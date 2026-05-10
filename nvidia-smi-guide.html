@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>nvidia-smi Deep Dive</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.6.0/dist/tabler-icons.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-page: #F7F6F3;
+  --bg-primary: #FFFFFF;
+  --bg-secondary: #EFEEE9;
+  --text-primary: #1a1a1a;
+  --text-secondary: #6b6b6b;
+  --border-color: rgba(0,0,0,0.12);
+  --border-hover: rgba(0,0,0,0.25);
+  --bg-warning: #FFF8E1;
+  --text-warning: #854F0B;
+  --bg-success: #E8F5E9;
+  --text-success: #2E7D32;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --font-body: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'IBM Plex Mono', 'Menlo', 'Consolas', monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-page: #1a1a1a;
+    --bg-primary: #242424;
+    --bg-secondary: #2e2e2e;
+    --text-primary: #e8e8e8;
+    --text-secondary: #999;
+    --border-color: rgba(255,255,255,0.1);
+    --border-hover: rgba(255,255,255,0.2);
+    --bg-warning: #3d2e00;
+    --text-warning: #FAC775;
+    --bg-success: #1b3a1b;
+    --text-success: #81C784;
+  }
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--font-body);
+  background: var(--bg-page);
+  color: var(--text-primary);
+  line-height: 1.7;
+  padding: 2rem 1rem;
+}
+.container {
+  max-width: 780px;
+  margin: 0 auto;
+}
+h1 {
+  font-size: 26px;
+  font-weight: 500;
+  margin: 0 0 6px;
+}
+.subtitle {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin: 0 0 28px;
+}
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 12px;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: var(--radius-md);
+  border: 0.5px solid transparent;
+  transition: border-color 0.15s, background 0.15s;
+  user-select: none;
+}
+.legend-item:hover {
+  border-color: var(--border-hover);
+  background: var(--bg-secondary);
+}
+.legend-item.active {
+  border-color: var(--border-hover);
+  background: var(--bg-secondary);
+}
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.tap-hint {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0 0 12px;
+}
+.smi-box {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.65;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  padding: 18px 22px;
+  overflow-x: auto;
+  white-space: pre;
+  color: var(--text-primary);
+}
+.hl {
+  cursor: pointer;
+  border-radius: 3px;
+  padding: 1px 3px;
+  transition: filter 0.15s, opacity 0.15s;
+}
+.hl:hover { filter: brightness(1.08); }
+.hl-gpu   { background: #B5D4F4; color: #042C53; }
+.hl-fan   { background: #C0DD97; color: #173404; }
+.hl-temp  { background: #F5C4B3; color: #4A1B0C; }
+.hl-perf  { background: #CECBF6; color: #26215C; }
+.hl-pwr   { background: #FAC775; color: #412402; }
+.hl-mem   { background: #9FE1CB; color: #04342C; }
+.hl-util  { background: #F4C0D1; color: #4B1528; }
+.hl-mig   { background: #D3D1C7; color: #2C2C2A; }
+.hl-proc  { background: #F09595; color: #501313; }
+.hl-drv   { background: #85B7EB; color: #042C53; }
+@media (prefers-color-scheme: dark) {
+  .hl-gpu   { background: #0C447C; color: #B5D4F4; }
+  .hl-fan   { background: #27500A; color: #C0DD97; }
+  .hl-temp  { background: #712B13; color: #F5C4B3; }
+  .hl-perf  { background: #3C3489; color: #CECBF6; }
+  .hl-pwr   { background: #633806; color: #FAC775; }
+  .hl-mem   { background: #085041; color: #9FE1CB; }
+  .hl-util  { background: #72243E; color: #F4C0D1; }
+  .hl-mig   { background: #444441; color: #D3D1C7; }
+  .hl-proc  { background: #791F1F; color: #F09595; }
+  .hl-drv   { background: #185FA5; color: #B5D4F4; }
+}
+.detail-panel {
+  margin-top: 20px;
+  background: var(--bg-primary);
+  border: 0.5px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 24px 28px;
+  display: none;
+  animation: fadeIn 0.2s ease;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.detail-panel.active { display: block; }
+.dp-title {
+  font-size: 18px;
+  font-weight: 500;
+  margin: 0 0 4px;
+  color: var(--text-primary);
+}
+.dp-section { margin: 16px 0 0; }
+.dp-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin: 0 0 6px;
+}
+.dp-text {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-primary);
+  margin: 0;
+}
+.dp-issue {
+  background: var(--bg-warning);
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  margin: 8px 0 0;
+}
+.dp-issue-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-warning);
+  margin: 0 0 4px;
+}
+.dp-issue-text {
+  font-size: 13px;
+  color: var(--text-primary);
+  margin: 0;
+  line-height: 1.65;
+}
+.dp-ok {
+  background: var(--bg-success);
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  margin: 8px 0 0;
+}
+.dp-ok-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-success);
+  margin: 0 0 4px;
+}
+.dp-ok-text {
+  font-size: 13px;
+  color: var(--text-primary);
+  margin: 0;
+  line-height: 1.65;
+}
+code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--bg-secondary);
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>nvidia-smi deep dive</h1>
+  <p class="subtitle">Interactive reference — click any highlighted metric to learn what it means and how to diagnose issues</p>
+
+  <div class="legend" id="legend"></div>
+  <p class="tap-hint">Click any highlighted region below or use the legend to jump to a metric</p>
+
+  <div class="smi-box" id="smi"><span class="hl hl-drv" data-key="drv">Sun May 10 14:32:07 2026</span>
+<span class="hl hl-drv" data-key="drv">+-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 550.54.15              Driver Version: 550.54.15      CUDA Version: 12.4     |</span>
+|-----------------------------------------+------------------------+----------------------+
+| <span class="hl hl-gpu" data-key="gpu">GPU  Name</span>                 <span class="hl hl-perf" data-key="perf">Persistence-M</span> | <span class="hl hl-gpu" data-key="gpu">Bus-Id</span>          <span class="hl hl-gpu" data-key="gpu">Disp.A</span> | <span class="hl hl-util" data-key="util">Volatile Uncorr. ECC</span> |
+| <span class="hl hl-fan" data-key="fan">Fan</span>  <span class="hl hl-temp" data-key="temp">Temp</span>   <span class="hl hl-perf" data-key="perf">Perf</span>          <span class="hl hl-pwr" data-key="pwr">Pwr:Usage/Cap</span> |          <span class="hl hl-mem" data-key="mem">Memory-Usage</span> | <span class="hl hl-util" data-key="util">GPU-Util</span>  <span class="hl hl-util" data-key="util">Compute M.</span> |
+|                                         |                        |               <span class="hl hl-mig" data-key="mig">MIG M.</span> |
+|=========================================+========================+======================|
+|   <span class="hl hl-gpu" data-key="gpu">0  NVIDIA H100 80GB HBM3</span>          <span class="hl hl-perf" data-key="perf">On</span> | <span class="hl hl-gpu" data-key="gpu">00000000:1A:00.0</span> <span class="hl hl-gpu" data-key="gpu">Off</span> |                    <span class="hl hl-util" data-key="ecc">0</span> |
+| <span class="hl hl-fan" data-key="fan">N/A</span>   <span class="hl hl-temp" data-key="temp">34C</span>    <span class="hl hl-perf" data-key="perf">P0</span>              <span class="hl hl-pwr" data-key="pwr">72W / 700W</span> |   <span class="hl hl-mem" data-key="mem">1024MiB / 81559MiB</span> |     <span class="hl hl-util" data-key="util">0%</span>      <span class="hl hl-util" data-key="util">Default</span> |
+|                                         |                        |               <span class="hl hl-mig" data-key="mig">N/A</span> |
++-----------------------------------------+------------------------+----------------------+
+
+<span class="hl hl-proc" data-key="proc">+-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI        PID   Type   Process name                              GPU Memory |
+|        ID   ID                                                               Usage       |
+|=========================================================================================|
+|    0   N/A  N/A     12847      C   python                                     1010MiB   |
++-----------------------------------------------------------------------------------------+</span></div>
+
+  <div class="detail-panel" id="detail"></div>
+</div>
+
+<script>
+var data={
+drv:{
+title:"Driver and CUDA version",
+what:"The header shows the <code>nvidia-smi</code> timestamp, the kernel-mode GPU driver version (550.54.15), and the highest CUDA toolkit version supported by this driver (12.4). The CUDA version here is the driver's capability ceiling — your actual CUDA runtime (from PyTorch or <code>nvcc</code>) can be lower but not higher.",
+healthy:"Driver and CUDA version should match what your framework expects. Run <code>python -c \"import torch; print(torch.version.cuda)\"</code> — if it says 12.1 but the driver says 12.4, that's fine. If the driver says 11.8 and PyTorch wants 12.x, things will break silently.",
+issues:[
+{t:"Driver/toolkit mismatch",d:"If PyTorch was compiled for CUDA 12.x but your driver only supports 11.8, kernels may fail or fall back to slow paths. Update the driver or install a matching PyTorch wheel."},
+{t:"Very old driver",d:"Older drivers may not support newer GPU features like Tensor Core instructions for bf16/fp8 on H100. Run <code>nvidia-smi -q | grep 'Driver Version'</code> and compare against NVIDIA's minimum driver table for your GPU."}
+]
+},
+gpu:{
+title:"GPU identity: index, name, bus-id, display",
+what:"GPU index (0–7 on an 8-GPU node), product name (H100 80GB HBM3), PCIe bus address (<code>00000000:1A:00.0</code>), and whether a display is attached (Off for headless servers). The bus-id uniquely identifies each physical GPU, which matters when you have multiple GPUs and need to pin processes with <code>CUDA_VISIBLE_DEVICES</code>.",
+healthy:"Name should match the expected hardware. Bus-Id should be stable across reboots. Disp.A should be Off on training nodes — a connected display steals VRAM and can introduce scheduling jitter.",
+issues:[
+{t:"Wrong GPU count or missing GPUs",d:"If you expect 8 GPUs but only see 4, check PCIe slot seating, NVSwitch health, or whether a GPU is in a fatal error state. Run <code>nvidia-smi -L</code> for a clean list."},
+{t:"Display attached on a training node",d:"Disp.A = On means a display server (X11/Wayland) is consuming VRAM and scheduling GPU context switches. Disable the display manager or use <code>nvidia-smi -dm 0</code> for the GPU."}
+]
+},
+fan:{
+title:"Fan speed",
+what:"Fan speed as a percentage of maximum RPM. N/A means the GPU is passively cooled (typical for data center GPUs like H100 SXM which use the server's system fans). Consumer GPUs (RTX 4090, A6000) show a percentage here.",
+healthy:"For server GPUs: N/A is expected. For consumer GPUs: 30–50% at idle, 70–90% under load. Sustained 100% means thermal throttling is likely.",
+issues:[
+{t:"Fan at 100% continuously",d:"The GPU is fighting thermal limits. Check server airflow, ambient temperature, and whether neighboring GPUs are blocking exhaust. Persistent max-fan usually correlates with Perf state dropping from P0 to P2 (thermal throttling)."},
+{t:"Fan at 0% under load",d:"Fan may have failed. GPU will thermal-throttle or shut down. Check <code>nvidia-smi -q -d TEMPERATURE</code> for throttle reasons."}
+]
+},
+temp:{
+title:"GPU temperature",
+what:"Current GPU die temperature in Celsius. The H100 SXM has a thermal throttle point around 83°C and a shutdown at ~90°C. Different GPUs have different thresholds — check with <code>nvidia-smi -q -d TEMPERATURE</code> which also shows the slowdown and shutdown limits.",
+healthy:"Under sustained training: 60–75°C is good. Above 80°C the GPU starts clock-throttling (you'll see Perf drop to P2/P3 and power cap lower). Below 40°C at idle is normal.",
+issues:[
+{t:"Temperature above 80°C during training",d:"Thermal throttling reduces clock speed by 10–30%. Check data center cooling, fan health, and whether GPUs are packed too tightly. On multi-GPU nodes, GPUs in the middle of the board run hotter. Consider staggering workloads or improving airflow."},
+{t:"Temperature divergence across GPUs",d:"If GPU 0 runs at 65°C but GPU 3 runs at 82°C on the same workload, the hot GPU will throttle and become the bottleneck in data-parallel training, slowing all GPUs to the pace of the slowest. Investigate physical cooling asymmetry."}
+]
+},
+perf:{
+title:"Performance state and persistence mode",
+what:"Perf shows the GPU's clock state: P0 = maximum clocks (training), P2 = reduced clocks (thermal/power throttle), P8 = idle. Persistence-M keeps the driver loaded between jobs, eliminating cold-start latency (1–3 seconds per launch). It should always be On for training servers.",
+healthy:"P0 during active training, P8 at idle. Persistence-M = On.",
+issues:[
+{t:"Stuck in P2 during training",d:"The GPU is throttling — either thermal (check Temp) or power (check Pwr). Run <code>nvidia-smi -q -d PERFORMANCE</code> to see the throttle reason. If power-limited, the power cap may be set too low or the PSU can't deliver enough. If thermal, address cooling."},
+{t:"Persistence mode Off",d:"Every CUDA context creation pays a 1–3 second driver initialization penalty. Turn it on: <code>sudo nvidia-smi -pm 1</code>. Critical for short iterative jobs and profiling runs."},
+{t:"GPU stuck in P0 at idle",d:"A process may have leaked a CUDA context. Check the process table — a zombie python process holding the GPU keeps it in P0 and wastes power. Kill it."}
+]
+},
+pwr:{
+title:"Power draw and power cap",
+what:"Current power consumption (72W) and the configured power limit (700W). The H100 SXM can draw up to 700W at max clocks. The power cap can be software-limited by admins to save energy or manage thermals. Power draw is the most honest real-time indicator of whether the GPU is actually working — unlike GPU-Util, it can't be faked by busy-waiting.",
+healthy:"During active H100 training: 400–650W typically. At idle: 50–80W. If training is running but power stays below 200W, the GPU isn't doing meaningful work — it's likely starved for data.",
+issues:[
+{t:"Low power during training (&lt; 200W on H100)",d:"The GPU is idle most of the time. This is the classic data-starved or CPU-bottlenecked pattern — the GPU finishes its kernels and waits. Profile with Nsight to find the gaps. Common fixes: increase DataLoader workers, move preprocessing to GPU, use <code>torch.compile</code>."},
+{t:"Power cap set below TDP",d:"If you see 72W / 300W on an H100 (should be 700W), someone has power-capped the GPU. Check with <code>nvidia-smi -q -d POWER</code> and reset with <code>sudo nvidia-smi -pl 700</code>. Admins sometimes do this for power budgeting — coordinate with your infra team."},
+{t:"Power draw near cap continuously",d:"Not necessarily bad — it means the GPU is fully utilized. But if combined with P2 perf state, the GPU is power-throttling: it's hitting the wall and reducing clocks to stay within budget. This is expected at 700W on H100 but check if the cap is artificially low."}
+]
+},
+mem:{
+title:"GPU memory usage",
+what:"Currently allocated VRAM vs total physical VRAM. 1024MiB / 81559MiB means about 1GB used out of 80GB. This shows VRAM claimed by all processes, including PyTorch's caching allocator (which pre-allocates and holds memory even when tensors are freed). It does NOT show peak usage or fragmentation — only the current snapshot.",
+healthy:"During training: 60–95% utilization is typical and healthy. Leaving 5–10% headroom avoids OOM from activation spikes. If usage is very low (&lt; 30%) during training, the batch size is probably too small to saturate the GPU.",
+issues:[
+{t:"OOM errors but nvidia-smi shows memory available",d:"PyTorch's caching allocator fragments VRAM over time. There may be 10GB 'free' but no single contiguous block large enough for the next allocation. Run <code>torch.cuda.memory_summary()</code> in your script to see fragmentation. Fixes: set <code>max_split_size_mb</code> environment variable, use gradient checkpointing, or reduce batch size."},
+{t:"Memory nearly full at idle / between jobs",d:"A previous process leaked CUDA memory. Check the process table — there's likely a zombie python process. Kill it with <code>kill -9 &lt;PID&gt;</code>. If it persists, the driver may need a reset: <code>sudo nvidia-smi --gpu-reset</code>."},
+{t:"Very low memory usage during training",d:"Batch size is too small. The GPU's compute units are likely underutilized too. Increase batch size until memory is 70–85% full, or use gradient accumulation to simulate larger batches without more memory."},
+{t:"Memory jumps from 20GB to 75GB periodically",d:"This pattern suggests periodic memory spikes from gradient accumulation steps, eval passes, or logging that materializes large tensors. Profile peak memory with <code>torch.cuda.max_memory_allocated()</code> and consider gradient checkpointing for the spike."}
+]
+},
+util:{
+title:"GPU utilization and compute mode",
+what:"GPU-Util is the percentage of time over the last sample period (1–2 seconds) that at least one GPU kernel was executing. Compute M. controls whether the GPU accepts shared (Default) or exclusive process access. Important caveat: GPU-Util of 100% does NOT mean the GPU is running efficiently — a single tiny kernel running every microsecond counts as 100% utilization even if the SMs are mostly idle. It's a time-occupancy metric, not a throughput metric.",
+healthy:"During training: 85–100% GPU-Util with high power draw (400W+) is genuinely good. GPU-Util of 95% but power at 150W means kernels are running but are tiny and don't saturate the SMs — <code>torch.compile</code> or kernel fusion is needed. Default compute mode is fine for most cases.",
+issues:[
+{t:"GPU-Util 0% during training",d:"The process isn't submitting GPU work. Common causes: training is stuck in data loading (CPU-bound), the model is on CPU, or a distributed barrier is blocking. Check the process table to verify the PID exists, then profile."},
+{t:"GPU-Util 100% but training is slow",d:"This is the most deceptive pattern. High time-occupancy with low throughput means kernel launch overhead — thousands of tiny kernels each running for microseconds. Check power draw: if it's low (&lt; 300W on H100), the GPU is busy-waiting between launches. Use <code>torch.compile</code>, operator fusion, or CUDA Graphs."},
+{t:"GPU-Util fluctuating 0↔100%",d:"The saw-tooth pattern signals synchronous data loading or periodic CPU work between GPU batches. The GPU runs a batch (100%), then waits for the next batch (0%). Fix: increase DataLoader <code>num_workers</code>, enable prefetching, or overlap data loading with compute using double-buffering."},
+{t:"Compute mode = Exclusive_Process",d:"Only one process can use the GPU. If you're running DDP with one process per GPU, this is fine. But if you need multiple processes (e.g., profiling while training), switch to Default: <code>nvidia-smi -c 0</code>."}
+]
+},
+ecc:{
+title:"ECC memory errors",
+what:"Count of uncorrectable ECC (Error Correcting Code) errors in GPU memory. Volatile means since last driver load. These are bit-flip errors in HBM that couldn't be corrected. Even 1 uncorrectable error can corrupt model weights or gradients.",
+healthy:"Should always be 0. Any non-zero value is serious.",
+issues:[
+{t:"Non-zero ECC errors",d:"Even a single uncorrectable ECC error means GPU memory is producing corrupt data. Training results are unreliable. Immediate steps: drain the workload, run <code>nvidia-smi --query-gpu=ecc.errors.uncorrected.volatile.total --format=csv</code> to confirm, then retire the GPU for RMA. Check neighboring GPUs too — environmental factors (heat, cosmic rays at altitude) can affect multiple GPUs."},
+{t:"High correctable ECC errors",d:"Run <code>nvidia-smi -q -d ECC</code> to see correctable error counts. A few hundred is normal over weeks. Thousands per hour suggests degrading HBM — the GPU may soon produce uncorrectable errors. Schedule proactive replacement."}
+]
+},
+mig:{
+title:"MIG (multi-instance GPU) mode",
+what:"Multi-Instance GPU partitions a single GPU into up to 7 isolated instances, each with its own compute, memory, and cache. N/A means MIG is disabled (the whole GPU is one unit). Enabled means the GPU is partitioned. MIG is mainly used for inference serving, not training.",
+healthy:"N/A or Disabled for training workloads. Enabled only if intentionally serving multiple inference models on one GPU.",
+issues:[
+{t:"MIG enabled during training",d:"Training on a MIG partition means you're using a fraction of the GPU. Each H100 MIG slice gets a subset of SMs and memory bandwidth. Disable MIG for training: <code>sudo nvidia-smi -i 0 -mig 0</code> (requires GPU reset)."},
+{t:"Inconsistent MIG across GPUs in a node",d:"If some GPUs have MIG enabled and others don't, DDP/FSDP will see mismatched device capabilities and either crash or run at the speed of the smallest partition."}
+]
+},
+proc:{
+title:"Process table",
+what:"Lists every process using each GPU: the PID, process type (C = compute / CUDA, G = graphics), process name, and per-process GPU memory usage. This is your map from <code>nvidia-smi</code> numbers to actual running code.",
+healthy:"During training: one python process per GPU (for DDP), each using 60–95% of VRAM. No stale processes from previous runs.",
+issues:[
+{t:"Multiple python processes on one GPU",d:"Unless you're intentionally using model parallelism or MPS, multiple processes on one GPU fight for resources. They serialize kernel execution and double memory usage. Use <code>CUDA_VISIBLE_DEVICES</code> to pin one process per GPU, or clean up stale jobs."},
+{t:"Zombie processes hogging GPU memory",d:"After a crash or Ctrl+C, Python processes sometimes leave CUDA contexts alive. The memory shows as used but no training is happening. Find and kill: <code>kill -9 &lt;PID&gt;</code>. If the PID doesn't appear in <code>ps aux</code>, the driver is holding a stale context — <code>sudo nvidia-smi --gpu-reset -i &lt;GPU_ID&gt;</code> to reclaim."},
+{t:"Process using only a few hundred MiB",d:"If your model should use 40GB but the process only shows 500MiB, it's likely in an initialization phase, failed silently, or moved the model to CPU. Check training script logs and verify <code>model.to('cuda')</code> is actually executing."},
+{t:"No processes listed but memory is used",d:"A process may have been killed without releasing CUDA resources, or a display server is holding the GPU. Run <code>sudo fuser -v /dev/nvidia*</code> to find hidden consumers."}
+]
+}
+};
+
+var keys=["drv","gpu","fan","temp","perf","pwr","mem","util","ecc","mig","proc"];
+var labels={drv:"Driver/CUDA",gpu:"GPU identity",fan:"Fan speed",temp:"Temperature",perf:"Perf state",pwr:"Power",mem:"Memory",util:"GPU utilization",ecc:"ECC errors",mig:"MIG mode",proc:"Processes"};
+var cls={drv:"hl-drv",gpu:"hl-gpu",fan:"hl-fan",temp:"hl-temp",perf:"hl-perf",pwr:"hl-pwr",mem:"hl-mem",util:"hl-util",ecc:"hl-util",mig:"hl-mig",proc:"hl-proc"};
+
+var legend=document.getElementById("legend");
+var activeLegend=null;
+keys.forEach(function(k){
+  var d=document.createElement("div");
+  d.className="legend-item";
+  d.setAttribute("data-key",k);
+  d.innerHTML='<div class="legend-dot '+cls[k]+'"></div>'+labels[k];
+  d.onclick=function(){
+    if(activeLegend) activeLegend.classList.remove("active");
+    d.classList.add("active");
+    activeLegend=d;
+    show(k);
+  };
+  legend.appendChild(d);
+});
+
+document.querySelectorAll(".hl").forEach(function(el){
+  el.addEventListener("click",function(){
+    var k=el.getAttribute("data-key");
+    if(activeLegend) activeLegend.classList.remove("active");
+    var li=document.querySelector('.legend-item[data-key="'+k+'"]');
+    if(li){li.classList.add("active");activeLegend=li;}
+    show(k);
+  });
+});
+
+function show(key){
+  var d=data[key];
+  if(!d) return;
+  var panel=document.getElementById("detail");
+  var h='<p class="dp-title">'+d.title+'</p>';
+  h+='<div class="dp-section"><p class="dp-label">What this shows</p><p class="dp-text">'+d.what+'</p></div>';
+  h+='<div class="dp-section"><p class="dp-label">Healthy values</p><div class="dp-ok"><p class="dp-ok-title"><i class="ti ti-check" style="font-size:14px;margin-right:4px" aria-hidden="true"></i>Expected</p><p class="dp-ok-text">'+d.healthy+'</p></div></div>';
+  h+='<div class="dp-section"><p class="dp-label">Common issues & next steps</p>';
+  d.issues.forEach(function(iss){
+    h+='<div class="dp-issue"><p class="dp-issue-title"><i class="ti ti-alert-triangle" style="font-size:14px;margin-right:4px" aria-hidden="true"></i>'+iss.t+'</p><p class="dp-issue-text">'+iss.d+'</p></div>';
+  });
+  h+='</div>';
+  panel.innerHTML=h;
+  panel.className="detail-panel active";
+  panel.scrollIntoView({behavior:"smooth",block:"nearest"});
+}
+</script>
+</body>
+</html>
