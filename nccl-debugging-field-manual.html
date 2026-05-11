@@ -1,0 +1,2180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NCCL: A Field Manual for Hangs, Stalls & Silences</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,600;9..144,800;9..144,900&family=JetBrains+Mono:wght@400;500;700&family=Inter+Tight:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink: #0a0a0a;
+  --paper: #f4f1ea;
+  --paper-dim: #ebe6db;
+  --rust: #b8401f;
+  --rust-dim: #8a3018;
+  --moss: #3d5a3d;
+  --gold: #c9a227;
+  --blue: #1e3a5f;
+  --grid: rgba(10,10,10,0.06);
+  --rule: rgba(10,10,10,0.85);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: 'Inter Tight', sans-serif;
+  font-size: 16px;
+  line-height: 1.55;
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 32px 32px;
+  min-height: 100vh;
+}
+
+.masthead {
+  border-bottom: 3px double var(--rule);
+  padding: 24px 48px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  backdrop-filter: blur(8px);
+  background: rgba(244,241,234,0.95);
+}
+
+.masthead-left, .masthead-right {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+}
+
+.masthead-center {
+  font-family: 'Fraunces', serif;
+  font-weight: 900;
+  font-size: 22px;
+  font-style: italic;
+  letter-spacing: -0.01em;
+}
+
+.hero {
+  padding: 80px 48px 60px;
+  border-bottom: 1px solid var(--rule);
+  position: relative;
+  overflow: hidden;
+}
+
+.hero::before {
+  content: 'NCCL';
+  position: absolute;
+  font-family: 'Fraunces', serif;
+  font-weight: 900;
+  font-size: 420px;
+  color: var(--rust);
+  opacity: 0.06;
+  top: -80px;
+  right: -40px;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.kicker {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.3em;
+  color: var(--rust);
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.kicker::before {
+  content: '';
+  width: 40px;
+  height: 1px;
+  background: var(--rust);
+}
+
+.hero h1 {
+  font-family: 'Fraunces', serif;
+  font-weight: 300;
+  font-size: clamp(48px, 7vw, 96px);
+  line-height: 0.95;
+  letter-spacing: -0.03em;
+  margin-bottom: 24px;
+  max-width: 1100px;
+}
+
+.hero h1 em {
+  font-style: italic;
+  font-weight: 900;
+  color: var(--rust);
+}
+
+.hero-deck {
+  font-family: 'Fraunces', serif;
+  font-size: 22px;
+  font-weight: 400;
+  font-style: italic;
+  max-width: 720px;
+  opacity: 0.75;
+  border-left: 2px solid var(--rust);
+  padding-left: 20px;
+  margin-top: 32px;
+}
+
+.toc {
+  padding: 40px 48px;
+  border-bottom: 1px solid var(--rule);
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 48px;
+  background: var(--paper-dim);
+}
+
+.toc-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  padding-top: 4px;
+}
+
+.toc-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 8px 32px;
+  list-style: none;
+}
+
+.toc-list li {
+  border-bottom: 1px dotted var(--rule);
+  padding: 8px 0;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.toc-list a {
+  color: var(--ink);
+  text-decoration: none;
+  flex: 1;
+  font-weight: 500;
+  transition: color 0.2s, transform 0.2s;
+  display: inline-block;
+}
+
+.toc-list a:hover {
+  color: var(--rust);
+  transform: translateX(4px);
+}
+
+.toc-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--rust);
+  font-weight: 700;
+}
+
+section.chapter {
+  padding: 80px 48px;
+  border-bottom: 1px solid var(--rule);
+}
+
+section.chapter:nth-of-type(even) { background: var(--paper-dim); }
+
+.chapter-head {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 48px;
+  margin-bottom: 56px;
+  align-items: end;
+}
+
+.chapter-meta {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  border-top: 2px solid var(--ink);
+  padding-top: 8px;
+}
+
+.chapter-meta .num {
+  font-size: 64px;
+  font-family: 'Fraunces', serif;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  line-height: 0.9;
+  color: var(--rust);
+  display: block;
+  margin-top: 8px;
+}
+
+.chapter-title {
+  font-family: 'Fraunces', serif;
+  font-weight: 400;
+  font-size: clamp(36px, 5vw, 64px);
+  line-height: 1;
+  letter-spacing: -0.025em;
+}
+
+.chapter-title em {
+  font-style: italic;
+  color: var(--rust);
+}
+
+.chapter-body {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 48px;
+}
+
+.chapter-aside {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  opacity: 0.65;
+}
+
+.chapter-aside strong {
+  display: block;
+  color: var(--rust);
+  margin-bottom: 6px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+}
+
+.prose p {
+  font-size: 17px;
+  margin-bottom: 20px;
+  max-width: 680px;
+}
+
+.prose p.lead {
+  font-family: 'Fraunces', serif;
+  font-size: 24px;
+  line-height: 1.4;
+  font-weight: 400;
+  margin-bottom: 32px;
+  max-width: 720px;
+}
+
+.prose p.lead::first-letter {
+  font-family: 'Fraunces', serif;
+  font-size: 72px;
+  font-weight: 900;
+  float: left;
+  line-height: 0.85;
+  margin: 4px 12px 0 0;
+  color: var(--rust);
+}
+
+.prose h3 {
+  font-family: 'Fraunces', serif;
+  font-weight: 600;
+  font-size: 28px;
+  margin: 48px 0 16px;
+  letter-spacing: -0.01em;
+}
+
+.prose h3::before {
+  content: '§';
+  color: var(--rust);
+  margin-right: 12px;
+  font-weight: 400;
+}
+
+code, .mono {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.9em;
+  background: rgba(184,64,31,0.08);
+  padding: 1px 6px;
+  border-radius: 2px;
+  color: var(--rust-dim);
+}
+
+pre {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  background: var(--ink);
+  color: var(--paper);
+  padding: 24px 28px;
+  overflow-x: auto;
+  margin: 24px 0;
+  position: relative;
+  border-left: 4px solid var(--rust);
+}
+
+pre::before {
+  content: attr(data-label);
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--gold);
+  opacity: 0.7;
+}
+
+pre code { background: transparent; color: inherit; padding: 0; font-size: inherit; }
+
+.kw { color: #d59ad8; }
+.str { color: #b5d590; }
+.cmt { color: #6c6c6c; font-style: italic; }
+.num { color: #f5b85d; }
+.fn { color: #7dc9d9; }
+.err { color: #ff9580; }
+.ok { color: #b5d590; }
+
+.callout {
+  margin: 32px 0;
+  padding: 24px 28px;
+  border-left: 4px solid var(--rust);
+  background: rgba(184,64,31,0.06);
+}
+
+.callout.warn { border-color: var(--gold); background: rgba(201,162,39,0.08); }
+.callout.tip { border-color: var(--moss); background: rgba(61,90,61,0.06); }
+
+.callout-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  color: var(--rust);
+  margin-bottom: 8px;
+  font-weight: 700;
+}
+
+.callout.warn .callout-label { color: #8a6a10; }
+.callout.tip .callout-label { color: var(--moss); }
+.callout p { font-size: 15px; margin: 0; }
+
+/* Collective animation */
+.coll-demo {
+  background: var(--ink);
+  color: var(--paper);
+  padding: 40px;
+  margin: 32px 0;
+}
+
+.coll-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  color: var(--gold);
+  margin-bottom: 24px;
+}
+
+.coll-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.coll-tab {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  padding: 10px 16px;
+  background: transparent;
+  color: var(--paper);
+  border: 1px solid rgba(244,241,234,0.3);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.coll-tab.active { background: var(--gold); color: var(--ink); border-color: var(--gold); }
+
+.coll-stage {
+  background: rgba(244,241,234,0.04);
+  border: 1px dashed rgba(244,241,234,0.2);
+  padding: 24px;
+  min-height: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.coll-svg-wrap {
+  width: 100%;
+  text-align: center;
+}
+
+.coll-explain {
+  font-family: 'Fraunces', serif;
+  font-size: 15px;
+  line-height: 1.6;
+  font-style: italic;
+  color: rgba(244,241,234,0.9);
+  border-left: 3px solid var(--gold);
+  padding-left: 16px;
+}
+
+.coll-explain strong {
+  font-family: 'JetBrains Mono', monospace;
+  font-style: normal;
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  color: var(--gold);
+  text-transform: uppercase;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.coll-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.btn {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  padding: 10px 20px;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--paper);
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 600;
+}
+
+.btn:hover { background: var(--gold); border-color: var(--gold); }
+
+.btn.ghost {
+  background: transparent;
+  color: var(--paper);
+  border: 1px solid var(--paper);
+}
+
+.btn.ghost:hover { background: var(--paper); color: var(--ink); }
+
+/* Decision tree */
+.tree {
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  padding: 32px;
+  margin: 32px 0;
+}
+
+.tree-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  color: var(--rust);
+  margin-bottom: 8px;
+}
+
+.tree-title {
+  font-family: 'Fraunces', serif;
+  font-weight: 700;
+  font-size: 28px;
+  margin-bottom: 24px;
+  letter-spacing: -0.01em;
+}
+
+.tree-step {
+  background: var(--paper-dim);
+  padding: 24px 28px;
+  margin-bottom: 16px;
+  border-left: 4px solid var(--ink);
+  position: relative;
+}
+
+.tree-step.current {
+  background: var(--ink);
+  color: var(--paper);
+  border-left-color: var(--gold);
+}
+
+.tree-step.current .tree-q { color: var(--gold); }
+
+.tree-q {
+  font-family: 'Fraunces', serif;
+  font-weight: 700;
+  font-size: 19px;
+  margin-bottom: 16px;
+  letter-spacing: -0.01em;
+}
+
+.tree-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--rust);
+  letter-spacing: 0.2em;
+  margin-bottom: 6px;
+}
+
+.tree-step.current .tree-num { color: var(--gold); }
+
+.tree-choices {
+  display: grid;
+  gap: 8px;
+}
+
+.tree-choice {
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  padding: 12px 16px;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  transition: all 0.15s;
+}
+
+.tree-step.current .tree-choice {
+  background: rgba(244,241,234,0.08);
+  color: var(--paper);
+  border-color: rgba(244,241,234,0.4);
+}
+
+.tree-choice:hover {
+  background: var(--rust);
+  color: var(--paper);
+  border-color: var(--rust);
+}
+
+.tree-step.current .tree-choice:hover {
+  background: var(--gold);
+  color: var(--ink);
+  border-color: var(--gold);
+}
+
+.tree-choice-arrow {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  opacity: 0.6;
+}
+
+.tree-verdict {
+  background: var(--moss);
+  color: var(--paper);
+  padding: 24px 28px;
+  border-left: 4px solid var(--gold);
+}
+
+.tree-verdict h4 {
+  font-family: 'Fraunces', serif;
+  font-size: 22px;
+  margin-bottom: 12px;
+  color: var(--gold);
+}
+
+.tree-verdict p {
+  font-size: 15px;
+  line-height: 1.6;
+  margin-bottom: 8px;
+}
+
+.tree-verdict code {
+  background: rgba(0,0,0,0.4);
+  color: var(--gold);
+}
+
+.tree-reset {
+  margin-top: 16px;
+  padding: 8px 16px;
+  background: transparent;
+  color: var(--paper);
+  border: 1px solid var(--paper);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  cursor: pointer;
+}
+
+.tree-reset:hover { background: var(--paper); color: var(--ink); }
+
+/* Issue case studies */
+.case {
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  margin: 24px 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 80px 1fr;
+}
+
+.case-num {
+  background: var(--ink);
+  color: var(--gold);
+  font-family: 'Fraunces', serif;
+  font-weight: 900;
+  font-size: 48px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 24px;
+  letter-spacing: -0.02em;
+}
+
+.case-body { padding: 28px 32px; }
+
+.case-title {
+  font-family: 'Fraunces', serif;
+  font-weight: 700;
+  font-size: 24px;
+  letter-spacing: -0.01em;
+  margin-bottom: 8px;
+}
+
+.case-tags {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.case-tag {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  padding: 3px 8px;
+  background: var(--paper-dim);
+  border: 1px solid var(--rule);
+  font-weight: 600;
+}
+
+.case-tag.severity-high { background: var(--rust); color: var(--paper); border-color: var(--rust); }
+.case-tag.severity-med { background: var(--gold); color: var(--ink); border-color: var(--gold); }
+.case-tag.severity-low { background: var(--moss); color: var(--paper); border-color: var(--moss); }
+
+.case-section {
+  margin-top: 18px;
+}
+
+.case-section h5 {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  color: var(--rust);
+  margin-bottom: 8px;
+  font-weight: 700;
+}
+
+.case-section p { font-size: 14px; line-height: 1.6; max-width: none; margin-bottom: 0; }
+
+.case pre { margin: 12px 0 0; font-size: 12px; padding: 16px 20px; }
+
+/* env-var table */
+.envvars {
+  margin: 32px 0;
+  border-top: 2px solid var(--ink);
+  border-bottom: 2px solid var(--ink);
+}
+
+.envvar-row {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  border-bottom: 1px solid rgba(10,10,10,0.15);
+  padding: 14px 0;
+  gap: 24px;
+  align-items: start;
+}
+
+.envvar-row:last-child { border-bottom: none; }
+.envvar-row.head {
+  border-bottom: 1px solid var(--ink);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  color: var(--rust);
+  padding: 10px 0;
+}
+
+.envvar-name {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--rust-dim);
+}
+
+.envvar-desc { font-size: 14px; line-height: 1.5; }
+
+.envvar-desc strong { color: var(--rust); font-weight: 700; }
+
+/* Log explorer */
+.log-explorer {
+  background: var(--ink);
+  color: var(--paper);
+  padding: 32px;
+  margin: 32px 0;
+}
+
+.log-explorer h4 {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  color: var(--gold);
+  margin-bottom: 16px;
+}
+
+.log-line {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  padding: 6px 12px;
+  line-height: 1.6;
+  border-left: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: pre-wrap;
+}
+
+.log-line:hover {
+  background: rgba(244,241,234,0.06);
+  border-left-color: var(--gold);
+}
+
+.log-line.active {
+  background: rgba(201,162,39,0.15);
+  border-left-color: var(--gold);
+}
+
+.log-line .ts { color: #6c6c6c; }
+.log-line .host { color: #7dc9d9; }
+.log-line .lvl-warn { color: #f5b85d; }
+.log-line .lvl-info { color: #b5d590; }
+.log-line .lvl-err { color: #ff9580; font-weight: 700; }
+
+.log-annotation {
+  background: var(--gold);
+  color: var(--ink);
+  padding: 16px 20px;
+  margin-top: 16px;
+  border-left: 4px solid var(--rust);
+  display: none;
+  font-family: 'Fraunces', serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.log-annotation.shown { display: block; }
+
+.log-annotation strong {
+  font-family: 'JetBrains Mono', monospace;
+  font-style: normal;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  display: block;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+  color: var(--rust-dim);
+}
+
+/* Pre-flight checklist */
+.preflight {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+  margin: 32px 0;
+}
+
+.pre-item {
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  padding: 18px 20px;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.2s;
+  display: flex;
+  gap: 14px;
+  align-items: start;
+}
+
+.pre-item:hover { background: var(--paper-dim); }
+
+.pre-item.done {
+  background: var(--moss);
+  color: var(--paper);
+  border-color: var(--moss);
+}
+
+.pre-box {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--ink);
+  flex-shrink: 0;
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.pre-item.done .pre-box {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: var(--ink);
+}
+
+.pre-content { flex: 1; }
+
+.pre-title {
+  font-family: 'Fraunces', serif;
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 4px;
+}
+
+.pre-desc { font-size: 12px; line-height: 1.5; opacity: 0.85; }
+
+/* Topology summary */
+.topo-summary {
+  margin: 24px 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  border-top: 2px solid var(--ink);
+  border-left: 2px solid var(--ink);
+}
+
+.topo-cell {
+  border-right: 2px solid var(--ink);
+  border-bottom: 2px solid var(--ink);
+  padding: 18px;
+  min-height: 130px;
+  background: var(--paper);
+}
+
+.topo-cell strong {
+  display: block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--rust);
+  margin-bottom: 8px;
+}
+
+.topo-cell .big {
+  font-family: 'Fraunces', serif;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 6px;
+  line-height: 1;
+}
+
+.topo-cell p { font-size: 12px; line-height: 1.5; margin: 0; max-width: none; }
+
+.colophon {
+  padding: 48px;
+  background: var(--ink);
+  color: var(--paper);
+  text-align: center;
+}
+
+.colophon-mark {
+  font-family: 'Fraunces', serif;
+  font-style: italic;
+  font-weight: 300;
+  font-size: 32px;
+  margin-bottom: 12px;
+}
+
+.colophon-mark em { color: var(--gold); font-weight: 700; }
+
+.colophon p {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  opacity: 0.6;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.pulsing { animation: pulse 1.5s ease-in-out infinite; }
+
+@keyframes dataflow {
+  0% { offset-distance: 0%; opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { offset-distance: 100%; opacity: 0; }
+}
+
+@media (max-width: 900px) {
+  .chapter-head, .chapter-body, .toc { grid-template-columns: 1fr; gap: 16px; }
+  .masthead { padding: 16px 20px; flex-wrap: wrap; gap: 8px; }
+  .hero, section.chapter { padding: 48px 20px; }
+  .case { grid-template-columns: 1fr; }
+  .case-num { padding: 16px; justify-content: flex-start; font-size: 36px; }
+  .envvar-row { grid-template-columns: 1fr; }
+  .hero::before { font-size: 200px; }
+}
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="masthead-left">Vol. I · Issue 02 · MMXXVI</div>
+  <div class="masthead-center">The Cluster Quarterly</div>
+  <div class="masthead-right">Field Manual · Hangs &amp; Silences</div>
+</header>
+
+<section class="hero">
+  <div class="kicker">A Systematic Field Manual · Companion to Issue 01</div>
+  <h1>When <em>NCCL</em> stops<br>talking, & how to<br><em>make</em> it talk again.</h1>
+  <p class="hero-deck">The collectives library is the nervous system of distributed training. When it fails — hangs, timeouts, silent stalls — debugging is forensic, not interactive. This is the autopsy kit.</p>
+</section>
+
+<nav class="toc">
+  <div class="toc-label">Contents</div>
+  <ol class="toc-list">
+    <li><span class="toc-num">I.</span> <a href="#ch1">What NCCL Is &amp; How It Moves Bytes</a></li>
+    <li><span class="toc-num">II.</span> <a href="#ch2">The Collectives, Visually</a></li>
+    <li><span class="toc-num">III.</span> <a href="#ch3">Anatomy of a Hang</a></li>
+    <li><span class="toc-num">IV.</span> <a href="#ch4">The Debugging Telemetry</a></li>
+    <li><span class="toc-num">V.</span> <a href="#ch5">Reading a Log Like a Coroner</a></li>
+    <li><span class="toc-num">VI.</span> <a href="#ch6">The Decision Tree</a></li>
+    <li><span class="toc-num">VII.</span> <a href="#ch7">Eight Real Hangs, Annotated</a></li>
+    <li><span class="toc-num">VIII.</span> <a href="#ch8">Environment Variables That Matter</a></li>
+    <li><span class="toc-num">IX.</span> <a href="#ch9">The Pre-Flight Checklist</a></li>
+  </ol>
+</nav>
+
+<!-- CHAPTER 1 -->
+<section class="chapter" id="ch1">
+  <div class="chapter-head">
+    <div class="chapter-meta">Chapter <span class="num">I</span></div>
+    <h2 class="chapter-title">What NCCL is &amp; how it moves <em>bytes.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>Read time</strong>
+      5 min<br><br>
+      <strong>The premise</strong>
+      Every synchronous distributed step ends in a collective. Every collective is a barrier. Every barrier can hang.<br><br>
+      <strong>Mantra</strong>
+      A hang is not a bug. It's a missing rank.
+    </aside>
+    <div class="prose">
+      <p class="lead">NCCL (NVIDIA Collective Communications Library) is the layer underneath your <code>torch.distributed</code> calls. PyTorch hands it a tensor and an opcode — "all-reduce, sum, fp16" — and NCCL takes care of choosing rings, picking transports, dispatching to NVLink or InfiniBand, and barrier-synchronizing all ranks until everyone has the same answer.</p>
+      <p>That last part — "barrier-synchronizing" — is the entire story of NCCL debugging. <strong>A collective is an all-or-nothing handshake.</strong> If one rank shows up at the meeting and the others don't, that rank waits. Forever, by default. The hang you see at 3 a.m. is one rank, somewhere, that never made it to the meeting.</p>
+
+      <h3>The three-layer stack</h3>
+      <p><strong>Your code.</strong> You write <code>loss.backward()</code> or <code>dist.all_reduce(tensor)</code>. Under the hood, PyTorch's DDP/FSDP hooks queue work into a process group.</p>
+      <p><strong>The c10d process group.</strong> PyTorch's distributed coordinator. It owns the watchdog (the thing that fires the timeout you see in the stack trace), it owns the Flight Recorder (the thing that tells you why the hang happened), and it owns the call into NCCL.</p>
+      <p><strong>NCCL itself.</strong> A C++ library that talks to the GPUs through CUDA streams. It picks a topology-aware algorithm (ring, tree, or NVLS), serializes the tensor through whichever transport is fastest between each pair of GPUs (NVLink → PCIe → SHM → IB → TCP), and waits for every peer's contribution before producing the output.</p>
+
+      <h3>Why so many things break</h3>
+      <p>Because NCCL spans all of: CUDA streams, NVIDIA drivers, kernel networking, RDMA verbs, InfiniBand fabric, Ethernet switches, NUMA topology, container namespaces, and your application code's collective-ordering logic. A failure in <em>any</em> of these surfaces as the same symptom: a hang followed, ten or thirty minutes later, by a watchdog timeout.</p>
+      <p>This is the heart of NCCL debugging — the symptom is uniform, but the cause is not. You need telemetry to localize where the chain broke.</p>
+
+      <div class="callout">
+        <div class="callout-label">The single most important sentence in this manual</div>
+        <p>NCCL failures are <em>almost never bugs in NCCL.</em> They are symptoms of: a missing peer (rank crashed elsewhere), a collective-ordering bug (your code), a hardware fault (GPU XID, IB link flap), or a misconfiguration (wrong interface, blocked port, missing GDR). Debug accordingly.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 2 -->
+<section class="chapter" id="ch2">
+  <div class="chapter-head">
+    <div class="chapter-meta">Chapter <span class="num">II</span></div>
+    <h2 class="chapter-title">The collectives, <em>visually.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>Click</strong>
+      Each tab. The illustration shows the data movement; the caption tells you which parallelism strategy uses it.<br><br>
+      <strong>Why you care</strong>
+      Knowing the access pattern tells you which collective will hang first. AllReduce hangs uniformly. AllGather hangs asymmetrically.
+    </aside>
+    <div class="prose">
+      <p class="lead">Six collectives carry essentially all of distributed training. Each has a distinct data-flow pattern and a distinct failure mode.</p>
+
+      <div class="coll-demo">
+        <div class="coll-title">Interactive · Collective Patterns</div>
+        <div class="coll-tabs" id="collTabs">
+          <button class="coll-tab active" data-coll="allreduce">AllReduce</button>
+          <button class="coll-tab" data-coll="allgather">AllGather</button>
+          <button class="coll-tab" data-coll="reducescatter">ReduceScatter</button>
+          <button class="coll-tab" data-coll="broadcast">Broadcast</button>
+          <button class="coll-tab" data-coll="alltoall">AllToAll</button>
+          <button class="coll-tab" data-coll="barrier">Barrier</button>
+        </div>
+        <div class="coll-stage">
+          <div class="coll-svg-wrap">
+            <svg id="collSvg" viewBox="0 0 700 220" style="width: 100%; max-width: 700px; height: auto;"></svg>
+          </div>
+          <div class="coll-explain" id="collExplain"></div>
+        </div>
+      </div>
+
+      <h3>What each one is used for</h3>
+      <p><strong>AllReduce</strong> is the workhorse of data parallelism. Each rank computes a local gradient; AllReduce sums them and gives every rank the result. PyTorch DDP fires one AllReduce per parameter bucket per step.</p>
+      <p><strong>AllGather</strong> and <strong>ReduceScatter</strong> together implement ZeRO/FSDP. AllGather rebuilds the full parameter from shards on each rank before a forward pass; ReduceScatter distributes gradient shards back. A single FSDP step fires hundreds of these.</p>
+      <p><strong>Broadcast</strong> sends one rank's value to everyone. Used for parameter initialization, sending hyperparameter updates, and to synchronize random seeds.</p>
+      <p><strong>AllToAll</strong> is the MoE collective. Each rank sends a slice of its data to every other rank. Expert parallelism, sequence parallelism, and some forms of tensor parallelism use it. It's the most bandwidth-hungry collective and the first to expose a weak network link.</p>
+      <p><strong>Barrier</strong> is a pure synchronization point. No data moves; ranks just confirm "we're all here." Often inserted around checkpoint writes or evaluation.</p>
+
+      <div class="callout tip">
+        <div class="callout-label">Pattern → likely failure mode</div>
+        <p>If <strong>AllReduce</strong> hangs, suspect a missing rank (one peer died) or a collective-ordering mismatch (your code dispatched different collectives on different ranks). If <strong>AllGather</strong>/<strong>AllToAll</strong> hangs in the middle of a healthy run, suspect transient network issues (IB link flap, RoCE packet drops). If <strong>Broadcast</strong> hangs at start-up, suspect bootstrap connectivity (wrong <code>NCCL_SOCKET_IFNAME</code>, blocked port).</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 3 -->
+<section class="chapter" id="ch3">
+  <div class="chapter-head">
+    <div class="chapter-meta">Chapter <span class="num">III</span></div>
+    <h2 class="chapter-title">Anatomy of a <em>hang.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>The taxonomy</strong>
+      Four classes, four signatures. Learn to recognize each from the first 20 lines of log.<br><br>
+      <strong>Don't waste time</strong>
+      Restarting blindly works ~30% of the time and teaches you nothing. Diagnose first.
+    </aside>
+    <div class="prose">
+      <p class="lead">Per the PyTorch team's published taxonomy, every NCCL hang you'll ever see falls into one of four buckets. The buckets are distinguishable in the trace data, and each has its own remedy.</p>
+
+      <div class="topo-summary">
+        <div class="topo-cell">
+          <strong>Class 1</strong>
+          <div class="big">Collective mismatch</div>
+          <p>Different ranks called different collectives, or called them in different orders, or with different shapes/dtypes. <em>Application bug.</em></p>
+        </div>
+        <div class="topo-cell">
+          <strong>Class 2</strong>
+          <div class="big">GPU hang</div>
+          <p>One rank's GPU got stuck doing pre-collective work (a slow custom kernel, a CPU/GPU sync, an unrelated CUDA call). Peers waiting at the barrier. <em>Latency bug.</em></p>
+        </div>
+        <div class="topo-cell">
+          <strong>Class 3</strong>
+          <div class="big">Misconfigured args</div>
+          <p>All ranks called the same collective, but with mismatched dtype/size — e.g. an fp16 tensor on rank 0, fp32 on rank 1. <em>Type bug.</em></p>
+        </div>
+        <div class="topo-cell">
+          <strong>Class 4</strong>
+          <div class="big">Faulty hardware / network</div>
+          <p>Link flap, NIC reset, GPU XID, ECC error. Symptoms can mimic the others — distinguishing feature is <em>repeat patterns</em> across jobs.</p>
+        </div>
+      </div>
+
+      <h3>The signature of each class</h3>
+      <p><strong>Class 1 — Collective mismatch.</strong> Flight Recorder shows ranks executing <em>different</em> collective opcodes at the same sequence ID. Rank 0 ran AllReduce; ranks 1–7 ran AllGather. The hang is at the first collective that diverged.</p>
+      <p><strong>Class 2 — GPU hang.</strong> All ranks have the same collective queued, but one rank's collective is in state <code>scheduled</code> while the others are in state <code>started</code>. The culprit hasn't reached its <code>ncclAllReduce</code> call yet — something upstream is taking too long. Often a Python-level CPU sync, a profiler attached, or an unrelated CUDA kernel.</p>
+      <p><strong>Class 3 — Misconfigured args.</strong> Same opcode, same sequence ID, but Flight Recorder dumps show mismatched dtype, count, or root rank. This is detected and reported by NCCL itself in many recent versions: <code>NCCL WARN Mismatched collective ...</code></p>
+      <p><strong>Class 4 — Hardware/network.</strong> All ranks at the same collective, all in state <code>started</code>, none completing. <code>ibstat</code> shows port DOWN, <code>dmesg</code> shows GPU XID 79 (GPU lost from bus) or XID 13/31 (graphics engine errors). The diagnostic move is to repeat the job — if it fails on the same node, swap the node.</p>
+
+      <div class="callout warn">
+        <div class="callout-label">The signature you must learn first</div>
+        <p>When you see <code>Watchdog caught collective operation timeout</code> in the log, look at <em>which ranks survived</em>. If all 8 ranks of one node are missing and the other 56 are stuck, that's a node failure (Class 4). If 1 rank of each node is missing, that's a process or GPU failure within each node. If all 64 ranks are stuck and none crashed, that's Class 1, 2, or 3 — Flight Recorder will tell you which.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 4 -->
+<section class="chapter" id="ch4">
+  <div class="chapter-head">
+    <div class="chapter-meta">Chapter <span class="num">IV</span></div>
+    <h2 class="chapter-title">The debugging <em>telemetry.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>Set once</strong>
+      Bake these env vars into every job. The overhead is &lt;1% and a single avoided debugging session pays for it forever.<br><br>
+      <strong>Without telemetry</strong>
+      You are guessing. With telemetry, you are diagnosing.
+    </aside>
+    <div class="prose">
+      <p class="lead">Three sources of telemetry, layered. NCCL logs tell you what NCCL did. The PyTorch Flight Recorder tells you what every rank's process group was doing at the moment of the hang. Stack dumps tell you where the Python code was. With all three, the hang's cause is usually obvious within 10 minutes.</p>
+
+      <h3>Layer 1 — NCCL logs</h3>
+      <pre data-label="every job, baked in"><span class="cmt"># Always-on, low-overhead</span>
+<span class="kw">export</span> NCCL_DEBUG=INFO
+<span class="kw">export</span> NCCL_DEBUG_SUBSYS=INIT,ENV,GRAPH,TUNING
+
+<span class="cmt"># Critical: per-rank file output, never to stdout in prod</span>
+<span class="kw">export</span> NCCL_DEBUG_FILE=/var/log/nccl/nccl.%h.%p.log
+<span class="cmt"># %h = hostname, %p = pid. Per-rank file or output gets mangled.</span>
+
+<span class="cmt"># For triage of an active issue, also add:</span>
+<span class="kw">export</span> NCCL_DEBUG_SUBSYS=INIT,ENV,GRAPH,TUNING,COLL,NET</pre>
+      <p>The default <code>NCCL_DEBUG_SUBSYS</code> is <code>INIT,BOOTSTRAP,ENV</code> — enough to confirm setup but blind to collectives. Add <code>COLL</code> only when you're actively debugging; it logs every collective and explodes log size 100×.</p>
+
+      <h3>Layer 2 — PyTorch Flight Recorder</h3>
+      <p>The Flight Recorder is a ring buffer inside <code>c10d</code> that records every collective each rank issues: opcode, input/output sizes, dtype, sequence ID, state (scheduled, started, completed), C++ stack, Python stack. When a hang triggers the watchdog, every rank dumps its buffer to disk. The <code>fr_trace</code> tool aligns the dumps across ranks and tells you exactly where they diverged.</p>
+      <pre data-label="enable flight recorder"><span class="cmt"># Set in env BEFORE process group init</span>
+<span class="kw">export</span> TORCH_NCCL_TRACE_BUFFER_SIZE=2000        <span class="cmt"># keep last 2000 ops</span>
+<span class="kw">export</span> TORCH_NCCL_DUMP_ON_TIMEOUT=1              <span class="cmt"># dump on hang</span>
+<span class="kw">export</span> TORCH_NCCL_DEBUG_INFO_TEMP_FILE=/var/log/fr/dump_%h_%p
+<span class="kw">export</span> TORCH_NCCL_ENABLE_MONITORING=1            <span class="cmt"># watchdog</span>
+
+<span class="cmt"># For deeper diagnosis (more overhead, only when investigating):</span>
+<span class="kw">export</span> TORCH_NCCL_TRACE_CPP_STACK=1
+<span class="kw">export</span> TORCH_NCCL_ENABLE_TIMING=1
+
+<span class="cmt"># Then, after a hang, analyze the dumps:</span>
+python -m torch.distributed.checkpoint.fr_trace \
+  /var/log/fr/ --selected-ranks=0,1,7,15</pre>
+
+      <h3>Layer 3 — In-process stack dumps</h3>
+      <p>Flight Recorder tells you what collective hung. Sometimes you also need to know <em>where in Python</em> the offending rank was when it issued the divergent call. The lightweight option: install <code>py-spy</code> in the image and run, against a hung rank's PID:</p>
+      <pre data-label="live stack dump"><span class="cmt"># From the host of a hung rank:</span>
+sudo py-spy dump --pid <span class="num">&lt;rank_pid&gt;</span>          <span class="cmt"># Python stack</span>
+sudo gdb -p <span class="num">&lt;rank_pid&gt;</span> --batch -ex bt    <span class="cmt"># C++ stack</span></pre>
+      <p>You learn whether the rank is inside Python (likely Class 1 or 2), inside CUDA (likely Class 2), or inside NCCL's <code>commWait</code> loop (likely Class 4).</p>
+
+      <div class="callout tip">
+        <div class="callout-label">The minimum-viable telemetry</div>
+        <p>If you do nothing else: set <code>NCCL_DEBUG=INFO</code>, <code>NCCL_DEBUG_FILE</code>, <code>TORCH_NCCL_DUMP_ON_TIMEOUT=1</code>, and <code>TORCH_NCCL_TRACE_BUFFER_SIZE=2000</code>. That's four lines in your launch script and it pays for itself the first time you hang.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 5 -->
+<section class="chapter" id="ch5">
+  <div class="chapter-head">
+    <div class="chapter-meta">Chapter <span class="num">V</span></div>
+    <h2 class="chapter-title">Reading a log like a <em>coroner.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>Click</strong>
+      Each line to see what it means and what to do about it.<br><br>
+      <strong>The order</strong>
+      Read top-down. The first <em>anomaly</em> is the cause. Everything below it is a consequence.
+    </aside>
+    <div class="prose">
+      <p class="lead">A real Flight Recorder dump from a 64-GPU job that hung at step 4,128. Click any line to read what it tells you and what to do about it.</p>
+
+      <div class="log-explorer">
+        <h4>Excerpt · nccl.log + flight recorder · step 4128</h4>
+        <div class="log-line" data-ann="ann1">
+<span class="ts">[2026-04-12 14:23:17.401]</span> <span class="host">gpu-node-07:1834:1956</span> <span class="lvl-info">[3] NCCL INFO</span> Using network IB
+        </div>
+        <div class="log-line" data-ann="ann2">
+<span class="ts">[2026-04-12 14:23:17.402]</span> <span class="host">gpu-node-07:1834:1956</span> <span class="lvl-info">[3] NCCL INFO</span> NET/IB : Using [0]mlx5_0:1/IB [RO]; OOB ib0:10.0.7.4
+        </div>
+        <div class="log-line" data-ann="ann3">
+<span class="ts">[2026-04-12 14:23:17.512]</span> <span class="host">gpu-node-07:1834:1956</span> <span class="lvl-info">[3] NCCL INFO</span> Channel 00/0 : 27[3] -&gt; 28[4] via NET/IB/0/GDRDMA
+        </div>
+        <div class="log-line" data-ann="ann4">
+<span class="ts">[2026-04-12 14:23:18.001]</span> <span class="host">gpu-node-07:1834:1956</span> <span class="lvl-info">[3] NCCL INFO</span> comm 0x7f9c... rank 27 nranks 64 cudaDev 3 busId 47000 - Init COMPLETE
+        </div>
+        <div class="log-line" data-ann="ann5">
+<span class="ts">[2026-04-12 16:48:13.882]</span> <span class="host">gpu-node-07:1834:1956</span> <span class="lvl-warn">[3] NCCL WARN</span> Watchdog caught collective operation timeout: WorkNCCL(SeqNum=18244, OpType=ALLREDUCE, Timeout(ms)=600000)
+        </div>
+        <div class="log-line" data-ann="ann6">
+<span class="ts">[2026-04-12 16:48:13.884]</span> <span class="host">gpu-node-07:1834:1956</span> <span class="lvl-err">[3] FR DUMP</span> rank=27 sequence=18244 state=started input=[131072000] dtype=bfloat16
+        </div>
+        <div class="log-line" data-ann="ann7">
+<span class="ts">[2026-04-12 16:48:13.886]</span> <span class="host">gpu-node-31:8821:8902</span> <span class="lvl-err">[7] FR DUMP</span> rank=39 sequence=18243 state=completed last_seq=18243
+        </div>
+        <div class="log-line" data-ann="ann8">
+<span class="ts">[2026-04-12 16:48:14.001]</span> <span class="host">gpu-node-04:2105:2230</span> <span class="lvl-err">[0] NCCL ERROR</span> Bootstrap : send failed : Connection reset by peer (104)
+        </div>
+
+        <div class="log-annotation" id="ann1">
+          <strong>Line 1 — Setup confirmation</strong>
+          NCCL chose the IB transport. If you wanted IB but see <code>Using network Socket</code> here, your IB stack didn't initialize — check <code>ibstat</code>, the device plugin, and <code>NCCL_IB_HCA</code>.
+        </div>
+        <div class="log-annotation" id="ann2">
+          <strong>Line 2 — Which NIC is being used</strong>
+          <code>mlx5_0:1</code> means port 1 of the first Mellanox HCA. <code>OOB ib0</code> is the out-of-band channel for bootstrap. If you have multiple HCAs and you're not seeing all of them, set <code>NCCL_IB_HCA=mlx5_0,mlx5_1,mlx5_2,mlx5_3</code> explicitly. Wrong HCA selection halves bandwidth silently.
+        </div>
+        <div class="log-annotation" id="ann3">
+          <strong>Line 3 — A channel is set up over GDRDMA</strong>
+          <code>GDRDMA</code> means GPUDirect RDMA — GPU memory talks directly to the NIC without bouncing through host RAM. This is what you want. If you see <code>NET/IB/0/0</code> (no GDRDMA suffix), GPUDirect is NOT engaged and you'll lose 3–10× bandwidth.
+        </div>
+        <div class="log-annotation" id="ann4">
+          <strong>Line 4 — Communicator initialized successfully</strong>
+          The rank joined the global communicator. If init fails, you'll see this line missing for one or more ranks; check the bootstrap section (line 8).
+        </div>
+        <div class="log-annotation" id="ann5">
+          <strong>Line 5 — THE HANG · 2 hours 25 minutes after init</strong>
+          The watchdog fired after 600 seconds with no progress on collective sequence 18244 (an AllReduce on a 131M-element bfloat16 tensor — that's a gradient bucket of ~250MB). This is the symptom. The next two lines are the diagnosis.
+        </div>
+        <div class="log-annotation" id="ann6">
+          <strong>Line 6 — Rank 27's view</strong>
+          Rank 27 issued AllReduce sequence 18244 and the collective is in state <em>started</em>. It's waiting for peers.
+        </div>
+        <div class="log-annotation" id="ann7">
+          <strong>Line 7 — Rank 39's view · THE SMOKING GUN</strong>
+          Rank 39 (on a different node) shows its last completed sequence was 18243. It never <em>issued</em> sequence 18244. Rank 39 is the culprit — something prevented it from reaching the next AllReduce. This narrows the search to "what happened on gpu-node-31 between 14:23 and 16:48?"
+        </div>
+        <div class="log-annotation" id="ann8">
+          <strong>Line 8 — The root cause</strong>
+          A different rank on a third node logged <code>Connection reset by peer</code>. This is a TCP-level failure on the bootstrap channel — almost always means the peer process died. Cross-reference: was a rank OOM-killed? Did a node go NotReady? Did <code>dmesg</code> show an Xid error? The hang is downstream of a process death somewhere else.
+        </div>
+      </div>
+
+      <h3>The reading method</h3>
+      <p>Walk the log from top to bottom. Skip anything labeled INFO once init looks clean. Stop at the first WARN or ERROR. From there, you're looking for two things: <em>what sequence number was active</em>, and <em>which rank diverged from the others</em>. Flight Recorder gives you both. The rest is figuring out why that rank diverged — and the answer is almost always elsewhere in the log (another rank's earlier failure) or on the system (kubectl describe, dmesg, ibstat).</p>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 6 -->
+<section class="chapter" id="ch6">
+  <div class="chapter-head">
+    <div class="chapter-meta">Chapter <span class="num">VI</span></div>
+    <h2 class="chapter-title">The decision <em>tree.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>How to use</strong>
+      Click answers at each step. The tree narrows from 4 classes to 1 root cause in 3–5 hops.<br><br>
+      <strong>Reset</strong>
+      Anytime, to walk a different path.
+    </aside>
+    <div class="prose">
+      <p class="lead">A flowchart for the 3 a.m. version of yourself. Read the log first, then click through.</p>
+
+      <div class="tree">
+        <div class="tree-label">Interactive · Hang Triage Decision Tree</div>
+        <div class="tree-title" id="treeTitle">Where to start</div>
+        <div id="treeContainer"></div>
+        <button class="tree-reset" id="treeReset" style="display:none; margin-top: 16px; background: var(--ink); color: var(--paper);">↺ Reset</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 7 -->
+<section class="chapter" id="ch7">
+  <div class="chapter-head">
+    <div class="chapter-meta">Chapter <span class="num">VII</span></div>
+    <h2 class="chapter-title">Eight real hangs, <em>annotated.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>The cases</strong>
+      All seen in production. Each case: context, symptom, diagnosis, fix.<br><br>
+      <strong>Pattern recognition</strong>
+      After reading these, you'll recognize ~80% of the hangs you'll encounter.
+    </aside>
+    <div class="prose">
+      <p class="lead">Eight hangs from real training clusters, in roughly increasing order of subtlety. Each is presented as a case file: the context, the symptom, how to debug, and the fix.</p>
+
+      <!-- CASE 1 -->
+      <div class="case">
+        <div class="case-num">01</div>
+        <div class="case-body">
+          <div class="case-title">The OOM elsewhere</div>
+          <div class="case-tags">
+            <span class="case-tag">Class 1 · Missing rank</span>
+            <span class="case-tag severity-high">Severity: high</span>
+            <span class="case-tag">Frequency: very common</span>
+          </div>
+          <div class="case-section">
+            <h5>Context</h5>
+            <p>64-GPU pretraining run, FSDP. Has been running 18 hours. Suddenly hangs.</p>
+          </div>
+          <div class="case-section">
+            <h5>Symptom</h5>
+            <p>Watchdog timeout on rank 0. Stack trace shows it's stuck in AllReduce. All other ranks log identical messages. Logs look identical and unremarkable for the 30 minutes prior.</p>
+          </div>
+          <div class="case-section">
+            <h5>Debug</h5>
+            <p>Check <code>kubectl get pods</code>: rank 47's pod is in <code>OOMKilled</code> status. <code>dmesg</code> on its node shows kernel OOM killer fired ~2 minutes before the hang. Rank 47 died; the other 63 ranks waited at the next collective. The hang report on rank 0 is downstream noise.</p>
+          </div>
+          <div class="case-section">
+            <h5>Fix</h5>
+            <pre data-label="immediate"><span class="cmt"># Increase memory request on the pod spec</span>
+resources:
+  requests: { memory: 320Gi }    <span class="cmt"># was 256Gi</span>
+  limits:   { memory: 320Gi }
+
+<span class="cmt"># Lower per-rank activation memory in PyTorch</span>
+fsdp_config = FullyShardedDataParallelPlugin(
+    activation_checkpointing=<span class="ok">True</span>,
+    cpu_offload=CPUOffload(offload_params=<span class="ok">False</span>),
+)</pre>
+            <p>Permanent fix: enable activation checkpointing at the right granularity (transformer blocks usually), validate the new memory ceiling with a 1-hour smoke test, and add a memory-usage Prometheus alert so the next OOM is caught before it cascades.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- CASE 2 -->
+      <div class="case">
+        <div class="case-num">02</div>
+        <div class="case-body">
+          <div class="case-title">The conditional collective</div>
+          <div class="case-tags">
+            <span class="case-tag">Class 1 · Collective mismatch</span>
+            <span class="case-tag severity-med">Severity: med</span>
+            <span class="case-tag">Frequency: common</span>
+          </div>
+          <div class="case-section">
+            <h5>Context</h5>
+            <p>RLHF training. Custom logic that occasionally logs eval metrics only from rank 0.</p>
+          </div>
+          <div class="case-section">
+            <h5>Symptom</h5>
+            <p>Run hangs once every ~500 steps, never the same step. Flight Recorder shows rank 0 stuck in <code>all_gather</code> sequence 9842; all other ranks stuck in <code>all_reduce</code> sequence 9842.</p>
+          </div>
+          <div class="case-section">
+            <h5>Debug</h5>
+            <p>The collective opcode mismatch at the same sequence ID is the giveaway — Class 1. Search the code for any <code>if rank == 0:</code> or <code>if some_condition:</code> blocks containing a collective. Found:</p>
+            <pre data-label="the bug"><span class="kw">if</span> step % <span class="num">100</span> == <span class="num">0</span> <span class="kw">and</span> <span class="fn">should_eval</span>(metrics):
+    <span class="cmt"># rank 0 gathers eval samples</span>
+    samples = <span class="fn">dist.all_gather</span>(local_samples, ...)
+<span class="kw">else</span>:
+    <span class="cmt"># normal step</span>
+    <span class="fn">dist.all_reduce</span>(grads, ...)</pre>
+            <p><code>should_eval()</code> uses <em>local</em> rank-0 metrics, so different ranks make different branch choices. They dispatch different collectives at the same sequence ID. Hang.</p>
+          </div>
+          <div class="case-section">
+            <h5>Fix</h5>
+            <p>Two rules, never broken: (1) every rank must dispatch the same sequence of collectives in the same order; (2) any branch that contains a collective must be decided <em>by a broadcast from one rank</em>, not by local state.</p>
+            <pre data-label="the fix"><span class="kw">if</span> rank == <span class="num">0</span>:
+    do_eval = <span class="fn">should_eval</span>(metrics)
+<span class="kw">else</span>:
+    do_eval = <span class="ok">False</span>
+do_eval_tensor = torch.tensor([do_eval], device=device)
+<span class="fn">dist.broadcast</span>(do_eval_tensor, src=<span class="num">0</span>)   <span class="cmt"># everyone learns</span>
+<span class="kw">if</span> do_eval_tensor.item():
+    <span class="fn">dist.all_gather</span>(...)
+<span class="kw">else</span>:
+    <span class="fn">dist.all_reduce</span>(...)</pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- CASE 3 -->
+      <div class="case">
+        <div class="case-num">03</div>
+        <div class="case-body">
+          <div class="case-title">The dtype drift</div>
+          <div class="case-tags">
+            <span class="case-tag">Class 3 · Misconfigured args</span>
+            <span class="case-tag severity-med">Severity: med</span>
+            <span class="case-tag">Frequency: uncommon</span>
+          </div>
+          <div class="case-section">
+            <h5>Context</h5>
+            <p>Mixed-precision training. One rank uses <code>torch.autocast</code> from inside a helper module; another rank's code path doesn't reach that module on certain steps.</p>
+          </div>
+          <div class="case-section">
+            <h5>Symptom</h5>
+            <p>NCCL itself prints a warning: <code>NCCL WARN Mismatched collective: type fp16 on rank 3, type fp32 on rank 5</code>. Then hangs. (In newer NCCL versions; older ones just hang silently.)</p>
+          </div>
+          <div class="case-section">
+            <h5>Debug</h5>
+            <p>The error message is precise. Flight Recorder confirms: same opcode, same sequence, different <code>dtype</code>. Search the code for places where a tensor's dtype depends on local state — autocast contexts, conditional <code>.float()</code> casts, model-side type coercion.</p>
+          </div>
+          <div class="case-section">
+            <h5>Fix</h5>
+            <p>Cast the gradient bucket explicitly to a known dtype <em>before</em> the collective. PyTorch's DDP/FSDP do this automatically for the gradient sync, but custom <code>dist.all_reduce</code> calls in your code don't. Add <code>.to(torch.bfloat16)</code> before the call, or wrap with a <code>dist.barrier()</code> + dtype assertion in dev mode.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- CASE 4 -->
+      <div class="case">
+        <div class="case-num">04</div>
+        <div class="case-body">
+          <div class="case-title">The IB link flap</div>
+          <div class="case-tags">
+            <span class="case-tag">Class 4 · Network</span>
+            <span class="case-tag severity-high">Severity: high</span>
+            <span class="case-tag">Frequency: common at scale</span>
+          </div>
+          <div class="case-section">
+            <h5>Context</h5>
+            <p>512-GPU run. Healthy for 30 hours. Suddenly all ranks stall.</p>
+          </div>
+          <div class="case-section">
+            <h5>Symptom</h5>
+            <p>Flight Recorder: all 512 ranks at the same collective, all in state <em>started</em>, none completing. No rank crashed. No collective mismatch. The cluster is just frozen mid-AllReduce.</p>
+          </div>
+          <div class="case-section">
+            <h5>Debug</h5>
+            <p>The pattern — everyone at the same state with no rank missing — points at network. Run on each node:</p>
+            <pre data-label="diagnose"><span class="cmt"># Check link state on every node</span>
+<span class="fn">ibstat</span> | grep -E "State|Rate"
+<span class="cmt"># If any port shows "Initializing" or "Down" → flap</span>
+
+<span class="cmt"># Check switch counters (requires fabric mgmt access)</span>
+<span class="fn">ibdiagnet</span> --pc
+
+<span class="cmt"># Kernel ring buffer for NIC events</span>
+<span class="fn">dmesg</span> -T | grep -iE "mlx5|infiniband|link"</pre>
+            <p>Result: <code>gpu-node-23</code>'s <code>mlx5_2</code> port flapped at 15:42:18, came back at 15:42:23. NCCL's connections through that NIC died but never reconnected. The hang is permanent because NCCL doesn't auto-retry transport-level failures by default.</p>
+          </div>
+          <div class="case-section">
+            <h5>Fix</h5>
+            <p>Immediate: kill the job and restart from the last checkpoint. NCCL cannot recover from a transport reset.</p>
+            <p>Mid-term: enable NCCL fault tolerance via <code>NCCL_IB_RETRY_CNT=12</code> and <code>NCCL_IB_TIMEOUT=24</code>, and at the PyTorch level use <code>torchft</code> or fault-tolerant collectives that can re-form the process group around a failed node.</p>
+            <p>Long-term: install IB health monitoring — Prometheus exporters for <code>port_xmit_discards</code>, <code>symbol_errors</code>, and link state changes. Alert the moment any of these climb, swap the offending hardware before the next hang.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- CASE 5 -->
+      <div class="case">
+        <div class="case-num">05</div>
+        <div class="case-body">
+          <div class="case-title">The slow rank (straggler)</div>
+          <div class="case-tags">
+            <span class="case-tag">Class 2 · GPU hang</span>
+            <span class="case-tag severity-med">Severity: med</span>
+            <span class="case-tag">Frequency: very common</span>
+          </div>
+          <div class="case-section">
+            <h5>Context</h5>
+            <p>Vision training. Most steps take 1.2s; occasionally one takes 35s and the job nearly times out.</p>
+          </div>
+          <div class="case-section">
+            <h5>Symptom</h5>
+            <p>No hang per se — just severe step-time variance. Flight Recorder (with <code>TORCH_NCCL_ENABLE_TIMING=1</code>) shows that during the slow steps, one rank's <em>start</em> time for the AllReduce is 30 seconds after the others. The collective itself is fast; the rank's <em>arrival</em> at it is slow.</p>
+          </div>
+          <div class="case-section">
+            <h5>Debug</h5>
+            <p>Class 2 signature: peers waiting, one rank not yet at the collective. The slow rank's GPU is busy on something <em>before</em> the collective. Causes (in order of likelihood): a CPU sync (<code>tensor.item()</code>, <code>tensor.tolist()</code>, <code>print(tensor)</code>), a slow data-loader returning, a custom kernel with awful occupancy, or a profiler attached.</p>
+            <p>Tool of choice: NVIDIA Nsight Systems profiler on the slow rank for one step. The gap before AllReduce will reveal what's filling it.</p>
+          </div>
+          <div class="case-section">
+            <h5>Fix</h5>
+            <p>Most common cause: a <code>.item()</code> or <code>print(loss)</code> inside the training step on a rank whose loss happens to vary more. The implicit <code>cudaStreamSynchronize</code> blocks the CPU. Move logging to a fire-and-forget background thread, or only log every N steps from rank 0 after a fast <code>dist.reduce</code>.</p>
+            <p>If it's a slow data loader: bigger <code>prefetch_factor</code>, more workers, persistent workers, and verify <code>/dev/shm</code> is big enough (mount as <code>emptyDir: { medium: Memory }</code> in K8s).</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- CASE 6 -->
+      <div class="case">
+        <div class="case-num">06</div>
+        <div class="case-body">
+          <div class="case-title">The wrong network interface</div>
+          <div class="case-tags">
+            <span class="case-tag">Class 4 · Misconfig</span>
+            <span class="case-tag severity-high">Severity: high</span>
+            <span class="case-tag">Frequency: at every new cluster</span>
+          </div>
+          <div class="case-section">
+            <h5>Context</h5>
+            <p>New cluster deployed. Single-node 8-GPU runs work. Multi-node runs hang immediately at <code>init_process_group</code>.</p>
+          </div>
+          <div class="case-section">
+            <h5>Symptom</h5>
+            <p><code>Bootstrap : send failed : Connection refused (111)</code>, or hangs forever during init. Sometimes a verbose <code>could not find a working interface</code> warning.</p>
+          </div>
+          <div class="case-section">
+            <h5>Debug</h5>
+            <p>NCCL picked the wrong interface for the bootstrap (rendezvous) channel — probably a Docker bridge, a management LAN, or a flannel/cilium overlay that can't reach the other nodes' pod IPs. Show interfaces:</p>
+            <pre data-label="diagnose"><span class="cmt"># From inside the pod</span>
+<span class="fn">ip</span> addr show
+<span class="fn">getent</span> hosts <span class="num">&lt;other-rank-hostname&gt;</span>
+
+<span class="cmt"># What did NCCL pick?</span>
+grep -E "OOB|using.*interface" /var/log/nccl/*.log</pre>
+            <p>NCCL log shows it picked <code>docker0</code> on one rank and <code>eth0</code> on another. They can't reach each other.</p>
+          </div>
+          <div class="case-section">
+            <h5>Fix</h5>
+            <pre data-label="set in launch script"><span class="cmt"># Force NCCL to use the right Ethernet interface for bootstrap</span>
+<span class="kw">export</span> NCCL_SOCKET_IFNAME=eth0
+
+<span class="cmt"># Force which IB HCAs to use for data</span>
+<span class="kw">export</span> NCCL_IB_HCA=mlx5_0,mlx5_1,mlx5_2,mlx5_3
+
+<span class="cmt"># Exclude Docker / overlay interfaces explicitly</span>
+<span class="kw">export</span> NCCL_SOCKET_IFNAME=^docker,lo,veth</pre>
+            <p>Many cluster operators bake the right values into a <code>/etc/nccl.conf</code> on every node so jobs don't have to know.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- CASE 7 -->
+      <div class="case">
+        <div class="case-num">07</div>
+        <div class="case-body">
+          <div class="case-title">The GPU XID</div>
+          <div class="case-tags">
+            <span class="case-tag">Class 4 · Hardware</span>
+            <span class="case-tag severity-high">Severity: high</span>
+            <span class="case-tag">Frequency: 1 per 100 GPU-weeks</span>
+          </div>
+          <div class="case-section">
+            <h5>Context</h5>
+            <p>256-GPU job. Hangs at step 12,000. Restart from checkpoint — hangs again at step 12,000-ish. Restart on different nodes — runs fine.</p>
+          </div>
+          <div class="case-section">
+            <h5>Symptom</h5>
+            <p>One node's pod logs show <code>CUDA error: an illegal memory access was encountered</code> moments before the hang. Other nodes show the standard watchdog timeout. <code>dmesg</code> on the suspect node shows <code>NVRM: Xid (PCI:0000:5e:00): 79, pid='&lt;unknown&gt;', name=&lt;unknown&gt;, GPU has fallen off the bus</code>.</p>
+          </div>
+          <div class="case-section">
+            <h5>Debug</h5>
+            <p>Xid 79 = GPU lost from PCIe bus, almost always fatal hardware. Other useful Xids to recognize: 13 (graphics engine illegal access), 31 (GPU memory page fault), 48 (double-bit ECC error), 63/64 (page retirement). Check DCGM:</p>
+            <pre data-label="check the GPU"><span class="fn">nvidia-smi</span> --query-gpu=index,name,gpu_uuid,gpu_serial,inforom.ecc \
+  --format=csv
+
+<span class="fn">dcgmi</span> diag -r 3      <span class="cmt"># run a thorough hardware diag</span>
+<span class="fn">nvidia-smi</span> -q -d ECC | grep -i error</pre>
+          </div>
+          <div class="case-section">
+            <h5>Fix</h5>
+            <p>Cordon and drain the node in Kubernetes (<code>kubectl cordon &lt;node&gt; &amp;&amp; kubectl drain &lt;node&gt;</code>). File a hardware RMA. Add the node's GPU UUID to a "known-bad" list so the scheduler avoids re-using it even after reboot. Some teams maintain an automated "bad GPU" admission webhook that blocks pods from running on flagged hardware until a tech replaces it.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- CASE 8 -->
+      <div class="case">
+        <div class="case-num">08</div>
+        <div class="case-body">
+          <div class="case-title">The CUDA-graph capture deadlock</div>
+          <div class="case-tags">
+            <span class="case-tag">Class 2 · GPU hang</span>
+            <span class="case-tag severity-low">Severity: subtle</span>
+            <span class="case-tag">Frequency: rare, but vicious</span>
+          </div>
+          <div class="case-section">
+            <h5>Context</h5>
+            <p>Tensor-parallel training using CUDA graphs to reduce kernel-launch overhead. Two communicators in use (TP group + DP group). Hangs intermittently inside a graph launch.</p>
+          </div>
+          <div class="case-section">
+            <h5>Symptom</h5>
+            <p>The hang is rare and not at a reproducible step. <code>py-spy</code> on the hung rank shows the Python thread inside <code>cudaGraphLaunch</code>; another thread holds the GIL inside a CUDA API call. The watchdog timeout fires but the dump is incomplete because the watchdog itself can't proceed.</p>
+          </div>
+          <div class="case-section">
+            <h5>Debug</h5>
+            <p>This is a known interaction between CUDA graph launches and multiple NCCL communicators in the same process. The NCCL docs specifically call it out — if multiple ranks launch the same graph with NCCL inside from the same thread, the CUDA launches themselves can deadlock.</p>
+          </div>
+          <div class="case-section">
+            <h5>Fix</h5>
+            <pre data-label="env var trio"><span class="cmt"># Disable cross-communicator graph optimization</span>
+<span class="kw">export</span> NCCL_GRAPH_MIXING_SUPPORT=<span class="num">0</span>
+
+<span class="cmt"># Or use explicit grouped semantics</span>
+<span class="kw">export</span> NCCL_LAUNCH_MODE=PARALLEL
+
+<span class="cmt"># And ensure the watchdog can dump even when blocked</span>
+<span class="kw">export</span> TORCH_NCCL_DESYNC_DEBUG=<span class="num">1</span>
+<span class="kw">export</span> TORCH_NCCL_DUMP_ON_TIMEOUT=<span class="num">1</span></pre>
+            <p>Long-term: avoid using CUDA graphs across NCCL communicator boundaries until you have measured a real speedup that justifies the operational cost.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout">
+        <div class="callout-label">What these eight have in common</div>
+        <p>Every case here was diagnosed by the same method: <strong>read the Flight Recorder, find the divergent rank, look on that rank's node.</strong> The path from symptom to fix takes 10 minutes when telemetry is enabled and 4 hours when it isn't.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 8 -->
+<section class="chapter" id="ch8">
+  <div class="chapter-head">
+    <div class="chapter-meta">Chapter <span class="num">VIII</span></div>
+    <h2 class="chapter-title">Environment variables that <em>matter.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>The discipline</strong>
+      Most env vars are for tuning, not debugging. Keep tuning vars in <code>/etc/nccl.conf</code>; keep debugging vars in your launch script and remove them when issue is resolved.<br><br>
+      <strong>NCCL's own advice</strong>
+      Don't keep debug vars set in production — they can degrade performance or trigger hangs.
+    </aside>
+    <div class="prose">
+      <p class="lead">Twenty env vars cover essentially every real-world NCCL situation. Memorize the first eight; reference the rest.</p>
+
+      <div class="envvars">
+        <div class="envvar-row head">
+          <div>Variable</div>
+          <div>What it does · when to set</div>
+        </div>
+
+        <div class="envvar-row">
+          <div class="envvar-name">NCCL_DEBUG</div>
+          <div class="envvar-desc"><strong>VERSION | WARN | INFO | TRACE.</strong> Default is silent. Set to <code>INFO</code> always in dev/staging; <code>WARN</code> in prod (keeps warnings but trims volume).</div>
+        </div>
+        <div class="envvar-row">
+          <div class="envvar-name">NCCL_DEBUG_SUBSYS</div>
+          <div class="envvar-desc"><strong>INIT, COLL, NET, GRAPH, TUNING, ENV, ALLOC, P2P, NVLS, BOOTSTRAP, REG, ALL.</strong> Default <code>INIT,BOOTSTRAP,ENV</code>. For debugging hangs add <code>COLL,NET</code>. Prefix with <code>^</code> to exclude.</div>
+        </div>
+        <div class="envvar-row">
+          <div class="envvar-name">NCCL_DEBUG_FILE</div>
+          <div class="envvar-desc"><strong>Per-rank file output.</strong> Use template like <code>/var/log/nccl/nccl.%h.%p.log</code>. Without this, all ranks write to stdout and you get a tangle.</div>
+        </div>
+        <div class="envvar-row">
+          <div class="envvar-name">NCCL_SOCKET_IFNAME</div>
+          <div class="envvar-desc"><strong>Which Ethernet interface for bootstrap.</strong> Comma-separated prefix list. Prefix with <code>^</code> to exclude (<code>^docker,lo,veth</code>). The #1 cause of init hangs.</div>
+        </div>
+        <div class="envvar-row">
+          <div class="envvar-name">NCCL_IB_HCA</div>
+          <div class="envvar-desc"><strong>Which IB adapters for data.</strong> Set explicitly (<code>mlx5_0,mlx5_1,mlx5_2,mlx5_3</code>) — auto-discovery sometimes misses HCAs or picks the wrong ones.</div>
+        </div>
+        <div class="envvar-row">
+          <div class="envvar-name">NCCL_IB_DISABLE</div>
+          <div class="envvar-desc"><strong>0 or 1.</strong> Set to 1 to force fallback to TCP over Ethernet. Use as a test: if the hang goes away with IB disabled, the IB fabric is the culprit. Never run production this way — 10–50× bandwidth loss.</div>
+        </div>
+        <div class="envvar-row">
+          <div class="envvar-name">NCCL_P2P_DISABLE</div>
+          <div class="envvar-desc"><strong>0 or 1.</strong> Disables NVLink/PCIe direct GPU-to-GPU. Use only to test whether a P2P path is broken. Default 0.</div>
+        </div>
+        <div class="envvar-row">
+          <div class="envvar-name">NCCL_ALGO</div>
+          <div class="envvar-desc"><strong>Tree | Ring | CollnetDirect | NVLS.</strong> Forces a specific algorithm. Useful to bisect: if hang only happens with Ring, suspect a stuck peer in the ring; if only with Tree, suspect topology miscalculation.</div>
+        </div>
+        <div class="envvar-row">
+          <div class="envvar-name">NCCL_PROTO</div>
+          <div class="envvar-desc"><strong>Simple | LL | LL128.</strong> Protocol. LL128 is fastest on NVLink-class fabrics. Force <code>Simple</code> if you suspect a protocol-related corruption.</div>
+        </div>
+        <div class="envvar-row">
+          <div class="envvar-name">NCCL_NET_GDR_LEVEL</div>
+          <div class="envvar-desc"><strong>LOC | PIX | PXB | PHB | SYS.</strong> Maximum NIC-to-GPU distance for using GPUDirect RDMA. Default is auto. Set to <code>PHB</code> or higher if GDR is being skipped.</div>
+        </div>
+        <div class="envvar-row">
+          <div class="envvar-name">NCCL_IB_TIMEOUT</div>
+          <div class="envvar-desc"><strong>IB retransmit timeout exponent.</strong> Default 18 (~4 sec). Increase to 22 in noisy fabrics. <em>Tuning</em>, not debugging.</div>
+        </div>
+        <div class="envvar-row">
+          <div class="envvar-name">NCCL_IB_RETRY_CNT</div>
+          <div class="envvar-desc"><strong>Number of retries per packet.</strong> Default 7. Bump to 12 if you observe transient link issues that aren't true link-downs.</div>
+        </div>
+        <div class="envvar-row">
+          <div class="envvar-name">NCCL_BUFFSIZE</div>
+          <div class="envvar-desc"><strong>Per-channel buffer size in bytes.</strong> Default 4MB. Increase for large messages (8MB or 16MB) if all-reduces dominate; never decrease without measurement.</div>
+        </div>
+        <div class="envvar-row">
+          <div class="envvar-name">NCCL_NTHREADS</div>
+          <div class="envvar-desc"><strong>Number of CUDA threads per block in NCCL kernels.</strong> Don't touch unless guided by NCCL-tests output.</div>
+        </div>
+        <div class="envvar-row">
+          <div class="envvar-name">NCCL_ASYNC_ERROR_HANDLING</div>
+          <div class="envvar-desc"><strong>0 or 1.</strong> When 1, NCCL errors are surfaced to Python as exceptions instead of aborting the process. PyTorch sets this automatically. Useful for fault-tolerant frameworks.</div>
+        </div>
+        <div class="envvar-row">
+          <div class="envvar-name">TORCH_NCCL_BLOCKING_WAIT</div>
+          <div class="envvar-desc"><strong>0 or 1.</strong> When 1, <code>work.wait()</code> blocks the CPU instead of waiting on the CUDA stream. Combine with <code>TORCH_NCCL_ASYNC_ERROR_HANDLING=1</code> for fault tolerance.</div>
+        </div>
+        <div class="envvar-row">
+          <div class="envvar-name">TORCH_NCCL_DUMP_ON_TIMEOUT</div>
+          <div class="envvar-desc"><strong>0 or 1.</strong> Flight Recorder dumps trace buffers when watchdog fires. <strong>Set to 1 always.</strong> Cost is near zero; debugging payoff is enormous.</div>
+        </div>
+        <div class="envvar-row">
+          <div class="envvar-name">TORCH_NCCL_TRACE_BUFFER_SIZE</div>
+          <div class="envvar-desc"><strong>Ring buffer size in collectives.</strong> Default 0 (off). Set to 2000+ in production. Each entry is ~few KB, so 2000 ≈ 10MB per rank — trivial.</div>
+        </div>
+        <div class="envvar-row">
+          <div class="envvar-name">TORCH_NCCL_ENABLE_MONITORING</div>
+          <div class="envvar-desc"><strong>0 or 1.</strong> Enables the heartbeat watchdog. Default 1. Don't disable unless debugging the watchdog itself.</div>
+        </div>
+        <div class="envvar-row">
+          <div class="envvar-name">TORCH_NCCL_DESYNC_DEBUG</div>
+          <div class="envvar-desc"><strong>0 or 1.</strong> Extra diagnostics when collectives desync. Set to 1 during incident investigation; the overhead is non-trivial so don't leave on.</div>
+        </div>
+      </div>
+
+      <h3>The production-baseline launch script</h3>
+      <pre data-label="launch.sh — bake into every job"><span class="cmt">#!/bin/bash
+# ────────────────────────────────────────────────────
+# Telemetry (always on, low overhead)
+# ────────────────────────────────────────────────────</span>
+<span class="kw">export</span> NCCL_DEBUG=INFO
+<span class="kw">export</span> NCCL_DEBUG_SUBSYS=INIT,ENV,GRAPH,TUNING
+<span class="kw">export</span> NCCL_DEBUG_FILE=/var/log/nccl/nccl.%h.%p.log
+<span class="kw">export</span> TORCH_NCCL_DUMP_ON_TIMEOUT=<span class="num">1</span>
+<span class="kw">export</span> TORCH_NCCL_TRACE_BUFFER_SIZE=<span class="num">2000</span>
+<span class="kw">export</span> TORCH_NCCL_DEBUG_INFO_TEMP_FILE=/var/log/fr/dump_%h_%p
+<span class="kw">export</span> TORCH_NCCL_ENABLE_MONITORING=<span class="num">1</span>
+<span class="kw">export</span> TORCH_NCCL_HEARTBEAT_TIMEOUT_SEC=<span class="num">600</span>
+<span class="kw">export</span> TORCH_NCCL_BLOCKING_WAIT=<span class="num">0</span>           <span class="cmt"># non-blocking</span>
+<span class="kw">export</span> TORCH_NCCL_ASYNC_ERROR_HANDLING=<span class="num">1</span>     <span class="cmt"># surface errors</span>
+
+<span class="cmt"># ────────────────────────────────────────────────────
+# Network — set explicitly, never trust auto-discovery
+# ────────────────────────────────────────────────────</span>
+<span class="kw">export</span> NCCL_SOCKET_IFNAME=eth0
+<span class="kw">export</span> NCCL_IB_HCA=mlx5_0,mlx5_1,mlx5_2,mlx5_3
+<span class="kw">export</span> NCCL_IB_GID_INDEX=<span class="num">3</span>                  <span class="cmt"># RoCE v2; set per fabric</span>
+<span class="kw">export</span> NCCL_IB_TC=<span class="num">106</span>                        <span class="cmt"># DSCP for RoCE QoS</span>
+<span class="kw">export</span> NCCL_IB_SL=<span class="num">3</span>
+
+<span class="cmt"># ────────────────────────────────────────────────────
+# Performance — measured for this fabric
+# ────────────────────────────────────────────────────</span>
+<span class="kw">export</span> NCCL_BUFFSIZE=<span class="num">8388608</span>               <span class="cmt"># 8MB for H100</span>
+<span class="kw">export</span> NCCL_NET_GDR_LEVEL=PHB
+
+<span class="cmt"># ────────────────────────────────────────────────────
+# Application
+# ────────────────────────────────────────────────────</span>
+<span class="kw">torchrun</span> --nproc_per_node=<span class="num">8</span> --nnodes=<span class="num">64</span> \
+  --rdzv_backend=c10d --rdzv_endpoint=<span class="num">$RDZV</span> \
+  train.py "<span class="num">$@</span>"</pre>
+
+      <div class="callout warn">
+        <div class="callout-label">A word on the timeout</div>
+        <p>The default NCCL watchdog timeout in PyTorch is 30 minutes for some operations, 10 minutes for others. Long-running collectives can legitimately exceed this — particularly the first AllReduce after model load (can take minutes for very large models). If you see "false positive" timeouts during init, raise <code>TORCH_NCCL_HEARTBEAT_TIMEOUT_SEC</code> and the per-PG timeout. But: if you're raising it because timeouts happen mid-training, you have a real hang and you're hiding it. Don't do that.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 9 -->
+<section class="chapter" id="ch9">
+  <div class="chapter-head">
+    <div class="chapter-meta">Chapter <span class="num">IX</span></div>
+    <h2 class="chapter-title">The pre-flight <em>checklist.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>Run this</strong>
+      Before every multi-node training run. 10 minutes prevents 10-hour hangs.<br><br>
+      <strong>Automate</strong>
+      Turn each check into a CI gate that runs against the cluster before a big job is accepted.
+    </aside>
+    <div class="prose">
+      <p class="lead">A flight check before take-off. If you can check every box below before launching a multi-node run, the hang risk drops 5–10×. Click to mark each complete.</p>
+
+      <div class="preflight" id="preflight">
+        <div class="pre-item"><div class="pre-box"></div><div class="pre-content"><div class="pre-title">nccl-tests passes at expected bandwidth</div><div class="pre-desc">Run <code>all_reduce_perf</code> across the exact placement your job will use. Bandwidth should be 80%+ of the link's theoretical max.</div></div></div>
+        <div class="pre-item"><div class="pre-box"></div><div class="pre-content"><div class="pre-title">Flight Recorder is enabled</div><div class="pre-desc">TORCH_NCCL_DUMP_ON_TIMEOUT=1, TORCH_NCCL_TRACE_BUFFER_SIZE=2000, writable dump path.</div></div></div>
+        <div class="pre-item"><div class="pre-box"></div><div class="pre-content"><div class="pre-title">NCCL_DEBUG=INFO + per-rank file</div><div class="pre-desc">Logs going to /var/log/nccl/*.{hostname}.{pid}.log, not stdout. Tested by reading one rank's file.</div></div></div>
+        <div class="pre-item"><div class="pre-box"></div><div class="pre-content"><div class="pre-title">NCCL_SOCKET_IFNAME is explicit</div><div class="pre-desc">Set to the actual data interface name, not auto. Excludes docker, veth, lo.</div></div></div>
+        <div class="pre-item"><div class="pre-box"></div><div class="pre-content"><div class="pre-title">NCCL_IB_HCA is explicit</div><div class="pre-desc">Set to all 4 (or 8) HCAs by name. Verified by checking NCCL log shows all of them initialized.</div></div></div>
+        <div class="pre-item"><div class="pre-box"></div><div class="pre-content"><div class="pre-title">GPUDirect RDMA is engaged</div><div class="pre-desc">NCCL log shows <code>NET/IB/0/GDRDMA</code> in the channel setup lines, not <code>NET/IB/0/0</code>.</div></div></div>
+        <div class="pre-item"><div class="pre-box"></div><div class="pre-content"><div class="pre-title">/dev/shm sized correctly</div><div class="pre-desc">Mounted as emptyDir with memory medium, sized to 50% of node RAM. Default 64MB causes silent failures.</div></div></div>
+        <div class="pre-item"><div class="pre-box"></div><div class="pre-content"><div class="pre-title">No collective inside any if-rank-equals block</div><div class="pre-desc">Grep the training code for <code>if rank ==</code> or <code>if local_rank ==</code> — verify no collective inside any of them.</div></div></div>
+        <div class="pre-item"><div class="pre-box"></div><div class="pre-content"><div class="pre-title">Same NCCL version on all nodes</div><div class="pre-desc">Verified by <code>python -c "import torch; print(torch.cuda.nccl.version())"</code> on every node, or by image SHA equality.</div></div></div>
+        <div class="pre-item"><div class="pre-box"></div><div class="pre-content"><div class="pre-title">No mismatched dtypes in custom collectives</div><div class="pre-desc">Custom dist.all_reduce / all_gather calls cast inputs to a fixed dtype before the call.</div></div></div>
+        <div class="pre-item"><div class="pre-box"></div><div class="pre-content"><div class="pre-title">Hardware health check passes on all nodes</div><div class="pre-desc">DCGM diagnostic level 3 passes on every node. No active ECC errors, no IB port flaps in last 24h.</div></div></div>
+        <div class="pre-item"><div class="pre-box"></div><div class="pre-content"><div class="pre-title">Memory headroom verified</div><div class="pre-desc">Peak memory at planned batch size ≤ 90% of GPU memory. No reliance on cudaMallocAsync growing during training.</div></div></div>
+        <div class="pre-item"><div class="pre-box"></div><div class="pre-content"><div class="pre-title">Checkpointing tested at planned scale</div><div class="pre-desc">A test save + restore at full world size completes. Otherwise the first checkpoint at hour 12 will hang.</div></div></div>
+        <div class="pre-item"><div class="pre-box"></div><div class="pre-content"><div class="pre-title">Watchdog timeout right-sized</div><div class="pre-desc">TORCH_NCCL_HEARTBEAT_TIMEOUT_SEC ≥ longest expected step including warmup + checkpoint write.</div></div></div>
+      </div>
+
+      <h3>The smoke test you should always run</h3>
+      <p>Before any multi-day run on N nodes, run a 5-minute scaled-down version of the same code on N nodes. This catches 90% of integration bugs before they cost you a checkpoint's worth of compute. The smoke test below is the canonical one:</p>
+      <pre data-label="smoke.py"><span class="kw">import</span> torch, torch.distributed <span class="kw">as</span> dist, time
+dist.init_process_group(backend=<span class="str">"nccl"</span>)
+rank, world = dist.get_rank(), dist.get_world_size()
+torch.cuda.set_device(rank % torch.cuda.device_count())
+
+<span class="cmt"># 1. all-reduce smoke test, sized like a real gradient bucket</span>
+t = torch.randn(<span class="num">256_000_000</span>, dtype=torch.bfloat16, device=<span class="str">"cuda"</span>)
+torch.cuda.synchronize()
+t0 = time.time()
+<span class="kw">for</span> _ <span class="kw">in</span> range(<span class="num">20</span>):
+    dist.all_reduce(t)
+torch.cuda.synchronize()
+bw = <span class="num">20</span> * t.numel() * <span class="num">2</span> / (time.time() - t0) / <span class="num">1e9</span>
+<span class="kw">if</span> rank == <span class="num">0</span>:
+    print(f<span class="str">"AllReduce: {bw:.1f} GB/s busbw"</span>)
+
+<span class="cmt"># 2. barrier sanity</span>
+dist.barrier()
+
+<span class="cmt"># 3. broadcast sanity (catches NIC asymmetry)</span>
+t2 = torch.zeros(<span class="num">1024</span>, device=<span class="str">"cuda"</span>) <span class="kw">if</span> rank else torch.ones(<span class="num">1024</span>, device=<span class="str">"cuda"</span>)
+dist.broadcast(t2, src=<span class="num">0</span>)
+<span class="kw">assert</span> t2.sum().item() == <span class="num">1024</span>, f<span class="str">"rank {rank} got wrong broadcast"</span>
+
+dist.destroy_process_group()</pre>
+      <p>Run it across your full cluster. If the bandwidth is &lt;80% of theoretical or if it hangs, you have a problem to fix <em>now</em>, not at hour 47 of a real run.</p>
+    </div>
+  </div>
+</section>
+
+<footer class="colophon">
+  <div class="colophon-mark"><em>The Cluster</em> Quarterly</div>
+  <p>Field Manual · Volume I · Issue 02 · MMXXVI</p>
+</footer>
+
+<script>
+// ============ Collective animations ============
+const collData = {
+  allreduce: {
+    explain: '<strong>Pattern · sum-and-distribute</strong> Each rank contributes its tensor. The result (sum, max, etc.) is identical on every rank afterward. Used by <em>data parallelism</em> for gradient sync: one AllReduce per gradient bucket per step.',
+    draw: () => {
+      const ranks = [0, 1, 2, 3];
+      let html = '<g>';
+      ranks.forEach((r, i) => {
+        const x = 80 + i * 170;
+        html += `<rect x="${x - 35}" y="30" width="70" height="50" fill="#b8401f" rx="2"/>`;
+        html += `<text x="${x}" y="50" text-anchor="middle" font-family="Fraunces" font-size="12" fill="#f4f1ea" font-weight="700">rank ${r}</text>`;
+        html += `<text x="${x}" y="68" text-anchor="middle" font-family="JetBrains Mono" font-size="11" fill="#f4f1ea">[${[2,5,1,4][i]}]</text>`;
+        html += `<rect x="${x - 35}" y="150" width="70" height="50" fill="#c9a227" rx="2"/>`;
+        html += `<text x="${x}" y="170" text-anchor="middle" font-family="Fraunces" font-size="12" fill="#0a0a0a" font-weight="700">rank ${r}</text>`;
+        html += `<text x="${x}" y="188" text-anchor="middle" font-family="JetBrains Mono" font-size="11" fill="#0a0a0a" font-weight="700">[12]</text>`;
+        html += `<line x1="${x}" y1="85" x2="${x}" y2="145" stroke="#f4f1ea" stroke-width="0.5" stroke-dasharray="3 3"/>`;
+      });
+      // crossing lines
+      for (let i = 0; i < 4; i++) {
+        for (let j = 0; j < 4; j++) {
+          if (i !== j) {
+            const x1 = 80 + i * 170, x2 = 80 + j * 170;
+            html += `<path d="M${x1},90 Q${(x1+x2)/2},120 ${x2},140" stroke="#c9a227" stroke-width="0.4" fill="none" opacity="0.5"/>`;
+          }
+        }
+      }
+      html += `<text x="350" y="120" text-anchor="middle" font-family="Fraunces" font-style="italic" font-size="14" fill="#c9a227">sum</text>`;
+      html += '</g>';
+      return html;
+    }
+  },
+  allgather: {
+    explain: '<strong>Pattern · concatenate-everyone</strong> Each rank starts with a shard; afterward each rank has the concatenation of all shards. Used by <em>FSDP/ZeRO</em> to reconstitute full parameters before forward passes. Hundreds per step.',
+    draw: () => {
+      let html = '';
+      const colors = ['#b8401f', '#3d5a3d', '#1e3a5f', '#8a3018'];
+      for (let i = 0; i < 4; i++) {
+        const x = 80 + i * 170;
+        html += `<rect x="${x - 35}" y="30" width="70" height="50" fill="${colors[i]}" rx="2"/>`;
+        html += `<text x="${x}" y="50" text-anchor="middle" font-family="Fraunces" font-size="12" fill="#f4f1ea" font-weight="700">rank ${i}</text>`;
+        html += `<text x="${x}" y="68" text-anchor="middle" font-family="JetBrains Mono" font-size="11" fill="#f4f1ea">shard ${i}</text>`;
+        // bottom: each rank has all shards
+        for (let j = 0; j < 4; j++) {
+          html += `<rect x="${x - 32 + j * 16}" y="150" width="14" height="50" fill="${colors[j]}" rx="1"/>`;
+        }
+        html += `<text x="${x}" y="218" text-anchor="middle" font-family="JetBrains Mono" font-size="10" fill="#f4f1ea">[0,1,2,3]</text>`;
+        html += `<line x1="${x}" y1="85" x2="${x}" y2="145" stroke="#f4f1ea" stroke-width="0.5" stroke-dasharray="3 3"/>`;
+      }
+      return html;
+    }
+  },
+  reducescatter: {
+    explain: '<strong>Pattern · sum-then-shard</strong> Inverse of AllGather. Each rank ends up holding a sum of one shard. Used by <em>FSDP/ZeRO</em> to push gradient updates back to parameter shards.',
+    draw: () => {
+      let html = '';
+      const colors = ['#b8401f', '#3d5a3d', '#1e3a5f', '#8a3018'];
+      for (let i = 0; i < 4; i++) {
+        const x = 80 + i * 170;
+        for (let j = 0; j < 4; j++) {
+          html += `<rect x="${x - 32 + j * 16}" y="30" width="14" height="50" fill="${colors[j]}" opacity="0.6" rx="1"/>`;
+        }
+        html += `<text x="${x}" y="98" text-anchor="middle" font-family="JetBrains Mono" font-size="10" fill="#f4f1ea">[0,1,2,3]</text>`;
+        html += `<rect x="${x - 35}" y="150" width="70" height="50" fill="${colors[i]}" rx="2"/>`;
+        html += `<text x="${x}" y="170" text-anchor="middle" font-family="Fraunces" font-size="12" fill="#f4f1ea" font-weight="700">rank ${i}</text>`;
+        html += `<text x="${x}" y="188" text-anchor="middle" font-family="JetBrains Mono" font-size="10" fill="#f4f1ea">Σ shard ${i}</text>`;
+        html += `<line x1="${x}" y1="105" x2="${x}" y2="145" stroke="#f4f1ea" stroke-width="0.5" stroke-dasharray="3 3"/>`;
+      }
+      return html;
+    }
+  },
+  broadcast: {
+    explain: '<strong>Pattern · one-to-all</strong> A designated rank (root) sends its tensor to every other rank. Used to <em>synchronize initial weights</em>, to share an evaluation decision across ranks, or to broadcast a random seed at training start.',
+    draw: () => {
+      let html = '';
+      for (let i = 0; i < 4; i++) {
+        const x = 80 + i * 170;
+        const isRoot = i === 0;
+        html += `<rect x="${x - 35}" y="30" width="70" height="50" fill="${isRoot ? '#c9a227' : '#3d3d3d'}" rx="2"/>`;
+        html += `<text x="${x}" y="50" text-anchor="middle" font-family="Fraunces" font-size="12" fill="${isRoot ? '#0a0a0a' : '#f4f1ea'}" font-weight="700">rank ${i}${isRoot ? ' ★' : ''}</text>`;
+        html += `<text x="${x}" y="68" text-anchor="middle" font-family="JetBrains Mono" font-size="11" fill="${isRoot ? '#0a0a0a' : '#f4f1ea'}">${isRoot ? '[X]' : '[ ]'}</text>`;
+        html += `<rect x="${x - 35}" y="150" width="70" height="50" fill="#c9a227" rx="2"/>`;
+        html += `<text x="${x}" y="170" text-anchor="middle" font-family="Fraunces" font-size="12" fill="#0a0a0a" font-weight="700">rank ${i}</text>`;
+        html += `<text x="${x}" y="188" text-anchor="middle" font-family="JetBrains Mono" font-size="11" fill="#0a0a0a" font-weight="700">[X]</text>`;
+        if (i > 0) {
+          html += `<path d="M80,90 Q${(80+x)/2},120 ${x},140" stroke="#c9a227" stroke-width="0.8" fill="none" marker-end="url(#bcastArrow)"/>`;
+        } else {
+          html += `<line x1="${x}" y1="85" x2="${x}" y2="145" stroke="#c9a227" stroke-width="0.8" stroke-dasharray="3 3"/>`;
+        }
+      }
+      html += `<defs><marker id="bcastArrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#c9a227"/></marker></defs>`;
+      return html;
+    }
+  },
+  alltoall: {
+    explain: '<strong>Pattern · everyone-to-everyone</strong> Each rank sends a different slice to each other rank. The all-bandwidth collective. Used by <em>MoE expert parallelism</em> and <em>sequence parallelism</em>. First to expose any weak network link.',
+    draw: () => {
+      let html = '';
+      const colors = ['#b8401f', '#3d5a3d', '#1e3a5f', '#8a3018'];
+      for (let i = 0; i < 4; i++) {
+        const x = 80 + i * 170;
+        for (let j = 0; j < 4; j++) {
+          html += `<rect x="${x - 32 + j * 16}" y="30" width="14" height="50" fill="${colors[i]}" opacity="${0.4 + j * 0.2}" rx="1"/>`;
+          html += `<text x="${x - 25 + j * 16}" y="60" font-family="JetBrains Mono" font-size="8" fill="#f4f1ea">${i}→${j}</text>`;
+        }
+        for (let j = 0; j < 4; j++) {
+          html += `<rect x="${x - 32 + j * 16}" y="150" width="14" height="50" fill="${colors[j]}" opacity="${0.4 + i * 0.2}" rx="1"/>`;
+          html += `<text x="${x - 25 + j * 16}" y="180" font-family="JetBrains Mono" font-size="8" fill="#f4f1ea">${j}→${i}</text>`;
+        }
+        html += `<line x1="${x}" y1="85" x2="${x}" y2="145" stroke="#f4f1ea" stroke-width="0.5" stroke-dasharray="3 3"/>`;
+      }
+      return html;
+    }
+  },
+  barrier: {
+    explain: '<strong>Pattern · pure synchronization</strong> No data moves. Every rank simply confirms "I\'ve reached this point." Used around <em>checkpoint writes</em>, evaluation phases, or anywhere a wall-clock sync is needed. Cheap, but a hang here usually means a deeper hang elsewhere.',
+    draw: () => {
+      let html = '';
+      for (let i = 0; i < 4; i++) {
+        const x = 80 + i * 170;
+        html += `<rect x="${x - 35}" y="30" width="70" height="50" fill="#3d5a3d" rx="2"/>`;
+        html += `<text x="${x}" y="50" text-anchor="middle" font-family="Fraunces" font-size="12" fill="#f4f1ea" font-weight="700">rank ${i}</text>`;
+        html += `<text x="${x}" y="68" text-anchor="middle" font-family="JetBrains Mono" font-size="11" fill="#f4f1ea">arrives</text>`;
+      }
+      // single horizontal bar = the barrier
+      html += `<rect x="50" y="110" width="600" height="3" fill="#c9a227"/>`;
+      html += `<text x="350" y="100" text-anchor="middle" font-family="JetBrains Mono" font-size="10" letter-spacing="3" fill="#c9a227">━━━ BARRIER ━━━</text>`;
+      for (let i = 0; i < 4; i++) {
+        const x = 80 + i * 170;
+        html += `<rect x="${x - 35}" y="150" width="70" height="50" fill="#3d5a3d" rx="2"/>`;
+        html += `<text x="${x}" y="170" text-anchor="middle" font-family="Fraunces" font-size="12" fill="#f4f1ea" font-weight="700">rank ${i}</text>`;
+        html += `<text x="${x}" y="188" text-anchor="middle" font-family="JetBrains Mono" font-size="11" fill="#f4f1ea">proceeds</text>`;
+        html += `<line x1="${x}" y1="85" x2="${x}" y2="115" stroke="#f4f1ea" stroke-width="0.5" stroke-dasharray="3 3"/>`;
+        html += `<line x1="${x}" y1="113" x2="${x}" y2="145" stroke="#f4f1ea" stroke-width="0.5" stroke-dasharray="3 3"/>`;
+      }
+      return html;
+    }
+  }
+};
+
+const collSvg = document.getElementById('collSvg');
+const collExplain = document.getElementById('collExplain');
+const collTabs = document.querySelectorAll('.coll-tab');
+
+function showColl(key) {
+  collTabs.forEach(t => t.classList.toggle('active', t.dataset.coll === key));
+  collSvg.innerHTML = collData[key].draw();
+  collExplain.innerHTML = collData[key].explain;
+}
+collTabs.forEach(t => t.addEventListener('click', () => showColl(t.dataset.coll)));
+showColl('allreduce');
+
+// ============ Log explorer ============
+document.querySelectorAll('.log-line').forEach(line => {
+  line.addEventListener('click', () => {
+    const annId = line.dataset.ann;
+    document.querySelectorAll('.log-line').forEach(l => l.classList.remove('active'));
+    document.querySelectorAll('.log-annotation').forEach(a => a.classList.remove('shown'));
+    line.classList.add('active');
+    document.getElementById(annId).classList.add('shown');
+  });
+});
+
+// ============ Decision tree ============
+const tree = {
+  start: {
+    q: 'Is your training run hung right now?',
+    n: 'Q0',
+    choices: [
+      { label: 'Yes — actively hung', next: 'check_telemetry' },
+      { label: 'It crashed with a NCCL error', next: 'crash_path' },
+      { label: 'Bandwidth feels slow', next: 'slow_path' }
+    ]
+  },
+  check_telemetry: {
+    q: 'Do you have Flight Recorder dumps available?',
+    n: 'Q1',
+    choices: [
+      { label: 'Yes — I can read the FR traces', next: 'fr_yes' },
+      { label: 'No — only stack traces & NCCL logs', next: 'fr_no' }
+    ]
+  },
+  fr_no: {
+    verdict: true,
+    title: '✗ You are debugging blind',
+    body: [
+      'Without Flight Recorder you can\'t distinguish Class 1 (mismatch) from Class 2 (GPU hang) from Class 4 (network).',
+      'Enable now and restart the run from the last checkpoint:',
+      '<pre style="margin-top:12px"><code>export TORCH_NCCL_DUMP_ON_TIMEOUT=1\nexport TORCH_NCCL_TRACE_BUFFER_SIZE=2000\nexport TORCH_NCCL_DEBUG_INFO_TEMP_FILE=/var/log/fr/dump_%h_%p</code></pre>',
+      'Meanwhile, do the cheap checks: <code>kubectl get pods</code> (any OOMKilled?), <code>dmesg | grep -i xid</code> on each node, <code>ibstat | grep State</code>. Restart with telemetry.'
+    ]
+  },
+  fr_yes: {
+    q: 'In the Flight Recorder dump, do ranks show the same opcode at the same sequence ID?',
+    n: 'Q2',
+    choices: [
+      { label: 'No — different opcodes', next: 'class1' },
+      { label: 'Yes, same opcode — but different dtype/size', next: 'class3' },
+      { label: 'Yes — same opcode, same args, mixed states', next: 'mixed_states' }
+    ]
+  },
+  mixed_states: {
+    q: 'What are the rank states at the stuck sequence?',
+    n: 'Q3',
+    choices: [
+      { label: 'Some "scheduled", some "started"', next: 'class2' },
+      { label: 'All "started", none "completed"', next: 'class4' },
+      { label: 'Some are missing entirely (no entry)', next: 'missing_rank' }
+    ]
+  },
+  missing_rank: {
+    verdict: true,
+    title: 'Class 1+ · Missing rank — a peer died',
+    body: [
+      'One or more ranks never reached the collective because the process is dead. Find the dead process:',
+      '<pre style="margin-top:12px"><code># In Kubernetes\nkubectl get pods -n &lt;ns&gt; -o wide | grep -v Running\nkubectl describe pod &lt;dead-pod&gt;        # what killed it?\nkubectl logs &lt;dead-pod&gt; --previous     # last words</code></pre>',
+      'Most common causes: OOM (memory request too low), CUDA OOM (batch too big), CUDA Xid (hardware), application exception swallowed.',
+      'Fix the root cause on that one rank and restart. The hang on the others was just downstream noise.'
+    ]
+  },
+  class1: {
+    verdict: true,
+    title: 'Class 1 · Collective mismatch — application bug',
+    body: [
+      'Ranks dispatched different collectives at the same sequence ID. This is your code\'s fault, not the cluster\'s.',
+      'Search the training step for: <code>if rank == 0:</code>, <code>if some_condition:</code>, any branch that contains a <code>dist.*</code> call.',
+      'Fix: ensure every collective is dispatched by every rank in the same order. If a branch is unavoidable, broadcast the branch decision from one rank first.',
+      'Reproduce locally with 2 ranks on a single node — almost always reproduces.'
+    ]
+  },
+  class2: {
+    verdict: true,
+    title: 'Class 2 · GPU hang — slow rank',
+    body: [
+      'Some ranks are at the collective, one is still doing pre-collective work. The slow rank is the culprit.',
+      'Attach py-spy + gdb to the slow rank to see what it\'s doing:',
+      '<pre style="margin-top:12px"><code>sudo py-spy dump --pid &lt;pid&gt;       # Python\nsudo gdb -p &lt;pid&gt; --batch -ex bt   # C++</code></pre>',
+      'Most common: a <code>.item()</code> / <code>.tolist()</code> / <code>print(tensor)</code> on the slow rank causing a CPU sync. Less common: a slow data loader, a profiler attached, a custom CUDA kernel with bad occupancy.'
+    ]
+  },
+  class3: {
+    verdict: true,
+    title: 'Class 3 · Misconfigured arguments',
+    body: [
+      'Same opcode and sequence, but mismatched dtype, count, or root rank across peers.',
+      'Recent NCCL versions print: <code>NCCL WARN Mismatched collective: type ...</code>',
+      'Fix: cast tensors to a fixed dtype right before the collective. Audit any <code>torch.autocast</code> contexts that wrap distributed code paths — autocast can change tensor dtypes asymmetrically.',
+      'Sanity helper: in dev mode, wrap every distributed call with a barrier + dtype assertion across ranks.'
+    ]
+  },
+  class4: {
+    verdict: true,
+    title: 'Class 4 · Hardware or network',
+    body: [
+      'All ranks at the collective, all started, none completing → transport-level failure.',
+      'Diagnose on each node:',
+      '<pre style="margin-top:12px"><code>ibstat | grep -E "State|Rate"     # link state\ndmesg -T | grep -iE "mlx5|xid"    # NIC + GPU events\nnvidia-smi -q -d ECC | grep -i error\ndcgmi diag -r 3                    # full diag</code></pre>',
+      'Most likely findings: an IB link flap (port went down briefly), a GPU Xid event (hardware fault), or a switch-level packet drop spike.',
+      'Immediate: kill the job, cordon the bad node, restart from checkpoint. Long-term: install fabric health monitoring (Prometheus IB exporter) and a "known-bad GPU UUID" admission webhook.'
+    ]
+  },
+  crash_path: {
+    q: 'What does the first error message say?',
+    n: 'Q1',
+    choices: [
+      { label: 'Bootstrap / Connection refused / can\'t find interface', next: 'class6' },
+      { label: 'CUDA error: illegal memory access', next: 'crash_cuda' },
+      { label: 'Watchdog timeout', next: 'check_telemetry' }
+    ]
+  },
+  class6: {
+    verdict: true,
+    title: 'Init-time bootstrap failure — wrong network interface',
+    body: [
+      'NCCL\'s rendezvous channel can\'t reach the other ranks. Almost always the wrong interface is selected.',
+      '<pre style="margin-top:12px"><code>export NCCL_SOCKET_IFNAME=eth0           # the actual data interface\nexport NCCL_SOCKET_IFNAME=^docker,lo,veth # exclude bad ones\nexport NCCL_IB_HCA=mlx5_0,mlx5_1,mlx5_2,mlx5_3</code></pre>',
+      'Verify by reading the NCCL log\'s "Using interface" line — it should be the data interface, not docker0 or a flannel/cilium overlay.',
+      'Bake this into <code>/etc/nccl.conf</code> on every node so jobs don\'t have to set it.'
+    ]
+  },
+  crash_cuda: {
+    verdict: true,
+    title: 'Class 4 · GPU hardware fault',
+    body: [
+      'Illegal memory access typically means a Xid event. Check dmesg on the offending node:',
+      '<pre style="margin-top:12px"><code>dmesg -T | grep -i "NVRM: Xid"</code></pre>',
+      'Common Xids: 13 (graphics engine illegal access), 31 (memory page fault), 48 (double-bit ECC), 63/64 (page retirement), 79 (GPU off the bus).',
+      'Cordon the node in Kubernetes, RMA the hardware, and add the GPU UUID to a known-bad list.'
+    ]
+  },
+  slow_path: {
+    q: 'Is the slowness uniform or does it vary by step?',
+    n: 'Q1',
+    choices: [
+      { label: 'Uniform — every step takes longer than expected', next: 'slow_uniform' },
+      { label: 'Variance — some steps slow, others fast (stragglers)', next: 'class2' }
+    ]
+  },
+  slow_uniform: {
+    verdict: true,
+    title: 'Transport / topology not engaged',
+    body: [
+      'Run nccl-tests at your job\'s placement and compare:',
+      '<pre style="margin-top:12px"><code>mpirun -np 64 -hostfile hosts \\\n  /usr/local/nccl-tests/bin/all_reduce_perf \\\n  -b 1G -e 1G -f 2 -g 1</code></pre>',
+      'If reported busbw is &lt;80% of theoretical: check NCCL log for "Using network IB" vs "Using network Socket" and look for "NET/IB/0/GDRDMA" (you want GDRDMA). Verify MTU is 9000 on the data network. Verify topology-aware scheduling pinned all workers to the same IB island.',
+      'See Issue 01 of this manual: Chapter VI · Topology & the NCCL Tax.'
+    ]
+  }
+};
+
+let currentNode = 'start';
+const treeContainer = document.getElementById('treeContainer');
+const treeTitle = document.getElementById('treeTitle');
+const treeReset = document.getElementById('treeReset');
+
+function renderTree() {
+  const node = tree[currentNode];
+  treeContainer.innerHTML = '';
+  if (node.verdict) {
+    treeTitle.textContent = '→ Verdict';
+    const div = document.createElement('div');
+    div.className = 'tree-verdict';
+    div.innerHTML = `<h4>${node.title}</h4>${node.body.map(b => `<p>${b}</p>`).join('')}`;
+    treeContainer.appendChild(div);
+    treeReset.style.display = 'inline-block';
+  } else {
+    treeTitle.textContent = 'Walk the tree';
+    const div = document.createElement('div');
+    div.className = 'tree-step current';
+    div.innerHTML = `
+      <div class="tree-num">${node.n}</div>
+      <div class="tree-q">${node.q}</div>
+      <div class="tree-choices">
+        ${node.choices.map(c => `<div class="tree-choice" data-next="${c.next}">${c.label}<span class="tree-choice-arrow">→</span></div>`).join('')}
+      </div>`;
+    treeContainer.appendChild(div);
+    div.querySelectorAll('.tree-choice').forEach(c => {
+      c.addEventListener('click', () => {
+        currentNode = c.dataset.next;
+        renderTree();
+      });
+    });
+    treeReset.style.display = currentNode === 'start' ? 'none' : 'inline-block';
+  }
+}
+treeReset.addEventListener('click', () => { currentNode = 'start'; renderTree(); });
+renderTree();
+
+// ============ Checklist ============
+document.querySelectorAll('.pre-item').forEach(el => {
+  el.addEventListener('click', () => {
+    el.classList.toggle('done');
+    const box = el.querySelector('.pre-box');
+    box.textContent = el.classList.contains('done') ? '✓' : '';
+  });
+});
+</script>
+</body>
+</html>
