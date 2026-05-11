@@ -1,0 +1,1108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nsight Systems mastery — profiling CUDA &amp; PyTorch</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.6.0/dist/tabler-icons.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,wght@0,400;0,600;1,400&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+--bg:#FAFAF7;--bg2:#F0EFEB;--bg3:#E6E5E0;--card:#fff;
+--tx:#1C1C1A;--tx2:#6B6B65;--tx3:#9C9C95;
+--bdr:rgba(0,0,0,0.08);--bdr2:rgba(0,0,0,0.15);
+--acc:#2D5A27;--acc-bg:#E8F0E7;--acc-tx:#1E3D1A;
+--warn:#8B6914;--warn-bg:#FFF8E1;--warn-tx:#5C4400;
+--err:#9B2C2C;--err-bg:#FFF0F0;--err-tx:#6B1A1A;
+--info:#1A5276;--info-bg:#E8F4FD;--info-tx:#0D3B56;
+--blue:#3B82F6;--green:#22C55E;--amber:#F59E0B;--red:#EF4444;--purple:#8B5CF6;--teal:#14B8A6;--pink:#EC4899;--gray:#94A3B8;
+--font:'Instrument Sans',sans-serif;--serif:'Source Serif 4',Georgia,serif;--mono:'JetBrains Mono','Consolas',monospace;
+--radius:8px;--radius-lg:12px;
+}
+@media(prefers-color-scheme:dark){:root{
+--bg:#1A1A18;--bg2:#242422;--bg3:#2E2E2B;--card:#222220;
+--tx:#E8E8E4;--tx2:#9C9C95;--tx3:#6B6B65;
+--bdr:rgba(255,255,255,0.08);--bdr2:rgba(255,255,255,0.15);
+--acc:#6ABF62;--acc-bg:#1E2E1C;--acc-tx:#A0D89A;
+--warn:#D4A529;--warn-bg:#2E2610;--warn-tx:#E8C556;
+--err:#F87171;--err-bg:#2E1A1A;--err-tx:#FCA5A5;
+--info:#60A5FA;--info-bg:#1A2836;--info-tx:#93C5FD;
+}}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:var(--font);background:var(--bg);color:var(--tx);line-height:1.7;font-size:15px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:820px;margin:0 auto;padding:2.5rem 1.5rem 6rem}
+h1{font-family:var(--serif);font-size:32px;font-weight:600;line-height:1.25;margin:0 0 8px;letter-spacing:-0.02em}
+.hero-sub{font-size:15px;color:var(--tx2);margin:0 0 2.5rem;max-width:600px;line-height:1.65}
+h2{font-size:20px;font-weight:600;margin:2.5rem 0 1rem;padding-top:1.5rem;border-top:1px solid var(--bdr);letter-spacing:-0.01em}
+h2:first-of-type{border-top:none;padding-top:0}
+h3{font-size:16px;font-weight:600;margin:1.5rem 0 0.5rem}
+p{margin:0 0 0.85rem}
+a{color:var(--acc);text-decoration:none}
+a:hover{text-decoration:underline}
+code{font-family:var(--mono);font-size:12.5px;background:var(--bg2);padding:2px 6px;border-radius:4px;word-break:break-word}
+pre{font-family:var(--mono);font-size:12.5px;line-height:1.65;background:var(--bg2);border:1px solid var(--bdr);border-radius:var(--radius);padding:16px 20px;overflow-x:auto;margin:0 0 1rem;white-space:pre;position:relative}
+pre .flag{color:var(--acc)}
+pre .comment{color:var(--tx3);font-style:italic}
+
+/* Table of contents */
+.toc{background:var(--card);border:1px solid var(--bdr);border-radius:var(--radius-lg);padding:20px 24px;margin:0 0 2rem}
+.toc-title{font-size:13px;font-weight:600;color:var(--tx2);text-transform:uppercase;letter-spacing:0.8px;margin:0 0 10px}
+.toc-list{list-style:none;display:grid;grid-template-columns:1fr 1fr;gap:4px 24px}
+.toc-list a{font-size:14px;color:var(--tx);display:flex;align-items:center;gap:6px;padding:4px 0;transition:color 0.15s}
+.toc-list a:hover{color:var(--acc);text-decoration:none}
+.toc-list .ti{font-size:14px;color:var(--tx3)}
+@media(max-width:600px){.toc-list{grid-template-columns:1fr}}
+
+/* Expandable sections */
+.expand{border:1px solid var(--bdr);border-radius:var(--radius-lg);margin:0 0 10px;background:var(--card);overflow:hidden}
+.expand-head{display:flex;align-items:center;gap:10px;padding:14px 18px;cursor:pointer;user-select:none;transition:background 0.15s}
+.expand-head:hover{background:var(--bg2)}
+.expand-head .ti{font-size:18px;color:var(--tx3);transition:transform 0.25s}
+.expand-head.open .ti{transform:rotate(90deg)}
+.expand-title{font-size:15px;font-weight:500;flex:1}
+.expand-badge{font-size:11px;font-weight:500;padding:3px 10px;border-radius:20px;text-transform:uppercase;letter-spacing:0.5px}
+.badge-capture{background:var(--info-bg);color:var(--info-tx)}
+.badge-interpret{background:var(--acc-bg);color:var(--acc-tx)}
+.badge-issue{background:var(--warn-bg);color:var(--warn-tx)}
+.badge-fix{background:var(--err-bg);color:var(--err-tx)}
+.badge-advanced{background:var(--bg3);color:var(--tx2)}
+.expand-body{display:none;padding:0 18px 18px;animation:fadeIn 0.2s ease}
+.expand-body.open{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+
+/* Timeline visualizations */
+.timeline-viz{background:var(--bg2);border-radius:var(--radius);padding:16px;margin:12px 0 16px;overflow-x:auto}
+.tl-row{display:flex;align-items:center;margin:0 0 6px;min-width:500px}
+.tl-row:last-child{margin:0}
+.tl-label{font-family:var(--mono);font-size:11px;color:var(--tx2);width:110px;flex-shrink:0;text-align:right;padding-right:10px}
+.tl-track{flex:1;height:22px;background:var(--bg);border-radius:3px;position:relative;overflow:hidden;border:1px solid var(--bdr)}
+.tl-block{position:absolute;top:2px;height:18px;border-radius:2px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:9px;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 3px}
+.tl-gap{position:absolute;top:0;height:100%;background:repeating-linear-gradient(90deg,transparent,transparent 3px,var(--err) 3px,var(--err) 4px);opacity:0.15}
+.tl-caption{font-size:12px;color:var(--tx2);margin:8px 0 0;text-align:center;font-style:italic}
+
+/* Metric cards */
+.metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:12px 0 16px}
+.metric-card{background:var(--bg2);border-radius:var(--radius);padding:12px 14px}
+.metric-label{font-size:11px;color:var(--tx3);text-transform:uppercase;letter-spacing:0.5px;margin:0 0 2px}
+.metric-val{font-size:20px;font-weight:500;margin:0}
+
+/* Issue cards */
+.issue-card{border-left:3px solid;border-radius:0 var(--radius) var(--radius) 0;padding:14px 18px;margin:10px 0}
+.issue-card.symptom{border-color:var(--amber);background:var(--warn-bg)}
+.issue-card.cause{border-color:var(--info);background:var(--info-bg)}
+.issue-card.fix{border-color:var(--green);background:var(--acc-bg)}
+.issue-card .ic-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin:0 0 4px}
+.issue-card.symptom .ic-label{color:var(--warn-tx)}
+.issue-card.cause .ic-label{color:var(--info-tx)}
+.issue-card.fix .ic-label{color:var(--acc-tx)}
+.issue-card p{margin:0;font-size:14px;line-height:1.6}
+
+/* Decision tree */
+.dt-node{background:var(--card);border:1px solid var(--bdr);border-radius:var(--radius-lg);padding:16px 20px;margin:10px 0;position:relative}
+.dt-node::before{content:'';position:absolute;left:24px;top:-10px;width:2px;height:10px;background:var(--bdr2)}
+.dt-node:first-child::before{display:none}
+.dt-question{font-weight:500;font-size:15px;margin:0 0 10px}
+.dt-options{display:flex;flex-direction:column;gap:6px}
+.dt-opt{display:flex;align-items:flex-start;gap:8px;font-size:14px;padding:8px 12px;background:var(--bg2);border-radius:var(--radius);cursor:pointer;transition:background 0.15s;border:1px solid transparent}
+.dt-opt:hover{background:var(--bg3);border-color:var(--bdr2)}
+.dt-opt .arrow{color:var(--acc);font-weight:600;flex-shrink:0;margin-top:1px}
+.dt-result{font-size:13px;color:var(--tx2);margin:4px 0 0 20px;line-height:1.5}
+
+/* Quick ref table */
+.ref-table{width:100%;border-collapse:collapse;font-size:13px;margin:12px 0 16px}
+.ref-table th{text-align:left;font-weight:500;padding:8px 12px;border-bottom:2px solid var(--bdr2);color:var(--tx2);font-size:12px;text-transform:uppercase;letter-spacing:0.5px}
+.ref-table td{padding:8px 12px;border-bottom:1px solid var(--bdr);vertical-align:top}
+.ref-table tr:last-child td{border-bottom:none}
+.ref-table code{font-size:11.5px}
+
+/* Tab system for pattern gallery */
+.tab-bar{display:flex;gap:4px;margin:0 0 0;flex-wrap:wrap}
+.tab-btn{font-family:var(--font);font-size:13px;padding:8px 14px;border:1px solid var(--bdr);border-bottom:none;border-radius:var(--radius) var(--radius) 0 0;background:var(--bg2);color:var(--tx2);cursor:pointer;transition:all 0.15s;font-weight:500}
+.tab-btn:hover{background:var(--bg3)}
+.tab-btn.active{background:var(--card);color:var(--tx);border-color:var(--bdr);position:relative;z-index:1}
+.tab-panel{display:none;border:1px solid var(--bdr);border-radius:0 var(--radius) var(--radius) var(--radius);background:var(--card);padding:20px;margin:0 0 16px;position:relative;top:-1px}
+.tab-panel.active{display:block}
+
+/* Note callouts */
+.callout{display:flex;gap:10px;padding:14px 16px;border-radius:var(--radius);margin:12px 0 16px;font-size:14px;line-height:1.6}
+.callout .ti{font-size:18px;flex-shrink:0;margin-top:2px}
+.callout-info{background:var(--info-bg);color:var(--info-tx)}
+.callout-warn{background:var(--warn-bg);color:var(--warn-tx)}
+.callout-tip{background:var(--acc-bg);color:var(--acc-tx)}
+
+/* Annotations */
+.anno{position:relative;display:inline;border-bottom:2px dotted var(--acc);cursor:help}
+.anno-tip{display:none;position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:var(--tx);color:var(--bg);font-size:12px;padding:6px 10px;border-radius:6px;white-space:nowrap;z-index:10;pointer-events:none}
+.anno:hover .anno-tip{display:block}
+
+/* Phase marker */
+.phase{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.8px;color:var(--tx3);margin:0 0 8px}
+.phase-num{width:22px;height:22px;border-radius:50%;background:var(--acc);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:11px}
+
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Nsight Systems mastery</h1>
+<p class="hero-sub">A systematic guide to profiling CUDA and PyTorch training workloads — from capture to diagnosis to fix. Every pattern, every metric, every decision.</p>
+
+<nav class="toc">
+<p class="toc-title">Contents</p>
+<ol class="toc-list">
+<li><a href="#s1"><i class="ti ti-terminal" aria-hidden="true"></i> Phase 1: Capture</a></li>
+<li><a href="#s2"><i class="ti ti-layout-rows" aria-hidden="true"></i> Phase 2: Timeline anatomy</a></li>
+<li><a href="#s3"><i class="ti ti-search" aria-hidden="true"></i> Phase 3: Where to look first</a></li>
+<li><a href="#s4"><i class="ti ti-bug" aria-hidden="true"></i> Phase 4: The six patterns</a></li>
+<li><a href="#s5"><i class="ti ti-chart-bar" aria-hidden="true"></i> Phase 5: Statistics views</a></li>
+<li><a href="#s6"><i class="ti ti-arrows-split" aria-hidden="true"></i> Phase 6: Multi-GPU &amp; NCCL</a></li>
+<li><a href="#s7"><i class="ti ti-git-branch" aria-hidden="true"></i> Phase 7: Decision tree</a></li>
+<li><a href="#s8"><i class="ti ti-bookmarks" aria-hidden="true"></i> Quick reference</a></li>
+</ol>
+</nav>
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="s1"><span class="phase"><span class="phase-num">1</span> Capture</span><br>Launching Nsight Systems</h2>
+
+<p>Before you can interpret anything, you need a clean capture. The goal is to record 2–3 full training iterations (skip the first for warmup) with all the trace sources that matter for PyTorch workloads.</p>
+
+<div class="expand">
+<div class="expand-head" onclick="toggle(this)">
+<i class="ti ti-chevron-right" aria-hidden="true"></i>
+<span class="expand-title">The baseline capture command</span>
+<span class="expand-badge badge-capture">Capture</span>
+</div>
+<div class="expand-body">
+<pre>nsys profile \
+  <span class="flag">--trace=cuda,nvtx,osrt,cudnn,cublas</span>  <span class="comment"># what to trace</span>
+  <span class="flag">--cuda-memory-usage=true</span>              <span class="comment"># track cudaMalloc/cudaFree</span>
+  <span class="flag">--gpu-metrics-device=all</span>              <span class="comment"># SM activity, power, temp</span>
+  <span class="flag">--gpu-metrics-frequency=10000</span>         <span class="comment"># 10kHz sampling (100μs)</span>
+  <span class="flag">--capture-range=cudaProfilerApi</span>      <span class="comment"># start/stop from code</span>
+  <span class="flag">--output=baseline</span>                     <span class="comment"># output filename</span>
+  <span class="flag">--force-overwrite=true</span>                <span class="comment"># replace existing</span>
+  python train.py</pre>
+
+<h3>Trace flags explained</h3>
+<table class="ref-table">
+<tr><th>Flag</th><th>What it captures</th><th>Why you need it</th></tr>
+<tr><td><code>cuda</code></td><td>CUDA API calls, kernel launches, memcpy, memset</td><td>The core GPU activity — kernels, transfers, synchronization</td></tr>
+<tr><td><code>nvtx</code></td><td>NVTX annotations (user-defined ranges)</td><td>Maps timeline regions to your code: "forward", "backward", "optimizer step"</td></tr>
+<tr><td><code>osrt</code></td><td>OS runtime: pthread, file I/O, poll, futex</td><td>Reveals CPU-side blocking: disk reads, thread contention, data loading stalls</td></tr>
+<tr><td><code>cudnn</code></td><td>cuDNN library calls</td><td>Identifies which convolution algorithm was selected, autotuning behavior</td></tr>
+<tr><td><code>cublas</code></td><td>cuBLAS library calls</td><td>Identifies GEMM calls from linear layers, whether Tensor Cores are used</td></tr>
+</table>
+
+<div class="callout callout-tip">
+<i class="ti ti-bulb" aria-hidden="true"></i>
+<div>If the training script doesn't have NVTX annotations, wrap the key phases with <code>torch.cuda.nvtx.range_push("forward")</code> / <code>range_pop()</code>, or use <code>with torch.autograd.profiler.emit_nvtx():</code> as a quick alternative that auto-labels autograd operations.</div>
+</div>
+</div>
+</div>
+
+<div class="expand">
+<div class="expand-head" onclick="toggle(this)">
+<i class="ti ti-chevron-right" aria-hidden="true"></i>
+<span class="expand-title">Programmatic capture control</span>
+<span class="expand-badge badge-capture">Capture</span>
+</div>
+<div class="expand-body">
+<p>Instead of capturing the entire run (which includes slow imports, data loading, model init), use the CUDA Profiler API to bracket just the iterations you care about:</p>
+<pre>import torch.cuda.profiler as profiler
+import torch.cuda
+
+for epoch in range(epochs):
+    for i, batch in enumerate(loader):
+        if i == 5:
+            profiler.start()       <span class="comment"># start capture</span>
+        if i == 8:
+            profiler.stop()        <span class="comment"># stop capture</span>
+
+        <span class="comment"># ... training step ...</span></pre>
+<p>Pair this with <code>--capture-range=cudaProfilerApi</code> in the <code>nsys</code> command. This gives you exactly 3 clean iterations (5, 6, 7) without startup noise. The resulting <code>.nsys-rep</code> file will be much smaller and faster to open.</p>
+
+<div class="callout callout-warn">
+<i class="ti ti-alert-triangle" aria-hidden="true"></i>
+<div>Always skip at least the first 2–3 iterations. PyTorch's CUDA caching allocator, cuDNN autotuner, and <code>torch.compile</code> all do one-time work on the first pass that is not representative of steady-state performance.</div>
+</div>
+</div>
+</div>
+
+<div class="expand">
+<div class="expand-head" onclick="toggle(this)">
+<i class="ti ti-chevron-right" aria-hidden="true"></i>
+<span class="expand-title">Headless (SSH) capture and transfer</span>
+<span class="expand-badge badge-capture">Capture</span>
+</div>
+<div class="expand-body">
+<p>On HPC clusters and cloud GPU instances, you typically SSH in and don't have a GUI. The workflow is:</p>
+<pre><span class="comment"># On the remote GPU node:</span>
+nsys profile --output=/tmp/profile_run1 ... python train.py
+
+<span class="comment"># Generates /tmp/profile_run1.nsys-rep (typically 50–500MB)</span>
+<span class="comment"># Transfer to your local machine:</span>
+scp gpu-node:/tmp/profile_run1.nsys-rep .
+
+<span class="comment"># Open in Nsight Systems GUI on your local workstation</span></pre>
+<p>Alternatively, for a quick summary without the GUI:</p>
+<pre>nsys stats profile_run1.nsys-rep</pre>
+<p>This prints the kernel statistics, CUDA API summary, and OS runtime summary directly in the terminal — useful for a fast check before pulling the full file.</p>
+</div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="s2"><span class="phase"><span class="phase-num">2</span> Orientation</span><br>Timeline anatomy</h2>
+
+<p>When you open the <code>.nsys-rep</code> in the GUI, you see a horizontal timeline with multiple "swim lanes" stacked vertically. Each row tells a different part of the story. Understanding what each row shows is the foundation for every diagnosis.</p>
+
+<div class="expand">
+<div class="expand-head" onclick="toggle(this)">
+<i class="ti ti-chevron-right" aria-hidden="true"></i>
+<span class="expand-title">Swim lane map — what each row means</span>
+<span class="expand-badge badge-interpret">Interpret</span>
+</div>
+<div class="expand-body">
+
+<div class="timeline-viz">
+<div class="tl-row">
+<span class="tl-label">NVTX</span>
+<span class="tl-track">
+<span class="tl-block" style="left:2%;width:40%;background:var(--purple);opacity:0.7">forward</span>
+<span class="tl-block" style="left:44%;width:2%;background:var(--amber);opacity:0.7">loss</span>
+<span class="tl-block" style="left:48%;width:42%;background:var(--teal);opacity:0.7">backward</span>
+<span class="tl-block" style="left:92%;width:6%;background:var(--pink);opacity:0.7">optim</span>
+</span>
+</div>
+<div class="tl-row">
+<span class="tl-label">CPU thread</span>
+<span class="tl-track">
+<span class="tl-block" style="left:0%;width:8%;background:var(--gray)"></span>
+<span class="tl-block" style="left:10%;width:3%;background:var(--gray)"></span>
+<span class="tl-block" style="left:15%;width:5%;background:var(--gray)"></span>
+<span class="tl-block" style="left:22%;width:2%;background:var(--gray)"></span>
+<span class="tl-block" style="left:26%;width:6%;background:var(--gray)"></span>
+<span class="tl-block" style="left:34%;width:3%;background:var(--gray)"></span>
+<span class="tl-block" style="left:39%;width:2%;background:var(--gray)"></span>
+<span class="tl-block" style="left:44%;width:4%;background:var(--gray)"></span>
+<span class="tl-block" style="left:50%;width:7%;background:var(--gray)"></span>
+<span class="tl-block" style="left:59%;width:3%;background:var(--gray)"></span>
+<span class="tl-block" style="left:64%;width:5%;background:var(--gray)"></span>
+<span class="tl-block" style="left:71%;width:3%;background:var(--gray)"></span>
+<span class="tl-block" style="left:76%;width:2%;background:var(--gray)"></span>
+<span class="tl-block" style="left:80%;width:4%;background:var(--gray)"></span>
+<span class="tl-block" style="left:86%;width:5%;background:var(--gray)"></span>
+<span class="tl-block" style="left:93%;width:6%;background:var(--gray)"></span>
+</span>
+</div>
+<div class="tl-row">
+<span class="tl-label">CUDA API</span>
+<span class="tl-track">
+<span class="tl-block" style="left:1%;width:1.5%;background:var(--blue);opacity:0.6" title="cudaLaunchKernel"></span>
+<span class="tl-block" style="left:4%;width:1%;background:var(--blue);opacity:0.6"></span>
+<span class="tl-block" style="left:7%;width:1.5%;background:var(--blue);opacity:0.6"></span>
+<span class="tl-block" style="left:11%;width:1%;background:var(--blue);opacity:0.6"></span>
+<span class="tl-block" style="left:14%;width:1%;background:var(--blue);opacity:0.6"></span>
+<span class="tl-block" style="left:18%;width:1.5%;background:var(--blue);opacity:0.6"></span>
+<span class="tl-block" style="left:22%;width:1%;background:var(--blue);opacity:0.6"></span>
+<span class="tl-block" style="left:26%;width:1%;background:var(--blue);opacity:0.6"></span>
+<span class="tl-block" style="left:30%;width:1.5%;background:var(--blue);opacity:0.6"></span>
+<span class="tl-block" style="left:44%;width:2%;background:var(--amber);opacity:0.6"></span>
+<span class="tl-block" style="left:48%;width:1.5%;background:var(--blue);opacity:0.6"></span>
+<span class="tl-block" style="left:52%;width:1%;background:var(--blue);opacity:0.6"></span>
+<span class="tl-block" style="left:56%;width:1.5%;background:var(--blue);opacity:0.6"></span>
+<span class="tl-block" style="left:60%;width:1%;background:var(--blue);opacity:0.6"></span>
+<span class="tl-block" style="left:64%;width:1%;background:var(--blue);opacity:0.6"></span>
+<span class="tl-block" style="left:92%;width:6%;background:var(--pink);opacity:0.6"></span>
+</span>
+</div>
+<div class="tl-row">
+<span class="tl-label">GPU kernels</span>
+<span class="tl-track">
+<span class="tl-block" style="left:3%;width:12%;background:var(--blue)" title="conv2d_fwd">conv</span>
+<span class="tl-block" style="left:16%;width:8%;background:var(--green)" title="gemm">gemm</span>
+<span class="tl-block" style="left:25%;width:15%;background:var(--blue)">conv</span>
+<span class="tl-block" style="left:41%;width:5%;background:var(--green)">gemm</span>
+<span class="tl-block" style="left:47%;width:2%;background:var(--amber)">loss</span>
+<span class="tl-block" style="left:50%;width:14%;background:var(--teal)">bwd</span>
+<span class="tl-block" style="left:65%;width:10%;background:var(--teal)">bwd</span>
+<span class="tl-block" style="left:76%;width:14%;background:var(--teal)">bwd</span>
+<span class="tl-block" style="left:92%;width:7%;background:var(--pink)">adam</span>
+</span>
+</div>
+<div class="tl-row">
+<span class="tl-label">GPU memcpy</span>
+<span class="tl-track">
+<span class="tl-block" style="left:0%;width:2%;background:var(--red);opacity:0.5" title="H2D">H2D</span>
+<span class="tl-block" style="left:43%;width:1%;background:var(--red);opacity:0.5">D2H</span>
+</span>
+</div>
+</div>
+<p class="tl-caption">A healthy training iteration — large kernels, minimal gaps, overlapped data transfer</p>
+
+<table class="ref-table">
+<tr><th>Swim lane</th><th>What it shows</th><th>What to look for</th></tr>
+<tr><td><strong>NVTX</strong></td><td>User-defined annotations — high-level phase markers like "forward", "backward", "data_load"</td><td>Use these to orient yourself. All other analysis happens "within" an NVTX range. Without them, you're lost.</td></tr>
+<tr><td><strong>CPU thread(s)</strong></td><td>Python/PyTorch execution on CPU — function calls, OS calls, Python GIL activity</td><td>When the CPU row is busy during GPU gaps, the CPU is the bottleneck. Look for data loading, preprocessing, or Python overhead.</td></tr>
+<tr><td><strong>CUDA API</strong></td><td>Host-side CUDA calls: <code>cudaLaunchKernel</code>, <code>cudaMemcpyAsync</code>, <code>cudaMalloc</code>, <code>cudaStreamSynchronize</code></td><td>The bridge between CPU and GPU. A wall of tiny <code>cudaLaunchKernel</code> = launch overhead. A <code>cudaStreamSynchronize</code> = pipeline drain.</td></tr>
+<tr><td><strong>GPU kernels</strong></td><td>Actual CUDA kernel execution on the GPU SMs</td><td>The most important row. White space = GPU idle = wasted time. Large blocks = good. Tiny blocks = launch overhead.</td></tr>
+<tr><td><strong>GPU memcpy</strong></td><td>Host-to-device (H2D), device-to-host (D2H), device-to-device (D2D) transfers</td><td>H2D at iteration start is normal (batch transfer). D2H mid-iteration is suspicious — someone called <code>.item()</code> or <code>.cpu()</code>.</td></tr>
+<tr><td><strong>GPU metrics</strong></td><td>Sampled counters: SM active %, power (W), temperature, memory bandwidth utilization</td><td>The "ground truth" overlay. SM active + power together tell you if the GPU is doing real work (see Pattern gallery).</td></tr>
+</table>
+</div>
+</div>
+
+<div class="expand">
+<div class="expand-head" onclick="toggle(this)">
+<i class="ti ti-chevron-right" aria-hidden="true"></i>
+<span class="expand-title">Zooming, selecting, and measuring</span>
+<span class="expand-badge badge-interpret">Interpret</span>
+</div>
+<div class="expand-body">
+<table class="ref-table">
+<tr><th>Action</th><th>How</th><th>When to use</th></tr>
+<tr><td>Zoom to NVTX range</td><td>Double-click any NVTX annotation</td><td>Isolate one training iteration, one forward pass, etc.</td></tr>
+<tr><td>Measure a time span</td><td>Click and drag on the ruler at the top</td><td>Measure exact duration of a gap, kernel, or iteration</td></tr>
+<tr><td>Filter by kernel name</td><td>Right-click kernel → "Filter by name"</td><td>Highlight all instances of a specific kernel across the timeline</td></tr>
+<tr><td>Show gaps</td><td>Right-click GPU row → "Show idle gaps"</td><td>Instantly find where the GPU is doing nothing — the single most important diagnostic view</td></tr>
+<tr><td>Cross-reference</td><td>Click a kernel → its corresponding CUDA API launch highlights</td><td>Trace from GPU back to the CPU call that launched it</td></tr>
+<tr><td>Jump between iterations</td><td>Use NVTX markers as bookmarks (Ctrl+click)</td><td>Compare iteration N vs N+1 for consistency</td></tr>
+</table>
+</div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="s3"><span class="phase"><span class="phase-num">3</span> Triage</span><br>Where to look first</h2>
+
+<p>Don't try to understand everything at once. Follow this 3-step triage:</p>
+
+<div class="metric-grid">
+<div class="metric-card">
+<p class="metric-label">Step 1</p>
+<p class="metric-val" style="font-size:15px">Find one full iteration</p>
+</div>
+<div class="metric-card">
+<p class="metric-label">Step 2</p>
+<p class="metric-val" style="font-size:15px">Measure GPU idle time</p>
+</div>
+<div class="metric-card">
+<p class="metric-label">Step 3</p>
+<p class="metric-val" style="font-size:15px">Classify the gaps</p>
+</div>
+</div>
+
+<p><strong>Step 1</strong> — Use NVTX markers (or the repeating pattern of kernel clusters) to identify one full iteration: data load → forward → loss → backward → optimizer step. Zoom to fit exactly one iteration. Measure its wall time with the ruler — this is your baseline.</p>
+
+<p><strong>Step 2</strong> — Look at the GPU kernel row and estimate (or measure) the fraction of the iteration where the GPU row is empty. This is your "GPU idle percentage." Right-click the GPU row and select "Show idle gaps" to get a sorted list. The sum of those gaps divided by the iteration wall time gives you the fraction of time the GPU is waiting.</p>
+
+<p><strong>Step 3</strong> — Classify each significant gap by what's happening on the other rows during that gap:</p>
+
+<table class="ref-table">
+<tr><th>During the GPU gap, you see...</th><th>Diagnosis</th><th>Jump to</th></tr>
+<tr><td>CPU thread is busy (solid blocks)</td><td>CPU bottleneck — data loading, preprocessing, or Python overhead</td><td>Pattern 1</td></tr>
+<tr><td>CPU thread is idle too (both empty)</td><td>Synchronization stall — waiting for a CUDA sync or distributed barrier</td><td>Pattern 3</td></tr>
+<tr><td><code>cudaMalloc</code> on the CUDA API row</td><td>Memory allocation churn</td><td>Pattern 4</td></tr>
+<tr><td>NCCL kernels just finished</td><td>Communication bottleneck (multi-GPU)</td><td>Pattern 5</td></tr>
+<tr><td>No gap — but throughput is still low</td><td>Kernel efficiency problem (too small, no Tensor Cores)</td><td>Pattern 2 or 6</td></tr>
+</table>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="s4"><span class="phase"><span class="phase-num">4</span> Diagnosis</span><br>The six patterns</h2>
+
+<p>Every slow PyTorch training run falls into one (or a combination) of these six patterns. Each has a distinct visual signature in Nsight Systems.</p>
+
+<div class="tab-bar" id="pattern-tabs">
+<button class="tab-btn active" onclick="showTab('p1',this)">1. Data starvation</button>
+<button class="tab-btn" onclick="showTab('p2',this)">2. Launch overhead</button>
+<button class="tab-btn" onclick="showTab('p3',this)">3. Sync stalls</button>
+<button class="tab-btn" onclick="showTab('p4',this)">4. Alloc churn</button>
+<button class="tab-btn" onclick="showTab('p5',this)">5. Comms bottleneck</button>
+<button class="tab-btn" onclick="showTab('p6',this)">6. Low Tensor Core use</button>
+</div>
+
+<!-- Pattern 1 -->
+<div class="tab-panel active" id="p1">
+<h3>Pattern 1: Data starvation / CPU bottleneck</h3>
+<p>The GPU finishes a training step and then sits idle while the CPU prepares the next batch. This is the most common problem in practice.</p>
+
+<div class="timeline-viz">
+<div class="tl-row">
+<span class="tl-label">CPU thread</span>
+<span class="tl-track">
+<span class="tl-block" style="left:0%;width:30%;background:var(--blue)">data loading / preprocess</span>
+<span class="tl-block" style="left:32%;width:5%;background:var(--gray)"></span>
+<span class="tl-block" style="left:39%;width:3%;background:var(--gray)"></span>
+<span class="tl-block" style="left:44%;width:3%;background:var(--gray)"></span>
+<span class="tl-block" style="left:49%;width:3%;background:var(--gray)"></span>
+<span class="tl-block" style="left:55%;width:30%;background:var(--blue)">data loading / preprocess</span>
+<span class="tl-block" style="left:87%;width:5%;background:var(--gray)"></span>
+<span class="tl-block" style="left:94%;width:3%;background:var(--gray)"></span>
+</span>
+</div>
+<div class="tl-row">
+<span class="tl-label">GPU kernels</span>
+<span class="tl-track">
+<span class="tl-gap" style="left:0%;width:30%"></span>
+<span class="tl-block" style="left:31%;width:22%;background:var(--green)">forward + backward</span>
+<span class="tl-gap" style="left:55%;width:30%"></span>
+<span class="tl-block" style="left:86%;width:13%;background:var(--green)">forward + ...</span>
+</span>
+</div>
+</div>
+<p class="tl-caption">Red hash marks = GPU idle time. CPU is busy with data loading while GPU waits.</p>
+
+<div class="issue-card symptom">
+<p class="ic-label"><i class="ti ti-eye" style="font-size:14px;margin-right:4px" aria-hidden="true"></i> What you see</p>
+<p>Large gaps on the GPU row (10ms–1s+). During these gaps, the CPU row shows solid activity — <code>read()</code>, <code>poll()</code>, <code>futex()</code> in the OS Runtime trace, or Python DataLoader worker threads churning. The gap appears <em>between</em> iterations, aligned with the data loading phase of the NVTX markers.</p>
+</div>
+<div class="issue-card cause">
+<p class="ic-label"><i class="ti ti-search" style="font-size:14px;margin-right:4px" aria-hidden="true"></i> Root cause</p>
+<p>The DataLoader can't deliver batches fast enough. Common reasons: too few <code>num_workers</code>, slow disk I/O (spinning HDD, NFS), CPU-bound augmentations (random crop, color jitter on CPU), data decompression (JPEG decode), or the GIL serializing multi-threaded transforms.</p>
+</div>
+<div class="issue-card fix">
+<p class="ic-label"><i class="ti ti-tool" style="font-size:14px;margin-right:4px" aria-hidden="true"></i> Fixes</p>
+<p><strong>Increase <code>num_workers</code></strong> — start with <code>num_workers = num_cpus // num_gpus</code>. Set <code>pin_memory=True</code> and <code>persistent_workers=True</code>.<br>
+<strong>Move transforms to GPU</strong> — use NVIDIA DALI, Kornia, or torchvision's v2 transforms with GPU support.<br>
+<strong>Use faster storage</strong> — local NVMe SSD over NFS. Pre-convert data to optimized formats (WebDataset, FFCV, TFRecord).<br>
+<strong>Prefetch</strong> — set <code>prefetch_factor=2</code> (or higher) so the next batch is ready before the GPU finishes.<br>
+<strong>Profile the loader separately</strong> — time just the data loading loop without GPU work to isolate disk vs CPU bottleneck.</p>
+</div>
+</div>
+
+<!-- Pattern 2 -->
+<div class="tab-panel" id="p2">
+<h3>Pattern 2: Kernel launch overhead</h3>
+<p>Thousands of tiny CUDA kernels each take only a few microseconds, but the launch latency between them adds up. The GPU <em>looks</em> busy but achieves low throughput.</p>
+
+<div class="timeline-viz">
+<div class="tl-row">
+<span class="tl-label">CUDA API</span>
+<span class="tl-track" style="background:var(--blue);opacity:0.25">
+</span>
+</div>
+<div class="tl-row">
+<span class="tl-label">GPU kernels</span>
+<span class="tl-track">
+<span class="tl-block" style="left:0%;width:1.2%;background:var(--green)"></span>
+<span class="tl-block" style="left:2%;width:1%;background:var(--amber)"></span>
+<span class="tl-block" style="left:3.5%;width:1.5%;background:var(--green)"></span>
+<span class="tl-block" style="left:5.5%;width:0.8%;background:var(--amber)"></span>
+<span class="tl-block" style="left:7%;width:1.2%;background:var(--green)"></span>
+<span class="tl-block" style="left:9%;width:1%;background:var(--amber)"></span>
+<span class="tl-block" style="left:10.5%;width:1.5%;background:var(--green)"></span>
+<span class="tl-block" style="left:12.5%;width:0.8%;background:var(--amber)"></span>
+<span class="tl-block" style="left:14%;width:1.2%;background:var(--green)"></span>
+<span class="tl-block" style="left:16%;width:1%;background:var(--amber)"></span>
+<span class="tl-block" style="left:17.5%;width:1.5%;background:var(--green)"></span>
+<span class="tl-block" style="left:19.5%;width:0.8%;background:var(--amber)"></span>
+<span class="tl-block" style="left:21%;width:1.2%;background:var(--green)"></span>
+<span class="tl-block" style="left:23%;width:1%;background:var(--amber)"></span>
+<span class="tl-block" style="left:24.5%;width:1.5%;background:var(--green)"></span>
+<span class="tl-block" style="left:26.5%;width:0.8%;background:var(--amber)"></span>
+<span class="tl-block" style="left:28%;width:1.2%;background:var(--green)"></span>
+<span class="tl-block" style="left:30%;width:1%;background:var(--amber)"></span>
+<span class="tl-block" style="left:31.5%;width:1.5%;background:var(--green)"></span>
+<span class="tl-block" style="left:33.5%;width:0.8%;background:var(--amber)"></span>
+<span class="tl-block" style="left:35%;width:1.2%;background:var(--green)"></span>
+<span class="tl-block" style="left:37%;width:1%;background:var(--amber)"></span>
+<span class="tl-block" style="left:38.5%;width:1.5%;background:var(--green)"></span>
+<span class="tl-block" style="left:40.5%;width:0.8%;background:var(--amber)"></span>
+<span class="tl-block" style="left:42%;width:1.2%;background:var(--green)"></span>
+<span class="tl-block" style="left:44%;width:1%;background:var(--amber)"></span>
+<span class="tl-block" style="left:45.5%;width:1.5%;background:var(--green)"></span>
+<span class="tl-block" style="left:47.5%;width:0.8%;background:var(--amber)"></span>
+<span class="tl-block" style="left:49%;width:1.2%;background:var(--green)"></span>
+<span class="tl-block" style="left:51%;width:1%;background:var(--amber)"></span>
+<span class="tl-block" style="left:52.5%;width:1.5%;background:var(--green)"></span>
+<span class="tl-block" style="left:54.5%;width:0.8%;background:var(--amber)"></span>
+<span class="tl-block" style="left:56%;width:1.2%;background:var(--green)"></span>
+<span class="tl-block" style="left:58%;width:1%;background:var(--amber)"></span>
+<span class="tl-block" style="left:59.5%;width:1.5%;background:var(--green)"></span>
+<span class="tl-block" style="left:61.5%;width:0.8%;background:var(--amber)"></span>
+<span class="tl-block" style="left:63%;width:1.2%;background:var(--green)"></span>
+<span class="tl-block" style="left:65%;width:1%;background:var(--amber)"></span>
+<span class="tl-block" style="left:66.5%;width:1.5%;background:var(--green)"></span>
+<span class="tl-block" style="left:68.5%;width:0.8%;background:var(--amber)"></span>
+<span class="tl-block" style="left:70%;width:1.2%;background:var(--green)"></span>
+<span class="tl-block" style="left:72%;width:1%;background:var(--amber)"></span>
+<span class="tl-block" style="left:73.5%;width:1.5%;background:var(--green)"></span>
+<span class="tl-block" style="left:75.5%;width:0.8%;background:var(--amber)"></span>
+<span class="tl-block" style="left:77%;width:1.2%;background:var(--green)"></span>
+<span class="tl-block" style="left:79%;width:1%;background:var(--amber)"></span>
+<span class="tl-block" style="left:80.5%;width:1.5%;background:var(--green)"></span>
+<span class="tl-block" style="left:82.5%;width:0.8%;background:var(--amber)"></span>
+<span class="tl-block" style="left:84%;width:1.2%;background:var(--green)"></span>
+<span class="tl-block" style="left:86%;width:1%;background:var(--amber)"></span>
+<span class="tl-block" style="left:87.5%;width:1.5%;background:var(--green)"></span>
+<span class="tl-block" style="left:89.5%;width:0.8%;background:var(--amber)"></span>
+<span class="tl-block" style="left:91%;width:1.2%;background:var(--green)"></span>
+<span class="tl-block" style="left:93%;width:1%;background:var(--amber)"></span>
+<span class="tl-block" style="left:94.5%;width:1.5%;background:var(--green)"></span>
+<span class="tl-block" style="left:96.5%;width:0.8%;background:var(--amber)"></span>
+<span class="tl-block" style="left:98%;width:1.5%;background:var(--green)"></span>
+</span>
+</div>
+<div class="tl-row">
+<span class="tl-label">Power (W)</span>
+<span class="tl-track"><span class="tl-block" style="left:0%;width:100%;background:var(--amber);opacity:0.15;font-size:10px;color:var(--tx)">~180W (should be 500W+)</span></span>
+</div>
+</div>
+<p class="tl-caption">Dense tiny kernels with gaps between each — GPU looks busy, power says otherwise</p>
+
+<div class="issue-card symptom">
+<p class="ic-label"><i class="ti ti-eye" style="font-size:14px;margin-right:4px" aria-hidden="true"></i> What you see</p>
+<p>The GPU row looks fully packed at normal zoom. But zoom in and you see dozens of tiny kernels (2–10μs each) with 1–5μs gaps. The CUDA API row is a solid wall of <code>cudaLaunchKernel</code>. The GPU metrics power trace stays low (150–250W on H100). In the kernel statistics, sort by Count — the top entries have 10,000+ invocations with average duration under 10μs.</p>
+</div>
+<div class="issue-card cause">
+<p class="ic-label"><i class="ti ti-search" style="font-size:14px;margin-right:4px" aria-hidden="true"></i> Root cause</p>
+<p>PyTorch eager mode dispatches each operator as a separate CUDA kernel. Element-wise ops (ReLU, add, multiply, dropout), pointwise activations, and small reductions each launch their own kernel. On H100, the minimum kernel launch overhead is ~3–5μs. If the kernel itself takes 5μs, you spend 50% of time on overhead.</p>
+</div>
+<div class="issue-card fix">
+<p class="ic-label"><i class="ti ti-tool" style="font-size:14px;margin-right:4px" aria-hidden="true"></i> Fixes</p>
+<p><strong><code>torch.compile(model)</code></strong> — The primary fix. It fuses element-wise ops, reduces kernel count by 5–20x, and generates larger optimized kernels. Run <code>torch._dynamo.explain(model)(input)</code> to see what gets fused and what breaks out.<br>
+<strong>CUDA Graphs</strong> — For fixed-shape workloads, record the entire training step as a graph and replay it, amortizing all launch overhead to near-zero. Use <code>torch.cuda.make_graphed_callables()</code>.<br>
+<strong>Manual fusion</strong> — If <code>torch.compile</code> can't fuse certain ops (custom kernels, dynamic shapes), write fused Triton kernels for the hot path.</p>
+</div>
+</div>
+
+<!-- Pattern 3 -->
+<div class="tab-panel" id="p3">
+<h3>Pattern 3: Synchronization stalls</h3>
+<p>The CPU forces the GPU pipeline to drain by calling a synchronization operation. Everything stops until all queued GPU work completes.</p>
+
+<div class="timeline-viz">
+<div class="tl-row">
+<span class="tl-label">CPU thread</span>
+<span class="tl-track">
+<span class="tl-block" style="left:0%;width:5%;background:var(--gray)"></span>
+<span class="tl-block" style="left:7%;width:3%;background:var(--gray)"></span>
+<span class="tl-block" style="left:30%;width:3%;background:var(--red);opacity:0.7">.item()</span>
+<span class="tl-block" style="left:35%;width:4%;background:var(--gray)"></span>
+<span class="tl-block" style="left:41%;width:3%;background:var(--gray)"></span>
+<span class="tl-block" style="left:70%;width:3%;background:var(--red);opacity:0.7">.cpu()</span>
+<span class="tl-block" style="left:75%;width:3%;background:var(--gray)"></span>
+<span class="tl-block" style="left:80%;width:3%;background:var(--gray)"></span>
+</span>
+</div>
+<div class="tl-row">
+<span class="tl-label">CUDA API</span>
+<span class="tl-track">
+<span class="tl-block" style="left:1%;width:2%;background:var(--blue);opacity:0.5"></span>
+<span class="tl-block" style="left:5%;width:2%;background:var(--blue);opacity:0.5"></span>
+<span class="tl-block" style="left:28%;width:6%;background:var(--red);opacity:0.4">cudaStreamSync</span>
+<span class="tl-block" style="left:36%;width:2%;background:var(--blue);opacity:0.5"></span>
+<span class="tl-block" style="left:40%;width:2%;background:var(--blue);opacity:0.5"></span>
+<span class="tl-block" style="left:68%;width:6%;background:var(--red);opacity:0.4">cudaMemcpy D2H</span>
+<span class="tl-block" style="left:76%;width:2%;background:var(--blue);opacity:0.5"></span>
+</span>
+</div>
+<div class="tl-row">
+<span class="tl-label">GPU kernels</span>
+<span class="tl-track">
+<span class="tl-block" style="left:2%;width:26%;background:var(--green)">forward kernels</span>
+<span class="tl-gap" style="left:34%;width:6%"></span>
+<span class="tl-block" style="left:40%;width:28%;background:var(--teal)">backward kernels</span>
+<span class="tl-gap" style="left:74%;width:6%"></span>
+<span class="tl-block" style="left:80%;width:18%;background:var(--teal)">more bwd</span>
+</span>
+</div>
+</div>
+<p class="tl-caption">Each .item() / .cpu() call drains the GPU pipeline, creating idle gaps</p>
+
+<div class="issue-card symptom">
+<p class="ic-label"><i class="ti ti-eye" style="font-size:14px;margin-right:4px" aria-hidden="true"></i> What you see</p>
+<p>Intermittent gaps on the GPU row, each preceded by a <code>cudaStreamSynchronize</code> or <code>cudaDeviceSynchronize</code> on the CUDA API row. During the gap, the CPU is blocked waiting inside the sync call. After the sync completes, the CPU briefly runs Python code (processing the value it pulled back), then resumes launching kernels. These gaps appear in the <em>middle</em> of forward or backward passes — not at iteration boundaries.</p>
+</div>
+<div class="issue-card cause">
+<p class="ic-label"><i class="ti ti-search" style="font-size:14px;margin-right:4px" aria-hidden="true"></i> Root cause</p>
+<p>Operations that transfer data from GPU to CPU force synchronization: <code>loss.item()</code>, <code>tensor.cpu()</code>, <code>tensor.numpy()</code>, <code>print(tensor)</code>, Python-side <code>if tensor &gt; threshold:</code> conditionals. Each one drains the asynchronous kernel queue, waits for all pending GPU work to finish, copies the value to CPU, and only then allows the CPU to continue queueing new work. This kills the overlap between CPU kernel dispatch and GPU execution.</p>
+</div>
+<div class="issue-card fix">
+<p class="ic-label"><i class="ti ti-tool" style="font-size:14px;margin-right:4px" aria-hidden="true"></i> Fixes</p>
+<p><strong>Eliminate <code>.item()</code> in the hot loop</strong> — accumulate loss as a tensor: <code>running_loss += loss.detach()</code>. Only call <code>.item()</code> every N iterations for logging.<br>
+<strong>Replace Python conditionals with <code>torch.where</code></strong> — keep the branching on GPU: <code>result = torch.where(tensor &gt; threshold, a, b)</code>.<br>
+<strong>Defer metrics to callbacks</strong> — log metrics in a separate non-blocking callback rather than inline in the training step.<br>
+<strong>Use <code>torch.cuda.Event</code> for timing</strong> — avoid <code>torch.cuda.synchronize()</code> for benchmarking. Events measure GPU time without draining the pipeline.</p>
+</div>
+</div>
+
+<!-- Pattern 4 -->
+<div class="tab-panel" id="p4">
+<h3>Pattern 4: Memory allocation churn</h3>
+<p>The GPU stalls while CUDA allocates or frees memory, bypassing PyTorch's caching allocator.</p>
+
+<div class="timeline-viz">
+<div class="tl-row">
+<span class="tl-label">CUDA API</span>
+<span class="tl-track">
+<span class="tl-block" style="left:2%;width:2%;background:var(--blue);opacity:0.5"></span>
+<span class="tl-block" style="left:10%;width:8%;background:var(--red);opacity:0.6">cudaMalloc</span>
+<span class="tl-block" style="left:22%;width:2%;background:var(--blue);opacity:0.5"></span>
+<span class="tl-block" style="left:30%;width:2%;background:var(--blue);opacity:0.5"></span>
+<span class="tl-block" style="left:40%;width:5%;background:var(--red);opacity:0.6">cudaFree</span>
+<span class="tl-block" style="left:48%;width:8%;background:var(--red);opacity:0.6">cudaMalloc</span>
+<span class="tl-block" style="left:60%;width:2%;background:var(--blue);opacity:0.5"></span>
+<span class="tl-block" style="left:70%;width:2%;background:var(--blue);opacity:0.5"></span>
+<span class="tl-block" style="left:78%;width:5%;background:var(--red);opacity:0.6">cudaFree</span>
+<span class="tl-block" style="left:86%;width:7%;background:var(--red);opacity:0.6">cudaMalloc</span>
+</span>
+</div>
+<div class="tl-row">
+<span class="tl-label">GPU kernels</span>
+<span class="tl-track">
+<span class="tl-block" style="left:3%;width:7%;background:var(--green)">kernel</span>
+<span class="tl-gap" style="left:10%;width:8%"></span>
+<span class="tl-block" style="left:19%;width:11%;background:var(--green)">kernel</span>
+<span class="tl-block" style="left:32%;width:8%;background:var(--green)">kernel</span>
+<span class="tl-gap" style="left:40%;width:16%"></span>
+<span class="tl-block" style="left:57%;width:13%;background:var(--green)">kernel</span>
+<span class="tl-block" style="left:71%;width:7%;background:var(--green)">kernel</span>
+<span class="tl-gap" style="left:78%;width:15%"></span>
+<span class="tl-block" style="left:94%;width:6%;background:var(--green)">kernel</span>
+</span>
+</div>
+</div>
+<p class="tl-caption">cudaMalloc / cudaFree calls correlate with GPU gaps</p>
+
+<div class="issue-card symptom">
+<p class="ic-label"><i class="ti ti-eye" style="font-size:14px;margin-right:4px" aria-hidden="true"></i> What you see</p>
+<p>GPU gaps that align precisely with <code>cudaMalloc</code> or <code>cudaFree</code> calls on the CUDA API row. These allocations take 1–100ms each (far longer than kernel launches). You may also see them in the Memory Usage row as sharp spikes/drops. Enable <code>--cuda-memory-usage=true</code> to get the memory operations trace.</p>
+</div>
+<div class="issue-card cause">
+<p class="ic-label"><i class="ti ti-search" style="font-size:14px;margin-right:4px" aria-hidden="true"></i> Root cause</p>
+<p>PyTorch's caching allocator normally holds onto freed memory and reuses it. Allocation churn bypasses this when: tensors with varying sizes are created each iteration (dynamic shapes), <code>torch.cuda.empty_cache()</code> is called unnecessarily inside the loop, or code creates new tensors via <code>torch.cat</code>/<code>torch.stack</code> with growing dimensions. The caching allocator can also fragment, forcing new physical allocations even when total free memory exists.</p>
+</div>
+<div class="issue-card fix">
+<p class="ic-label"><i class="ti ti-tool" style="font-size:14px;margin-right:4px" aria-hidden="true"></i> Fixes</p>
+<p><strong>Pre-allocate buffers</strong> — create output tensors once outside the loop and rewrite operations to use <code>out=</code> parameters.<br>
+<strong>Pad to fixed sizes</strong> — for variable-length sequences, pad to the nearest power of 2 or a fixed bucket size so the allocator can reuse blocks.<br>
+<strong>Remove <code>torch.cuda.empty_cache()</code></strong> — this is almost never helpful in a training loop. It forces the allocator to release all cached memory back to CUDA, triggering expensive re-allocations.<br>
+<strong>Set <code>PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:128</code></strong> — controls allocator fragmentation behavior. Tune this if you see OOM despite available memory.<br>
+<strong>Inspect with <code>torch.cuda.memory_summary()</code></strong> — shows the allocator's internal state: active blocks, cached blocks, fragmentation.</p>
+</div>
+</div>
+
+<!-- Pattern 5 -->
+<div class="tab-panel" id="p5">
+<h3>Pattern 5: Communication bottleneck (multi-GPU)</h3>
+<p>In DDP/FSDP training, GPUs wait for collective communication (AllReduce, ReduceScatter) to complete before proceeding to the next step.</p>
+
+<div class="timeline-viz">
+<div class="tl-row">
+<span class="tl-label">GPU 0 kernels</span>
+<span class="tl-track">
+<span class="tl-block" style="left:0%;width:35%;background:var(--green)">forward + backward</span>
+<span class="tl-block" style="left:36%;width:40%;background:var(--purple)">ncclAllReduce</span>
+<span class="tl-gap" style="left:77%;width:7%"></span>
+<span class="tl-block" style="left:84%;width:6%;background:var(--pink)">optim</span>
+<span class="tl-block" style="left:91%;width:9%;background:var(--green)">next fwd</span>
+</span>
+</div>
+<div class="tl-row">
+<span class="tl-label">GPU 1 kernels</span>
+<span class="tl-track">
+<span class="tl-block" style="left:0%;width:30%;background:var(--green)">forward + backward</span>
+<span class="tl-gap" style="left:30%;width:6%"></span>
+<span class="tl-block" style="left:36%;width:40%;background:var(--purple)">ncclAllReduce</span>
+<span class="tl-gap" style="left:77%;width:7%"></span>
+<span class="tl-block" style="left:84%;width:6%;background:var(--pink)">optim</span>
+<span class="tl-block" style="left:91%;width:9%;background:var(--green)">next fwd</span>
+</span>
+</div>
+</div>
+<p class="tl-caption">NCCL AllReduce dominates the timeline — communication not overlapped with compute</p>
+
+<div class="issue-card symptom">
+<p class="ic-label"><i class="ti ti-eye" style="font-size:14px;margin-right:4px" aria-hidden="true"></i> What you see</p>
+<p>Large NCCL kernel blocks (<code>ncclAllReduceRingLL</code>, <code>ncclReduceScatter</code>, etc.) that appear <em>after</em> the backward pass completes, occupying 30–60% of the iteration wall time. All GPUs idle until the slowest one finishes its backward pass and enters the collective. The NCCL kernels should ideally overlap with backward compute, but instead they're serialized.</p>
+</div>
+<div class="issue-card cause">
+<p class="ic-label"><i class="ti ti-search" style="font-size:14px;margin-right:4px" aria-hidden="true"></i> Root cause</p>
+<p>DDP communication not overlapping with backward compute. Possible reasons: <code>find_unused_parameters=True</code> (adds overhead to detect which gradients need syncing), improper gradient bucketing (buckets too large = late start, too small = excessive collectives), or the model has sequential bottleneck layers that delay backward completion on some GPUs. For FSDP: full parameter gather happening synchronously before each layer's forward pass.</p>
+</div>
+<div class="issue-card fix">
+<p class="ic-label"><i class="ti ti-tool" style="font-size:14px;margin-right:4px" aria-hidden="true"></i> Fixes</p>
+<p><strong>Verify overlap</strong> — in a healthy DDP setup, NCCL kernels should start firing on the GPU <em>during</em> the backward pass (gradient buckets are communicated as soon as they're ready). If they only appear after backward, check <code>gradient_as_bucket_view=True</code>.<br>
+<strong>Set <code>find_unused_parameters=False</code></strong> — if all parameters get gradients every iteration.<br>
+<strong>Tune bucket size</strong> — <code>bucket_cap_mb=25</code> (default) works for most models. Smaller buckets start communication earlier but add overhead. Profile with different values.<br>
+<strong>For FSDP: use <code>limit_all_gathers=True</code></strong> — prevents all-gathers from piling up and exhausting memory/bandwidth.<br>
+<strong>Check NVLink topology</strong> — run <code>nvidia-smi topo -m</code> to verify GPUs are connected via NVLink, not PCIe. NCCL over PCIe is 5–10x slower.<br>
+<strong>NCCL environment tuning</strong> — <code>NCCL_ALGO=Ring</code> vs <code>Tree</code>, <code>NCCL_MIN_NCHANNELS</code>, <code>NCCL_BUFFSIZE</code>. Profile with <code>NCCL_DEBUG=INFO</code> to see which algorithm/protocol NCCL selects.</p>
+</div>
+</div>
+
+<!-- Pattern 6 -->
+<div class="tab-panel" id="p6">
+<h3>Pattern 6: Low Tensor Core utilization</h3>
+<p>The GPU runs large kernels (no launch overhead) and stays busy (no gaps), but throughput is far below the hardware ceiling because Tensor Cores aren't being used.</p>
+
+<div class="timeline-viz">
+<div class="tl-row">
+<span class="tl-label">GPU kernels</span>
+<span class="tl-track">
+<span class="tl-block" style="left:0%;width:30%;background:var(--red);opacity:0.6">sgemm_128x128 (FP32)</span>
+<span class="tl-block" style="left:31%;width:25%;background:var(--red);opacity:0.6">volta_sgemm (FP32)</span>
+<span class="tl-block" style="left:57%;width:20%;background:var(--red);opacity:0.6">sgemm (FP32)</span>
+<span class="tl-block" style="left:78%;width:22%;background:var(--red);opacity:0.6">sgemm (FP32)</span>
+</span>
+</div>
+<div class="tl-row">
+<span class="tl-label">Power (W)</span>
+<span class="tl-track"><span class="tl-block" style="left:0%;width:100%;background:var(--amber);opacity:0.2;font-size:10px;color:var(--tx)">~350W (vs 600W+ with Tensor Cores)</span></span>
+</div>
+</div>
+<p class="tl-caption">Large GEMM kernels but named "sgemm" (FP32) instead of Tensor Core variants</p>
+
+<div class="issue-card symptom">
+<p class="ic-label"><i class="ti ti-eye" style="font-size:14px;margin-right:4px" aria-hidden="true"></i> What you see</p>
+<p>Large GEMM/convolution kernels that fill the timeline (no idle gaps). But their names contain <code>sgemm</code> (single-precision GEMM) rather than Tensor Core variants like <code>h884gemm</code>, <code>s16816gemm</code>, or names containing <code>_fp16_</code>/<code>_bf16_</code>. Power draw is moderate (300–400W on H100) rather than high (550W+). The Nsight Compute roofline shows operations far below the Tensor Core ceiling.</p>
+</div>
+<div class="issue-card cause">
+<p class="ic-label"><i class="ti ti-search" style="font-size:14px;margin-right:4px" aria-hidden="true"></i> Root cause</p>
+<p>The model is running in FP32 instead of using mixed precision (FP16/BF16). On H100, the Tensor Core throughput for BF16 is ~4x that of FP32 CUDA cores for matrix operations. Even if AMP is enabled, Tensor Cores require matrix dimensions (M, N, K) to be multiples of 8 — misaligned dimensions cause fallback to CUDA cores.</p>
+</div>
+<div class="issue-card fix">
+<p class="ic-label"><i class="ti ti-tool" style="font-size:14px;margin-right:4px" aria-hidden="true"></i> Fixes</p>
+<p><strong>Enable mixed precision</strong> — wrap the forward pass with <code>torch.autocast('cuda', dtype=torch.bfloat16)</code> and use <code>GradScaler</code> (for FP16) or just autocast (for BF16, which doesn't need scaling on H100).<br>
+<strong>Align dimensions to multiples of 8</strong> — embedding dims, hidden sizes, vocabulary size, batch size. Padding a vocab from 30,522 to 30,528 costs negligible memory but enables Tensor Cores for the output projection.<br>
+<strong>Verify with kernel names</strong> — after enabling AMP, re-profile and check that GEMM kernel names now contain <code>h884</code>, <code>16816</code>, <code>bf16</code>, or <code>fp16</code>. If they still say <code>sgemm</code>, some layers may be excluded from autocasting.<br>
+<strong>For H100: consider FP8</strong> — using Transformer Engine with FP8 training gives another 2x over BF16 for compatible architectures.</p>
+</div>
+</div>
+
+</div><!-- end tab panels wrapper -->
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="s5"><span class="phase"><span class="phase-num">5</span> Quantify</span><br>Statistics views</h2>
+
+<p>The timeline gives you the narrative. The statistics views give you the numbers. Nsight Systems has several summary tables accessible from the top menu (or the bottom panel in newer versions). Here's how to read each one.</p>
+
+<div class="expand">
+<div class="expand-head" onclick="toggle(this)">
+<i class="ti ti-chevron-right" aria-hidden="true"></i>
+<span class="expand-title">CUDA kernel statistics</span>
+<span class="expand-badge badge-interpret">Interpret</span>
+</div>
+<div class="expand-body">
+<p>This is the most important statistics view. It lists every distinct CUDA kernel with aggregate metrics.</p>
+<table class="ref-table">
+<tr><th>Column</th><th>What it tells you</th><th>How to use it</th></tr>
+<tr><td><strong>Name</strong></td><td>The kernel function name (mangled C++ name)</td><td>Look for <code>sgemm</code> vs <code>h884gemm</code> (Tensor Core), <code>nccl</code> (communication), <code>elementwise</code> (fusion candidates)</td></tr>
+<tr><td><strong>Count</strong></td><td>How many times this kernel was launched</td><td>High count + low duration = launch overhead pattern. Sort by count descending to find the worst offenders.</td></tr>
+<tr><td><strong>Total Time</strong></td><td>Sum of all invocations of this kernel</td><td>Sort by total time to find the top-5 kernels that dominate GPU time. These are your optimization targets.</td></tr>
+<tr><td><strong>Avg Duration</strong></td><td>Average time per invocation</td><td>Under 10μs = too small, launch-bound. Over 1ms = significant kernel worth optimizing at the algorithm level.</td></tr>
+<tr><td><strong>Min/Max Duration</strong></td><td>Range across invocations</td><td>Large variance (10x+ between min and max) suggests input-dependent behavior (e.g., dynamic shapes, variable sequence lengths).</td></tr>
+</table>
+
+<div class="callout callout-tip">
+<i class="ti ti-bulb" aria-hidden="true"></i>
+<div><strong>The 80/20 rule applies strongly here.</strong> Typically 3–5 kernels account for 80%+ of total GPU time. Focus your optimization effort on those. Everything else is noise.</div>
+</div>
+</div>
+</div>
+
+<div class="expand">
+<div class="expand-head" onclick="toggle(this)">
+<i class="ti ti-chevron-right" aria-hidden="true"></i>
+<span class="expand-title">CUDA API statistics</span>
+<span class="expand-badge badge-interpret">Interpret</span>
+</div>
+<div class="expand-body">
+<p>Lists all CUDA API calls from the host side — the CPU's interface to the GPU.</p>
+<table class="ref-table">
+<tr><th>API call</th><th>Healthy pattern</th><th>Red flag</th></tr>
+<tr><td><code>cudaLaunchKernel</code></td><td>Hundreds per iteration, each &lt; 10μs</td><td>Tens of thousands per iteration = too many small ops, needs fusion</td></tr>
+<tr><td><code>cudaMemcpyAsync</code></td><td>1–2 H2D transfers per iteration (batch data)</td><td>Many D2H transfers mid-iteration = sync stalls from <code>.item()</code>/<code>.cpu()</code></td></tr>
+<tr><td><code>cudaMalloc</code></td><td>Zero during steady-state training</td><td>Any occurrence in steady-state = allocation churn (Pattern 4)</td></tr>
+<tr><td><code>cudaStreamSynchronize</code></td><td>1 per iteration (at gradient sync boundary)</td><td>Multiple per iteration = explicit sync stalls (Pattern 3)</td></tr>
+<tr><td><code>cudaDeviceSynchronize</code></td><td>Zero during training</td><td>Any occurrence = hard sync, drains all streams on all devices</td></tr>
+</table>
+</div>
+</div>
+
+<div class="expand">
+<div class="expand-head" onclick="toggle(this)">
+<i class="ti ti-chevron-right" aria-hidden="true"></i>
+<span class="expand-title">OS runtime statistics</span>
+<span class="expand-badge badge-interpret">Interpret</span>
+</div>
+<div class="expand-body">
+<p>Shows POSIX syscalls and library calls from the CPU side. This is where you diagnose data loading and CPU bottlenecks.</p>
+<table class="ref-table">
+<tr><th>Syscall</th><th>What it indicates</th><th>When it's a problem</th></tr>
+<tr><td><code>read()</code> / <code>pread()</code></td><td>Disk I/O — reading training data files</td><td>High total time during training iterations (not just initial data load) means data isn't cached in memory or the storage is slow</td></tr>
+<tr><td><code>futex()</code></td><td>Thread synchronization primitive</td><td>High contention = DataLoader workers fighting for resources, GIL contention, or lock-heavy custom code</td></tr>
+<tr><td><code>poll()</code> / <code>select()</code></td><td>Waiting for I/O readiness</td><td>Long durations suggest the CPU is waiting for network I/O (NFS reads, distributed coordination)</td></tr>
+<tr><td><code>mmap()</code></td><td>Memory-mapped file access</td><td>Frequent mmap calls can indicate the data loader is opening/closing files repeatedly instead of keeping them memory-mapped</td></tr>
+<tr><td><code>clone()</code></td><td>Process/thread creation</td><td>Should only appear at startup. During training means DataLoader workers are being re-spawned (<code>persistent_workers=False</code>)</td></tr>
+</table>
+</div>
+</div>
+
+<div class="expand">
+<div class="expand-head" onclick="toggle(this)">
+<i class="ti ti-chevron-right" aria-hidden="true"></i>
+<span class="expand-title">GPU metrics traces</span>
+<span class="expand-badge badge-interpret">Interpret</span>
+</div>
+<div class="expand-body">
+<p>If captured with <code>--gpu-metrics-device=all</code>, these continuous sampled traces appear as line graphs overlaid on the timeline.</p>
+<table class="ref-table">
+<tr><th>Metric</th><th>What it shows</th><th>Diagnosis value</th></tr>
+<tr><td><strong>SM Active %</strong></td><td>Fraction of time at least one warp is active on each SM</td><td>High SM Active + low power = memory-bound kernels (warps active but stalled on memory). High SM Active + high power = compute-bound (good).</td></tr>
+<tr><td><strong>SM Occupancy %</strong></td><td>Fraction of available warp slots occupied</td><td>Low occupancy (&lt; 50%) limits the GPU's ability to hide memory latency. Often caused by high register usage per thread or large shared memory allocation.</td></tr>
+<tr><td><strong>DRAM Throughput</strong></td><td>HBM memory bandwidth utilization</td><td>If this is near the hardware ceiling (3.35 TB/s on H100 SXM) while SM utilization is moderate, the workload is memory-bandwidth-bound. Fusion or reduced precision can help.</td></tr>
+<tr><td><strong>Power (W)</strong></td><td>Instantaneous GPU power consumption</td><td>The most honest proxy for "is the GPU doing real work." Cross-reference with kernel timeline: power drops during gaps confirm the GPU truly idled.</td></tr>
+<tr><td><strong>GPU Clock (MHz)</strong></td><td>Current SM clock frequency</td><td>Drops below the boost clock indicate thermal or power throttling. Should stay at max (~1980 MHz on H100) during active compute.</td></tr>
+</table>
+
+<div class="callout callout-info">
+<i class="ti ti-info-circle" aria-hidden="true"></i>
+<div><strong>The power cross-check heuristic:</strong> GPU-Util (from nvidia-smi or SM Active in Nsight) can be misleading. Power draw cannot. If the GPU row looks busy but power is low, something is wrong — the kernels are too small, memory-bound, or the SMs are stalled. Always overlay the power trace when evaluating utilization.</div>
+</div>
+</div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="s6"><span class="phase"><span class="phase-num">6</span> Scale</span><br>Multi-GPU and NCCL analysis</h2>
+
+<p>When profiling 8xH100 DDP/FSDP training, Nsight Systems shows all GPUs on the same timeline. This enables critical cross-GPU analysis.</p>
+
+<div class="expand">
+<div class="expand-head" onclick="toggle(this)">
+<i class="ti ti-chevron-right" aria-hidden="true"></i>
+<span class="expand-title">Multi-GPU capture setup</span>
+<span class="expand-badge badge-capture">Capture</span>
+</div>
+<div class="expand-body">
+<p>For <code>torchrun</code>-based distributed training, profile the entire launcher:</p>
+<pre>nsys profile \
+  <span class="flag">--trace=cuda,nvtx,osrt,cudnn,cublas</span> \
+  <span class="flag">--cuda-memory-usage=true</span> \
+  <span class="flag">--gpu-metrics-device=all</span> \
+  <span class="flag">--output=multi_gpu_baseline</span> \
+  torchrun --nproc_per_node=8 train.py</pre>
+
+<p>Each GPU gets its own set of swim lanes in the timeline. You can expand/collapse individual GPU sections. For cleaner analysis, you can also profile a single rank:</p>
+<pre><span class="comment"># Profile only rank 0 (reduces file size and noise)</span>
+CUDA_VISIBLE_DEVICES=0 nsys profile ... \
+  torchrun --nproc_per_node=8 train.py</pre>
+<p>But note: this misses the cross-GPU timing relationships. For communication analysis, you need all ranks.</p>
+</div>
+</div>
+
+<div class="expand">
+<div class="expand-head" onclick="toggle(this)">
+<i class="ti ti-chevron-right" aria-hidden="true"></i>
+<span class="expand-title">What to look for across GPUs</span>
+<span class="expand-badge badge-interpret">Interpret</span>
+</div>
+<div class="expand-body">
+<h3>1. Compute skew</h3>
+<p>All GPUs should finish their backward pass at roughly the same time. If GPU 3 consistently finishes 20% later than the others, all GPUs are throttled to GPU 3's speed (because the AllReduce can't complete until the slowest GPU contributes its gradients). Common causes: thermal throttling on one GPU, data imbalance across ranks, or uneven model partitioning.</p>
+
+<h3>2. Communication / compute overlap</h3>
+<p>In a well-configured DDP setup, NCCL AllReduce kernels should start firing on each GPU <em>during</em> the backward pass, not after it finishes. DDP buckets gradients and launches communication as soon as each bucket is ready. Look for NCCL kernels (purple) interleaved with backward compute kernels (teal) on the same GPU row. If NCCL only appears after all backward kernels are done, the overlap isn't working.</p>
+
+<h3>3. Straggler barriers</h3>
+<p>Look for a gap between one GPU finishing its compute and the NCCL kernel starting. If GPU 0 finishes backward at t=100ms but NCCL doesn't start until t=130ms, something is blocking the collective launch. This could be a Python-side barrier, a logging call on one rank, or a load imbalance.</p>
+
+<h3>4. NCCL algorithm selection</h3>
+<p>NCCL kernel names encode the algorithm: <code>Ring</code>, <code>Tree</code>, <code>CollNet</code>. Ring is optimal for small messages on <= 8 GPUs. Tree is better for large messages. If you see suboptimal selection, override with <code>NCCL_ALGO=Ring</code> or <code>NCCL_ALGO=Tree</code> and re-profile.</p>
+</div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="s7"><span class="phase"><span class="phase-num">7</span> Decide</span><br>The diagnostic decision tree</h2>
+
+<p>Start at the top and follow the arrows. This encodes the systematic triage from the sections above into a quick-reference flowchart.</p>
+
+<div class="dt-node" style="border-left:3px solid var(--acc)">
+<p class="dt-question">Open the profile. Zoom to one training iteration. Look at the GPU kernel row. Is there significant white space (GPU idle time)?</p>
+<div class="dt-options">
+<div class="dt-opt"><span class="arrow">YES →</span><span>The GPU is idle for a significant portion of the iteration</span></div>
+<div class="dt-opt"><span class="arrow">NO →</span><span>GPU row looks fully packed, but throughput is still low</span></div>
+</div>
+</div>
+
+<div class="dt-node" style="border-left:3px solid var(--blue);margin-left:24px">
+<p class="dt-question">YES path: During the GPU gaps, what's happening on the CPU thread row?</p>
+<div class="dt-options">
+<div class="dt-opt"><span class="arrow">A →</span><span>CPU is busy (solid blocks visible)</span></div>
+<div class="dt-result">→ <strong>Pattern 1: Data starvation / CPU bottleneck.</strong> Check OS Runtime stats for read/futex. Fix: more workers, GPU transforms, faster storage.</div>
+<div class="dt-opt"><span class="arrow">B →</span><span>CPU is idle too (both rows empty)</span></div>
+<div class="dt-result">→ Check CUDA API row. Is there a <code>cudaStreamSynchronize</code>?<br>
+• Yes → <strong>Pattern 3: Sync stall.</strong> Find the .item()/.cpu() call.<br>
+• No, but <code>cudaMalloc</code> → <strong>Pattern 4: Alloc churn.</strong><br>
+• No, but NCCL just finished → <strong>Pattern 5: Comms bottleneck.</strong> Check DDP bucket config.</div>
+</div>
+</div>
+
+<div class="dt-node" style="border-left:3px solid var(--amber);margin-left:24px">
+<p class="dt-question">NO path: GPU row is packed. Check power draw and kernel sizes.</p>
+<div class="dt-options">
+<div class="dt-opt"><span class="arrow">C →</span><span>Power is low (&lt; 250W on H100) despite full occupancy</span></div>
+<div class="dt-result">→ Zoom in. Are there thousands of tiny kernels (&lt; 10μs)?<br>
+• Yes → <strong>Pattern 2: Launch overhead.</strong> Use torch.compile or CUDA Graphs.<br>
+• No, kernels are large but power still low → Memory-bandwidth-bound kernels. Move to Nsight Compute roofline analysis.</div>
+<div class="dt-opt"><span class="arrow">D →</span><span>Power is moderate (300–450W), large kernels visible</span></div>
+<div class="dt-result">→ Check kernel names. Do they contain <code>sgemm</code> (FP32)?<br>
+• Yes → <strong>Pattern 6: No Tensor Cores.</strong> Enable AMP / BF16. Align dimensions to multiples of 8.<br>
+• No, names show <code>h884</code>/<code>bf16</code> → Good! You're Tensor Core-bound. This is close to optimal — consider FP8 (Transformer Engine) or algorithmic improvements.</div>
+<div class="dt-opt"><span class="arrow">E →</span><span>Power is high (500W+), large Tensor Core kernels</span></div>
+<div class="dt-result">→ You're near hardware peak. Remaining gains come from: higher batch size (gradient accumulation), algorithmic changes (FlashAttention, fused optimizers), or scaling to more GPUs with good communication overlap.</div>
+</div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="s8"><span class="phase"><span class="phase-num">8</span> Reference</span><br>Quick reference</h2>
+
+<div class="expand">
+<div class="expand-head" onclick="toggle(this)">
+<i class="ti ti-chevron-right" aria-hidden="true"></i>
+<span class="expand-title">nsys command-line cheat sheet</span>
+<span class="expand-badge badge-advanced">Reference</span>
+</div>
+<div class="expand-body">
+<table class="ref-table">
+<tr><th>Command</th><th>Purpose</th></tr>
+<tr><td><code>nsys profile -o out python train.py</code></td><td>Basic capture with defaults</td></tr>
+<tr><td><code>nsys profile --trace=cuda,nvtx,osrt ...</code></td><td>Capture CUDA + NVTX + OS runtime</td></tr>
+<tr><td><code>nsys profile --gpu-metrics-device=all ...</code></td><td>Add GPU counters (power, SM, memory BW)</td></tr>
+<tr><td><code>nsys profile --cuda-memory-usage=true ...</code></td><td>Track cudaMalloc/cudaFree</td></tr>
+<tr><td><code>nsys profile --capture-range=cudaProfilerApi ...</code></td><td>Start/stop from code</td></tr>
+<tr><td><code>nsys profile --duration=60 ...</code></td><td>Auto-stop after 60 seconds</td></tr>
+<tr><td><code>nsys stats report.nsys-rep</code></td><td>Print summary tables to terminal</td></tr>
+<tr><td><code>nsys export --type=sqlite report.nsys-rep</code></td><td>Export to SQLite for custom queries</td></tr>
+<tr><td><code>nsys recipe ... report.nsys-rep</code></td><td>Run built-in analysis recipes (GPU gaps, etc.)</td></tr>
+</table>
+</div>
+</div>
+
+<div class="expand">
+<div class="expand-head" onclick="toggle(this)">
+<i class="ti ti-chevron-right" aria-hidden="true"></i>
+<span class="expand-title">Kernel name decoder ring</span>
+<span class="expand-badge badge-advanced">Reference</span>
+</div>
+<div class="expand-body">
+<p>CUDA kernel names are mangled C++ symbols. Here's how to decode the most common ones in PyTorch workloads:</p>
+<table class="ref-table">
+<tr><th>Name contains...</th><th>What it is</th><th>Notes</th></tr>
+<tr><td><code>sgemm</code></td><td>FP32 matrix multiply (CUDA cores)</td><td>Bad on H100 — should be using Tensor Cores via BF16/FP16</td></tr>
+<tr><td><code>h884gemm</code>, <code>s16816gemm</code></td><td>Tensor Core GEMM (FP16/BF16)</td><td>Good — this is what you want to see for linear layers</td></tr>
+<tr><td><code>volta_</code>, <code>ampere_</code>, <code>hopper_</code></td><td>Architecture-specific kernel</td><td>Confirms the right architecture codepath was selected</td></tr>
+<tr><td><code>nccl</code></td><td>NCCL collective communication</td><td>AllReduce, ReduceScatter, AllGather — multi-GPU comms</td></tr>
+<tr><td><code>elementwise</code></td><td>Pointwise op (add, mul, activation)</td><td>Fusion candidate — should be absorbed by torch.compile</td></tr>
+<tr><td><code>native_batch_norm</code></td><td>Batch normalization</td><td>Check if fused with adjacent ops. Consider using LayerNorm for Tensor Core friendliness.</td></tr>
+<tr><td><code>flash_</code>, <code>fmha_</code></td><td>FlashAttention / fused multi-head attention</td><td>Good — optimized memory-efficient attention</td></tr>
+<tr><td><code>cudnn::cnn::</code></td><td>cuDNN convolution</td><td>Check algorithm selection — Winograd vs FFT vs implicit GEMM</td></tr>
+</table>
+</div>
+</div>
+
+<div class="expand">
+<div class="expand-head" onclick="toggle(this)">
+<i class="ti ti-chevron-right" aria-hidden="true"></i>
+<span class="expand-title">PyTorch profiling helpers</span>
+<span class="expand-badge badge-advanced">Reference</span>
+</div>
+<div class="expand-body">
+<pre><span class="comment"># Add NVTX markers to your training loop</span>
+import torch.cuda.nvtx as nvtx
+
+for batch in loader:
+    nvtx.range_push("data_transfer")
+    x, y = batch[0].cuda(), batch[1].cuda()
+    nvtx.range_pop()
+
+    nvtx.range_push("forward")
+    output = model(x)
+    nvtx.range_pop()
+
+    nvtx.range_push("loss")
+    loss = criterion(output, y)
+    nvtx.range_pop()
+
+    nvtx.range_push("backward")
+    loss.backward()
+    nvtx.range_pop()
+
+    nvtx.range_push("optimizer")
+    optimizer.step()
+    optimizer.zero_grad()
+    nvtx.range_pop()</pre>
+
+<pre><span class="comment"># Quick memory diagnostics (run inline)</span>
+print(torch.cuda.memory_summary())
+print(f"Peak memory: {torch.cuda.max_memory_allocated()/1e9:.2f} GB")
+print(f"Current memory: {torch.cuda.memory_allocated()/1e9:.2f} GB")
+print(f"Cached by allocator: {torch.cuda.memory_reserved()/1e9:.2f} GB")</pre>
+
+<pre><span class="comment"># Check what torch.compile does</span>
+import torch._dynamo as dynamo
+explanation = dynamo.explain(model)(sample_input)
+print(explanation)</pre>
+
+<pre><span class="comment"># Emit NVTX from autograd automatically (alternative to manual markers)</span>
+with torch.autograd.profiler.emit_nvtx():
+    output = model(input)
+    loss = criterion(output, target)
+    loss.backward()</pre>
+</div>
+</div>
+
+<div class="expand">
+<div class="expand-head" onclick="toggle(this)">
+<i class="ti ti-chevron-right" aria-hidden="true"></i>
+<span class="expand-title">When to graduate to Nsight Compute</span>
+<span class="expand-badge badge-advanced">Reference</span>
+</div>
+<div class="expand-body">
+<p>Nsight Systems tells you <em>where</em> the time goes (which kernels, what gaps). Nsight Compute tells you <em>why</em> a specific kernel is slow (SM utilization, memory throughput, instruction mix, occupancy limiters). Move to Nsight Compute when:</p>
+<table class="ref-table">
+<tr><th>Situation</th><th>What Nsight Compute shows</th></tr>
+<tr><td>A single GEMM dominates GPU time and you've already enabled Tensor Cores</td><td>Roofline analysis — shows if you're compute-bound or memory-bound, and how far from the ceiling</td></tr>
+<tr><td>Custom CUDA/Triton kernel underperforms</td><td>Warp stall analysis — shows what warps are waiting on (memory, instruction, sync)</td></tr>
+<tr><td>You suspect low occupancy limits performance</td><td>Occupancy calculator — shows register/shared-memory pressure limiting warp slots</td></tr>
+<tr><td>You need to compare two kernel implementations</td><td>Side-by-side diff of all hardware counters between baseline and optimized version</td></tr>
+</table>
+<pre><span class="comment"># Profile a single kernel with Nsight Compute</span>
+ncu --set full \
+    --kernel-name "regex:gemm" \
+    --launch-count 5 \
+    --target-processes all \
+    python train.py</pre>
+</div>
+</div>
+
+<div style="margin-top:3rem;padding:20px;background:var(--bg2);border-radius:var(--radius-lg);font-size:14px;color:var(--tx2);line-height:1.7">
+<p style="margin:0"><strong style="color:var(--tx)">The core discipline:</strong> Don't optimize what you haven't measured. Don't measure everything at once. Find the white space on the GPU row, classify it with the decision tree, apply the targeted fix, re-profile to confirm the gap closed. Repeat until power draw is high and kernels are large Tensor Core operations with no idle gaps between them.</p>
+</div>
+
+</div>
+
+<script>
+function toggle(el){
+el.classList.toggle('open');
+var body=el.nextElementSibling;
+body.classList.toggle('open');
+}
+function showTab(id,btn){
+document.querySelectorAll('.tab-panel').forEach(function(p){p.classList.remove('active')});
+document.querySelectorAll('.tab-btn').forEach(function(b){b.classList.remove('active')});
+document.getElementById(id).classList.add('active');
+btn.classList.add('active');
+}
+</script>
+</body>
+</html>
