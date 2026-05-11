@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nsight Compute mastery — kernel-level CUDA profiling</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.6.0/dist/tabler-icons.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,wght@0,400;0,600;1,400&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+--bg:#FAFAF7;--bg2:#F0EFEB;--bg3:#E6E5E0;--card:#fff;
+--tx:#1C1C1A;--tx2:#6B6B65;--tx3:#9C9C95;
+--bdr:rgba(0,0,0,0.08);--bdr2:rgba(0,0,0,0.15);
+--acc:#8B4513;--acc-bg:#FDF5EC;--acc-tx:#6B3410;
+--warn:#8B6914;--warn-bg:#FFF8E1;--warn-tx:#5C4400;
+--err:#9B2C2C;--err-bg:#FFF0F0;--err-tx:#6B1A1A;
+--info:#1A5276;--info-bg:#E8F4FD;--info-tx:#0D3B56;
+--green-bg:#E8F0E7;--green-tx:#1E3D1A;
+--blue:#3B82F6;--green:#22C55E;--amber:#F59E0B;--red:#EF4444;--purple:#8B5CF6;--teal:#14B8A6;--pink:#EC4899;--gray:#94A3B8;--orange:#F97316;--cyan:#06B6D4;
+--font:'Instrument Sans',sans-serif;--serif:'Source Serif 4',Georgia,serif;--mono:'JetBrains Mono','Consolas',monospace;
+--radius:8px;--radius-lg:12px;
+}
+@media(prefers-color-scheme:dark){:root{
+--bg:#1A1A18;--bg2:#242422;--bg3:#2E2E2B;--card:#222220;
+--tx:#E8E8E4;--tx2:#9C9C95;--tx3:#6B6B65;
+--bdr:rgba(255,255,255,0.08);--bdr2:rgba(255,255,255,0.15);
+--acc:#D4956B;--acc-bg:#2E2218;--acc-tx:#E8B896;
+--warn:#D4A529;--warn-bg:#2E2610;--warn-tx:#E8C556;
+--err:#F87171;--err-bg:#2E1A1A;--err-tx:#FCA5A5;
+--info:#60A5FA;--info-bg:#1A2836;--info-tx:#93C5FD;
+--green-bg:#1E2E1C;--green-tx:#A0D89A;
+}}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:var(--font);background:var(--bg);color:var(--tx);line-height:1.7;font-size:15px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:840px;margin:0 auto;padding:2.5rem 1.5rem 6rem}
+h1{font-family:var(--serif);font-size:32px;font-weight:600;line-height:1.25;margin:0 0 8px;letter-spacing:-0.02em}
+.hero-sub{font-size:15px;color:var(--tx2);margin:0 0 2.5rem;max-width:620px;line-height:1.65}
+h2{font-size:20px;font-weight:600;margin:2.5rem 0 1rem;padding-top:1.5rem;border-top:1px solid var(--bdr);letter-spacing:-0.01em}
+h2:first-of-type{border-top:none;padding-top:0}
+h3{font-size:16px;font-weight:600;margin:1.5rem 0 0.5rem}
+h4{font-size:14px;font-weight:600;margin:1rem 0 0.4rem}
+p{margin:0 0 0.85rem}
+a{color:var(--acc);text-decoration:none}
+a:hover{text-decoration:underline}
+code{font-family:var(--mono);font-size:12.5px;background:var(--bg2);padding:2px 6px;border-radius:4px;word-break:break-word}
+pre{font-family:var(--mono);font-size:12.5px;line-height:1.65;background:var(--bg2);border:1px solid var(--bdr);border-radius:var(--radius);padding:16px 20px;overflow-x:auto;margin:0 0 1rem;white-space:pre}
+pre .flag{color:var(--acc)}
+pre .comment{color:var(--tx3);font-style:italic}
+
+.toc{background:var(--card);border:1px solid var(--bdr);border-radius:var(--radius-lg);padding:20px 24px;margin:0 0 2rem}
+.toc-title{font-size:13px;font-weight:600;color:var(--tx2);text-transform:uppercase;letter-spacing:0.8px;margin:0 0 10px}
+.toc-list{list-style:none;display:grid;grid-template-columns:1fr 1fr;gap:4px 24px}
+.toc-list a{font-size:14px;color:var(--tx);display:flex;align-items:center;gap:6px;padding:4px 0;transition:color 0.15s}
+.toc-list a:hover{color:var(--acc);text-decoration:none}
+.toc-list .ti{font-size:14px;color:var(--tx3)}
+@media(max-width:600px){.toc-list{grid-template-columns:1fr}}
+
+.expand{border:1px solid var(--bdr);border-radius:var(--radius-lg);margin:0 0 10px;background:var(--card);overflow:hidden}
+.expand-head{display:flex;align-items:center;gap:10px;padding:14px 18px;cursor:pointer;user-select:none;transition:background 0.15s}
+.expand-head:hover{background:var(--bg2)}
+.expand-head .ti{font-size:18px;color:var(--tx3);transition:transform 0.25s}
+.expand-head.open .ti{transform:rotate(90deg)}
+.expand-title{font-size:15px;font-weight:500;flex:1}
+.expand-badge{font-size:11px;font-weight:500;padding:3px 10px;border-radius:20px;text-transform:uppercase;letter-spacing:0.5px}
+.badge-capture{background:var(--info-bg);color:var(--info-tx)}
+.badge-interpret{background:var(--acc-bg);color:var(--acc-tx)}
+.badge-issue{background:var(--warn-bg);color:var(--warn-tx)}
+.badge-fix{background:var(--err-bg);color:var(--err-tx)}
+.badge-advanced{background:var(--bg3);color:var(--tx2)}
+.badge-concept{background:var(--green-bg);color:var(--green-tx)}
+.expand-body{display:none;padding:0 18px 18px;animation:fadeIn 0.2s ease}
+.expand-body.open{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+
+.metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:12px 0 16px}
+.metric-card{background:var(--bg2);border-radius:var(--radius);padding:12px 14px}
+.metric-label{font-size:11px;color:var(--tx3);text-transform:uppercase;letter-spacing:0.5px;margin:0 0 2px}
+.metric-val{font-size:20px;font-weight:500;margin:0}
+
+.issue-card{border-left:3px solid;border-radius:0 var(--radius) var(--radius) 0;padding:14px 18px;margin:10px 0}
+.issue-card.symptom{border-color:var(--amber);background:var(--warn-bg)}
+.issue-card.cause{border-color:var(--info);background:var(--info-bg)}
+.issue-card.fix{border-color:var(--green);background:var(--green-bg)}
+.issue-card .ic-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin:0 0 4px}
+.issue-card.symptom .ic-label{color:var(--warn-tx)}
+.issue-card.cause .ic-label{color:var(--info-tx)}
+.issue-card.fix .ic-label{color:var(--green-tx)}
+.issue-card p{margin:0;font-size:14px;line-height:1.6}
+
+.ref-table{width:100%;border-collapse:collapse;font-size:13px;margin:12px 0 16px}
+.ref-table th{text-align:left;font-weight:500;padding:8px 12px;border-bottom:2px solid var(--bdr2);color:var(--tx2);font-size:12px;text-transform:uppercase;letter-spacing:0.5px}
+.ref-table td{padding:8px 12px;border-bottom:1px solid var(--bdr);vertical-align:top;line-height:1.55}
+.ref-table tr:last-child td{border-bottom:none}
+.ref-table code{font-size:11.5px}
+
+.tab-bar{display:flex;gap:4px;margin:0;flex-wrap:wrap}
+.tab-btn{font-family:var(--font);font-size:13px;padding:8px 14px;border:1px solid var(--bdr);border-bottom:none;border-radius:var(--radius) var(--radius) 0 0;background:var(--bg2);color:var(--tx2);cursor:pointer;transition:all 0.15s;font-weight:500}
+.tab-btn:hover{background:var(--bg3)}
+.tab-btn.active{background:var(--card);color:var(--tx);border-color:var(--bdr);position:relative;z-index:1}
+.tab-panel{display:none;border:1px solid var(--bdr);border-radius:0 var(--radius) var(--radius) var(--radius);background:var(--card);padding:20px;margin:0 0 16px;position:relative;top:-1px}
+.tab-panel.active{display:block}
+
+.callout{display:flex;gap:10px;padding:14px 16px;border-radius:var(--radius);margin:12px 0 16px;font-size:14px;line-height:1.6}
+.callout .ti{font-size:18px;flex-shrink:0;margin-top:2px}
+.callout-info{background:var(--info-bg);color:var(--info-tx)}
+.callout-warn{background:var(--warn-bg);color:var(--warn-tx)}
+.callout-tip{background:var(--acc-bg);color:var(--acc-tx)}
+
+.phase{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.8px;color:var(--tx3);margin:0 0 8px}
+.phase-num{width:22px;height:22px;border-radius:50%;background:var(--acc);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:11px}
+
+/* Roofline visualization */
+.roof-viz{background:var(--bg2);border:1px solid var(--bdr);border-radius:var(--radius-lg);padding:24px;margin:12px 0 16px;position:relative}
+.roof-svg{width:100%;max-width:520px;margin:0 auto;display:block}
+.roof-caption{font-size:12px;color:var(--tx2);margin:10px 0 0;text-align:center;font-style:italic}
+
+/* Bar chart for stall reasons */
+.bar-chart{margin:12px 0 16px}
+.bar-row{display:flex;align-items:center;gap:10px;margin:0 0 6px}
+.bar-label{font-family:var(--mono);font-size:12px;color:var(--tx2);width:140px;flex-shrink:0;text-align:right}
+.bar-track{flex:1;height:20px;background:var(--bg2);border-radius:3px;overflow:hidden;position:relative}
+.bar-fill{height:100%;border-radius:3px;display:flex;align-items:center;padding:0 8px;font-size:10px;font-weight:500;color:#fff;white-space:nowrap;transition:width 0.4s ease}
+.bar-pct{font-family:var(--mono);font-size:12px;color:var(--tx2);width:45px;flex-shrink:0}
+
+/* Speed-of-light chart */
+.sol-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0 16px}
+@media(max-width:550px){.sol-grid{grid-template-columns:1fr}}
+.sol-card{background:var(--bg2);border-radius:var(--radius);padding:14px 16px}
+.sol-header{display:flex;justify-content:space-between;align-items:center;margin:0 0 6px}
+.sol-name{font-size:13px;font-weight:500}
+.sol-pct{font-family:var(--mono);font-size:18px;font-weight:600}
+.sol-bar{height:6px;background:var(--bg3);border-radius:3px;overflow:hidden;margin:0 0 4px}
+.sol-bar-fill{height:100%;border-radius:3px}
+.sol-desc{font-size:12px;color:var(--tx3);margin:0}
+
+/* Decision blocks */
+.dt-node{background:var(--card);border:1px solid var(--bdr);border-radius:var(--radius-lg);padding:16px 20px;margin:10px 0;position:relative}
+.dt-node::before{content:'';position:absolute;left:24px;top:-10px;width:2px;height:10px;background:var(--bdr2)}
+.dt-node:first-child::before{display:none}
+.dt-question{font-weight:500;font-size:15px;margin:0 0 10px}
+.dt-options{display:flex;flex-direction:column;gap:6px}
+.dt-opt{display:flex;align-items:flex-start;gap:8px;font-size:14px;padding:8px 12px;background:var(--bg2);border-radius:var(--radius);line-height:1.55}
+.dt-opt .arrow{color:var(--acc);font-weight:600;flex-shrink:0;margin-top:1px}
+.dt-result{font-size:13px;color:var(--tx2);margin:4px 0 0 20px;line-height:1.5}
+
+.summary-box{margin-top:3rem;padding:20px;background:var(--bg2);border-radius:var(--radius-lg);font-size:14px;color:var(--tx2);line-height:1.7}
+.summary-box p{margin:0}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Nsight Compute mastery</h1>
+<p class="hero-sub">Kernel-level GPU profiling — roofline analysis, warp stalls, occupancy, memory efficiency, and the art of squeezing every FLOP from your hardware. The companion guide to Nsight Systems.</p>
+
+<nav class="toc">
+<p class="toc-title">Contents</p>
+<ol class="toc-list">
+<li><a href="#s1"><i class="ti ti-arrows-diff" aria-hidden="true"></i> Nsight Systems vs Compute</a></li>
+<li><a href="#s2"><i class="ti ti-terminal" aria-hidden="true"></i> Capture: launching ncu</a></li>
+<li><a href="#s3"><i class="ti ti-chart-dots-3" aria-hidden="true"></i> The roofline model</a></li>
+<li><a href="#s4"><i class="ti ti-gauge" aria-hidden="true"></i> Speed of Light</a></li>
+<li><a href="#s5"><i class="ti ti-cpu" aria-hidden="true"></i> Compute analysis</a></li>
+<li><a href="#s6"><i class="ti ti-database" aria-hidden="true"></i> Memory analysis</a></li>
+<li><a href="#s7"><i class="ti ti-layers-intersect" aria-hidden="true"></i> Occupancy analysis</a></li>
+<li><a href="#s8"><i class="ti ti-bug" aria-hidden="true"></i> Warp stall reasons</a></li>
+<li><a href="#s9"><i class="ti ti-git-branch" aria-hidden="true"></i> Decision tree</a></li>
+<li><a href="#s10"><i class="ti ti-bookmarks" aria-hidden="true"></i> Quick reference</a></li>
+</ol>
+</nav>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="s1"><span class="phase"><span class="phase-num">1</span> Context</span><br>Nsight Systems vs Nsight Compute</h2>
+
+<p>These two tools answer fundamentally different questions. Getting clear on their roles prevents wasted time.</p>
+
+<div class="sol-grid">
+<div class="sol-card">
+<p class="sol-name" style="font-size:15px;font-weight:600">Nsight Systems</p>
+<p class="sol-desc" style="font-size:13px;color:var(--tx);margin-top:6px"><strong>System-level profiler.</strong> Shows the timeline across CPU, GPU, and communication. Answers: <em>where</em> is time being spent? Which kernels dominate? Where is the GPU idle? Is communication overlapped?</p>
+<p class="sol-desc" style="margin-top:8px">Scope: entire application, all kernels, all threads.<br>Overhead: low (1–5%).<br>Output: timeline + summary statistics.</p>
+</div>
+<div class="sol-card">
+<p class="sol-name" style="font-size:15px;font-weight:600">Nsight Compute</p>
+<p class="sol-desc" style="font-size:13px;color:var(--tx);margin-top:6px"><strong>Kernel-level profiler.</strong> Deep-dives into a single CUDA kernel. Answers: <em>why</em> is this kernel slow? Is it compute-bound or memory-bound? What are the warps stalled on? What limits occupancy?</p>
+<p class="sol-desc" style="margin-top:8px">Scope: 1 kernel (or a few), re-runs it multiple times.<br>Overhead: very high (10–100x slowdown per kernel).<br>Output: roofline, counters, source correlation.</p>
+</div>
+</div>
+
+<div class="callout callout-tip">
+<i class="ti ti-bulb" aria-hidden="true"></i>
+<div><strong>The workflow:</strong> Use Nsight Systems first to identify the top 3–5 kernels by total GPU time. Then use Nsight Compute to deep-dive into each one. Never start with Nsight Compute on the full application — it will take hours and produce an overwhelming amount of data.</div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="s2"><span class="phase"><span class="phase-num">2</span> Capture</span><br>Launching ncu</h2>
+
+<div class="expand">
+<div class="expand-head" onclick="toggle(this)">
+<i class="ti ti-chevron-right" aria-hidden="true"></i>
+<span class="expand-title">Basic ncu capture commands</span>
+<span class="expand-badge badge-capture">Capture</span>
+</div>
+<div class="expand-body">
+<pre><span class="comment"># Profile ALL kernels (careful — very slow)</span>
+ncu <span class="flag">--set full</span> \
+    <span class="flag">--launch-count 3</span> \
+    <span class="flag">-o baseline_kernel</span> \
+    python train.py
+
+<span class="comment"># Profile only GEMM kernels (most common target)</span>
+ncu <span class="flag">--set full</span> \
+    <span class="flag">--kernel-name "regex:gemm"</span> \
+    <span class="flag">--launch-skip 100</span> \
+    <span class="flag">--launch-count 5</span> \
+    <span class="flag">-o gemm_analysis</span> \
+    python train.py
+
+<span class="comment"># Profile a specific kernel by index</span>
+ncu <span class="flag">--set full</span> \
+    <span class="flag">--launch-skip 50</span> \
+    <span class="flag">--launch-count 1</span> \
+    <span class="flag">-o single_kernel</span> \
+    python train.py</pre>
+
+<table class="ref-table">
+<tr><th>Flag</th><th>Purpose</th><th>Guidance</th></tr>
+<tr><td><code>--set full</code></td><td>Collect all hardware counters</td><td>Use this unless you know exactly which section you need. The <code>basic</code> and <code>detailed</code> sets miss important metrics.</td></tr>
+<tr><td><code>--kernel-name "regex:..."</code></td><td>Filter kernels by name pattern</td><td>Target specific kernels: <code>gemm</code>, <code>conv</code>, <code>elementwise</code>, <code>flash</code>. Avoids profiling thousands of irrelevant tiny kernels.</td></tr>
+<tr><td><code>--launch-skip N</code></td><td>Skip the first N kernel launches</td><td>Skip warmup iterations. If your forward pass launches 200 kernels and you want iteration 3's GEMM, skip ~400+.</td></tr>
+<tr><td><code>--launch-count N</code></td><td>Profile only N kernel launches</td><td>Keep small (1–10). Each profiled kernel is replayed 5–20+ times internally to collect all counters.</td></tr>
+<tr><td><code>-o filename</code></td><td>Output file (<code>.ncu-rep</code>)</td><td>Transfer to local workstation for GUI analysis, like Nsight Systems.</td></tr>
+<tr><td><code>--section "regex:..."</code></td><td>Collect only specific counter sections</td><td>Speeds up collection if you only need e.g. memory or compute metrics. Use <code>ncu --list-sections</code> to see options.</td></tr>
+</table>
+
+<div class="callout callout-warn">
+<i class="ti ti-alert-triangle" aria-hidden="true"></i>
+<div><strong>Performance impact:</strong> Nsight Compute replays each kernel multiple times (once per counter group). A kernel that takes 1ms will be replayed 10–20 times, taking 10–20ms per profiled launch. With <code>--set full</code>, profiling even 5 kernel launches can slow a training step from 100ms to 30+ seconds. Always use <code>--launch-skip</code> and <code>--launch-count</code>.</div>
+</div>
+</div>
+</div>
+
+<div class="expand">
+<div class="expand-head" onclick="toggle(this)">
+<i class="ti ti-chevron-right" aria-hidden="true"></i>
+<span class="expand-title">Programmatic capture from Python</span>
+<span class="expand-badge badge-capture">Capture</span>
+</div>
+<div class="expand-body">
+<p>For more precise control, use <code>--capture-range</code> with the CUDA Profiler API:</p>
+<pre>import torch.cuda.profiler as profiler
+
+for i, batch in enumerate(loader):
+    <span class="comment"># ... forward, backward ...</span>
+
+    if i == 5:
+        profiler.start()    <span class="comment"># ncu starts collecting</span>
+    if i == 6:
+        profiler.stop()     <span class="comment"># ncu stops</span></pre>
+
+<pre><span class="comment"># Launch with capture-range mode</span>
+ncu --set full \
+    <span class="flag">--replay-mode application</span> \
+    <span class="flag">--target-processes all</span> \
+    python train.py</pre>
+
+<div class="callout callout-info">
+<i class="ti ti-info-circle" aria-hidden="true"></i>
+<div><strong>Replay modes matter.</strong> Nsight Compute has three replay modes: <code>kernel</code> (default, replays each kernel in isolation — most accurate but changes memory state), <code>application</code> (reruns the whole app per counter pass — slow but preserves memory state), and <code>range</code> (replays a marked range). For PyTorch, <code>kernel</code> mode is usually fine. Use <code>application</code> if you suspect the kernel's behavior depends on prior GPU state.</div>
+</div>
+</div>
+</div>
+
+<div class="expand">
+<div class="expand-head" onclick="toggle(this)">
+<i class="ti ti-chevron-right" aria-hidden="true"></i>
+<span class="expand-title">Comparing two implementations (A/B diff)</span>
+<span class="expand-badge badge-capture">Capture</span>
+</div>
+<div class="expand-body">
+<p>One of Nsight Compute's most powerful features is side-by-side kernel comparison. Profile the baseline and optimized version separately, then open both in the GUI:</p>
+<pre><span class="comment"># Baseline</span>
+ncu --set full --kernel-name "regex:my_kernel" \
+    --launch-count 3 -o baseline python train_v1.py
+
+<span class="comment"># Optimized</span>
+ncu --set full --kernel-name "regex:my_kernel" \
+    --launch-count 3 -o optimized python train_v2.py
+
+<span class="comment"># In the GUI: File → Open → baseline.ncu-rep</span>
+<span class="comment"># Then: Add Baseline → optimized.ncu-rep</span>
+<span class="comment"># Every metric shows absolute and % difference</span></pre>
+<p>The diff view highlights regressions in red and improvements in green across every counter. This is invaluable for validating that a change (e.g., adding <code>torch.compile</code>, changing data layout, adjusting tile sizes in a Triton kernel) actually improved hardware utilization rather than just changing where time is spent.</p>
+</div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="s3"><span class="phase"><span class="phase-num">3</span> Foundation</span><br>The roofline model</h2>
+
+<p>The roofline model is the single most important concept in Nsight Compute. It tells you whether a kernel is limited by compute throughput or memory bandwidth — and how far it is from the hardware's theoretical maximum.</p>
+
+<div class="expand">
+<div class="expand-head" onclick="toggle(this)">
+<i class="ti ti-chevron-right" aria-hidden="true"></i>
+<span class="expand-title">Understanding the roofline chart</span>
+<span class="expand-badge badge-concept">Concept</span>
+</div>
+<div class="expand-body">
+
+<div class="roof-viz">
+<svg class="roof-svg" viewBox="0 0 520 320" xmlns="http://www.w3.org/2000/svg">
+<!-- Axes -->
+<line x1="70" y1="270" x2="490" y2="270" stroke="var(--tx3)" stroke-width="1"/>
+<line x1="70" y1="270" x2="70" y2="30" stroke="var(--tx3)" stroke-width="1"/>
+<!-- Axis labels -->
+<text x="280" y="305" fill="var(--tx2)" font-size="11" text-anchor="middle" font-family="var(--font)">Arithmetic Intensity (FLOP/Byte)</text>
+<text x="20" y="150" fill="var(--tx2)" font-size="11" text-anchor="middle" font-family="var(--font)" transform="rotate(-90,20,150)">Performance (FLOP/s)</text>
+<!-- Grid lines -->
+<line x1="70" y1="220" x2="490" y2="220" stroke="var(--bdr)" stroke-width="0.5" stroke-dasharray="4,4"/>
+<line x1="70" y1="170" x2="490" y2="170" stroke="var(--bdr)" stroke-width="0.5" stroke-dasharray="4,4"/>
+<line x1="70" y1="120" x2="490" y2="120" stroke="var(--bdr)" stroke-width="0.5" stroke-dasharray="4,4"/>
+<line x1="70" y1="70" x2="490" y2="70" stroke="var(--bdr)" stroke-width="0.5" stroke-dasharray="4,4"/>
+<!-- Tick labels -->
+<text x="65" y="274" fill="var(--tx3)" font-size="10" text-anchor="end" font-family="var(--mono)">1</text>
+<text x="175" y="284" fill="var(--tx3)" font-size="10" text-anchor="middle" font-family="var(--mono)">4</text>
+<text x="280" y="284" fill="var(--tx3)" font-size="10" text-anchor="middle" font-family="var(--mono)">32</text>
+<text x="385" y="284" fill="var(--tx3)" font-size="10" text-anchor="middle" font-family="var(--mono)">256</text>
+<text x="65" y="224" fill="var(--tx3)" font-size="10" text-anchor="end" font-family="var(--mono)">1T</text>
+<text x="65" y="174" fill="var(--tx3)" font-size="10" text-anchor="end" font-family="var(--mono)">10T</text>
+<text x="65" y="124" fill="var(--tx3)" font-size="10" text-anchor="end" font-family="var(--mono)">100T</text>
+<text x="65" y="74" fill="var(--tx3)" font-size="10" text-anchor="end" font-family="var(--mono)">1P</text>
+<!-- Memory bandwidth roof (sloped) -->
+<line x1="70" y1="270" x2="310" y2="70" stroke="var(--blue)" stroke-width="2.5"/>
+<!-- Compute roof (horizontal) -->
+<line x1="310" y1="70" x2="490" y2="70" stroke="var(--red)" stroke-width="2.5"/>
+<!-- Ridge point -->
+<circle cx="310" cy="70" r="5" fill="var(--purple)"/>
+<text x="310" y="55" fill="var(--purple)" font-size="10" text-anchor="middle" font-family="var(--font)" font-weight="500">Ridge point</text>
+<!-- Labels on rooflines -->
+<text x="170" y="145" fill="var(--blue)" font-size="11" font-family="var(--font)" font-weight="500" transform="rotate(-38,170,145)">Memory BW ceiling</text>
+<text x="400" y="62" fill="var(--red)" font-size="11" text-anchor="middle" font-family="var(--font)" font-weight="500">Compute ceiling</text>
+<!-- Example points -->
+<!-- Memory bound kernel -->
+<circle cx="155" cy="200" r="8" fill="var(--amber)" stroke="#fff" stroke-width="2"/>
+<text x="170" y="210" fill="var(--amber)" font-size="10" font-family="var(--font)" font-weight="500">A: BatchNorm</text>
+<!-- Near ridge kernel -->
+<circle cx="280" cy="110" r="8" fill="var(--teal)" stroke="#fff" stroke-width="2"/>
+<text x="295" y="120" fill="var(--teal)" font-size="10" font-family="var(--font)" font-weight="500">B: Small GEMM</text>
+<!-- Compute bound kernel -->
+<circle cx="420" cy="100" r="8" fill="var(--green)" stroke="#fff" stroke-width="2"/>
+<text x="435" y="110" fill="var(--green)" font-size="10" font-family="var(--font)" font-weight="500">C: Large GEMM</text>
+<!-- Inefficient kernel (far below roof) -->
+<circle cx="380" cy="190" r="8" fill="var(--red)" stroke="#fff" stroke-width="2"/>
+<text x="395" y="200" fill="var(--red)" font-size="10" font-family="var(--font)" font-weight="500">D: Unoptimized</text>
+<!-- Vertical gap annotation for D -->
+<line x1="380" y1="100" x2="380" y2="185" stroke="var(--red)" stroke-width="1" stroke-dasharray="3,3"/>
+<text x="375" y="150" fill="var(--red)" font-size="9" text-anchor="end" font-family="var(--font)">gap = optimization opportunity</text>
+</svg>
+<p class="roof-caption">Roofline model for H100 SXM (BF16 Tensor Core). Points below the roofline have room to improve.</p>
+</div>
+
+<h4>How to read it</h4>
+<p>The X-axis is <strong>arithmetic intensity</strong> — FLOPs performed per byte of data moved from memory. The Y-axis is <strong>achieved performance</strong> in FLOP/s. The roofline has two parts:</p>
+<p><strong>The sloped line (left)</strong> represents the memory bandwidth ceiling. Kernels in this region are <em>memory-bound</em> — they can't compute faster because they're waiting for data from HBM. The slope equals the GPU's memory bandwidth (3.35 TB/s on H100 SXM).</p>
+<p><strong>The horizontal line (right)</strong> represents the compute ceiling. Kernels here are <em>compute-bound</em> — they have enough data but can't execute instructions faster. The height equals peak FLOP/s (990 TFLOP/s BF16 Tensor Core on H100).</p>
+<p><strong>The ridge point</strong> is where the two lines meet. Its X-coordinate tells you the arithmetic intensity needed to fully utilize both compute and memory — about 295 FLOP/Byte for H100 BF16.</p>
+
+<h4>What the example points mean</h4>
+<table class="ref-table">
+<tr><th>Point</th><th>Position</th><th>Interpretation</th></tr>
+<tr><td style="color:var(--amber);font-weight:600">A: BatchNorm</td><td>Low AI, near bandwidth ceiling</td><td>Memory-bound and near the memory roofline — this kernel is already efficient given its arithmetic intensity. The only way to speed it up is to fuse it with adjacent ops to increase AI.</td></tr>
+<tr><td style="color:var(--teal);font-weight:600">B: Small GEMM</td><td>Near ridge, slightly below roof</td><td>Near the transition point. Has moderate AI but doesn't quite reach the ceiling — may have occupancy issues or suboptimal tiling.</td></tr>
+<tr><td style="color:var(--green);font-weight:600">C: Large GEMM</td><td>High AI, near compute ceiling</td><td>Compute-bound and close to peak — this is the goal. Large matrix multiplies with Tensor Cores should land here.</td></tr>
+<tr><td style="color:var(--red);font-weight:600">D: Unoptimized</td><td>High AI, far below compute ceiling</td><td>Has enough arithmetic intensity to be compute-bound but achieves far less than the hardware can deliver. The vertical gap to the ceiling is the optimization opportunity — look at warp stalls, occupancy, and instruction mix.</td></tr>
+</table>
+
+<div class="callout callout-info">
+<i class="ti ti-info-circle" aria-hidden="true"></i>
+<div><strong>Multiple rooflines:</strong> Nsight Compute shows separate rooflines for FP32 CUDA cores, FP16 Tensor Cores, BF16 Tensor Cores, and FP8. If your kernel appears near the FP32 ceiling but far below the BF16 ceiling, it's using the wrong precision — switch to mixed precision to jump to the higher roofline.</div>
+</div>
+</div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="s4"><span class="phase"><span class="phase-num">4</span> Overview</span><br>Speed of Light (SOL)</h2>
+
+<p>The "Speed of Light" section is the first thing to check in any Nsight Compute report. It summarizes how close the kernel is to the hardware's theoretical peak across compute and memory, expressed as percentages.</p>
+
+<div class="expand">
+<div class="expand-head" onclick="toggle(this)">
+<i class="ti ti-chevron-right" aria-hidden="true"></i>
+<span class="expand-title">Reading the SOL summary</span>
+<span class="expand-badge badge-interpret">Interpret</span>
+</div>
+<div class="expand-body">
+<p>Here's what a typical SOL display looks like for different kernel types. The percentage tells you how close to the hardware maximum the kernel achieves.</p>
+
+<h4>Example: Well-optimized large GEMM (BF16 Tensor Core)</h4>
+<div class="sol-grid">
+<div class="sol-card">
+<div class="sol-header"><span class="sol-name">SM Throughput</span><span class="sol-pct" style="color:var(--green)">87%</span></div>
+<div class="sol-bar"><div class="sol-bar-fill" style="width:87%;background:var(--green)"></div></div>
+<p class="sol-desc">Compute pipe utilization — close to peak Tensor Core throughput</p>
+</div>
+<div class="sol-card">
+<div class="sol-header"><span class="sol-name">Memory Throughput</span><span class="sol-pct" style="color:var(--teal)">42%</span></div>
+<div class="sol-bar"><div class="sol-bar-fill" style="width:42%;background:var(--teal)"></div></div>
+<p class="sol-desc">HBM bandwidth utilization — not the bottleneck, compute-bound</p>
+</div>
+</div>
+
+<h4>Example: Memory-bound element-wise kernel</h4>
+<div class="sol-grid">
+<div class="sol-card">
+<div class="sol-header"><span class="sol-name">SM Throughput</span><span class="sol-pct" style="color:var(--amber)">12%</span></div>
+<div class="sol-bar"><div class="sol-bar-fill" style="width:12%;background:var(--amber)"></div></div>
+<p class="sol-desc">Very low compute utilization — SMs mostly waiting for data</p>
+</div>
+<div class="sol-card">
+<div class="sol-header"><span class="sol-name">Memory Throughput</span><span class="sol-pct" style="color:var(--green)">89%</span></div>
+<div class="sol-bar"><div class="sol-bar-fill" style="width:89%;background:var(--green)"></div></div>
+<p class="sol-desc">Near peak HBM bandwidth — memory-bound kernel working as expected</p>
+</div>
+</div>
+
+<h4>Example: Poorly optimized kernel</h4>
+<div class="sol-grid">
+<div class="sol-card">
+<div class="sol-header"><span class="sol-name">SM Throughput</span><span class="sol-pct" style="color:var(--red)">18%</span></div>
+<div class="sol-bar"><div class="sol-bar-fill" style="width:18%;background:var(--red)"></div></div>
+<p class="sol-desc">Low compute — SMs are underutilized</p>
+</div>
+<div class="sol-card">
+<div class="sol-header"><span class="sol-name">Memory Throughput</span><span class="sol-pct" style="color:var(--red)">23%</span></div>
+<div class="sol-bar"><div class="sol-bar-fill" style="width:23%;background:var(--red)"></div></div>
+<p class="sol-desc">Low memory — not bandwidth-bound either. Something else is wrong.</p>
+</div>
+</div>
+
+<div class="callout callout-tip">
+<i class="ti ti-bulb" aria-hidden="true"></i>
+<div><strong>The diagnostic rule:</strong> High SM + low Mem = compute-bound (good for GEMMs). Low SM + high Mem = memory-bound (expected for element-wise, reductions). Low SM + low Mem = <em>neither pipeline is saturated</em> — look at occupancy, warp stalls, or instruction-level inefficiencies. This is the quadrant where the biggest gains live.</div>
+</div>
+</div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="s5"><span class="phase"><span class="phase-num">5</span> Compute</span><br>Compute analysis</h2>
+
+<div class="expand">
+<div class="expand-head" onclick="toggle(this)">
+<i class="ti ti-chevron-right" aria-hidden="true"></i>
+<span class="expand-title">Instruction mix and pipe utilization</span>
+<span class="expand-badge badge-interpret">Interpret</span>
+</div>
+<div class="expand-body">
+<p>The Compute Workload Analysis section breaks down which functional units (pipes) inside the SM are active:</p>
+
+<table class="ref-table">
+<tr><th>Pipe</th><th>What it does</th><th>What to look for</th></tr>
+<tr><td><strong>FMA (FP32)</strong></td><td>Fused multiply-add on CUDA cores</td><td>If this dominates and Tensor pipe is idle, the kernel isn't using mixed precision. Switch to BF16/FP16.</td></tr>
+<tr><td><strong>Tensor Core</strong></td><td>Matrix multiply-accumulate units</td><td>Should be the dominant pipe for GEMM/convolution kernels. If idle, check data types and matrix alignment (multiples of 8).</td></tr>
+<tr><td><strong>ALU (INT)</strong></td><td>Integer arithmetic (indexing, address computation)</td><td>High ALU with low FMA/Tensor = the kernel spends most time computing addresses rather than doing useful math. Indicates memory access pattern issues.</td></tr>
+<tr><td><strong>FP64</strong></td><td>Double-precision floating point</td><td>Should be zero for training workloads. If non-zero, something is accidentally in FP64 — <code>torch.set_default_dtype(torch.float32)</code> and check for Python float constants in kernels.</td></tr>
+<tr><td><strong>LSU</strong></td><td>Load/store unit</td><td>High LSU utilization means the kernel is memory-access heavy. Expected for data movement kernels (transpose, copy), a red flag for compute kernels.</td></tr>
+<tr><td><strong>SFU</strong></td><td>Special function unit (sin, cos, exp, rsqrt)</td><td>High SFU utilization in activation functions (GELU, SiLU) is expected. If it dominates, consider using polynomial approximations or fusing with adjacent ops.</td></tr>
+</table>
+
+<div class="issue-card symptom">
+<p class="ic-label"><i class="ti ti-eye" style="font-size:14px;margin-right:4px" aria-hidden="true"></i> Common problem: Tensor Core pipe shows 0% utilization on a GEMM kernel</p>
+<p>This means the kernel fell back to FP32 CUDA cores. Check: is autocast enabled? Are the input tensors actually in FP16/BF16 (print <code>tensor.dtype</code>)? Are matrix dimensions M, N, K multiples of 8? Are you using a cuBLAS GEMM or a custom kernel that doesn't use <code>wmma</code>/<code>mma</code> instructions?</p>
+</div>
+</div>
+</div>
+
+<div class="expand">
+<div class="expand-head" onclick="toggle(this)">
+<i class="ti ti-chevron-right" aria-hidden="true"></i>
+<span class="expand-title">Warp execution efficiency</span>
+<span class="expand-badge badge-interpret">Interpret</span>
+</div>
+<div class="expand-body">
+<p>A warp is 32 threads that execute in lockstep. Warp execution efficiency measures what fraction of threads in a warp are active (not masked off by divergent branches).</p>
+
+<div class="metric-grid">
+<div class="metric-card">
+<p class="metric-label">Ideal</p>
+<p class="metric-val">100%</p>
+</div>
+<div class="metric-card">
+<p class="metric-label">Acceptable</p>
+<p class="metric-val">> 80%</p>
+</div>
+<div class="metric-card">
+<p class="metric-label">Concerning</p>
+<p class="metric-val">< 50%</p>
+</div>
+</div>
+
+<p>Low efficiency means branch divergence — different threads in a warp take different paths in an <code>if/else</code>, so the GPU serializes both paths. Common in: custom kernels with data-dependent branching, sparse operations, irregular workloads. Less common in standard PyTorch ops (cuBLAS/cuDNN are well-optimized).</p>
+</div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="s6"><span class="phase"><span class="phase-num">6</span> Memory</span><br>Memory analysis</h2>
+
+<div class="expand">
+<div class="expand-head" onclick="toggle(this)">
+<i class="ti ti-chevron-right" aria-hidden="true"></i>
+<span class="expand-title">The memory hierarchy and where bottlenecks occur</span>
+<span class="expand-badge badge-concept">Concept</span>
+</div>
+<div class="expand-body">
+<p>The GPU memory hierarchy has multiple levels, each with different bandwidth and latency. Nsight Compute shows utilization at each level.</p>
+
+<table class="ref-table">
+<tr><th>Level</th><th>H100 SXM specs</th><th>Typical access pattern</th></tr>
+<tr><td><strong>Registers</strong></td><td>~80 TB/s effective, per-thread</td><td>Fastest. Compiler-managed. Exceeding 255 registers per thread spills to local memory (slow).</td></tr>
+<tr><td><strong>Shared memory (SMEM)</strong></td><td>228 KB per SM, ~30 TB/s aggregate</td><td>Programmer-managed scratchpad. Used for tiling in GEMM, reductions, inter-thread communication. Under-utilization here often means suboptimal tiling.</td></tr>
+<tr><td><strong>L1 cache</strong></td><td>256 KB per SM (combined with SMEM)</td><td>Automatic caching. High L1 hit rate = good spatial/temporal locality. Low hit rate = scattered access patterns.</td></tr>
+<tr><td><strong>L2 cache</strong></td><td>50 MB total, ~12 TB/s</td><td>Shared across all SMs. Working sets that fit in L2 see huge speedups. Flash attention exploits this aggressively.</td></tr>
+<tr><td><strong>HBM (DRAM)</strong></td><td>80 GB, 3.35 TB/s</td><td>Global memory — slowest. Every byte you can avoid reading from HBM is a win. Fusion reduces HBM traffic by keeping intermediates in registers/SMEM.</td></tr>
+</table>
+
+<h4>Key metrics to check</h4>
+<table class="ref-table">
+<tr><th>Metric</th><th>What it tells you</th><th>Action</th></tr>
+<tr><td><strong>DRAM Throughput %</strong></td><td>How close to peak HBM bandwidth</td><td>If near 100%, kernel is memory-bound. Reduce data movement (fusion, smaller dtypes, tiling).</td></tr>
+<tr><td><strong>L2 Hit Rate</strong></td><td>Fraction of memory requests served by L2</td><td>High hit rate (>80%) means data fits in L2 — good. Low hit rate means every access goes to HBM.</td></tr>
+<tr><td><strong>L1 Hit Rate</strong></td><td>Fraction served by L1/shared memory</td><td>Low hit rate = poor spatial locality or insufficient tiling. Consider shared memory tiling or data layout changes (AoS → SoA).</td></tr>
+<tr><td><strong>SMEM Utilization</strong></td><td>How much shared memory is used vs available</td><td>Near 100% may limit occupancy (fewer blocks per SM). Near 0% on a memory-bound kernel means SMEM tiling isn't being used when it could be.</td></tr>
+<tr><td><strong>Sector Efficiency</strong></td><td>Fraction of fetched bytes actually used</td><td>Low efficiency means uncoalesced access — threads request scattered addresses, forcing the GPU to fetch full cache lines but only use part. Fix data layout or access patterns.</td></tr>
+</table>
+</div>
+</div>
+
+<div class="expand">
+<div class="expand-head" onclick="toggle(this)">
+<i class="ti ti-chevron-right" aria-hidden="true"></i>
+<span class="expand-title">Memory access pattern problems</span>
+<span class="expand-badge badge-issue">Issue</span>
+</div>
+<div class="expand-body">
+
+<div class="issue-card symptom">
+<p class="ic-label"><i class="ti ti-eye" style="font-size:14px;margin-right:4px" aria-hidden="true"></i> Uncoalesced global memory access</p>
+<p>In the Memory Workload Analysis, you see high "Sectors per Request" (ideally 1 for coalesced, can be up to 32 for fully scattered). The GPU fetches 128-byte sectors from HBM — if 32 threads in a warp each want bytes from different sectors, you fetch 32 sectors but only use 4 bytes from each, wasting 97% of bandwidth.</p>
+</div>
+<div class="issue-card fix">
+<p class="ic-label"><i class="ti ti-tool" style="font-size:14px;margin-right:4px" aria-hidden="true"></i> Fix</p>
+<p>Ensure consecutive threads access consecutive memory addresses (coalesced access). For matrix operations: use column-major layout for column-accessed data, row-major for row-accessed. For custom kernels: reindex thread → data mapping so thread <code>i</code> accesses address <code>base + i * sizeof(element)</code>. For PyTorch: use <code>.contiguous()</code> on tensors before passing to CUDA operations, and prefer <code>channels_last</code> memory format for convolutions.</p>
+</div>
+
+<div class="issue-card symptom">
+<p class="ic-label"><i class="ti ti-eye" style="font-size:14px;margin-right:4px" aria-hidden="true"></i> Shared memory bank conflicts</p>
+<p>In the Shared Memory section, you see high "Bank Conflicts per Access" (ideally 0). Shared memory has 32 banks — if multiple threads in a warp access different addresses in the same bank simultaneously, the accesses serialize (a 32-way conflict is 32x slower).</p>
+</div>
+<div class="issue-card fix">
+<p class="ic-label"><i class="ti ti-tool" style="font-size:14px;margin-right:4px" aria-hidden="true"></i> Fix</p>
+<p>Pad shared memory arrays to avoid stride-conflicts: instead of <code>__shared__ float tile[32][32]</code>, use <code>__shared__ float tile[32][33]</code> (adds one column of padding to shift bank alignment). In Triton kernels, the compiler usually handles this, but check the generated PTX if stalls persist.</p>
+</div>
+
+<div class="issue-card symptom">
+<p class="ic-label"><i class="ti ti-eye" style="font-size:14px;margin-right:4px" aria-hidden="true"></i> Register spilling</p>
+<p>In the Launch Statistics, you see "Local Memory per Thread" is non-zero. This means registers overflowed to local memory (which is actually global memory with L1 caching) — 100–400x slower than register access.</p>
+</div>
+<div class="issue-card fix">
+<p class="ic-label"><i class="ti ti-tool" style="font-size:14px;margin-right:4px" aria-hidden="true"></i> Fix</p>
+<p>Reduce register pressure: simplify per-thread computation, break large kernels into smaller fused stages, use <code>--maxrregcount=N</code> compiler flag to force register limits (trades spilling for occupancy). In Triton: reduce <code>BLOCK_SIZE</code> or the number of accumulator variables.</p>
+</div>
+</div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="s7"><span class="phase"><span class="phase-num">7</span> Occupancy</span><br>Occupancy analysis</h2>
+
+<div class="expand">
+<div class="expand-head" onclick="toggle(this)">
+<i class="ti ti-chevron-right" aria-hidden="true"></i>
+<span class="expand-title">What occupancy means and when it matters</span>
+<span class="expand-badge badge-concept">Concept</span>
+</div>
+<div class="expand-body">
+<p><strong>Occupancy</strong> is the ratio of active warps on an SM to the maximum number of warps the SM can hold (64 on H100). Higher occupancy gives the GPU more warps to schedule when one warp stalls (e.g., on a memory fetch), hiding latency through parallelism.</p>
+
+<div class="metric-grid">
+<div class="metric-card">
+<p class="metric-label">Max warps per SM (H100)</p>
+<p class="metric-val">64</p>
+</div>
+<div class="metric-card">
+<p class="metric-label">Max threads per SM</p>
+<p class="metric-val">2048</p>
+</div>
+<div class="metric-card">
+<p class="metric-label">Max blocks per SM</p>
+<p class="metric-val">32</p>
+</div>
+</div>
+
+<h4>Three resources that limit occupancy</h4>
+<table class="ref-table">
+<tr><th>Resource</th><th>How it limits</th><th>Nsight Compute shows</th></tr>
+<tr><td><strong>Registers per thread</strong></td><td>H100 has 65,536 registers per SM. If a kernel uses 128 registers/thread, each block of 256 threads needs 32,768 registers — only 2 blocks fit (= 16 warps = 25% occupancy).</td><td>The Occupancy section shows "Registers per Thread" and "Theoretical Occupancy" limited by registers. If this is the limiter, you'll see "Registers" highlighted in red.</td></tr>
+<tr><td><strong>Shared memory per block</strong></td><td>228 KB per SM on H100. If each block uses 100 KB of SMEM, only 2 blocks fit. At 256 threads/block, that's 16 warps = 25% occupancy.</td><td>The Occupancy section shows "Shared Memory per Block" and flags it if it's the limiter.</td></tr>
+<tr><td><strong>Block size (threads per block)</strong></td><td>If the block is too large (e.g., 1024 threads) and resources per block are high, fewer blocks fit. If too small (e.g., 32 threads = 1 warp), you need 64 blocks to fill an SM but the max is 32.</td><td>The "Block Limit" row in the occupancy calculator. Increasing block size is often the easiest lever.</td></tr>
+</table>
+
+<div class="callout callout-warn">
+<i class="ti ti-alert-triangle" aria-hidden="true"></i>
+<div><strong>Occupancy isn't everything.</strong> A memory-bound kernel at 25% occupancy might be performing optimally if it's already saturating HBM bandwidth — more warps won't help because there's no more bandwidth to use. A compute-bound Tensor Core GEMM at 50% occupancy can still hit 85% of peak FLOP/s because Tensor Core instructions have high throughput. Use occupancy as a diagnostic for latency-sensitive kernels (those with many memory stalls), not as a universal optimization target.</div>
+</div>
+</div>
+</div>
+
+<div class="expand">
+<div class="expand-head" onclick="toggle(this)">
+<i class="ti ti-chevron-right" aria-hidden="true"></i>
+<span class="expand-title">The occupancy calculator</span>
+<span class="expand-badge badge-interpret">Interpret</span>
+</div>
+<div class="expand-body">
+<p>Nsight Compute includes an interactive occupancy calculator (also available as a standalone Excel spreadsheet from NVIDIA). It shows three curves:</p>
+
+<p><strong>Occupancy vs Registers per Thread</strong> — shows how occupancy drops as register usage increases. The achieved register count is marked. If you're on a steep part of the curve, reducing registers by even a few can jump occupancy significantly.</p>
+
+<p><strong>Occupancy vs Shared Memory per Block</strong> — shows how occupancy drops as SMEM usage increases. If the achieved SMEM is right at a step boundary, a small reduction can unlock an additional block per SM.</p>
+
+<p><strong>Occupancy vs Block Size</strong> — shows how occupancy scales with threads per block. Generally, 128–256 threads per block is the sweet spot. Below 64, you can't fill enough warp slots; above 512, resource pressure usually kills occupancy.</p>
+
+<h4>Achieved vs theoretical occupancy</h4>
+<p>The calculator shows <em>theoretical</em> maximum occupancy given the resource constraints. But <em>achieved</em> occupancy (measured at runtime) can be lower if there aren't enough blocks to fill all SMs (the grid is too small). This happens with small batch sizes or small spatial dimensions — the problem decomposes into too few blocks to keep 132 SMs on H100 busy. Fix: increase batch size, or restructure the kernel to launch more blocks.</p>
+</div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="s8"><span class="phase"><span class="phase-num">8</span> Stalls</span><br>Warp stall reasons</h2>
+
+<p>When warps can't issue an instruction, they stall. The Warp State Statistics section shows <em>why</em> warps are stalled. This is often the most actionable section in the entire report.</p>
+
+<div class="expand">
+<div class="expand-head" onclick="toggle(this)">
+<i class="ti ti-chevron-right" aria-hidden="true"></i>
+<span class="expand-title">Stall reason breakdown</span>
+<span class="expand-badge badge-interpret">Interpret</span>
+</div>
+<div class="expand-body">
+<p>Here's a simulated stall breakdown for a poorly optimized kernel. Click each bar category in the table below for diagnosis.</p>
+
+<div class="bar-chart">
+<div class="bar-row"><span class="bar-label">Long Scoreboard</span><span class="bar-track"><span class="bar-fill" style="width:42%;background:var(--red)">42%</span></span><span class="bar-pct">42%</span></div>
+<div class="bar-row"><span class="bar-label">Wait</span><span class="bar-track"><span class="bar-fill" style="width:18%;background:var(--amber)">18%</span></span><span class="bar-pct">18%</span></div>
+<div class="bar-row"><span class="bar-label">Stall MIO Throttle</span><span class="bar-track"><span class="bar-fill" style="width:14%;background:var(--blue)">14%</span></span><span class="bar-pct">14%</span></div>
+<div class="bar-row"><span class="bar-label">Short Scoreboard</span><span class="bar-track"><span class="bar-fill" style="width:10%;background:var(--purple)">10%</span></span><span class="bar-pct">10%</span></div>
+<div class="bar-row"><span class="bar-label">Not Selected</span><span class="bar-track"><span class="bar-fill" style="width:8%;background:var(--teal)">8%</span></span><span class="bar-pct">8%</span></div>
+<div class="bar-row"><span class="bar-label">Barrier</span><span class="bar-track"><span class="bar-fill" style="width:5%;background:var(--pink)">5%</span></span><span class="bar-pct">5%</span></div>
+<div class="bar-row"><span class="bar-label">Other</span><span class="bar-track"><span class="bar-fill" style="width:3%;background:var(--gray)">3%</span></span><span class="bar-pct">3%</span></div>
+</div>
+
+<table class="ref-table">
+<tr><th>Stall reason</th><th>What it means</th><th>Root cause</th><th>Fix</th></tr>
+<tr>
+<td><strong style="color:var(--red)">Long Scoreboard</strong></td>
+<td>Warp waiting for a long-latency operation to complete (global memory load, texture fetch)</td>
+<td>Not enough warps to hide memory latency, or too many dependent memory accesses in sequence</td>
+<td>Increase occupancy (reduce registers/SMEM), prefetch data, restructure algorithm to have independent loads, use shared memory tiling</td>
+</tr>
+<tr>
+<td><strong style="color:var(--amber)">Wait</strong></td>
+<td>Warp waiting on a fixed-latency pipeline (Tensor Core MMA, shared memory access)</td>
+<td>Back-to-back dependent Tensor Core operations without interleaved independent work</td>
+<td>Software pipelining — overlap the next tile's data load with the current tile's compute. This is what optimized GEMM libraries (cuBLAS, CUTLASS) do.</td>
+</tr>
+<tr>
+<td><strong style="color:var(--blue)">MIO Throttle</strong></td>
+<td>Memory instruction queue is full — too many outstanding memory requests</td>
+<td>Very high memory request rate exceeding the SM's memory pipeline capacity</td>
+<td>Reduce memory instructions per thread (fuse loads, use vector loads like <code>float4</code>), coalesce accesses to issue fewer wider transactions</td>
+</tr>
+<tr>
+<td><strong style="color:var(--purple)">Short Scoreboard</strong></td>
+<td>Warp waiting for a short-latency operation (shared memory load, L1 access)</td>
+<td>Shared memory bank conflicts serializing accesses, or dependent chains of SMEM operations</td>
+<td>Resolve bank conflicts (pad SMEM arrays), restructure access patterns for conflict-free access</td>
+</tr>
+<tr>
+<td><strong style="color:var(--teal)">Not Selected</strong></td>
+<td>Warp is eligible to issue but another warp was scheduled instead</td>
+<td>Not a problem — this is healthy. It means there are enough warps to keep the scheduler busy. High "Not Selected" with high achieved throughput is ideal.</td>
+<td>No fix needed. This is the goal of high occupancy.</td>
+</tr>
+<tr>
+<td><strong style="color:var(--pink)">Barrier</strong></td>
+<td>Warp waiting at a <code>__syncthreads()</code> or equivalent barrier</td>
+<td>Workload imbalance within a block — some warps finish their work and wait at the barrier for slower warps</td>
+<td>Balance work across threads in a block, reduce unnecessary barriers, consider warp-level synchronization (<code>__syncwarp</code>) instead of block-level</td>
+</tr>
+<tr>
+<td><strong>LG Throttle</strong></td>
+<td>Local/global memory instruction queue full</td>
+<td>Similar to MIO Throttle but specific to the local/global memory pipeline</td>
+<td>Reduce register spilling (which uses local memory), coalesce global accesses</td>
+</tr>
+<tr>
+<td><strong>Drain</strong></td>
+<td>Warp is finishing its last instructions before exiting</td>
+<td>Normal end-of-kernel behavior. If dominant, the kernel is very short (launch overhead concern — go back to Nsight Systems).</td>
+<td>If excessive: the kernel is too short, fuse with adjacent kernels</td>
+</tr>
+</table>
+</div>
+</div>
+
+<div class="expand">
+<div class="expand-head" onclick="toggle(this)">
+<i class="ti ti-chevron-right" aria-hidden="true"></i>
+<span class="expand-title">Interpreting stall patterns for PyTorch workloads</span>
+<span class="expand-badge badge-issue">Issue</span>
+</div>
+<div class="expand-body">
+
+<div class="tab-bar">
+<button class="tab-btn active" onclick="showTab('stall1',this)">GEMM kernels</button>
+<button class="tab-btn" onclick="showTab('stall2',this)">Element-wise ops</button>
+<button class="tab-btn" onclick="showTab('stall3',this)">Reductions</button>
+<button class="tab-btn" onclick="showTab('stall4',this)">Attention</button>
+</div>
+
+<div class="tab-panel active" id="stall1">
+<h4>GEMM kernels (linear layers, convolutions)</h4>
+<p>Healthy GEMM stall profile: dominated by <strong>Wait</strong> (Tensor Core pipeline latency) and <strong>Not Selected</strong> (scheduler has options). If instead you see high <strong>Long Scoreboard</strong>, the GEMM is memory-bound — likely because the matrices are too small to achieve high arithmetic intensity.</p>
+
+<div class="issue-card cause">
+<p class="ic-label"><i class="ti ti-search" style="font-size:14px;margin-right:4px" aria-hidden="true"></i> Common GEMM problems</p>
+<p><strong>Small M dimension</strong> (batch_size × seq_len is small) — not enough work to fill the GPU. Increase batch size or use gradient accumulation.<br>
+<strong>Misaligned K dimension</strong> — K not a multiple of 8 or 16 prevents efficient Tensor Core tiling. Pad weights/inputs.<br>
+<strong>FP32 fallback</strong> — Tensor pipe shows 0%. Enable autocast.<br>
+<strong>Suboptimal algorithm</strong> — cuBLAS heuristic picked the wrong GEMM implementation. Use <code>torch.backends.cuda.matmul.allow_tf32 = True</code> and ensure <code>torch.backends.cudnn.benchmark = True</code>.</p>
+</div>
+</div>
+
+<div class="tab-panel" id="stall2">
+<h4>Element-wise operations (ReLU, add, multiply, dropout)</h4>
+<p>These are almost always memory-bound — low arithmetic intensity (1–2 FLOPs per byte loaded). Healthy stall profile: dominated by <strong>Long Scoreboard</strong> (waiting for HBM loads) with high memory throughput in SOL. The achieved performance should be near the memory bandwidth roofline.</p>
+
+<div class="issue-card cause">
+<p class="ic-label"><i class="ti ti-search" style="font-size:14px;margin-right:4px" aria-hidden="true"></i> When element-wise ops are a problem</p>
+<p>Individual element-wise kernels are rarely worth optimizing in isolation — they're inherently memory-bound. The fix is <em>fusion</em>: combine multiple element-wise ops into a single kernel so intermediate results stay in registers instead of round-tripping through HBM. This is exactly what <code>torch.compile</code> does. If you see 20 separate element-wise kernels between two GEMMs, that's 20 HBM round-trips that a fused kernel reduces to 1.</p>
+</div>
+</div>
+
+<div class="tab-panel" id="stall3">
+<h4>Reductions (sum, mean, softmax, layer norm)</h4>
+<p>Reductions are tricky because they have two phases: a memory-bound parallel reduction across elements, then a communication phase where partial results are combined. Stall profile typically shows <strong>Long Scoreboard</strong> (memory loads) and <strong>Barrier</strong> (synchronization between reduction stages).</p>
+
+<div class="issue-card cause">
+<p class="ic-label"><i class="ti ti-search" style="font-size:14px;margin-right:4px" aria-hidden="true"></i> When reductions are a problem</p>
+<p><strong>Small reduction dimension</strong> — reducing over a small axis means each block has little work. This shows up as low occupancy and high "Drain" stall (kernels finishing too quickly).<br>
+<strong>Multiple separate reductions</strong> — LayerNorm computes mean, then variance, then normalizes — 3 separate HBM reads of the same data. Fused LayerNorm kernels (like Apex's) do it in a single pass. Check if you're using the fused version.</p>
+</div>
+</div>
+
+<div class="tab-panel" id="stall4">
+<h4>Attention kernels</h4>
+<p>If you see standard (non-Flash) attention, the softmax + matmul chain is memory-bound with massive HBM traffic (O(N²) for sequence length N). The stall profile shows extreme <strong>Long Scoreboard</strong>.</p>
+
+<div class="issue-card fix">
+<p class="ic-label"><i class="ti ti-tool" style="font-size:14px;margin-right:4px" aria-hidden="true"></i> Fix</p>
+<p>Switch to <strong>FlashAttention</strong> (<code>torch.nn.functional.scaled_dot_product_attention</code> in PyTorch 2.0+). Flash attention tiles the attention computation to keep data in SMEM/registers, reducing HBM traffic from O(N²) to O(N). In Nsight Compute, a FlashAttention kernel should show high SMEM utilization, moderate Long Scoreboard (SMEM latency is much lower than HBM), and throughput much closer to the compute roofline.</p>
+</div>
+</div>
+
+</div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="s9"><span class="phase"><span class="phase-num">9</span> Decide</span><br>Decision tree</h2>
+
+<p>Given a kernel's Nsight Compute report, follow this tree to diagnose and fix.</p>
+
+<div class="dt-node" style="border-left:3px solid var(--acc)">
+<p class="dt-question">Step 1: Look at the Speed of Light summary. Which pipeline is closer to its ceiling?</p>
+<div class="dt-options">
+<div class="dt-opt"><span class="arrow">A →</span><span>SM Throughput high, Memory Throughput low → <strong>Compute-bound</strong></span></div>
+<div class="dt-opt"><span class="arrow">B →</span><span>SM Throughput low, Memory Throughput high → <strong>Memory-bound</strong></span></div>
+<div class="dt-opt"><span class="arrow">C →</span><span>Both low → <strong>Latency-bound</strong> (neither pipeline saturated)</span></div>
+</div>
+</div>
+
+<div class="dt-node" style="border-left:3px solid var(--green);margin-left:24px">
+<p class="dt-question">Path A (Compute-bound): Check the roofline position and instruction mix.</p>
+<div class="dt-options">
+<div class="dt-opt"><span class="arrow">A1 →</span><span>Near the compute ceiling (>75% SOL)</span></div>
+<div class="dt-result">→ The kernel is well-optimized. Remaining gains: switch to a higher roofline (FP32→BF16→FP8), increase matrix dimensions, or use a more efficient algorithm.</div>
+<div class="dt-opt"><span class="arrow">A2 →</span><span>Far below the compute ceiling (<50% SOL)</span></div>
+<div class="dt-result">→ Check pipe utilization: is Tensor Core pipe active? If not → enable mixed precision, align dims to 8.<br>
+Check warp stall reasons: high <strong>Wait</strong> → pipeline bubbles, need software pipelining.<br>
+Check warp execution efficiency: low (<80%) → branch divergence in the kernel.</div>
+</div>
+</div>
+
+<div class="dt-node" style="border-left:3px solid var(--blue);margin-left:24px">
+<p class="dt-question">Path B (Memory-bound): Check if the kernel is near the memory bandwidth ceiling.</p>
+<div class="dt-options">
+<div class="dt-opt"><span class="arrow">B1 →</span><span>Near the memory ceiling (>75% DRAM throughput)</span></div>
+<div class="dt-result">→ The kernel is efficiently memory-bound. Only way to improve: reduce data movement through fusion (combine with adjacent kernels), use smaller data types (BF16→FP8 halves memory traffic), or improve cache hit rates (tiling for L2).</div>
+<div class="dt-opt"><span class="arrow">B2 →</span><span>Below the memory ceiling (<50% DRAM throughput)</span></div>
+<div class="dt-result">→ Memory is the bottleneck but you're not hitting the bandwidth wall. Check:<br>
+• <strong>Sector efficiency</strong>: low → uncoalesced access. Fix data layout.<br>
+• <strong>L2 hit rate</strong>: low → working set doesn't fit in L2. Consider tiling or blocking.<br>
+• <strong>SMEM bank conflicts</strong>: high → pad shared memory arrays.<br>
+• <strong>MIO/LG Throttle stalls</strong>: high → too many outstanding loads. Use vector loads or reduce loads per thread.</div>
+</div>
+</div>
+
+<div class="dt-node" style="border-left:3px solid var(--amber);margin-left:24px">
+<p class="dt-question">Path C (Latency-bound — both pipelines underutilized): This is where the biggest gains live.</p>
+<div class="dt-options">
+<div class="dt-opt"><span class="arrow">C1 →</span><span>Low achieved occupancy (< 25%)</span></div>
+<div class="dt-result">→ Check the occupancy limiter: registers, shared memory, or block size. Reduce the dominant limiter. Consider <code>--maxrregcount</code> to trade register pressure for occupancy.</div>
+<div class="dt-opt"><span class="arrow">C2 →</span><span>Reasonable occupancy (> 40%) but still latency-bound</span></div>
+<div class="dt-result">→ Check warp stalls: dominant <strong>Long Scoreboard</strong> with moderate occupancy means dependent memory access chains. Restructure the algorithm to have independent loads that can overlap. Consider prefetching or double-buffering.</div>
+<div class="dt-opt"><span class="arrow">C3 →</span><span>The grid is too small (fewer blocks than SMs)</span></div>
+<div class="dt-result">→ The kernel doesn't launch enough blocks to fill all 132 SMs on H100. This is a problem geometry, not a kernel optimization problem. Increase batch size, restructure the decomposition to launch more blocks, or fuse this kernel into a larger one.</div>
+</div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="s10"><span class="phase"><span class="phase-num">10</span> Reference</span><br>Quick reference</h2>
+
+<div class="expand">
+<div class="expand-head" onclick="toggle(this)">
+<i class="ti ti-chevron-right" aria-hidden="true"></i>
+<span class="expand-title">ncu command-line cheat sheet</span>
+<span class="expand-badge badge-advanced">Reference</span>
+</div>
+<div class="expand-body">
+<table class="ref-table">
+<tr><th>Command</th><th>Purpose</th></tr>
+<tr><td><code>ncu --set full -o report python train.py</code></td><td>Full counter collection on all kernels</td></tr>
+<tr><td><code>ncu --set full --kernel-name "regex:gemm" ...</code></td><td>Profile only GEMM kernels</td></tr>
+<tr><td><code>ncu --launch-skip 200 --launch-count 3 ...</code></td><td>Skip warmup, profile 3 kernel launches</td></tr>
+<tr><td><code>ncu --section "regex:Memory" ...</code></td><td>Collect only memory-related counters (faster)</td></tr>
+<tr><td><code>ncu --section "regex:Occupancy" ...</code></td><td>Collect only occupancy counters</td></tr>
+<tr><td><code>ncu --section "regex:Roofline" ...</code></td><td>Collect only roofline data</td></tr>
+<tr><td><code>ncu --list-sections</code></td><td>List all available counter sections</td></tr>
+<tr><td><code>ncu --list-sets</code></td><td>List available sets (basic, detailed, full, source)</td></tr>
+<tr><td><code>ncu --print-summary per-kernel ...</code></td><td>Print summary to terminal without GUI</td></tr>
+<tr><td><code>ncu --csv -o report ...</code></td><td>Export raw counters as CSV for scripting</td></tr>
+<tr><td><code>ncu --replay-mode application ...</code></td><td>Rerun entire app per counter pass (preserves state)</td></tr>
+<tr><td><code>ncu --target-processes all ...</code></td><td>Profile all child processes (for multi-process launchers)</td></tr>
+</table>
+</div>
+</div>
+
+<div class="expand">
+<div class="expand-head" onclick="toggle(this)">
+<i class="ti ti-chevron-right" aria-hidden="true"></i>
+<span class="expand-title">H100 SXM hardware ceilings</span>
+<span class="expand-badge badge-advanced">Reference</span>
+</div>
+<div class="expand-body">
+<p>Know the ceilings so you can gauge how close your kernel is to peak.</p>
+<table class="ref-table">
+<tr><th>Metric</th><th>H100 SXM value</th><th>Notes</th></tr>
+<tr><td>BF16 Tensor Core</td><td>990 TFLOP/s</td><td>Peak for matrix ops with BF16 inputs, FP32 accumulate</td></tr>
+<tr><td>FP16 Tensor Core</td><td>990 TFLOP/s</td><td>Same throughput as BF16 on H100</td></tr>
+<tr><td>TF32 Tensor Core</td><td>495 TFLOP/s</td><td>TensorFloat-32 — automatic in cuBLAS when enabled</td></tr>
+<tr><td>FP8 Tensor Core (E4M3)</td><td>1,979 TFLOP/s</td><td>Requires Transformer Engine; 2x BF16 throughput</td></tr>
+<tr><td>FP32 CUDA Core</td><td>67 TFLOP/s</td><td>~15x slower than BF16 Tensor Core — avoid for GEMM</td></tr>
+<tr><td>FP64 CUDA Core</td><td>34 TFLOP/s</td><td>Should be zero in training workloads</td></tr>
+<tr><td>HBM3 Bandwidth</td><td>3.35 TB/s</td><td>80 GB HBM3, 5-stack</td></tr>
+<tr><td>L2 Cache</td><td>50 MB</td><td>Shared across all 132 SMs</td></tr>
+<tr><td>SMEM per SM</td><td>228 KB</td><td>Configurable split with L1 (up to 256 KB combined)</td></tr>
+<tr><td>Registers per SM</td><td>65,536 × 32-bit</td><td>256 KB register file per SM</td></tr>
+<tr><td>SMs</td><td>132</td><td>16,896 CUDA cores, 528 Tensor Cores</td></tr>
+<tr><td>Max warps per SM</td><td>64</td><td>= 2048 threads per SM</td></tr>
+<tr><td>Max blocks per SM</td><td>32</td><td>Rarely the limiter unless block size is very small</td></tr>
+<tr><td>NVLink 4.0 bandwidth</td><td>900 GB/s (bidirectional)</td><td>18 links × 50 GB/s per direction. For NCCL AllReduce.</td></tr>
+<tr><td>TDP</td><td>700 W</td><td>SXM form factor. PCIe variant is 350 W with lower clocks.</td></tr>
+</table>
+</div>
+</div>
+
+<div class="expand">
+<div class="expand-head" onclick="toggle(this)">
+<i class="ti ti-chevron-right" aria-hidden="true"></i>
+<span class="expand-title">Nsight Compute GUI sections map</span>
+<span class="expand-badge badge-advanced">Reference</span>
+</div>
+<div class="expand-body">
+<p>When you open a <code>.ncu-rep</code> file, the GUI shows sections in a specific order. Here's what each one contains and when to prioritize it:</p>
+<table class="ref-table">
+<tr><th>Section</th><th>Priority</th><th>Contents</th></tr>
+<tr><td><strong>GPU Speed Of Light Throughput</strong></td><td>★★★ Always first</td><td>SM % and Memory %. Tells you compute-bound vs memory-bound in 2 seconds.</td></tr>
+<tr><td><strong>Roofline Analysis</strong></td><td>★★★ Always second</td><td>The roofline chart with your kernel plotted. Shows distance to ceiling and which ceiling matters.</td></tr>
+<tr><td><strong>Compute Workload Analysis</strong></td><td>★★ If compute-bound</td><td>Pipe utilization breakdown (Tensor Core, FMA, ALU, SFU, LSU). Instruction mix.</td></tr>
+<tr><td><strong>Memory Workload Analysis</strong></td><td>★★ If memory-bound</td><td>HBM throughput, L2/L1 hit rates, sector efficiency, SMEM utilization. Cache behavior.</td></tr>
+<tr><td><strong>Occupancy</strong></td><td>★★ If latency-bound</td><td>Achieved vs theoretical occupancy. Limiter identification (registers, SMEM, block size).</td></tr>
+<tr><td><strong>Warp State Statistics</strong></td><td>★★ If SOL is low</td><td>Stall reason breakdown. Where warps spend their time waiting.</td></tr>
+<tr><td><strong>Scheduler Statistics</strong></td><td>★ Deep dive</td><td>Instructions issued per cycle, eligible warps per cycle. Shows if the scheduler is starved.</td></tr>
+<tr><td><strong>Launch Statistics</strong></td><td>★ Always glance</td><td>Grid/block dimensions, registers/thread, SMEM/block, local memory (spills). Quick sanity check.</td></tr>
+<tr><td><strong>Source Counters</strong></td><td>★ With source</td><td>Maps hardware counters back to source lines (CUDA C++, PTX, or SASS). Available only when compiled with <code>-lineinfo</code>.</td></tr>
+</table>
+</div>
+</div>
+
+<div class="expand">
+<div class="expand-head" onclick="toggle(this)">
+<i class="ti ti-chevron-right" aria-hidden="true"></i>
+<span class="expand-title">From Nsight Compute findings to PyTorch-level actions</span>
+<span class="expand-badge badge-advanced">Reference</span>
+</div>
+<div class="expand-body">
+<p>Nsight Compute operates at the CUDA kernel level. Here's the translation table to PyTorch-level actions:</p>
+<table class="ref-table">
+<tr><th>Nsight Compute finding</th><th>PyTorch-level action</th></tr>
+<tr><td>GEMM using FP32 (sgemm, Tensor pipe idle)</td><td><code>torch.autocast('cuda', dtype=torch.bfloat16)</code>, verify <code>torch.backends.cuda.matmul.allow_tf32 = True</code></td></tr>
+<tr><td>GEMM dimensions not multiples of 8</td><td>Pad embedding dim, hidden size, vocab size. E.g., vocab 30522 → 30528.</td></tr>
+<tr><td>Many small element-wise kernels (each memory-bound)</td><td><code>torch.compile(model)</code> to fuse adjacent ops into single kernels</td></tr>
+<tr><td>Standard attention kernel is memory-bound at O(N²)</td><td>Switch to <code>F.scaled_dot_product_attention()</code> (FlashAttention)</td></tr>
+<tr><td>LayerNorm shows 3 separate HBM reads</td><td>Use fused LayerNorm: <code>apex.normalization.FusedLayerNorm</code> or the PyTorch built-in (fused since 2.0)</td></tr>
+<tr><td>Low achieved occupancy due to register pressure</td><td>Reduce <code>BLOCK_SIZE</code> in Triton kernels, or use <code>torch.compile</code> which selects tile sizes automatically</td></tr>
+<tr><td>Grid too small (fewer blocks than SMs)</td><td>Increase batch size. Check that parallelism dimensions (batch × heads × seq_blocks) exceed SM count (132 on H100).</td></tr>
+<tr><td>AdamW optimizer kernel is memory-bound</td><td>Use fused optimizer: <code>torch.optim.AdamW(fused=True)</code> reduces HBM reads from 4 passes to 1.</td></tr>
+<tr><td>Dropout kernel is a separate HBM round-trip</td><td><code>torch.compile</code> fuses dropout with the preceding activation. Or use Flash-Attention which includes dropout.</td></tr>
+<tr><td>BF16 GEMM near ceiling, no more compute headroom</td><td>Consider FP8 training with NVIDIA Transformer Engine for another 2x.</td></tr>
+</table>
+</div>
+</div>
+
+<div class="summary-box">
+<p><strong style="color:var(--tx)">The systematic workflow:</strong> Nsight Systems finds the <em>which</em> — which kernels dominate, where the GPU is idle. Nsight Compute finds the <em>why</em> — why a specific kernel underperforms. Start with SOL (compute-bound or memory-bound?), check the roofline (how far from the ceiling?), read the stall reasons (what are warps waiting on?), check occupancy (is there enough parallelism?), then translate findings to PyTorch-level actions. Profile → diagnose → fix → re-profile. The gap between your kernel's achieved throughput and the hardware ceiling is your optimization budget.</p>
+</div>
+
+</div>
+
+<script>
+function toggle(el){el.classList.toggle('open');el.nextElementSibling.classList.toggle('open')}
+function showTab(id,btn){
+var p=btn.closest('.expand-body')||document;
+p.querySelectorAll('.tab-panel').forEach(function(t){t.classList.remove('active')});
+p.querySelectorAll('.tab-btn').forEach(function(b){b.classList.remove('active')});
+document.getElementById(id).classList.add('active');
+btn.classList.add('active');
+}
+</script>
+</body>
+</html>
