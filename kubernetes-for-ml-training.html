@@ -1,0 +1,2171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kubernetes for ML Training — A Field Manual</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,600;9..144,800;9..144,900&family=JetBrains+Mono:wght@400;500;700&family=Inter+Tight:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink: #0a0a0a;
+  --paper: #f4f1ea;
+  --paper-dim: #ebe6db;
+  --rust: #b8401f;
+  --rust-dim: #8a3018;
+  --moss: #3d5a3d;
+  --gold: #c9a227;
+  --blue: #1e3a5f;
+  --grid: rgba(10,10,10,0.06);
+  --rule: rgba(10,10,10,0.85);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: 'Inter Tight', sans-serif;
+  font-size: 16px;
+  line-height: 1.55;
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 32px 32px;
+  min-height: 100vh;
+}
+
+.masthead {
+  border-bottom: 3px double var(--rule);
+  padding: 24px 48px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  background: var(--paper);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  backdrop-filter: blur(8px);
+  background: rgba(244,241,234,0.95);
+}
+
+.masthead-left {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+}
+
+.masthead-center {
+  font-family: 'Fraunces', serif;
+  font-weight: 900;
+  font-size: 22px;
+  font-style: italic;
+  letter-spacing: -0.01em;
+}
+
+.masthead-right {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+}
+
+.hero {
+  padding: 80px 48px 60px;
+  border-bottom: 1px solid var(--rule);
+  position: relative;
+  overflow: hidden;
+}
+
+.hero::before {
+  content: 'K8s';
+  position: absolute;
+  font-family: 'Fraunces', serif;
+  font-weight: 900;
+  font-size: 480px;
+  color: var(--rust);
+  opacity: 0.06;
+  top: -100px;
+  right: -60px;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.kicker {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.3em;
+  color: var(--rust);
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.kicker::before {
+  content: '';
+  width: 40px;
+  height: 1px;
+  background: var(--rust);
+}
+
+.hero h1 {
+  font-family: 'Fraunces', serif;
+  font-weight: 300;
+  font-size: clamp(48px, 7vw, 96px);
+  line-height: 0.95;
+  letter-spacing: -0.03em;
+  margin-bottom: 24px;
+  max-width: 1100px;
+}
+
+.hero h1 em {
+  font-style: italic;
+  font-weight: 900;
+  color: var(--rust);
+}
+
+.hero-deck {
+  font-family: 'Fraunces', serif;
+  font-size: 22px;
+  font-weight: 400;
+  font-style: italic;
+  max-width: 720px;
+  color: var(--ink);
+  opacity: 0.75;
+  border-left: 2px solid var(--rust);
+  padding-left: 20px;
+  margin-top: 32px;
+}
+
+.toc {
+  padding: 40px 48px;
+  border-bottom: 1px solid var(--rule);
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 48px;
+  background: var(--paper-dim);
+}
+
+.toc-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  padding-top: 4px;
+}
+
+.toc-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 8px 32px;
+  list-style: none;
+}
+
+.toc-list li {
+  border-bottom: 1px dotted var(--rule);
+  padding: 8px 0;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.toc-list a {
+  color: var(--ink);
+  text-decoration: none;
+  flex: 1;
+  font-weight: 500;
+  transition: color 0.2s, transform 0.2s;
+  display: inline-block;
+}
+
+.toc-list a:hover {
+  color: var(--rust);
+  transform: translateX(4px);
+}
+
+.toc-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--rust);
+  font-weight: 700;
+}
+
+section.chapter {
+  padding: 80px 48px;
+  border-bottom: 1px solid var(--rule);
+  position: relative;
+}
+
+section.chapter:nth-of-type(even) {
+  background: var(--paper-dim);
+}
+
+.chapter-head {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 48px;
+  margin-bottom: 56px;
+  align-items: end;
+}
+
+.chapter-meta {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  border-top: 2px solid var(--ink);
+  padding-top: 8px;
+}
+
+.chapter-meta .num {
+  font-size: 64px;
+  font-family: 'Fraunces', serif;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  line-height: 0.9;
+  color: var(--rust);
+  display: block;
+  margin-top: 8px;
+}
+
+.chapter-title {
+  font-family: 'Fraunces', serif;
+  font-weight: 400;
+  font-size: clamp(36px, 5vw, 64px);
+  line-height: 1;
+  letter-spacing: -0.025em;
+}
+
+.chapter-title em {
+  font-style: italic;
+  color: var(--rust);
+}
+
+.chapter-body {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 48px;
+}
+
+.chapter-aside {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--ink);
+  opacity: 0.65;
+}
+
+.chapter-aside strong {
+  display: block;
+  color: var(--rust);
+  margin-bottom: 6px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+}
+
+.prose p {
+  font-size: 17px;
+  margin-bottom: 20px;
+  max-width: 680px;
+}
+
+.prose p.lead {
+  font-family: 'Fraunces', serif;
+  font-size: 24px;
+  line-height: 1.4;
+  font-weight: 400;
+  margin-bottom: 32px;
+  max-width: 720px;
+}
+
+.prose p.lead::first-letter {
+  font-family: 'Fraunces', serif;
+  font-size: 72px;
+  font-weight: 900;
+  float: left;
+  line-height: 0.85;
+  margin: 4px 12px 0 0;
+  color: var(--rust);
+}
+
+.prose h3 {
+  font-family: 'Fraunces', serif;
+  font-weight: 600;
+  font-size: 28px;
+  margin: 48px 0 16px;
+  letter-spacing: -0.01em;
+}
+
+.prose h3::before {
+  content: '§';
+  color: var(--rust);
+  margin-right: 12px;
+  font-weight: 400;
+}
+
+code, .mono {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.9em;
+  background: rgba(184,64,31,0.08);
+  padding: 1px 6px;
+  border-radius: 2px;
+  color: var(--rust-dim);
+}
+
+pre {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  background: var(--ink);
+  color: var(--paper);
+  padding: 24px 28px;
+  border-radius: 0;
+  overflow-x: auto;
+  margin: 24px 0;
+  position: relative;
+  border-left: 4px solid var(--rust);
+}
+
+pre::before {
+  content: attr(data-label);
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--gold);
+  opacity: 0.7;
+}
+
+pre code {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  font-size: inherit;
+}
+
+.kw { color: #d59ad8; }
+.str { color: #b5d590; }
+.cmt { color: #6c6c6c; font-style: italic; }
+.num { color: #f5b85d; }
+.fn { color: #7dc9d9; }
+
+/* Architecture diagram */
+.arch-diagram {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  padding: 40px;
+  margin: 32px 0;
+  position: relative;
+}
+
+.arch-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  margin-bottom: 24px;
+  color: var(--rust);
+}
+
+.arch-svg {
+  width: 100%;
+  height: auto;
+  max-height: 520px;
+}
+
+/* Component cards */
+.objects-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 0;
+  margin: 32px 0;
+  border-top: 2px solid var(--ink);
+  border-left: 2px solid var(--ink);
+}
+
+.obj-card {
+  border-right: 2px solid var(--ink);
+  border-bottom: 2px solid var(--ink);
+  padding: 24px;
+  background: var(--paper);
+  cursor: pointer;
+  transition: all 0.25s;
+  position: relative;
+  min-height: 180px;
+}
+
+.obj-card:hover {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.obj-card:hover .obj-kind,
+.obj-card:hover .obj-tag {
+  color: var(--gold);
+}
+
+.obj-kind {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--rust);
+  margin-bottom: 12px;
+}
+
+.obj-name {
+  font-family: 'Fraunces', serif;
+  font-weight: 700;
+  font-size: 28px;
+  letter-spacing: -0.02em;
+  margin-bottom: 12px;
+  line-height: 1;
+}
+
+.obj-desc {
+  font-size: 13px;
+  line-height: 1.5;
+  opacity: 0.85;
+}
+
+.obj-tag {
+  position: absolute;
+  bottom: 12px;
+  right: 16px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  color: var(--ink);
+  opacity: 0.5;
+  letter-spacing: 0.15em;
+}
+
+/* Interactive lifecycle */
+.lifecycle {
+  background: var(--ink);
+  color: var(--paper);
+  padding: 48px;
+  margin: 32px 0;
+  position: relative;
+}
+
+.lifecycle-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  color: var(--gold);
+  margin-bottom: 32px;
+}
+
+.lifecycle-steps {
+  display: grid;
+  gap: 0;
+  grid-template-columns: repeat(6, 1fr);
+  margin-bottom: 32px;
+}
+
+.lf-step {
+  border-top: 1px solid rgba(244,241,234,0.2);
+  padding: 16px 12px 16px 0;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+}
+
+.lf-step.active {
+  border-top: 2px solid var(--gold);
+  padding-top: 15px;
+}
+
+.lf-step:hover {
+  background: rgba(244,241,234,0.05);
+}
+
+.lf-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--gold);
+  letter-spacing: 0.2em;
+  margin-bottom: 4px;
+}
+
+.lf-name {
+  font-family: 'Fraunces', serif;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.lf-detail {
+  min-height: 180px;
+  background: rgba(244,241,234,0.04);
+  padding: 28px;
+  border-left: 3px solid var(--gold);
+}
+
+.lf-detail-title {
+  font-family: 'Fraunces', serif;
+  font-size: 24px;
+  font-weight: 700;
+  margin-bottom: 12px;
+  color: var(--gold);
+}
+
+.lf-detail p {
+  font-size: 15px;
+  line-height: 1.6;
+  margin-bottom: 12px;
+  color: var(--paper);
+  opacity: 0.9;
+}
+
+.lf-detail .actor {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: #f5b85d;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  margin-bottom: 16px;
+}
+
+/* Callouts */
+.callout {
+  margin: 32px 0;
+  padding: 24px 28px;
+  border-left: 4px solid var(--rust);
+  background: rgba(184,64,31,0.06);
+  position: relative;
+}
+
+.callout.warn {
+  border-color: var(--gold);
+  background: rgba(201,162,39,0.08);
+}
+
+.callout.tip {
+  border-color: var(--moss);
+  background: rgba(61,90,61,0.06);
+}
+
+.callout-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  color: var(--rust);
+  margin-bottom: 8px;
+  font-weight: 700;
+}
+
+.callout.warn .callout-label { color: #8a6a10; }
+.callout.tip .callout-label { color: var(--moss); }
+
+.callout p {
+  font-size: 15px;
+  margin: 0;
+}
+
+/* Command builder */
+.builder {
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  padding: 32px;
+  margin: 32px 0;
+}
+
+.builder-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  color: var(--rust);
+  margin-bottom: 16px;
+}
+
+.builder-title {
+  font-family: 'Fraunces', serif;
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: 24px;
+  letter-spacing: -0.01em;
+}
+
+.builder-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.ctrl {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ctrl label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--ink);
+  opacity: 0.7;
+}
+
+.ctrl input, .ctrl select {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  padding: 10px 12px;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.ctrl input:focus, .ctrl select:focus {
+  border-color: var(--rust);
+  background: white;
+}
+
+.builder-output {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  line-height: 1.7;
+  background: var(--ink);
+  color: var(--paper);
+  padding: 24px;
+  white-space: pre;
+  overflow-x: auto;
+  border-left: 4px solid var(--gold);
+}
+
+/* Scheduler simulator */
+.sim {
+  background: var(--ink);
+  color: var(--paper);
+  padding: 40px;
+  margin: 32px 0;
+}
+
+.sim-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+  margin-top: 24px;
+}
+
+.sim-pool {
+  background: rgba(244,241,234,0.04);
+  padding: 20px;
+  border: 1px dashed rgba(244,241,234,0.2);
+  min-height: 240px;
+}
+
+.sim-pool-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  margin-bottom: 16px;
+  color: var(--gold);
+}
+
+.node-card {
+  background: rgba(244,241,234,0.08);
+  border: 1px solid rgba(244,241,234,0.15);
+  padding: 14px;
+  margin-bottom: 10px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+}
+
+.node-card .nname { color: var(--gold); }
+
+.cap-bar {
+  display: flex;
+  gap: 4px;
+  grid-column: span 2;
+  margin-top: 8px;
+}
+
+.cap-cell {
+  flex: 1;
+  height: 10px;
+  background: rgba(244,241,234,0.1);
+  position: relative;
+  font-size: 8px;
+  text-align: center;
+  line-height: 10px;
+}
+
+.cap-cell.used { background: var(--rust); }
+.cap-cell.used.gpu { background: var(--gold); color: var(--ink); }
+
+.pod-pending {
+  background: var(--rust-dim);
+  color: var(--paper);
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  cursor: pointer;
+  border-left: 3px solid var(--gold);
+  transition: transform 0.2s;
+}
+
+.pod-pending:hover { transform: translateX(4px); }
+
+.sim-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+  flex-wrap: wrap;
+}
+
+.btn {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  padding: 10px 20px;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--paper);
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 600;
+}
+
+.btn:hover { background: var(--gold); border-color: var(--gold); }
+
+.btn.ghost {
+  background: transparent;
+  color: var(--paper);
+  border: 1px solid var(--paper);
+}
+
+.btn.ghost:hover { background: var(--paper); color: var(--ink); }
+
+.sim-log {
+  margin-top: 20px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  line-height: 1.7;
+  background: rgba(0,0,0,0.3);
+  padding: 16px;
+  min-height: 80px;
+  max-height: 160px;
+  overflow-y: auto;
+  color: var(--paper);
+}
+
+.sim-log .ok { color: #b5d590; }
+.sim-log .fail { color: #ff9580; }
+.sim-log .info { color: #7dc9d9; }
+
+/* Comparison table */
+.cmp {
+  margin: 32px 0;
+  border-top: 2px solid var(--ink);
+  border-bottom: 2px solid var(--ink);
+}
+
+.cmp-row {
+  display: grid;
+  grid-template-columns: 200px 1fr 1fr;
+  border-bottom: 1px solid rgba(10,10,10,0.15);
+  padding: 16px 0;
+  align-items: start;
+  gap: 24px;
+}
+
+.cmp-row:last-child { border-bottom: none; }
+
+.cmp-row.head {
+  border-bottom: 1px solid var(--ink);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  padding: 12px 0;
+}
+
+.cmp-row.head .cmp-rust { color: var(--rust); }
+.cmp-row.head .cmp-blue { color: var(--blue); }
+
+.cmp-axis {
+  font-family: 'Fraunces', serif;
+  font-size: 16px;
+  font-weight: 600;
+  font-style: italic;
+}
+
+.cmp-row p {
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* Footer */
+.colophon {
+  padding: 48px;
+  background: var(--ink);
+  color: var(--paper);
+  text-align: center;
+}
+
+.colophon-mark {
+  font-family: 'Fraunces', serif;
+  font-style: italic;
+  font-weight: 300;
+  font-size: 32px;
+  margin-bottom: 12px;
+}
+
+.colophon-mark em { color: var(--gold); font-weight: 700; }
+
+.colophon p {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  opacity: 0.6;
+}
+
+/* Topology playground */
+.topo {
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  padding: 32px;
+  margin: 32px 0;
+}
+
+.topo-svg-wrap {
+  background: var(--paper-dim);
+  padding: 20px;
+  border: 1px dashed var(--rule);
+  margin-bottom: 16px;
+}
+
+.topo-options {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.topo-btn {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  padding: 8px 14px;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--ink);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.topo-btn.active { background: var(--ink); color: var(--paper); }
+
+.topo-explain {
+  background: var(--ink);
+  color: var(--paper);
+  padding: 16px 20px;
+  font-size: 14px;
+  line-height: 1.5;
+  font-family: 'Fraunces', serif;
+  font-style: italic;
+  border-left: 4px solid var(--gold);
+}
+
+.topo-explain strong {
+  font-family: 'JetBrains Mono', monospace;
+  font-style: normal;
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  color: var(--gold);
+  text-transform: uppercase;
+  display: block;
+  margin-bottom: 6px;
+}
+
+/* Checklist */
+.checklist {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+  margin: 32px 0;
+}
+
+.check-item {
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  padding: 18px 20px;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.2s;
+  display: flex;
+  gap: 14px;
+  align-items: start;
+}
+
+.check-item:hover { background: var(--paper-dim); }
+
+.check-item.done {
+  background: var(--moss);
+  color: var(--paper);
+  border-color: var(--moss);
+}
+
+.check-box {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--ink);
+  flex-shrink: 0;
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.check-item.done .check-box {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: var(--ink);
+}
+
+.check-content {
+  flex: 1;
+}
+
+.check-title {
+  font-family: 'Fraunces', serif;
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 4px;
+}
+
+.check-desc {
+  font-size: 12px;
+  line-height: 1.5;
+  opacity: 0.85;
+}
+
+@media (max-width: 900px) {
+  .chapter-head, .chapter-body, .toc { grid-template-columns: 1fr; gap: 16px; }
+  .masthead { padding: 16px 20px; flex-wrap: wrap; gap: 8px; }
+  .hero, section.chapter { padding: 48px 20px; }
+  .sim-grid { grid-template-columns: 1fr; }
+  .cmp-row { grid-template-columns: 1fr; }
+  .hero::before { font-size: 240px; }
+}
+
+/* Sticky reveal */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+section.chapter { animation: fadeUp 0.6s ease-out; }
+
+.scroll-hint {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  background: var(--ink);
+  color: var(--paper);
+  padding: 8px 14px;
+  z-index: 50;
+  border-left: 3px solid var(--gold);
+}
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="masthead-left">Vol. I · Issue 01 · MMXXVI</div>
+  <div class="masthead-center">The Cluster Quarterly</div>
+  <div class="masthead-right">Field Manual · 480 GPU-hrs</div>
+</header>
+
+<section class="hero">
+  <div class="kicker">A Systematic Field Manual</div>
+  <h1>Kubernetes for the<br><em>training</em> of large models.</h1>
+  <p class="hero-deck">From the control plane to gang-scheduled multi-node runs — what the orchestrator actually does, why ML workloads break its defaults, and how to make a cluster move metal efficiently.</p>
+</section>
+
+<nav class="toc">
+  <div class="toc-label">Contents</div>
+  <ol class="toc-list">
+    <li><span class="toc-num">I.</span> <a href="#ch1">The Anatomy of a Cluster</a></li>
+    <li><span class="toc-num">II.</span> <a href="#ch2">Objects, in Decreasing Order of Trust</a></li>
+    <li><span class="toc-num">III.</span> <a href="#ch3">The Life of a Pod</a></li>
+    <li><span class="toc-num">IV.</span> <a href="#ch4">Commands You Will Type</a></li>
+    <li><span class="toc-num">V.</span> <a href="#ch5">The Scheduler &amp; Why It Fails You</a></li>
+    <li><span class="toc-num">VI.</span> <a href="#ch6">Topology &amp; the NCCL Tax</a></li>
+    <li><span class="toc-num">VII.</span> <a href="#ch7">Training Manifests, Annotated</a></li>
+    <li><span class="toc-num">VIII.</span> <a href="#ch8">Performance: The Knobs That Matter</a></li>
+    <li><span class="toc-num">IX.</span> <a href="#ch9">Operating the Cluster</a></li>
+    <li><span class="toc-num">X.</span> <a href="#ch10">The Production Checklist</a></li>
+  </ol>
+</nav>
+
+<!-- CHAPTER 1 -->
+<section class="chapter" id="ch1">
+  <div class="chapter-head">
+    <div class="chapter-meta">Chapter <span class="num">I</span></div>
+    <h2 class="chapter-title">The anatomy of a <em>cluster.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>Read time</strong>
+      6 min<br><br>
+      <strong>Prereq</strong>
+      Containers (Docker) basics. A vague sense that "kubectl" is involved.<br><br>
+      <strong>Outcome</strong>
+      You can sketch the control plane on a napkin and explain what each piece does.
+    </aside>
+    <div class="prose">
+      <p class="lead">A Kubernetes cluster is not one program. It is half a dozen programs in a polite, paranoid conversation, persisting their consensus into a single key-value store that pretends to be the truth.</p>
+      <p>Every action — create a pod, scale a deployment, mount a volume — is a write to <code>etcd</code>. Every other process is a control loop watching <code>etcd</code> for drift between what users <em>declared</em> they wanted and what's actually running. This is the only sentence about Kubernetes you really need to internalize.</p>
+
+      <div class="arch-diagram">
+        <div class="arch-title">Fig. 1 — The two planes</div>
+        <svg class="arch-svg" viewBox="0 0 900 460" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <pattern id="dots" patternUnits="userSpaceOnUse" width="6" height="6">
+              <circle cx="1" cy="1" r="0.6" fill="#0a0a0a" opacity="0.2"/>
+            </pattern>
+          </defs>
+          <!-- Control plane region -->
+          <rect x="40" y="30" width="820" height="180" fill="url(#dots)" stroke="#0a0a0a" stroke-width="1.5"/>
+          <text x="60" y="55" font-family="JetBrains Mono" font-size="10" letter-spacing="3" fill="#b8401f">CONTROL PLANE / THE BRAIN</text>
+
+          <!-- API Server -->
+          <rect x="60" y="80" width="150" height="100" fill="#0a0a0a"/>
+          <text x="135" y="115" font-family="Fraunces" font-size="14" fill="#c9a227" text-anchor="middle" font-weight="700">API Server</text>
+          <text x="135" y="135" font-family="JetBrains Mono" font-size="9" fill="#f4f1ea" text-anchor="middle">kube-apiserver</text>
+          <text x="135" y="155" font-family="Inter Tight" font-size="10" fill="#f4f1ea" text-anchor="middle" opacity="0.7">single door</text>
+          <text x="135" y="168" font-family="Inter Tight" font-size="10" fill="#f4f1ea" text-anchor="middle" opacity="0.7">into the cluster</text>
+
+          <!-- etcd -->
+          <rect x="240" y="80" width="150" height="100" fill="#b8401f"/>
+          <text x="315" y="115" font-family="Fraunces" font-size="14" fill="#f4f1ea" text-anchor="middle" font-weight="700">etcd</text>
+          <text x="315" y="135" font-family="JetBrains Mono" font-size="9" fill="#f4f1ea" text-anchor="middle">key-value store</text>
+          <text x="315" y="155" font-family="Inter Tight" font-size="10" fill="#f4f1ea" text-anchor="middle" opacity="0.85">the cluster's</text>
+          <text x="315" y="168" font-family="Inter Tight" font-size="10" fill="#f4f1ea" text-anchor="middle" opacity="0.85">only memory</text>
+
+          <!-- Scheduler -->
+          <rect x="420" y="80" width="150" height="100" fill="#3d5a3d"/>
+          <text x="495" y="115" font-family="Fraunces" font-size="14" fill="#f4f1ea" text-anchor="middle" font-weight="700">Scheduler</text>
+          <text x="495" y="135" font-family="JetBrains Mono" font-size="9" fill="#f4f1ea" text-anchor="middle">kube-scheduler</text>
+          <text x="495" y="155" font-family="Inter Tight" font-size="10" fill="#f4f1ea" text-anchor="middle" opacity="0.85">picks a node</text>
+          <text x="495" y="168" font-family="Inter Tight" font-size="10" fill="#f4f1ea" text-anchor="middle" opacity="0.85">for each pod</text>
+
+          <!-- Controller Manager -->
+          <rect x="600" y="80" width="180" height="100" fill="#1e3a5f"/>
+          <text x="690" y="115" font-family="Fraunces" font-size="14" fill="#f4f1ea" text-anchor="middle" font-weight="700">Controller Manager</text>
+          <text x="690" y="135" font-family="JetBrains Mono" font-size="9" fill="#f4f1ea" text-anchor="middle">kube-controller-manager</text>
+          <text x="690" y="155" font-family="Inter Tight" font-size="10" fill="#f4f1ea" text-anchor="middle" opacity="0.85">loops that drag</text>
+          <text x="690" y="168" font-family="Inter Tight" font-size="10" fill="#f4f1ea" text-anchor="middle" opacity="0.85">reality → desire</text>
+
+          <!-- Data plane region -->
+          <rect x="40" y="240" width="820" height="200" fill="none" stroke="#0a0a0a" stroke-width="1.5" stroke-dasharray="4 4"/>
+          <text x="60" y="265" font-family="JetBrains Mono" font-size="10" letter-spacing="3" fill="#b8401f">DATA PLANE / THE MUSCLE</text>
+
+          <!-- Node 1 -->
+          <g>
+            <rect x="60" y="285" width="240" height="135" fill="#f4f1ea" stroke="#0a0a0a" stroke-width="1.5"/>
+            <text x="180" y="310" font-family="Fraunces" font-size="14" fill="#0a0a0a" text-anchor="middle" font-weight="700">node-gpu-001</text>
+            <text x="180" y="326" font-family="JetBrains Mono" font-size="9" fill="#b8401f" text-anchor="middle">8× H100 · 192 vCPU</text>
+            <rect x="80" y="340" width="80" height="22" fill="#0a0a0a"/>
+            <text x="120" y="355" font-family="JetBrains Mono" font-size="9" fill="#c9a227" text-anchor="middle">kubelet</text>
+            <rect x="170" y="340" width="80" height="22" fill="#0a0a0a"/>
+            <text x="210" y="355" font-family="JetBrains Mono" font-size="9" fill="#c9a227" text-anchor="middle">containerd</text>
+            <rect x="80" y="370" width="170" height="22" fill="#3d5a3d"/>
+            <text x="165" y="385" font-family="JetBrains Mono" font-size="9" fill="#f4f1ea" text-anchor="middle">nvidia-device-plugin</text>
+          </g>
+          <!-- Node 2 -->
+          <g>
+            <rect x="330" y="285" width="240" height="135" fill="#f4f1ea" stroke="#0a0a0a" stroke-width="1.5"/>
+            <text x="450" y="310" font-family="Fraunces" font-size="14" fill="#0a0a0a" text-anchor="middle" font-weight="700">node-gpu-002</text>
+            <text x="450" y="326" font-family="JetBrains Mono" font-size="9" fill="#b8401f" text-anchor="middle">8× H100 · 192 vCPU</text>
+            <rect x="350" y="340" width="80" height="22" fill="#0a0a0a"/>
+            <text x="390" y="355" font-family="JetBrains Mono" font-size="9" fill="#c9a227" text-anchor="middle">kubelet</text>
+            <rect x="440" y="340" width="80" height="22" fill="#0a0a0a"/>
+            <text x="480" y="355" font-family="JetBrains Mono" font-size="9" fill="#c9a227" text-anchor="middle">kube-proxy</text>
+            <rect x="350" y="370" width="170" height="22" fill="#3d5a3d"/>
+            <text x="435" y="385" font-family="JetBrains Mono" font-size="9" fill="#f4f1ea" text-anchor="middle">nvidia-device-plugin</text>
+          </g>
+          <!-- Node N -->
+          <g>
+            <rect x="600" y="285" width="180" height="135" fill="#f4f1ea" stroke="#0a0a0a" stroke-width="1.5" stroke-dasharray="3 3"/>
+            <text x="690" y="310" font-family="Fraunces" font-size="14" fill="#0a0a0a" text-anchor="middle" font-weight="700" font-style="italic">node-gpu-N</text>
+            <text x="690" y="345" font-family="Inter Tight" font-size="12" fill="#0a0a0a" text-anchor="middle" opacity="0.6">. . .</text>
+            <text x="690" y="380" font-family="JetBrains Mono" font-size="9" fill="#0a0a0a" text-anchor="middle" opacity="0.7">scales out</text>
+          </g>
+
+          <!-- Arrows -->
+          <line x1="180" y1="180" x2="180" y2="285" stroke="#0a0a0a" stroke-width="1" marker-end="url(#arrow)"/>
+          <line x1="315" y1="180" x2="315" y2="285" stroke="#b8401f" stroke-width="1" marker-end="url(#arrowred)"/>
+          <line x1="495" y1="180" x2="495" y2="285" stroke="#3d5a3d" stroke-width="1" marker-end="url(#arrowmoss)"/>
+
+          <defs>
+            <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+              <path d="M0,0 L8,4 L0,8 Z" fill="#0a0a0a"/>
+            </marker>
+            <marker id="arrowred" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+              <path d="M0,0 L8,4 L0,8 Z" fill="#b8401f"/>
+            </marker>
+            <marker id="arrowmoss" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+              <path d="M0,0 L8,4 L0,8 Z" fill="#3d5a3d"/>
+            </marker>
+          </defs>
+        </svg>
+      </div>
+
+      <h3>The four control-plane parts</h3>
+      <p><strong>API Server.</strong> The only door into the cluster. Every <code>kubectl</code> command, every controller, every kubelet — they all talk to the API server over HTTPS. It validates requests, authenticates them, writes accepted state to etcd, and emits watch events to everyone subscribed. If the API server is down, the cluster is, for all practical purposes, frozen — though existing workloads keep running.</p>
+      <p><strong>etcd.</strong> A distributed key-value store with strong consistency (Raft consensus). It holds every object you've ever created. Lose etcd and you lose the cluster. Back it up.</p>
+      <p><strong>Scheduler.</strong> Watches for pods that have a spec but no <code>nodeName</code>. For each one, it filters nodes that <em>can</em> run the pod (enough CPU, memory, GPU; matches affinities), then scores the survivors, then writes the choice back to the API server. That's the entire job.</p>
+      <p><strong>Controller Manager.</strong> A single binary running dozens of control loops: the Deployment controller, the Job controller, the Node lifecycle controller, the Endpoint controller, and so on. Each watches some kind of object and writes other objects to compensate for drift.</p>
+
+      <h3>What runs on every node</h3>
+      <p><strong>kubelet.</strong> The local agent. Watches the API for pods bound to its node, then talks to the container runtime to start them. Reports node and pod status back upward.</p>
+      <p><strong>Container runtime.</strong> Almost always <code>containerd</code> now. Pulls images, manages containers' lifecycles, attaches storage and network.</p>
+      <p><strong>kube-proxy.</strong> Programs iptables (or IPVS, or eBPF) rules so that traffic to a Service's virtual IP lands on a healthy pod.</p>
+      <p><strong>Device plugins.</strong> For GPUs, <code>nvidia-device-plugin</code> tells the kubelet how many GPUs the node has and how to attach them to a container. Without it, the cluster cannot see GPUs at all.</p>
+
+      <div class="callout">
+        <div class="callout-label">Why this matters for ML</div>
+        <p>The control plane is small and cheap; the data plane is the entire cost. On a real training cluster, control-plane nodes might be 3× <code>m6i.xlarge</code> ($200/mo) and the data plane is 64× <code>p5.48xlarge</code> at $98/hr each. Every optimization that matters is about keeping GPUs hot — control-plane tuning is a rounding error.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 2 -->
+<section class="chapter" id="ch2">
+  <div class="chapter-head">
+    <div class="chapter-meta">Chapter <span class="num">II</span></div>
+    <h2 class="chapter-title">Objects, in decreasing order of <em>trust.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>Read time</strong>
+      8 min<br><br>
+      <strong>Method</strong>
+      Hover each card. The ones at top-left are primitives; the ones bottom-right wrap them in policy.<br><br>
+      <strong>Heuristic</strong>
+      You almost never create a Pod directly. You create something that creates Pods for you.
+    </aside>
+    <div class="prose">
+      <p class="lead">Kubernetes objects come in a rough pyramid: Pods at the base, controllers stacked above. Each layer hands its desired state down to the one beneath, and each layer adds a guarantee — that there will be N replicas, or that a Job will run to completion, or that storage will outlive any container.</p>
+
+      <div class="objects-grid">
+        <div class="obj-card">
+          <div class="obj-kind">kind: Pod</div>
+          <div class="obj-name">Pod</div>
+          <div class="obj-desc">One-or-more containers sharing network &amp; volumes. The smallest deployable unit. Ephemeral by design — never run one directly in prod.</div>
+          <div class="obj-tag">v1</div>
+        </div>
+        <div class="obj-card">
+          <div class="obj-kind">kind: Deployment</div>
+          <div class="obj-name">Deployment</div>
+          <div class="obj-desc">"N replicas of this Pod template, rolling-update-aware." For inference servers, dashboards, anything long-running and stateless.</div>
+          <div class="obj-tag">apps/v1</div>
+        </div>
+        <div class="obj-card">
+          <div class="obj-kind">kind: Job</div>
+          <div class="obj-name">Job</div>
+          <div class="obj-desc">Run pods until they succeed, then stop. <strong>Your default for a training run.</strong> Supports retries, parallelism, completions.</div>
+          <div class="obj-tag">batch/v1</div>
+        </div>
+        <div class="obj-card">
+          <div class="obj-kind">kind: StatefulSet</div>
+          <div class="obj-name">StatefulSet</div>
+          <div class="obj-desc">Pods with stable identities (pod-0, pod-1, …) and stable storage. Use for rank-aware DDP peers and parameter servers.</div>
+          <div class="obj-tag">apps/v1</div>
+        </div>
+        <div class="obj-card">
+          <div class="obj-kind">kind: DaemonSet</div>
+          <div class="obj-name">DaemonSet</div>
+          <div class="obj-desc">"One pod per node, automatically." Used for node-level agents: log collectors, monitoring exporters, the NVIDIA driver itself.</div>
+          <div class="obj-tag">apps/v1</div>
+        </div>
+        <div class="obj-card">
+          <div class="obj-kind">kind: Service</div>
+          <div class="obj-name">Service</div>
+          <div class="obj-desc">A stable virtual IP and DNS name that load-balances to a set of pods selected by labels. Pods are mortal; Services are not.</div>
+          <div class="obj-tag">v1</div>
+        </div>
+        <div class="obj-card">
+          <div class="obj-kind">kind: ConfigMap</div>
+          <div class="obj-name">ConfigMap</div>
+          <div class="obj-desc">A bag of key-value pairs you mount as files or env vars. Hyperparameters, model config, anything not secret.</div>
+          <div class="obj-tag">v1</div>
+        </div>
+        <div class="obj-card">
+          <div class="obj-kind">kind: Secret</div>
+          <div class="obj-name">Secret</div>
+          <div class="obj-desc">Same as ConfigMap but base64-encoded and treated specially by RBAC. Tokens, API keys, registry credentials.</div>
+          <div class="obj-tag">v1</div>
+        </div>
+        <div class="obj-card">
+          <div class="obj-kind">kind: PersistentVolumeClaim</div>
+          <div class="obj-name">PVC</div>
+          <div class="obj-desc">"I need 2TB of fast storage." A StorageClass provisions a PersistentVolume to satisfy it. Where checkpoints and datasets live.</div>
+          <div class="obj-tag">v1</div>
+        </div>
+        <div class="obj-card">
+          <div class="obj-kind">kind: Namespace</div>
+          <div class="obj-name">Namespace</div>
+          <div class="obj-desc">A logical partition for objects. One per team or project. RBAC, network policy, and quotas attach to namespaces.</div>
+          <div class="obj-tag">v1</div>
+        </div>
+        <div class="obj-card">
+          <div class="obj-kind">kind: PyTorchJob</div>
+          <div class="obj-name">PyTorchJob</div>
+          <div class="obj-desc">A custom resource from the Kubeflow Training Operator. Knows about <em>masters</em> and <em>workers</em>, sets <code>RANK</code> &amp; <code>WORLD_SIZE</code> automatically.</div>
+          <div class="obj-tag">CRD</div>
+        </div>
+        <div class="obj-card">
+          <div class="obj-kind">kind: VolcanoJob</div>
+          <div class="obj-name">VolcanoJob</div>
+          <div class="obj-desc">Batch-job CRD with gang scheduling, queues, fair-share. Built for the kind of work K8s wasn't.</div>
+          <div class="obj-tag">CRD</div>
+        </div>
+      </div>
+
+      <div class="callout tip">
+        <div class="callout-label">Rule of thumb</div>
+        <p>When something feels missing in Kubernetes for ML — fair-share quotas, gang scheduling, queueing, distributed run lifecycle — there is almost certainly a Custom Resource Definition (CRD) for it. The big four to know: <strong>Kubeflow Training Operator</strong> (PyTorchJob, TFJob, MPIJob), <strong>Volcano</strong> (batch + gang), <strong>Kueue</strong> (queues + quotas), <strong>Ray on K8s</strong> (RayCluster, RayJob).</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 3 -->
+<section class="chapter" id="ch3">
+  <div class="chapter-head">
+    <div class="chapter-meta">Chapter <span class="num">III</span></div>
+    <h2 class="chapter-title">The life of a <em>pod.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>Interactive</strong>
+      Click each stage. The right pane shows who acts and what they write.<br><br>
+      <strong>The point</strong>
+      Every stage is just two parties: a watcher and the API server. Nothing acts directly on anything.
+    </aside>
+    <div class="prose">
+      <p class="lead">A pod doesn't get created. It gets <em>negotiated</em> — through five or six bounces off the API server, each handled by a different actor that knows nothing about the others. Click through to see the conversation.</p>
+
+      <div class="lifecycle">
+        <div class="lifecycle-title">The bouncing-off-etcd dance</div>
+        <div class="lifecycle-steps" id="lfSteps">
+          <div class="lf-step active" data-step="0">
+            <div class="lf-num">01</div>
+            <div class="lf-name">Submit</div>
+          </div>
+          <div class="lf-step" data-step="1">
+            <div class="lf-num">02</div>
+            <div class="lf-name">Persist</div>
+          </div>
+          <div class="lf-step" data-step="2">
+            <div class="lf-num">03</div>
+            <div class="lf-name">Schedule</div>
+          </div>
+          <div class="lf-step" data-step="3">
+            <div class="lf-num">04</div>
+            <div class="lf-name">Pull &amp; start</div>
+          </div>
+          <div class="lf-step" data-step="4">
+            <div class="lf-num">05</div>
+            <div class="lf-name">Run &amp; report</div>
+          </div>
+          <div class="lf-step" data-step="5">
+            <div class="lf-num">06</div>
+            <div class="lf-name">Terminate</div>
+          </div>
+        </div>
+        <div class="lf-detail" id="lfDetail">
+          <div class="actor">Actor: kubectl &nbsp;·&nbsp; Target: kube-apiserver</div>
+          <div class="lf-detail-title">01 — You run kubectl apply</div>
+          <p>Your YAML manifest is shipped to the API server over HTTPS. The API server authenticates you (cert, token, OIDC), authorizes the action (RBAC), and runs admission controllers — mutating webhooks may inject sidecars, validating webhooks may reject pods that don't meet policy (e.g., missing resource requests).</p>
+          <p>The pod's status field shows <code>Pending</code>, with no <code>nodeName</code> yet. It exists conceptually but is running on nobody.</p>
+        </div>
+      </div>
+
+      <h3>Why this matters operationally</h3>
+      <p>When a pod is stuck, you debug it by asking: <em>which actor in the conversation is silent?</em></p>
+      <p>Stuck in <code>Pending</code>? The scheduler couldn't find a node. Run <code>kubectl describe pod</code> and read the Events — you'll see "0/8 nodes available: insufficient nvidia.com/gpu". The fix is more nodes, smaller pods, or different node selectors.</p>
+      <p>Stuck in <code>ContainerCreating</code>? The kubelet accepted the binding but can't start the container. Almost always: image pull failure (wrong registry credentials), volume mount failure (PVC not bound), or device plugin not ready.</p>
+      <p>Stuck in <code>CrashLoopBackOff</code>? The container started and died. <code>kubectl logs --previous</code> shows you the last words. Most common: OOM kill, missing config, wrong CUDA version inside the image vs. driver on the host.</p>
+
+      <div class="callout warn">
+        <div class="callout-label">The single most useful debug command</div>
+        <p><code>kubectl describe pod &lt;name&gt;</code> prints the entire conversation: every state transition, every probe failure, every scheduler verdict. Always read this <em>before</em> reading logs.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 4 -->
+<section class="chapter" id="ch4">
+  <div class="chapter-head">
+    <div class="chapter-meta">Chapter <span class="num">IV</span></div>
+    <h2 class="chapter-title">Commands you will <em>type.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>Form</strong>
+      kubectl &lt;verb&gt; &lt;noun&gt; &lt;name&gt; [-n ns] [--flag]<br><br>
+      <strong>Most-used verbs</strong>
+      get, describe, logs, exec, apply, delete, top, port-forward<br><br>
+      <strong>Tip</strong>
+      Set the alias <code>k=kubectl</code> and never look back.
+    </aside>
+    <div class="prose">
+      <p class="lead">kubectl is a wrapper over the REST API with a verb-noun grammar. Once you know fifteen invocations, you can run a cluster.</p>
+
+      <div class="builder">
+        <div class="builder-label">Interactive · kubectl Command Builder</div>
+        <div class="builder-title">Compose a command. Watch it form.</div>
+        <div class="builder-controls">
+          <div class="ctrl">
+            <label>Verb</label>
+            <select id="bVerb">
+              <option value="get">get</option>
+              <option value="describe">describe</option>
+              <option value="logs">logs</option>
+              <option value="exec">exec</option>
+              <option value="apply">apply</option>
+              <option value="delete">delete</option>
+              <option value="top">top</option>
+              <option value="rollout">rollout status</option>
+              <option value="scale">scale</option>
+            </select>
+          </div>
+          <div class="ctrl">
+            <label>Resource</label>
+            <select id="bRes">
+              <option value="pods">pods</option>
+              <option value="nodes">nodes</option>
+              <option value="deployments">deployments</option>
+              <option value="jobs">jobs</option>
+              <option value="pytorchjobs">pytorchjobs</option>
+              <option value="pvc">pvc</option>
+              <option value="events">events</option>
+              <option value="services">services</option>
+            </select>
+          </div>
+          <div class="ctrl">
+            <label>Name (optional)</label>
+            <input id="bName" placeholder="my-training-run-0">
+          </div>
+          <div class="ctrl">
+            <label>Namespace</label>
+            <input id="bNs" value="ml-training">
+          </div>
+          <div class="ctrl">
+            <label>Flag</label>
+            <select id="bFlag">
+              <option value="">(none)</option>
+              <option value="-o yaml">-o yaml (full spec)</option>
+              <option value="-o wide">-o wide (more cols)</option>
+              <option value="-w">-w (watch)</option>
+              <option value="--follow">--follow (stream logs)</option>
+              <option value="--previous">--previous (prev container)</option>
+              <option value="-l role=worker">-l role=worker</option>
+              <option value="--all-namespaces">--all-namespaces</option>
+            </select>
+          </div>
+        </div>
+        <div class="builder-output" id="bOut">kubectl get pods -n ml-training</div>
+      </div>
+
+      <h3>The fifteen you'll actually use</h3>
+      <pre data-label="cheatsheet"><span class="cmt"># Inspect cluster &amp; nodes</span>
+<span class="kw">kubectl</span> get nodes -o wide
+<span class="kw">kubectl</span> describe node node-gpu-001
+<span class="kw">kubectl</span> top nodes                       <span class="cmt"># real-time CPU/mem</span>
+
+<span class="cmt"># See what's running</span>
+<span class="kw">kubectl</span> get pods -n ml-training -w
+<span class="kw">kubectl</span> get pods --all-namespaces -o wide
+<span class="kw">kubectl</span> get events --sort-by=.lastTimestamp
+
+<span class="cmt"># Debug a specific pod</span>
+<span class="kw">kubectl</span> describe pod my-train-0
+<span class="kw">kubectl</span> logs my-train-0 -c trainer --follow
+<span class="kw">kubectl</span> logs my-train-0 --previous       <span class="cmt"># last crash</span>
+<span class="kw">kubectl</span> exec -it my-train-0 -- bash     <span class="cmt"># shell in</span>
+
+<span class="cmt"># Apply &amp; remove manifests</span>
+<span class="kw">kubectl</span> apply -f training-job.yaml
+<span class="kw">kubectl</span> delete -f training-job.yaml
+<span class="kw">kubectl</span> diff -f training-job.yaml        <span class="cmt"># preview</span>
+
+<span class="cmt"># Port-forward for local access (Jupyter, tensorboard)</span>
+<span class="kw">kubectl</span> port-forward svc/tensorboard 6006:6006
+
+<span class="cmt"># Scale on the fly</span>
+<span class="kw">kubectl</span> scale deployment inference --replicas=12</pre>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 5 -->
+<section class="chapter" id="ch5">
+  <div class="chapter-head">
+    <div class="chapter-meta">Chapter <span class="num">V</span></div>
+    <h2 class="chapter-title">The scheduler &amp; why it <em>fails</em> you.</h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>Try it</strong>
+      Click each pending pod to attempt scheduling. Watch which ones can't fit, and why.<br><br>
+      <strong>The lesson</strong>
+      Vanilla kube-scheduler is greedy and per-pod. It will happily place pod #1 of a distributed run, then leave pods #2–#7 pending while pod #1 burns money.
+    </aside>
+    <div class="prose">
+      <p class="lead">The default scheduler is a one-pod-at-a-time matchmaker. That's fine for web services. For distributed training, it's a recipe for partial scheduling — the scenario where some workers start, can't reach their peers, and stall until somebody manually kills the run.</p>
+
+      <div class="sim">
+        <div class="lifecycle-title">Interactive · Scheduler Simulator</div>
+        <p style="font-family: 'Fraunces'; font-style: italic; font-size: 16px; margin: 16px 0; opacity: 0.85;">Click a pending pod. The scheduler picks the first node with enough capacity. With <em>gang scheduling</em> on, multi-pod jobs are only placed if <strong>all</strong> peers can fit at once.</p>
+
+        <div class="sim-actions">
+          <button class="btn ghost" id="simGang">Gang scheduling: <span id="gangState">OFF</span></button>
+          <button class="btn ghost" id="simReset">Reset</button>
+        </div>
+
+        <div class="sim-grid">
+          <div class="sim-pool">
+            <div class="sim-pool-title">Pending pods</div>
+            <div id="pendingPool"></div>
+          </div>
+          <div class="sim-pool">
+            <div class="sim-pool-title">Nodes</div>
+            <div id="nodePool"></div>
+          </div>
+        </div>
+
+        <div class="sim-log" id="simLog"><span class="info">scheduler ready · 4 nodes · 32 GPUs total</span></div>
+      </div>
+
+      <h3>What the default scheduler does, step by step</h3>
+      <p><strong>Filter.</strong> Discard nodes that fail any predicate: insufficient CPU/memory/GPU, taints not tolerated, node-selector mismatch, port conflicts, volume zone mismatch. After this, you have a candidate set.</p>
+      <p><strong>Score.</strong> Rank survivors by built-in scoring plugins: spread pods of the same replica set (resilience), prefer nodes with the image already pulled (speed), prefer less-utilized nodes (or more-utilized, with bin-packing). Highest score wins.</p>
+      <p><strong>Bind.</strong> Write <code>spec.nodeName</code> on the pod. The kubelet on that node takes over.</p>
+
+      <h3>The three ways this hurts ML</h3>
+      <p><strong>1. Partial scheduling.</strong> Your <code>WORLD_SIZE=8</code> run gets 5 workers on GPUs and 3 stuck in Pending. The 5 running pods sit at zero utilization waiting for rendezvous. Cost: ~$500/hour for nothing. <strong>Fix:</strong> a gang scheduler (Volcano, Kueue with WorkloadPriorityClass + queueing, KAI Scheduler) that holds the whole job until it fits.</p>
+      <p><strong>2. Topology-blind placement.</strong> The scheduler sees "this node has 8 GPUs free" and "that node has 8 GPUs free" — but doesn't know that nodes in rack A1 share a NDR InfiniBand switch and nodes in rack B7 do not. Cross-rack all-reduce is 4× slower. <strong>Fix:</strong> topology labels on nodes plus topology-aware scheduling (NVIDIA's Topology Aware Scheduling, or affinity rules keyed on <code>topology.kubernetes.io/zone</code> and rack labels).</p>
+      <p><strong>3. Fragmentation.</strong> After a week of starts and stops, your 8-GPU-per-node cluster has lots of nodes with 1, 2, or 4 free GPUs and very few with 8. New 8-GPU jobs queue indefinitely. <strong>Fix:</strong> bin-packing scheduling policy (set <code>MostAllocated</code> in scheduler config) so small jobs cluster onto the same nodes, leaving full-node holes for big jobs.</p>
+
+      <div class="callout">
+        <div class="callout-label">In production ML clusters</div>
+        <p>Replace or augment the default scheduler. The most common choices in 2025–26: <strong>Kueue</strong> (lightweight, official-ish, ABi-compatible with native scheduler) for queueing &amp; quotas; <strong>Volcano</strong> for full gang scheduling &amp; batch semantics; <strong>NVIDIA KAI Scheduler</strong> if you're on NVIDIA-heavy infrastructure and want topology awareness baked in.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 6 -->
+<section class="chapter" id="ch6">
+  <div class="chapter-head">
+    <div class="chapter-meta">Chapter <span class="num">VI</span></div>
+    <h2 class="chapter-title">Topology &amp; the <em>NCCL</em> tax.</h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>Click</strong>
+      Each topology to see how it changes the cost of an all-reduce.<br><br>
+      <strong>Stack ranking</strong>
+      NVLink &gt; NVSwitch &gt; IB-Fat-Tree &gt; IB-Rail-Optimized &gt; RoCE &gt; TCP. Bandwidth differs by 10–50×.
+    </aside>
+    <div class="prose">
+      <p class="lead">Every step of synchronous training ends in an all-reduce: every worker sums its gradients with every other worker's. The speed of that all-reduce is gated by the <em>slowest</em> link in the topology. The scheduler's job, for distributed training, is to keep that slowest link as fast as possible.</p>
+
+      <div class="topo">
+        <div class="builder-label">Interactive · Topology Cost</div>
+        <div class="topo-options">
+          <button class="topo-btn active" data-topo="single">1 node · 8 GPU</button>
+          <button class="topo-btn" data-topo="nvlink">2 nodes · NVLink island</button>
+          <button class="topo-btn" data-topo="ib">8 nodes · InfiniBand</button>
+          <button class="topo-btn" data-topo="tcp">8 nodes · TCP</button>
+        </div>
+        <div class="topo-svg-wrap">
+          <svg id="topoSvg" viewBox="0 0 720 240" xmlns="http://www.w3.org/2000/svg" style="width: 100%; height: auto;"></svg>
+        </div>
+        <div class="topo-explain" id="topoExplain"></div>
+      </div>
+
+      <h3>How to make the scheduler topology-aware</h3>
+      <p>Step 1: label your nodes. Most cloud providers add zone labels automatically (<code>topology.kubernetes.io/zone</code>). You add the rest:</p>
+      <pre data-label="manual labeling"><span class="kw">kubectl</span> label node node-gpu-001 \
+  rack=A1 \
+  ib-switch=switch-A1-leaf-3 \
+  gpu-type=H100-SXM5</pre>
+      <p>Step 2: in your pod spec, require co-location using <code>topologyKey</code>:</p>
+      <pre data-label="affinity.yaml"><span class="kw">spec</span>:
+  affinity:
+    podAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - <span class="fn">labelSelector</span>:
+            matchExpressions:
+              - { key: app, operator: In, values: [my-training-run] }
+          <span class="fn">topologyKey</span>: ib-switch     <span class="cmt"># all peers share an IB switch</span></pre>
+      <p>Step 3 (for serious setups): install the <strong>NVIDIA GPU Operator</strong> and the <strong>Topology-Aware Scheduling</strong> components. These auto-discover NVLink islands, NUMA topology, and PCIe trees, and surface them as labels the scheduler can constrain on.</p>
+
+      <div class="callout tip">
+        <div class="callout-label">Measure, don't guess</div>
+        <p>Run <code>nccl-tests</code> as a one-off PyTorchJob across the placement your scheduler chose. If <code>all_reduce_perf</code> reports under 80% of the link's theoretical bandwidth, topology is leaking. Common causes: cross-zone scheduling on cloud, missing GPUDirect RDMA, MTU mismatch (set it to 9000 on the data network).</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 7 -->
+<section class="chapter" id="ch7">
+  <div class="chapter-head">
+    <div class="chapter-meta">Chapter <span class="num">VII</span></div>
+    <h2 class="chapter-title">Training manifests, <em>annotated.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>Form</strong>
+      Two manifests: a single-node multi-GPU Job, then a multi-node PyTorchJob.<br><br>
+      <strong>Read</strong>
+      Every line. There are no decorative fields — each one is doing work.
+    </aside>
+    <div class="prose">
+      <p class="lead">Below is the smallest training manifest worth deploying, then the canonical multi-node version. Both compile in real clusters today.</p>
+
+      <h3>Single-node, 8-GPU run</h3>
+      <pre data-label="single-node-train.yaml"><span class="kw">apiVersion</span>: batch/v1
+<span class="kw">kind</span>: Job
+<span class="kw">metadata</span>:
+  <span class="fn">name</span>: llama-finetune-001
+  <span class="fn">namespace</span>: ml-training
+<span class="kw">spec</span>:
+  <span class="fn">backoffLimit</span>: 2                          <span class="cmt"># retry up to 2x on failure</span>
+  <span class="fn">ttlSecondsAfterFinished</span>: 86400          <span class="cmt"># auto-clean after 24h</span>
+  <span class="fn">template</span>:
+    <span class="fn">spec</span>:
+      <span class="fn">restartPolicy</span>: OnFailure
+      <span class="fn">priorityClassName</span>: training-high
+      <span class="fn">tolerations</span>:                          <span class="cmt"># schedule onto GPU nodes</span>
+        - { key: gpu, operator: Exists, effect: NoSchedule }
+      <span class="fn">nodeSelector</span>:
+        gpu-type: H100-SXM5
+      <span class="fn">containers</span>:
+        - <span class="fn">name</span>: trainer
+          <span class="fn">image</span>: registry.internal/llama-trainer:2026.04.01
+          <span class="fn">command</span>: ["torchrun", "--standalone", "--nproc_per_node=8", "train.py"]
+          <span class="fn">env</span>:
+            - { name: NCCL_DEBUG, value: WARN }
+            - { name: NCCL_IB_DISABLE, value: <span class="str">"0"</span> }
+            - { name: CUDA_DEVICE_MAX_CONNECTIONS, value: <span class="str">"1"</span> }
+          <span class="fn">resources</span>:
+            <span class="fn">requests</span>:
+              cpu: <span class="str">"32"</span>
+              memory: <span class="str">256Gi</span>
+              <span class="cmt"># requests &amp; limits MUST match for guaranteed QoS class</span>
+              nvidia.com/gpu: <span class="str">"8"</span>
+            <span class="fn">limits</span>:
+              cpu: <span class="str">"32"</span>
+              memory: <span class="str">256Gi</span>
+              nvidia.com/gpu: <span class="str">"8"</span>
+          <span class="fn">volumeMounts</span>:
+            - { name: data,        mountPath: /data,    readOnly: true }
+            - { name: checkpoints, mountPath: /ckpt }
+            - { name: shm,         mountPath: /dev/shm } <span class="cmt"># bigger /dev/shm for DataLoader</span>
+      <span class="fn">volumes</span>:
+        - <span class="fn">name</span>: data
+          persistentVolumeClaim: { claimName: training-data-readonly }
+        - <span class="fn">name</span>: checkpoints
+          persistentVolumeClaim: { claimName: ckpt-llama-001 }
+        - <span class="fn">name</span>: shm
+          emptyDir: { medium: Memory, sizeLimit: 128Gi }</pre>
+
+      <h3>Multi-node, 4×8=32 GPU PyTorchJob</h3>
+      <p>The Kubeflow PyTorchJob CRD handles rank assignment, master discovery, and per-worker pod creation. You don't manually set RANK or MASTER_ADDR — the operator injects them.</p>
+      <pre data-label="multi-node-train.yaml"><span class="kw">apiVersion</span>: kubeflow.org/v1
+<span class="kw">kind</span>: PyTorchJob
+<span class="kw">metadata</span>:
+  <span class="fn">name</span>: llama-pretrain
+  <span class="fn">namespace</span>: ml-training
+<span class="kw">spec</span>:
+  <span class="fn">runPolicy</span>:
+    <span class="fn">cleanPodPolicy</span>: Running
+    <span class="fn">schedulingPolicy</span>:
+      <span class="fn">minAvailable</span>: 4                       <span class="cmt"># gang: all 4 or nothing</span>
+      <span class="fn">queue</span>: research-prio
+  <span class="fn">pytorchReplicaSpecs</span>:
+    <span class="fn">Master</span>:
+      <span class="fn">replicas</span>: 1
+      <span class="fn">restartPolicy</span>: OnFailure
+      <span class="fn">template</span>:
+        <span class="fn">spec</span>: { <span class="cmt">/* same container spec as below */</span> }
+    <span class="fn">Worker</span>:
+      <span class="fn">replicas</span>: 3                          <span class="cmt"># total world size = 4 * 8 = 32</span>
+      <span class="fn">restartPolicy</span>: OnFailure
+      <span class="fn">template</span>:
+        <span class="fn">metadata</span>:
+          <span class="fn">annotations</span>:
+            scheduling.volcano.sh/queue: research-prio
+        <span class="fn">spec</span>:
+          <span class="fn">schedulerName</span>: volcano
+          <span class="fn">affinity</span>:
+            <span class="fn">podAntiAffinity</span>:               <span class="cmt"># spread peers across nodes</span>
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector: { matchLabels: { job-name: llama-pretrain } }
+                  topologyKey: kubernetes.io/hostname
+            <span class="fn">podAffinity</span>:                    <span class="cmt"># but keep them in one IB island</span>
+              preferredDuringSchedulingIgnoredDuringExecution:
+                - weight: 100
+                  podAffinityTerm:
+                    labelSelector: { matchLabels: { job-name: llama-pretrain } }
+                    topologyKey: ib-island
+          <span class="fn">containers</span>:
+            - <span class="fn">name</span>: pytorch
+              <span class="fn">image</span>: registry.internal/llama-trainer:2026.04.01
+              <span class="fn">resources</span>:
+                limits:
+                  nvidia.com/gpu: <span class="str">"8"</span>
+                  rdma/hca: <span class="str">"1"</span>            <span class="cmt"># request RDMA NIC</span></pre>
+
+      <div class="callout warn">
+        <div class="callout-label">The QoS gotcha</div>
+        <p>Kubernetes assigns each pod a QoS class. <strong>Guaranteed</strong> (requests == limits on every resource) is the only class that prevents eviction under node pressure. Set requests = limits on training pods or you will lose work to bursty neighbors.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 8 -->
+<section class="chapter" id="ch8">
+  <div class="chapter-head">
+    <div class="chapter-meta">Chapter <span class="num">VIII</span></div>
+    <h2 class="chapter-title">Performance: the knobs that <em>matter.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>Reading order</strong>
+      The list is ordered by typical impact, not setup difficulty. Top items deliver 2–10× speedups; bottom items are 5–15% tuning.<br><br>
+      <strong>Method</strong>
+      Profile first (DCGM + Nsight), then optimize the slowest stage.
+    </aside>
+    <div class="prose">
+      <p class="lead">There is one rule of training performance: <em>find the bottleneck, fix it, find the next one.</em> Below are the bottlenecks ranked by how often they show up in real clusters.</p>
+
+      <div class="cmp">
+        <div class="cmp-row head">
+          <div>Bottleneck</div>
+          <div class="cmp-rust">Symptom</div>
+          <div class="cmp-blue">Fix</div>
+        </div>
+        <div class="cmp-row">
+          <div class="cmp-axis">Cross-node bandwidth</div>
+          <p>Per-step time scales with world size instead of being constant. <code>nccl-tests</code> reports &lt;30 GB/s on 200G IB.</p>
+          <p>Verify GPUDirect RDMA is enabled. Set <code>NCCL_IB_HCA</code> to the right HCA. MTU 9000. Pin workers to one IB island via topology-aware scheduling.</p>
+        </div>
+        <div class="cmp-row">
+          <div class="cmp-axis">Data loading</div>
+          <p>GPU util sawtooths: 95% then 0% then 95%. DataLoader workers can't keep up.</p>
+          <p>Cache hot shards on local NVMe via <code>emptyDir</code>. Use a parallel filesystem (Lustre, FSx, Weka) for cold data. Increase <code>num_workers</code> and <code>prefetch_factor</code>. Pin memory.</p>
+        </div>
+        <div class="cmp-row">
+          <div class="cmp-axis">Checkpoint I/O</div>
+          <p>Run pauses every N steps for minutes. Throughput drops to zero during save.</p>
+          <p>Async checkpointing (PyTorch DCP). Sharded checkpoints. Write to local NVMe first, then upload to object storage. Use rsync-style incremental saves.</p>
+        </div>
+        <div class="cmp-row">
+          <div class="cmp-axis">CPU starvation</div>
+          <p>GPUs idle waiting for CPU pre-processing. <code>nvidia-smi</code> shows low SM occupancy.</p>
+          <p>Increase pod CPU requests. Use DALI or Pillow-SIMD for image pipelines. Move augmentation to GPU. Pin CPU affinity per GPU (use the <code>cpu-manager-policy=static</code> kubelet flag).</p>
+        </div>
+        <div class="cmp-row">
+          <div class="cmp-axis">/dev/shm too small</div>
+          <p>PyTorch DataLoader crashes with "bus error" under multiprocessing.</p>
+          <p>Mount an <code>emptyDir: { medium: Memory }</code> at <code>/dev/shm</code> sized to ~50% of node RAM. K8s default is 64MB.</p>
+        </div>
+        <div class="cmp-row">
+          <div class="cmp-axis">NUMA misbinding</div>
+          <p>Some GPUs are 20% slower than identical peers on the same node.</p>
+          <p>Enable kubelet's <code>topology-manager-policy=single-numa-node</code>. Verify each GPU's NUMA affinity matches its CPU set.</p>
+        </div>
+        <div class="cmp-row">
+          <div class="cmp-axis">Scheduler latency</div>
+          <p>Pods sit pending 30–120s after submission, even with capacity.</p>
+          <p>Scale up scheduler replicas (single by default). Check the queue depth in Kueue. Disable per-pod admission webhooks if any are slow.</p>
+        </div>
+        <div class="cmp-row">
+          <div class="cmp-axis">DNS &amp; control plane</div>
+          <p>Inference pods occasionally fail to resolve service names. Scheduler API latency &gt; 100ms.</p>
+          <p>Scale CoreDNS replicas with cluster size. Move etcd to dedicated SSD. Increase API server <code>--max-requests-inflight</code>. Use endpoint slices.</p>
+        </div>
+      </div>
+
+      <h3>The metrics dashboard you should have</h3>
+      <p>Five panels, in this order, are enough to find 90% of training issues:</p>
+      <p><strong>1. GPU SM occupancy</strong> (DCGM exporter → Prometheus → Grafana). Should sit at 80–95% on a healthy training run. Sawtooths mean data starvation; flat low values mean small batch sizes or sync overhead.</p>
+      <p><strong>2. GPU memory used</strong>. Climbing memory across steps = a leak (usually from cached tensors not being freed). Flat at 90% = healthy; flat at 50% = you could increase batch size.</p>
+      <p><strong>3. NCCL all-reduce time per step</strong>. Log this from inside the trainer. Sudden jumps = topology change (a pod got rescheduled away from the IB island).</p>
+      <p><strong>4. Disk read throughput on the data PVC</strong>. If this maxes out, you're I/O bound.</p>
+      <p><strong>5. Pod restart count</strong>. Anything &gt; 0 deserves investigation — you may be losing work and not noticing.</p>
+
+      <div class="callout">
+        <div class="callout-label">The one-line health check</div>
+        <p>If <code>kubectl top pod</code> shows your trainer using 100% of its CPU request and DCGM shows GPU at 40%, the CPU is starving the GPU. Add more CPU. If both are 100%, you're balanced — increase the model size or batch.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 9 -->
+<section class="chapter" id="ch9">
+  <div class="chapter-head">
+    <div class="chapter-meta">Chapter <span class="num">IX</span></div>
+    <h2 class="chapter-title">Operating the <em>cluster.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>Daily</strong>
+      Check failed jobs, GPU util, queue depth.<br><br>
+      <strong>Weekly</strong>
+      Drift on node taints, evictions, image sizes.<br><br>
+      <strong>Quarterly</strong>
+      Upgrade K8s minor version. Test failover. Rotate certs.
+    </aside>
+    <div class="prose">
+      <p class="lead">A training cluster is a machine with three demands: keep the GPUs hot, keep the jobs honest, and keep the cluster boring. Boring is the highest praise.</p>
+
+      <h3>Day-to-day: triage</h3>
+      <p>Start every morning with three queries:</p>
+      <pre data-label="morning triage"><span class="cmt"># 1. Anything restarting more than it should?</span>
+<span class="kw">kubectl</span> get pods -A --field-selector=status.phase!=Succeeded \
+  | awk <span class="str">'$5 &gt; 2'</span>
+
+<span class="cmt"># 2. Anything pending more than 10 minutes?</span>
+<span class="kw">kubectl</span> get pods -A --field-selector=status.phase=Pending \
+  -o custom-columns=NS:.metadata.namespace,NAME:.metadata.name,AGE:.metadata.creationTimestamp
+
+<span class="cmt"># 3. Any node throwing pressure events?</span>
+<span class="kw">kubectl</span> get events -A --field-selector reason=NodeNotReady,reason=DiskPressure</pre>
+
+      <h3>Capacity &amp; cost</h3>
+      <p>A GPU is idle in three ways, each with a different remedy:</p>
+      <p><strong>Allocated but unused</strong> — the pod is running, the GPU is reserved, the trainer is not using it (rendezvous stuck, data loader stuck, eval phase). Fix: training-side. The cluster did its job.</p>
+      <p><strong>Allocatable but unallocated</strong> — fragmentation. The node has 3 GPUs free, but no job wants exactly 3. Fix: bin-packing scheduler policy, or a smaller-shape job class.</p>
+      <p><strong>Not allocatable</strong> — the node has unschedulable taints, a NotReady status, or no device plugin. Fix: <code>kubectl describe node</code>, look at conditions and taints.</p>
+      <p>The metric you want is <strong>GPU-hours allocated / GPU-hours available</strong>, measured weekly. Healthy clusters sustain 75–90%. Below 60%, queue policy is the problem (jobs requesting odd shapes, no preemption). Above 95%, you're starving queued work — add nodes or lower priority for low-value experiments.</p>
+
+      <h3>Upgrading</h3>
+      <p>K8s ships a minor version every ~4 months. Don't skip more than two. The order is fixed: control plane first, then nodes, then add-ons. For managed clusters (EKS, GKE, AKS), the cloud handles the first step; you handle node pools yourself.</p>
+      <p>Before any upgrade:</p>
+      <pre data-label="pre-upgrade"><span class="cmt"># Backup etcd (self-managed)</span>
+ETCDCTL_API=3 etcdctl snapshot save backup.db
+
+<span class="cmt"># Check API deprecations</span>
+kubectl convert -f manifests/ --output-version=v2
+
+<span class="cmt"># Drain a single node first as a canary</span>
+kubectl drain node-gpu-001 --ignore-daemonsets --delete-emptydir-data
+<span class="cmt"># ... upgrade kubelet, reboot ...</span>
+kubectl uncordon node-gpu-001</pre>
+
+      <h3>Security primitives you should have on day one</h3>
+      <p><strong>RBAC.</strong> Each namespace gets a default Role: read pods/logs, create Jobs, no node access. Cluster-admin is for two people, not twenty.</p>
+      <p><strong>NetworkPolicy.</strong> Default-deny on every namespace, then allow only what the workload needs. Otherwise any compromised pod can hit etcd.</p>
+      <p><strong>Pod Security Standards.</strong> Set <code>baseline</code> as the floor and <code>restricted</code> in non-training namespaces. Trainer pods often need privileged-ish access to GPUs and IB devices — keep those exceptions narrow.</p>
+      <p><strong>Image provenance.</strong> Sign images with cosign; the admission webhook rejects unsigned ones.</p>
+
+      <h3>Backups</h3>
+      <p>Three things to back up:</p>
+      <p><strong>etcd.</strong> Hourly snapshots, kept 7 days. This is the cluster.</p>
+      <p><strong>PVCs.</strong> Use Velero with cloud-provider CSI snapshots. Datasets you can re-fetch; checkpoints you cannot.</p>
+      <p><strong>Manifests.</strong> Live in Git. Always. The cluster is not a source of truth.</p>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 10 -->
+<section class="chapter" id="ch10">
+  <div class="chapter-head">
+    <div class="chapter-meta">Chapter <span class="num">X</span></div>
+    <h2 class="chapter-title">The production <em>checklist.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>Click</strong>
+      To mark items complete. The state is local-only — print this page if you want to keep it.<br><br>
+      <strong>The rubric</strong>
+      If you can't check all of these, you have an experimental cluster, not a production one. Both are valid; know which you have.
+    </aside>
+    <div class="prose">
+      <p class="lead">A training cluster is "production" when these are all true. Click to mark each.</p>
+
+      <div class="checklist" id="checklist">
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">etcd is backed up hourly</div><div class="check-desc">Tested restore path. Backups stored off-cluster. RPO ≤ 1 hour.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">All training Jobs have requests = limits</div><div class="check-desc">Guaranteed QoS. Pods are not evicted under node pressure.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Gang scheduling is enforced</div><div class="check-desc">Kueue, Volcano, or KAI in place. Multi-pod jobs never start partial.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Nodes are labeled with topology</div><div class="check-desc">rack, IB-switch, NVLink-island labels exist. Affinity rules use them.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">NCCL is tuned per fabric</div><div class="check-desc">NCCL_IB_HCA, NCCL_IB_GID_INDEX, MTU 9000, GPUDirect RDMA verified.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">DCGM exporter is running</div><div class="check-desc">Per-GPU metrics → Prometheus → Grafana. Dashboards exist for SM occupancy, mem, NCCL.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Checkpoint policy is async</div><div class="check-desc">No step-level pauses. Sharded saves. Object-store offload runs in background.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">PriorityClasses define preemption</div><div class="check-desc">production &gt; research &gt; spot. Low-pri jobs yield to high-pri.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Quotas are set per team namespace</div><div class="check-desc">ResourceQuota caps GPU hours / month. Visible chargeback dashboards.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Default-deny NetworkPolicy</div><div class="check-desc">Each namespace; explicit allow-lists for required egress.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Image signing enforced</div><div class="check-desc">cosign + admission webhook. No unsigned images run.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Runbooks for every alert</div><div class="check-desc">Each alert links to a doc with diagnostic kubectl commands and likely fixes.</div></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="colophon">
+  <div class="colophon-mark"><em>The Cluster</em> Quarterly</div>
+  <p>Field Manual · Volume I · Issue 01 · MMXXVI</p>
+</footer>
+
+<script>
+// ============ Command Builder ============
+const bVerb = document.getElementById('bVerb');
+const bRes = document.getElementById('bRes');
+const bName = document.getElementById('bName');
+const bNs = document.getElementById('bNs');
+const bFlag = document.getElementById('bFlag');
+const bOut = document.getElementById('bOut');
+
+function rebuildCmd() {
+  let parts = ['kubectl', bVerb.value, bRes.value];
+  if (bName.value.trim()) parts.push(bName.value.trim());
+  if (bNs.value.trim()) parts.push('-n', bNs.value.trim());
+  if (bFlag.value) parts.push(bFlag.value);
+  bOut.textContent = parts.join(' ');
+}
+[bVerb, bRes, bName, bNs, bFlag].forEach(el => el.addEventListener('input', rebuildCmd));
+
+// ============ Lifecycle stepper ============
+const lfData = [
+  {
+    actor: 'kubectl · kube-apiserver',
+    title: '01 — You run kubectl apply',
+    text: [
+      'Your YAML manifest is shipped to the API server over HTTPS. The API server authenticates you (cert, token, OIDC), authorizes the action (RBAC), and runs admission controllers — mutating webhooks may inject sidecars, validating webhooks may reject pods that don\'t meet policy (e.g., missing resource requests).',
+      'The pod\'s status field shows <code>Pending</code>, with no nodeName yet. It exists conceptually but is running on nobody.'
+    ]
+  },
+  {
+    actor: 'kube-apiserver · etcd',
+    title: '02 — etcd writes the desired state',
+    text: [
+      'The API server serializes your pod into a key under <code>/registry/pods/&lt;ns&gt;/&lt;name&gt;</code> in etcd. Raft replicates this write across all etcd nodes; the write is acknowledged only when a quorum agrees.',
+      'Every controller that subscribed to pod watch events now receives a notification. The pod has officially happened.'
+    ]
+  },
+  {
+    actor: 'kube-scheduler · kube-apiserver',
+    title: '03 — The scheduler picks a node',
+    text: [
+      'The scheduler\'s watch loop sees a pod with no nodeName. It runs the filter pipeline: drop nodes that lack capacity, taints, selector matches. It runs the score pipeline on survivors.',
+      'It writes a Binding object to the API server: <code>{ pod: my-train-0, node: node-gpu-001 }</code>. The API server patches the pod\'s spec.nodeName. The kubelet on that node has been watching for exactly this.'
+    ]
+  },
+  {
+    actor: 'kubelet · container runtime',
+    title: '04 — Kubelet pulls the image and starts containers',
+    text: [
+      'The kubelet on the bound node calls into containerd: pull this image, configure these volumes, attach this network namespace, then run.',
+      'It runs init containers first, in order. Then it runs main containers in parallel. It opens the requested device files (GPUs via the NVIDIA device plugin\'s CDI spec). It starts probes (liveness, readiness, startup).',
+      'It reports back: container started, status = Running.'
+    ]
+  },
+  {
+    actor: 'kubelet · kube-apiserver',
+    title: '05 — Status is reported continuously',
+    text: [
+      'Every few seconds, the kubelet patches the pod\'s status: phase, container states, restart counts, conditions (Ready, ContainersReady, PodScheduled).',
+      'Controllers reading these status updates may take further action — e.g., the Deployment controller noting that all replicas are Ready and progressing the rollout.'
+    ]
+  },
+  {
+    actor: 'kubelet · kube-apiserver',
+    title: '06 — The pod terminates',
+    text: [
+      'The container exits. Kubelet observes the exit code. If restartPolicy permits, it restarts the container in-place (same pod, same network, fresh container).',
+      'When the pod itself terminates (deletion, eviction, or completion of a Job\'s desired count), kubelet runs the preStop hook, sends SIGTERM, waits up to terminationGracePeriodSeconds, then SIGKILL. The pod object is removed from etcd.',
+      'The Job controller, watching this, increments the succeeded count and marks the Job complete if the target is reached.'
+    ]
+  }
+];
+
+const lfSteps = document.querySelectorAll('.lf-step');
+const lfDetail = document.getElementById('lfDetail');
+
+function showStep(i) {
+  lfSteps.forEach((s, idx) => s.classList.toggle('active', idx === i));
+  const d = lfData[i];
+  lfDetail.innerHTML = `
+    <div class="actor">Actor: ${d.actor}</div>
+    <div class="lf-detail-title">${d.title}</div>
+    ${d.text.map(t => `<p>${t}</p>`).join('')}
+  `;
+}
+lfSteps.forEach((s, i) => s.addEventListener('click', () => showStep(i)));
+
+// ============ Scheduler Simulator ============
+const initialNodes = () => [
+  { name: 'node-gpu-001', cpu: 192, mem: 1536, gpu: 8, usedCpu: 0, usedMem: 0, usedGpu: 0 },
+  { name: 'node-gpu-002', cpu: 192, mem: 1536, gpu: 8, usedCpu: 16, usedMem: 128, usedGpu: 2 },
+  { name: 'node-gpu-003', cpu: 192, mem: 1536, gpu: 8, usedCpu: 0, usedMem: 0, usedGpu: 0 },
+  { name: 'node-gpu-004', cpu: 192, mem: 1536, gpu: 8, usedCpu: 64, usedMem: 512, usedGpu: 6 }
+];
+const initialPending = () => [
+  { id: 'inf-1', name: 'inference-server', group: 'inf', cpu: 16, mem: 64, gpu: 1 },
+  { id: 'small-1', name: 'data-prep', group: 'prep', cpu: 32, mem: 128, gpu: 0 },
+  { id: 'train-1', name: 'llama-finetune (worker 1/4)', group: 'train', cpu: 32, mem: 256, gpu: 8 },
+  { id: 'train-2', name: 'llama-finetune (worker 2/4)', group: 'train', cpu: 32, mem: 256, gpu: 8 },
+  { id: 'train-3', name: 'llama-finetune (worker 3/4)', group: 'train', cpu: 32, mem: 256, gpu: 8 },
+  { id: 'train-4', name: 'llama-finetune (worker 4/4)', group: 'train', cpu: 32, mem: 256, gpu: 8 }
+];
+
+let nodes = initialNodes();
+let pending = initialPending();
+let gangOn = false;
+
+function renderNodes() {
+  const pool = document.getElementById('nodePool');
+  pool.innerHTML = nodes.map(n => {
+    const gpuCells = Array.from({ length: n.gpu }, (_, i) =>
+      `<div class="cap-cell ${i < n.usedGpu ? 'used gpu' : ''}">${i < n.usedGpu ? '●' : ''}</div>`
+    ).join('');
+    return `
+      <div class="node-card">
+        <div><span class="nname">${n.name}</span></div>
+        <div>${n.usedCpu}/${n.cpu} cpu · ${n.usedMem}/${n.mem}Gi · ${n.usedGpu}/${n.gpu} gpu</div>
+        <div class="cap-bar">${gpuCells}</div>
+      </div>`;
+  }).join('');
+}
+
+function renderPending() {
+  const pool = document.getElementById('pendingPool');
+  if (!pending.length) {
+    pool.innerHTML = '<div style="opacity:0.6; font-family: Fraunces; font-style: italic; padding: 16px;">All pods scheduled.</div>';
+    return;
+  }
+  pool.innerHTML = pending.map(p =>
+    `<div class="pod-pending" data-id="${p.id}">▶ ${p.name}<br><span style="opacity:0.7">${p.cpu}cpu · ${p.mem}Gi · ${p.gpu}gpu</span></div>`
+  ).join('');
+  pool.querySelectorAll('.pod-pending').forEach(el => {
+    el.addEventListener('click', () => attemptSchedule(el.dataset.id));
+  });
+}
+
+function logSim(msg, cls = '') {
+  const log = document.getElementById('simLog');
+  const t = new Date().toLocaleTimeString();
+  log.innerHTML += `<br><span class="${cls}">[${t}] ${msg}</span>`;
+  log.scrollTop = log.scrollHeight;
+}
+
+function fits(pod, node) {
+  return node.usedCpu + pod.cpu <= node.cpu &&
+         node.usedMem + pod.mem <= node.mem &&
+         node.usedGpu + pod.gpu <= node.gpu;
+}
+
+function attemptSchedule(podId) {
+  const pod = pending.find(p => p.id === podId);
+  if (!pod) return;
+
+  // If gang scheduling, find all peers in same group
+  const peers = gangOn ? pending.filter(p => p.group === pod.group) : [pod];
+
+  // Try to fit all peers atomically
+  const trialNodes = JSON.parse(JSON.stringify(nodes));
+  const placements = [];
+  let ok = true;
+
+  for (const p of peers) {
+    const candidate = trialNodes.find(n => fits(p, n));
+    if (!candidate) { ok = false; break; }
+    candidate.usedCpu += p.cpu;
+    candidate.usedMem += p.mem;
+    candidate.usedGpu += p.gpu;
+    placements.push({ pod: p, node: candidate.name });
+  }
+
+  if (ok) {
+    nodes = trialNodes;
+    pending = pending.filter(p => !peers.find(q => q.id === p.id));
+    placements.forEach(pl => logSim(`✓ ${pl.pod.name} → ${pl.node}`, 'ok'));
+    renderNodes(); renderPending();
+  } else {
+    if (gangOn && peers.length > 1) {
+      logSim(`✗ Gang scheduling: cannot fit all ${peers.length} peers of "${pod.group}". Pod held.`, 'fail');
+    } else {
+      logSim(`✗ No node has capacity for ${pod.name} (${pod.cpu}cpu / ${pod.mem}Gi / ${pod.gpu}gpu)`, 'fail');
+    }
+  }
+}
+
+document.getElementById('simGang').addEventListener('click', e => {
+  gangOn = !gangOn;
+  document.getElementById('gangState').textContent = gangOn ? 'ON' : 'OFF';
+  logSim(`Gang scheduling toggled ${gangOn ? 'ON' : 'OFF'}`, 'info');
+});
+
+document.getElementById('simReset').addEventListener('click', () => {
+  nodes = initialNodes(); pending = initialPending();
+  document.getElementById('simLog').innerHTML = '<span class="info">scheduler reset · 4 nodes · 32 GPUs total</span>';
+  renderNodes(); renderPending();
+});
+
+renderNodes(); renderPending();
+
+// ============ Topology playground ============
+const topoData = {
+  single: {
+    explain: '<strong>Best case · 900 GB/s</strong> 8 GPUs on one node, fully connected via NVLink + NVSwitch. NCCL all-reduce uses the fabric directly. No network involved. This is the placement to prefer for any job that fits.',
+    draw: svg => {
+      const center = { x: 360, y: 120 };
+      const r = 75;
+      const gpus = Array.from({ length: 8 }, (_, i) => ({
+        x: center.x + r * Math.cos(i * Math.PI / 4),
+        y: center.y + r * Math.sin(i * Math.PI / 4)
+      }));
+      let html = `<rect x="240" y="20" width="240" height="200" fill="#f4f1ea" stroke="#0a0a0a" stroke-width="1.5"/>`;
+      html += `<text x="360" y="40" font-family="Fraunces" font-size="13" text-anchor="middle" font-weight="700">node-gpu-001 · NVSwitch</text>`;
+      // mesh lines
+      for (let i = 0; i < 8; i++) {
+        for (let j = i + 1; j < 8; j++) {
+          html += `<line x1="${gpus[i].x}" y1="${gpus[i].y}" x2="${gpus[j].x}" y2="${gpus[j].y}" stroke="#c9a227" stroke-width="0.5" opacity="0.5"/>`;
+        }
+      }
+      gpus.forEach((g, i) => {
+        html += `<circle cx="${g.x}" cy="${g.y}" r="9" fill="#b8401f"/>`;
+        html += `<text x="${g.x}" y="${g.y + 3}" font-family="JetBrains Mono" font-size="8" fill="#f4f1ea" text-anchor="middle">${i}</text>`;
+      });
+      return html;
+    }
+  },
+  nvlink: {
+    explain: '<strong>Excellent · ~400 GB/s effective</strong> Two nodes, each fully NVLink-connected internally, joined by InfiniBand. Intra-node all-reduce uses NVLink; inter-node uses GPUDirect RDMA over IB. Reasonable scaling.',
+    draw: svg => {
+      let html = '';
+      [120, 480].forEach((cx, n) => {
+        html += `<rect x="${cx - 100}" y="20" width="200" height="180" fill="#f4f1ea" stroke="#0a0a0a" stroke-width="1.5"/>`;
+        html += `<text x="${cx}" y="40" font-family="Fraunces" font-size="11" text-anchor="middle" font-weight="700">node-gpu-00${n+1}</text>`;
+        for (let i = 0; i < 8; i++) {
+          const angle = i * Math.PI / 4;
+          const x = cx + 50 * Math.cos(angle);
+          const y = 115 + 50 * Math.sin(angle);
+          html += `<circle cx="${x}" cy="${y}" r="7" fill="#b8401f"/>`;
+        }
+        // intra-node mesh
+        for (let i = 0; i < 8; i++) {
+          for (let j = i + 1; j < 8; j++) {
+            const a = i * Math.PI / 4, b = j * Math.PI / 4;
+            html += `<line x1="${cx + 50 * Math.cos(a)}" y1="${115 + 50 * Math.sin(a)}" x2="${cx + 50 * Math.cos(b)}" y2="${115 + 50 * Math.sin(b)}" stroke="#c9a227" stroke-width="0.3" opacity="0.4"/>`;
+          }
+        }
+      });
+      html += `<line x1="220" y1="115" x2="380" y2="115" stroke="#3d5a3d" stroke-width="3"/>`;
+      html += `<text x="300" y="110" font-family="JetBrains Mono" font-size="10" text-anchor="middle" fill="#3d5a3d">IB / RDMA</text>`;
+      return html;
+    }
+  },
+  ib: {
+    explain: '<strong>Good · ~150 GB/s effective</strong> 8 nodes joined by a fat-tree InfiniBand network. All-reduce is rail-optimized — workers in the same rail share a low-latency path. Acceptable for large models with hidden-state overlap.',
+    draw: svg => {
+      let html = `<rect x="280" y="15" width="160" height="30" fill="#1e3a5f"/>`;
+      html += `<text x="360" y="35" font-family="Fraunces" font-size="11" text-anchor="middle" fill="#f4f1ea" font-weight="700">IB Fat-Tree Switch</text>`;
+      for (let i = 0; i < 8; i++) {
+        const x = 50 + i * 85;
+        html += `<rect x="${x - 20}" y="100" width="40" height="60" fill="#f4f1ea" stroke="#0a0a0a"/>`;
+        html += `<text x="${x}" y="120" font-family="JetBrains Mono" font-size="8" text-anchor="middle">n${i+1}</text>`;
+        // mini gpu cluster
+        for (let g = 0; g < 4; g++) {
+          html += `<circle cx="${x - 12 + (g % 2) * 16}" cy="${135 + Math.floor(g / 2) * 12}" r="3" fill="#b8401f"/>`;
+        }
+        html += `<line x1="${x}" y1="100" x2="${x}" y2="45" stroke="#3d5a3d" stroke-width="1.2"/>`;
+        // route up to switch
+        html += `<line x1="${x}" y1="45" x2="360" y2="45" stroke="#3d5a3d" stroke-width="0.8" opacity="0.5"/>`;
+      }
+      return html;
+    }
+  },
+  tcp: {
+    explain: '<strong>Awful · ~10–20 GB/s</strong> Same 8 nodes joined by ordinary Ethernet (no RDMA). All-reduce blocks for tens of seconds per step. Cross-node bandwidth is now the entire bottleneck — your H100s look like K80s. Either fix the network or shard differently.',
+    draw: svg => {
+      let html = `<rect x="280" y="15" width="160" height="30" fill="#8a3018"/>`;
+      html += `<text x="360" y="35" font-family="Fraunces" font-size="11" text-anchor="middle" fill="#f4f1ea" font-weight="700">Ethernet / TCP</text>`;
+      for (let i = 0; i < 8; i++) {
+        const x = 50 + i * 85;
+        html += `<rect x="${x - 20}" y="100" width="40" height="60" fill="#f4f1ea" stroke="#0a0a0a"/>`;
+        html += `<text x="${x}" y="120" font-family="JetBrains Mono" font-size="8" text-anchor="middle">n${i+1}</text>`;
+        for (let g = 0; g < 4; g++) {
+          html += `<circle cx="${x - 12 + (g % 2) * 16}" cy="${135 + Math.floor(g / 2) * 12}" r="3" fill="#b8401f"/>`;
+        }
+        html += `<line x1="${x}" y1="100" x2="${x}" y2="45" stroke="#b8401f" stroke-width="0.6" stroke-dasharray="2 2"/>`;
+        html += `<line x1="${x}" y1="45" x2="360" y2="45" stroke="#b8401f" stroke-width="0.4" stroke-dasharray="2 2"/>`;
+      }
+      html += `<text x="360" y="200" font-family="Fraunces" font-style="italic" font-size="12" text-anchor="middle" fill="#b8401f">all-reduce ≈ 30 s/step · GPUs idle 70%</text>`;
+      return html;
+    }
+  }
+};
+
+const topoSvg = document.getElementById('topoSvg');
+const topoExplain = document.getElementById('topoExplain');
+const topoBtns = document.querySelectorAll('.topo-btn');
+
+function showTopo(key) {
+  topoBtns.forEach(b => b.classList.toggle('active', b.dataset.topo === key));
+  topoSvg.innerHTML = topoData[key].draw(topoSvg);
+  topoExplain.innerHTML = topoData[key].explain;
+}
+topoBtns.forEach(b => b.addEventListener('click', () => showTopo(b.dataset.topo)));
+showTopo('single');
+
+// ============ Checklist ============
+document.querySelectorAll('.check-item').forEach(el => {
+  el.addEventListener('click', () => {
+    el.classList.toggle('done');
+    const box = el.querySelector('.check-box');
+    box.textContent = el.classList.contains('done') ? '✓' : '';
+  });
+});
+
+</script>
+</body>
+</html>
