@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PyTorch Profiler mastery — and when to use Nsight instead</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.6.0/dist/tabler-icons.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,wght@0,400;0,600;1,400&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+--bg:#F6F8FA;--bg2:#ECF0F3;--bg3:#E1E6EA;--card:#fff;
+--tx:#1A1D21;--tx2:#5E6A77;--tx3:#8D99A5;
+--bdr:rgba(0,0,0,0.07);--bdr2:rgba(0,0,0,0.13);
+--acc:#C2410C;--acc-bg:#FFF4ED;--acc-tx:#9A3412;
+--warn:#8B6914;--warn-bg:#FFF8E1;--warn-tx:#5C4400;
+--err:#9B2C2C;--err-bg:#FFF0F0;--err-tx:#6B1A1A;
+--info:#1A5276;--info-bg:#E8F4FD;--info-tx:#0D3B56;
+--green:#2D5A27;--green-bg:#E8F0E7;--green-tx:#1E3D1A;
+--blue:#3B82F6;--gre:#22C55E;--amber:#F59E0B;--red:#EF4444;--purple:#8B5CF6;--teal:#14B8A6;--pink:#EC4899;--gray:#94A3B8;
+--font:'Instrument Sans',sans-serif;--serif:'Source Serif 4',Georgia,serif;--mono:'JetBrains Mono','Consolas',monospace;
+--radius:8px;--radius-lg:12px;
+}
+@media(prefers-color-scheme:dark){:root{
+--bg:#1A1D20;--bg2:#22262A;--bg3:#2C3035;--card:#20242A;
+--tx:#E4E8EC;--tx2:#8D99A5;--tx3:#5E6A77;
+--bdr:rgba(255,255,255,0.07);--bdr2:rgba(255,255,255,0.13);
+--acc:#FB923C;--acc-bg:#2E1E0E;--acc-tx:#FDBA74;
+--warn:#D4A529;--warn-bg:#2E2610;--warn-tx:#E8C556;
+--err:#F87171;--err-bg:#2E1A1A;--err-tx:#FCA5A5;
+--info:#60A5FA;--info-bg:#1A2836;--info-tx:#93C5FD;
+--green:#6ABF62;--green-bg:#1E2E1C;--green-tx:#A0D89A;
+}}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:var(--font);background:var(--bg);color:var(--tx);line-height:1.72;font-size:15px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:860px;margin:0 auto;padding:2.5rem 1.5rem 6rem}
+h1{font-family:var(--serif);font-size:32px;font-weight:600;line-height:1.25;margin:0 0 8px;letter-spacing:-0.02em}
+.sub{font-size:15px;color:var(--tx2);margin:0 0 2.5rem;max-width:660px;line-height:1.65}
+h2{font-size:21px;font-weight:600;margin:3rem 0 1rem;padding-top:1.5rem;border-top:1.5px solid var(--bdr);letter-spacing:-0.01em}
+h2:first-of-type{border-top:none;padding-top:0}
+h3{font-size:16px;font-weight:600;margin:1.5rem 0 0.5rem}
+h4{font-size:14px;font-weight:600;margin:1.2rem 0 0.4rem}
+p{margin:0 0 0.85rem}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+code{font-family:var(--mono);font-size:12.5px;background:var(--bg2);padding:2px 6px;border-radius:4px;word-break:break-word}
+pre{font-family:var(--mono);font-size:12.5px;line-height:1.65;background:var(--bg2);border:1px solid var(--bdr);border-radius:var(--radius);padding:16px 20px;overflow-x:auto;margin:0 0 1rem;white-space:pre}
+pre .f{color:var(--acc)}pre .c{color:var(--tx3);font-style:italic}
+
+.toc{background:var(--card);border:1px solid var(--bdr);border-radius:var(--radius-lg);padding:20px 24px;margin:0 0 2.5rem}
+.toc-t{font-size:13px;font-weight:600;color:var(--tx2);text-transform:uppercase;letter-spacing:0.8px;margin:0 0 10px}
+.tg{display:grid;grid-template-columns:1fr 1fr;gap:3px 24px;list-style:none;padding:0}
+.tg a{font-size:13.5px;color:var(--tx);display:flex;align-items:center;gap:6px;padding:4px 0;transition:color 0.15s}
+.tg a:hover{color:var(--acc);text-decoration:none}
+.tg .ti{font-size:14px;color:var(--tx3)}
+@media(max-width:600px){.tg{grid-template-columns:1fr}}
+
+.ex{border:1px solid var(--bdr);border-radius:var(--radius-lg);margin:0 0 10px;background:var(--card);overflow:hidden}
+.eh{display:flex;align-items:center;gap:10px;padding:14px 18px;cursor:pointer;user-select:none;transition:background 0.15s}
+.eh:hover{background:var(--bg2)}
+.eh .ti{font-size:18px;color:var(--tx3);transition:transform 0.25s}
+.eh.open .ti{transform:rotate(90deg)}
+.et{font-size:15px;font-weight:500;flex:1}
+.bg{font-size:11px;font-weight:500;padding:3px 10px;border-radius:20px;text-transform:uppercase;letter-spacing:0.5px}
+.b1{background:var(--acc-bg);color:var(--acc-tx)}
+.b2{background:var(--info-bg);color:var(--info-tx)}
+.b3{background:var(--green-bg);color:var(--green-tx)}
+.b4{background:var(--warn-bg);color:var(--warn-tx)}
+.b5{background:var(--err-bg);color:var(--err-tx)}
+.b6{background:#F0E6FF;color:#5B21B6}
+.b7{background:var(--bg3);color:var(--tx2)}
+.eb{display:none;padding:0 18px 18px;animation:fi 0.2s ease}
+.eb.open{display:block}
+@keyframes fi{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+
+.rt{width:100%;border-collapse:collapse;font-size:13px;margin:12px 0 16px}
+.rt th{text-align:left;font-weight:500;padding:8px 12px;border-bottom:2px solid var(--bdr2);color:var(--tx2);font-size:12px;text-transform:uppercase;letter-spacing:0.5px}
+.rt td{padding:8px 12px;border-bottom:1px solid var(--bdr);vertical-align:top;line-height:1.55}
+.rt tr:last-child td{border-bottom:none}
+
+.ic{border-left:3px solid;border-radius:0 var(--radius) var(--radius) 0;padding:14px 18px;margin:10px 0}
+.ic.warn{border-color:var(--amber);background:var(--warn-bg)}
+.ic.info{border-color:var(--blue);background:var(--info-bg)}
+.ic.fix{border-color:var(--gre);background:var(--green-bg)}
+.ic.err{border-color:var(--red);background:var(--err-bg)}
+.ic .il{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin:0 0 4px}
+.ic.warn .il{color:var(--warn-tx)}.ic.info .il{color:var(--info-tx)}.ic.fix .il{color:var(--green-tx)}.ic.err .il{color:var(--err-tx)}
+.ic p{margin:0;font-size:14px;line-height:1.6}
+
+.co{display:flex;gap:10px;padding:14px 16px;border-radius:var(--radius);margin:12px 0 16px;font-size:14px;line-height:1.6}
+.co .ti{font-size:18px;flex-shrink:0;margin-top:2px}
+.ci{background:var(--info-bg);color:var(--info-tx)}
+.cw{background:var(--warn-bg);color:var(--warn-tx)}
+.ct{background:var(--acc-bg);color:var(--acc-tx)}
+.cg{background:var(--green-bg);color:var(--green-tx)}
+
+.tb{display:flex;gap:4px;flex-wrap:wrap}
+.tbn{font-family:var(--font);font-size:13px;padding:8px 14px;border:1px solid var(--bdr);border-bottom:none;border-radius:var(--radius) var(--radius) 0 0;background:var(--bg2);color:var(--tx2);cursor:pointer;transition:all 0.15s;font-weight:500}
+.tbn:hover{background:var(--bg3)}
+.tbn.active{background:var(--card);color:var(--tx);border-color:var(--bdr);position:relative;z-index:1}
+.tp{display:none;border:1px solid var(--bdr);border-radius:0 var(--radius) var(--radius) var(--radius);background:var(--card);padding:20px;margin:0 0 16px;position:relative;top:-1px}
+.tp.active{display:block}
+
+.ph{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.8px;color:var(--tx3);margin:0 0 8px}
+.pn{width:24px;height:24px;border-radius:50%;background:var(--acc);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:12px}
+
+.fm{background:var(--bg2);border:1px solid var(--bdr);border-radius:var(--radius);padding:14px 20px;margin:12px 0 16px;font-family:var(--mono);font-size:13px;line-height:1.8;overflow-x:auto}
+.fm .l{color:var(--tx3);font-size:11px;text-transform:uppercase;letter-spacing:0.5px}
+.fm .v{color:var(--acc);font-weight:500}
+
+.vs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin:12px 0 16px}
+@media(max-width:700px){.vs{grid-template-columns:1fr}}
+.vc{background:var(--bg2);border-radius:var(--radius-lg);padding:16px 18px}
+.vc h4{margin:0 0 6px;font-size:14px}
+.vc p{font-size:12.5px;color:var(--tx2);margin:0 0 4px;line-height:1.5}
+
+.sum{margin-top:3rem;padding:20px;background:var(--bg2);border-radius:var(--radius-lg);font-size:14px;color:var(--tx2);line-height:1.7}
+.sum p{margin:0}
+
+.bar-row{display:flex;align-items:center;gap:10px;margin:0 0 5px}
+.bar-label{font-family:var(--mono);font-size:11px;color:var(--tx2);width:160px;flex-shrink:0;text-align:right}
+.bar-track{flex:1;height:18px;background:var(--bg);border-radius:3px;overflow:hidden;border:1px solid var(--bdr)}
+.bar-fill{height:100%;border-radius:2px;display:flex;align-items:center;padding:0 6px;font-size:10px;font-weight:500;color:#fff;white-space:nowrap}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>PyTorch Profiler mastery</h1>
+<p class="sub">The complete guide to profiling with <code>torch.profiler</code> — from basic captures to Chrome Trace analysis, TensorBoard integration, memory profiling, and a systematic comparison with Nsight Systems and Nsight Compute so you know which tool to reach for and when.</p>
+
+<nav class="toc">
+<p class="toc-t">12 chapters</p>
+<ol class="tg">
+<li><a href="#c1"><i class="ti ti-arrows-diff"></i> The three tools compared</a></li>
+<li><a href="#c2"><i class="ti ti-terminal"></i> Capture: torch.profiler</a></li>
+<li><a href="#c3"><i class="ti ti-eye"></i> Chrome Trace viewer</a></li>
+<li><a href="#c4"><i class="ti ti-chart-bar"></i> TensorBoard plugin</a></li>
+<li><a href="#c5"><i class="ti ti-table"></i> Key tables and statistics</a></li>
+<li><a href="#c6"><i class="ti ti-database"></i> Memory profiling</a></li>
+<li><a href="#c7"><i class="ti ti-stack-2"></i> Profiling distributed training</a></li>
+<li><a href="#c8"><i class="ti ti-flame"></i> torch.compile profiling</a></li>
+<li><a href="#c9"><i class="ti ti-bug"></i> Pattern diagnosis</a></li>
+<li><a href="#c10"><i class="ti ti-git-branch"></i> Decision tree: which tool when</a></li>
+<li><a href="#c11"><i class="ti ti-arrows-exchange"></i> Cross-tool workflows</a></li>
+<li><a href="#c12"><i class="ti ti-bookmarks"></i> Quick reference</a></li>
+</ol>
+</nav>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c1"><span class="ph"><span class="pn">1</span></span> The three profiling tools compared</h2>
+
+<div class="ex"><div class="eh" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="et">PyTorch Profiler vs Nsight Systems vs Nsight Compute</span><span class="bg b1">Overview</span></div><div class="eb">
+
+<div class="vs">
+<div class="vc">
+<h4>PyTorch Profiler</h4>
+<p><strong>Level:</strong> Python / PyTorch operator</p>
+<p><strong>Question:</strong> Which PyTorch ops are slow? Where is Python spending time? What's the memory usage pattern?</p>
+<p><strong>Output:</strong> Chrome Trace, TensorBoard, text tables</p>
+<p><strong>Overhead:</strong> Low–moderate (2–10%)</p>
+<p><strong>Ease:</strong> ★★★★★ (no install needed)</p>
+</div>
+<div class="vc">
+<h4>Nsight Systems</h4>
+<p><strong>Level:</strong> System / GPU timeline</p>
+<p><strong>Question:</strong> Where is the GPU idle? Is communication overlapped? What's the CPU↔GPU relationship?</p>
+<p><strong>Output:</strong> .nsys-rep timeline</p>
+<p><strong>Overhead:</strong> Low (1–5%)</p>
+<p><strong>Ease:</strong> ★★★☆☆ (separate install + GUI)</p>
+</div>
+<div class="vc">
+<h4>Nsight Compute</h4>
+<p><strong>Level:</strong> Kernel / hardware counter</p>
+<p><strong>Question:</strong> Why is this specific CUDA kernel slow? Is it compute- or memory-bound? What are warps stalled on?</p>
+<p><strong>Output:</strong> .ncu-rep report</p>
+<p><strong>Overhead:</strong> Very high (10–100×)</p>
+<p><strong>Ease:</strong> ★★☆☆☆ (requires deep GPU knowledge)</p>
+</div>
+</div>
+
+<table class="rt">
+<tr><th>Capability</th><th>PyTorch Profiler</th><th>Nsight Systems</th><th>Nsight Compute</th></tr>
+<tr><td>Python-level call stack</td><td>✓ Full Python stack frames</td><td>✗ (sees CUDA API calls, not Python)</td><td>✗</td></tr>
+<tr><td>PyTorch operator names</td><td>✓ <code>aten::linear</code>, <code>aten::mm</code></td><td>Partial (via NVTX if annotated)</td><td>✗ (sees CUDA kernel names only)</td></tr>
+<tr><td>GPU kernel timeline</td><td>✓ (via CUDA activity tracing)</td><td>✓ (higher fidelity, µs resolution)</td><td>✗ (profiles single kernels, not timeline)</td></tr>
+<tr><td>GPU idle gap analysis</td><td>Partial (visible in trace)</td><td>✓ Best-in-class (dedicated gap analysis)</td><td>✗</td></tr>
+<tr><td>CUDA memory allocation tracking</td><td>✓ <code>profile_memory=True</code></td><td>✓ <code>--cuda-memory-usage=true</code></td><td>✗</td></tr>
+<tr><td>PyTorch memory allocator internals</td><td>✓ <code>torch.cuda.memory_snapshot()</code></td><td>✗ (sees cudaMalloc, not PyTorch caching)</td><td>✗</td></tr>
+<tr><td>SM utilization / hardware counters</td><td>✗</td><td>✓ (sampled GPU metrics)</td><td>✓ (per-kernel, full counters)</td></tr>
+<tr><td>Roofline analysis</td><td>✗</td><td>✗</td><td>✓</td></tr>
+<tr><td>Warp stall analysis</td><td>✗</td><td>✗</td><td>✓</td></tr>
+<tr><td>NCCL / communication tracing</td><td>Partial (sees collective ops)</td><td>✓ (full NCCL kernel timeline)</td><td>✗</td></tr>
+<tr><td>Multi-GPU cross-device view</td><td>Partial (one rank at a time)</td><td>✓ (all GPUs on same timeline)</td><td>✗</td></tr>
+<tr><td>Power / temperature traces</td><td>✗</td><td>✓</td><td>✗ (per-kernel power only)</td></tr>
+<tr><td>No install / zero-dependency</td><td>✓ (built into PyTorch)</td><td>✗ (requires NVIDIA tools)</td><td>✗</td></tr>
+<tr><td>Works on cloud / restricted envs</td><td>✓ (no root needed)</td><td>Sometimes (needs nsys binary)</td><td>Sometimes (needs ncu + permissions)</td></tr>
+</table>
+
+<div class="co ct"><i class="ti ti-bulb"></i><div><strong>The 80/20 rule:</strong> PyTorch Profiler answers 80% of your profiling questions in 20% of the time. It tells you which ops are slow, where memory goes, and whether the GPU is utilized — all from within your Python script, viewable in a browser. You only need Nsight Systems when you need µs-level GPU timeline accuracy (idle gap analysis, communication overlap). You only need Nsight Compute when a specific CUDA kernel is underperforming and you need to understand why at the hardware level.</div></div>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c2"><span class="ph"><span class="pn">2</span></span> Capture: torch.profiler</h2>
+
+<div class="ex"><div class="eh" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="et">Basic profiling — your first capture</span><span class="bg b2">Capture</span></div><div class="eb">
+<pre><span class="c"># Simplest possible profile</span>
+import torch
+from torch.profiler import profile, ProfilerActivity
+
+with profile(
+    activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+    <span class="f">record_shapes=True</span>,     <span class="c"># log tensor shapes (critical for GEMM analysis)</span>
+    <span class="f">profile_memory=True</span>,     <span class="c"># track memory allocations</span>
+    <span class="f">with_stack=True</span>,          <span class="c"># capture Python call stacks</span>
+) as prof:
+    for step in range(5):
+        train_step(model, batch)
+
+<span class="c"># Print top ops by GPU time</span>
+print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=20))
+
+<span class="c"># Export for Chrome trace viewer</span>
+prof.export_chrome_trace("trace.json")
+
+<span class="c"># Export for TensorBoard</span>
+<span class="c"># (see Chapter 4 for the schedule-based approach)</span></pre>
+
+<table class="rt">
+<tr><th>Parameter</th><th>What it enables</th><th>Overhead</th><th>When to use</th></tr>
+<tr><td><code>activities=[CPU, CUDA]</code></td><td>Traces CPU ops and CUDA kernels</td><td>~2–5%</td><td>Always — this is the minimum useful configuration</td></tr>
+<tr><td><code>record_shapes=True</code></td><td>Logs input/output tensor shapes for each op</td><td>~1%</td><td>Always — shapes tell you GEMM dimensions, which determines Tensor Core eligibility</td></tr>
+<tr><td><code>profile_memory=True</code></td><td>Tracks <code>torch.cuda.memory_allocated()</code> and allocation events</td><td>~2%</td><td>When diagnosing OOM or memory leaks</td></tr>
+<tr><td><code>with_stack=True</code></td><td>Captures Python call stacks for each op</td><td>~5–10%</td><td>When you need to trace an op back to the line of code that launched it</td></tr>
+<tr><td><code>with_flops=True</code></td><td>Estimates FLOP count for each op</td><td>~1%</td><td>When computing MFU or comparing theoretical vs actual throughput</td></tr>
+<tr><td><code>with_modules=True</code></td><td>Associates ops with their <code>nn.Module</code></td><td>~1%</td><td>When you want to see time per layer/module, not just per op</td></tr>
+</table>
+</div></div>
+
+<div class="ex"><div class="eh" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="et">Schedule-based profiling (the recommended approach)</span><span class="bg b2">Capture</span></div><div class="eb">
+<p>Instead of profiling every step (expensive), use a schedule that waits for warmup, profiles a few steps, then exports.</p>
+
+<pre>from torch.profiler import profile, schedule, tensorboard_trace_handler
+
+<span class="c"># Schedule: skip 2 warmup steps, actively profile 3 steps, repeat</span>
+with profile(
+    activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+    <span class="f">schedule=schedule(wait=1, warmup=1, active=3, repeat=1)</span>,
+    on_trace_ready=tensorboard_trace_handler("./log/profiler"),
+    record_shapes=True,
+    profile_memory=True,
+    with_stack=True,
+    with_flops=True,
+) as prof:
+    for step in range(10):
+        train_step(model, batch)
+        <span class="f">prof.step()</span>  <span class="c"># CRITICAL — must call this every iteration</span>
+
+<span class="c"># Schedule breakdown for 7 steps:</span>
+<span class="c"># Step 0: wait    (no profiling, no overhead)</span>
+<span class="c"># Step 1: warmup  (profiling on, but data discarded — warm caches)</span>
+<span class="c"># Step 2: active  ← data collected</span>
+<span class="c"># Step 3: active  ← data collected</span>
+<span class="c"># Step 4: active  ← data collected + trace exported</span>
+<span class="c"># Steps 5+: done (repeat=1 means don't repeat)</span></pre>
+
+<div class="ic info">
+<p class="il">Why the schedule matters</p>
+<p>The <code>wait</code> phase lets any startup transients settle. The <code>warmup</code> phase warms CUDA caches and the PyTorch caching allocator so the profiled steps are representative. The <code>active</code> phase captures the actual data. Without this schedule, you'd profile the first step (which includes JIT compilation, memory allocation, cuDNN autotuning) — none of which is representative of steady-state performance.</p>
+</div>
+</div></div>
+
+<div class="ex"><div class="eh" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="et">Profiling with NVTX markers (bridging to Nsight)</span><span class="bg b2">Capture</span></div><div class="eb">
+<p>PyTorch's profiler can emit NVTX annotations, which makes the trace visible in Nsight Systems too. This is the bridge between the two tools.</p>
+
+<pre><span class="c"># Method 1: emit_nvtx() — auto-annotate all autograd ops</span>
+with torch.autograd.profiler.emit_nvtx():
+    output = model(input)
+    loss = criterion(output, target)
+    loss.backward()
+<span class="c"># Every aten op becomes an NVTX range visible in Nsight Systems</span>
+
+<span class="c"># Method 2: manual NVTX markers (more control)</span>
+import torch.cuda.nvtx as nvtx
+
+nvtx.range_push("forward")
+output = model(input)
+nvtx.range_pop()
+
+nvtx.range_push("loss")
+loss = criterion(output, target)
+nvtx.range_pop()
+
+nvtx.range_push("backward")
+loss.backward()
+nvtx.range_pop()
+
+<span class="c"># Method 3: record_function (works with both PyTorch Profiler and NVTX)</span>
+with torch.profiler.record_function("my_custom_region"):
+    <span class="c"># This appears in both PyTorch Profiler AND Nsight Systems</span>
+    output = model(input)</pre>
+
+<div class="co ct"><i class="ti ti-bulb"></i><div><strong><code>record_function</code> is the universal annotation.</strong> It works with PyTorch Profiler (appears in Chrome Trace and TensorBoard), and also emits NVTX ranges that Nsight Systems can see. Use it to label the phases of your training loop — "data_load", "forward", "backward", "optimizer" — regardless of which profiler you'll ultimately use.</div></div>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c3"><span class="ph"><span class="pn">3</span></span> Chrome Trace viewer</h2>
+
+<div class="ex"><div class="eh" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="et">Reading the Chrome Trace (chrome://tracing)</span><span class="bg b3">Interpret</span></div><div class="eb">
+<p>After <code>prof.export_chrome_trace("trace.json")</code>, open <code>chrome://tracing</code> in Chrome and load the file. You get a timeline similar to Nsight Systems but organized by PyTorch concept rather than GPU hardware.</p>
+
+<h4>Timeline rows (swim lanes)</h4>
+<table class="rt">
+<tr><th>Row</th><th>What it shows</th><th>Equivalent in Nsight Systems</th></tr>
+<tr><td><strong>CPU op (Thread 0)</strong></td><td>PyTorch operator dispatch on the main thread: <code>aten::mm</code>, <code>aten::layer_norm</code>, <code>aten::linear</code></td><td>CPU thread row (but Nsight shows C++ function names, not PyTorch op names)</td></tr>
+<tr><td><strong>CUDA (GPU 0)</strong></td><td>Actual CUDA kernel execution on the GPU, linked to the CPU op that launched it</td><td>GPU kernel row</td></tr>
+<tr><td><strong>record_function</strong></td><td>Custom annotations you added</td><td>NVTX row</td></tr>
+<tr><td><strong>Allocations</strong> (if memory profiling on)</td><td>Memory allocation/deallocation events</td><td>CUDA memory usage trace</td></tr>
+</table>
+
+<h4>How to navigate</h4>
+<table class="rt">
+<tr><th>Action</th><th>Keyboard/mouse</th></tr>
+<tr><td>Pan</td><td>WASD keys or click+drag</td></tr>
+<tr><td>Zoom</td><td>Mouse scroll or W/S keys</td></tr>
+<tr><td>Select an event</td><td>Click on it — details appear in the bottom panel</td></tr>
+<tr><td>Measure duration</td><td>Click+drag on the time ruler at the top</td></tr>
+<tr><td>Search</td><td>Press <code>/</code> and type an op name (e.g., "aten::mm")</td></tr>
+<tr><td>Show flow arrows</td><td>Click an op → see arrows linking CPU dispatch to GPU execution</td></tr>
+</table>
+
+<h4>What to look for</h4>
+<table class="rt">
+<tr><th>Pattern</th><th>What it means</th><th>Same pattern in Nsight Systems</th></tr>
+<tr><td>Long CPU op with no corresponding CUDA activity</td><td>CPU bottleneck — Python overhead, data loading, or preprocessing</td><td>CPU thread busy, GPU row empty</td></tr>
+<tr><td>Gap between consecutive CUDA kernels</td><td>Kernel launch overhead or sync stall</td><td>White space on GPU kernel row</td></tr>
+<tr><td>Very wide <code>aten::item</code> or <code>aten::_local_scalar_dense</code></td><td>Sync stall from <code>.item()</code> — forces GPU→CPU transfer</td><td><code>cudaStreamSynchronize</code> on CUDA API row</td></tr>
+<tr><td>Many tiny CUDA slices packed tightly</td><td>Kernel launch overhead — too many small ops</td><td>Dense tiny kernels on GPU row</td></tr>
+<tr><td>Memory allocation spikes visible in the trace</td><td>Allocation churn or fragmentation</td><td><code>cudaMalloc</code> on CUDA API row</td></tr>
+</table>
+
+<div class="co cw"><i class="ti ti-alert-triangle"></i><div><strong>Chrome Trace limitation:</strong> The <code>chrome://tracing</code> viewer struggles with large traces (>100 MB). For big models or many steps, the file can be 500 MB+ and the viewer becomes unusable. Solutions: (1) profile fewer steps (use the schedule), (2) use TensorBoard plugin instead (handles large traces better), or (3) use <a href="https://ui.perfetto.dev">Perfetto</a> which handles large traces much better than Chrome Tracing.</div></div>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c4"><span class="ph"><span class="pn">4</span></span> TensorBoard plugin</h2>
+
+<div class="ex"><div class="eh" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="et">The TensorBoard profiling views</span><span class="bg b3">Interpret</span></div><div class="eb">
+<p>TensorBoard's PyTorch Profiler plugin provides structured analysis views that are more actionable than raw Chrome Traces.</p>
+
+<pre><span class="c"># Launch TensorBoard</span>
+<span class="c"># pip install torch-tb-profiler</span>
+<span class="c"># tensorboard --logdir=./log/profiler</span>
+<span class="c"># Navigate to: http://localhost:6006/#pytorch_profiler</span></pre>
+
+<h4>The six TensorBoard views</h4>
+<table class="rt">
+<tr><th>View</th><th>What it shows</th><th>When to use</th></tr>
+<tr><td><strong>Overview</strong></td><td>Step time breakdown: kernel time, memcpy time, CPU time, communication time, idle time. GPU utilization %. Top-10 expensive ops.</td><td>Always start here. Shows the high-level bottleneck at a glance.</td></tr>
+<tr><td><strong>Operator view</strong></td><td>Table of all PyTorch operators sorted by total GPU time. Shows self time, total time, call count, input shapes, FLOP counts.</td><td>Identifying which ops dominate GPU time. Equivalent to Nsight Systems kernel statistics.</td></tr>
+<tr><td><strong>GPU kernel view</strong></td><td>Table of CUDA kernel names (the actual GPU function names), sorted by total duration. Shows mean, min, max per kernel. Tensor Core usage indicator.</td><td>Checking if Tensor Cores are used. Identifying kernel-level bottlenecks. Closest equivalent to Nsight Systems kernel stats.</td></tr>
+<tr><td><strong>Trace view</strong></td><td>Interactive timeline (same as Chrome Trace but embedded in TensorBoard). Zoomable, searchable.</td><td>Visual timeline analysis — same use cases as Chrome Trace viewer.</td></tr>
+<tr><td><strong>Memory view</strong></td><td>Memory usage over time, allocation timeline, top memory-consuming ops.</td><td>Diagnosing OOM, finding memory leaks, understanding peak memory.</td></tr>
+<tr><td><strong>Module view</strong></td><td>Time broken down by <code>nn.Module</code> hierarchy (requires <code>with_modules=True</code>).</td><td>Identifying which layer/block is the bottleneck in your model architecture.</td></tr>
+</table>
+
+<h4>The Overview page: reading the step-time breakdown</h4>
+<div class="bar-row"><span class="bar-label">Kernel (GPU compute)</span><span class="bar-track"><span class="bar-fill" style="width:55%;background:var(--blue)">55%</span></span></div>
+<div class="bar-row"><span class="bar-label">Memcpy (H2D/D2H)</span><span class="bar-track"><span class="bar-fill" style="width:3%;background:var(--teal)">3%</span></span></div>
+<div class="bar-row"><span class="bar-label">Communication (NCCL)</span><span class="bar-track"><span class="bar-fill" style="width:12%;background:var(--purple)">12%</span></span></div>
+<div class="bar-row"><span class="bar-label">CPU compute</span><span class="bar-track"><span class="bar-fill" style="width:8%;background:var(--gray)">8%</span></span></div>
+<div class="bar-row"><span class="bar-label">Other (idle/overhead)</span><span class="bar-track"><span class="bar-fill" style="width:22%;background:var(--red);opacity:0.5">22%</span></span></div>
+<p style="font-size:12px;color:var(--tx3);margin:6px 0 12px">Example breakdown — the 22% "other" is where performance is being lost</p>
+
+<div class="co ct"><i class="ti ti-bulb"></i><div><strong>The Overview's "GPU utilization" number is the most important single metric.</strong> If it's above 80%, the GPU is well-utilized and you're looking at kernel-level or communication optimizations. If it's below 60%, there's a systemic issue — data loading, sync stalls, or Python overhead — that the other views will help diagnose.</div></div>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c5"><span class="ph"><span class="pn">5</span></span> Key tables and statistics</h2>
+
+<div class="ex"><div class="eh" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="et">Operator table: the most actionable view</span><span class="bg b3">Interpret</span></div><div class="eb">
+<pre><span class="c"># Print the operator table (terminal — no TensorBoard needed)</span>
+print(prof.key_averages().table(
+    sort_by="<span class="f">cuda_time_total</span>",
+    row_limit=20,
+))
+
+<span class="c"># Output looks like:</span>
+<span class="c"># --------------------------------  ------  ------  ------  ------  ------  ------</span>
+<span class="c">#                             Name  CPU %   CPU     CUDA %  CUDA    Calls   Shapes</span>
+<span class="c"># --------------------------------  ------  ------  ------  ------  ------  ------</span>
+<span class="c">#                       aten::mm    2.1%    1.2ms   45.3%   23.1ms  128     [2048,4096]x[4096,4096]</span>
+<span class="c">#                    aten::linear   3.4%    1.9ms   22.1%   11.3ms   96     ...</span>
+<span class="c">#               aten::layer_norm    1.8%    1.0ms    8.7%    4.5ms   64     ...</span>
+<span class="c"># ...</span></pre>
+
+<h4>How to read the columns</h4>
+<table class="rt">
+<tr><th>Column</th><th>What it means</th><th>How to use it</th></tr>
+<tr><td><strong>Name</strong></td><td>PyTorch operator name (aten namespace)</td><td>Maps directly to model operations: <code>aten::mm</code> → matrix multiply, <code>aten::linear</code> → nn.Linear, <code>aten::_softmax</code> → softmax</td></tr>
+<tr><td><strong>Self CPU / Self CUDA</strong></td><td>Time spent in this op <em>excluding</em> child ops</td><td>The "true" cost of this specific operation. Use self time to find the actual bottleneck, not the parent op that merely called it.</td></tr>
+<tr><td><strong>CPU Total / CUDA Total</strong></td><td>Time including all child ops</td><td>Useful for understanding the total cost of a high-level op (e.g., <code>aten::linear</code> includes the <code>aten::mm</code> it calls internally)</td></tr>
+<tr><td><strong>Calls</strong></td><td>Number of times this op was invoked</td><td>High call count + low per-call time = potential fusion candidate (many small ops → one fused kernel)</td></tr>
+<tr><td><strong>Input Shapes</strong></td><td>Tensor dimensions for each invocation</td><td>Critical for GEMM analysis: are dimensions multiples of 8? Is the M dimension (batch×seq) large enough to saturate Tensor Cores?</td></tr>
+<tr><td><strong>FLOPs</strong> (with <code>with_flops=True</code>)</td><td>Estimated floating-point operations</td><td>Compare to theoretical peak: actual_FLOPS = FLOPs / CUDA_time. MFU = actual / peak.</td></tr>
+</table>
+
+<pre><span class="c"># Group by module (layer) instead of operator</span>
+print(prof.key_averages(<span class="f">group_by_input_shape=True</span>).table(
+    sort_by="cuda_time_total", row_limit=20
+))
+<span class="c"># This groups identical ops with different shapes separately</span>
+<span class="c"># — essential for finding which GEMM configurations are slow</span>
+
+<span class="c"># Group by nn.Module (requires with_modules=True)</span>
+print(prof.key_averages(
+    <span class="f">group_by_stack_n=5</span>  <span class="c"># group by top 5 stack frames</span>
+).table(sort_by="cuda_time_total", row_limit=20))
+<span class="c"># Shows time per source code location — traces ops back to your code</span></pre>
+
+<div class="ic info">
+<p class="il">The shapes tell you everything about Tensor Core utilization</p>
+<p>When you see <code>aten::mm</code> with shape <code>[256, 4096] × [4096, 4096]</code>, the M=256 dimension (batch×seq) and K=4096, N=4096 are all multiples of 8 → Tensor Cores eligible. If you see <code>[256, 4096] × [4096, 30001]</code>, the N=30001 (vocab size) is not a multiple of 8 → Tensor Core fallback. This is exactly the kind of insight that's trivial in PyTorch Profiler but requires Nsight Compute kernel name decoding to get from Nsight.</p>
+</div>
+</div></div>
+
+<div class="ex"><div class="eh" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="et">Tensor Core utilization detection</span><span class="bg b3">Interpret</span></div><div class="eb">
+<p>The TensorBoard GPU kernel view shows a "Tensor Core" column indicating whether each CUDA kernel used Tensor Cores. You can also detect this programmatically:</p>
+
+<pre><span class="c"># Check Tensor Core usage in kernel names</span>
+for event in prof.key_averages():
+    if event.device_type == torch.autograd.DeviceType.CUDA:
+        name = event.key
+        <span class="c"># Tensor Core GEMM indicators in kernel names:</span>
+        is_tc = any(marker in name.lower() for marker in [
+            'h884', 'h1688', '16816', 's16816',  <span class="c"># Tensor Core GEMMs</span>
+            'mma', 'hmma', 'i8816',               <span class="c"># MMA instructions</span>
+            'bf16', 'fp16', 'tf32',                <span class="c"># reduced precision</span>
+        ])
+        if 'gemm' in name.lower() or 'mm' in event.key:
+            print(f"{name}: {'TC ✓' if is_tc else 'CUDA cores ✗'}"
+                  f" time={event.cuda_time_total/1000:.1f}ms")</pre>
+
+<div class="co ci"><i class="ti ti-info-circle"></i><div><strong>This is one area where Nsight Compute is strictly better.</strong> PyTorch Profiler can hint at Tensor Core usage via kernel names, but Nsight Compute directly measures Tensor Core pipe utilization as a percentage. If you need to confirm TC usage definitively (not just heuristically), use Nsight Compute on the specific GEMM kernel.</div></div>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c6"><span class="ph"><span class="pn">6</span></span> Memory profiling</h2>
+
+<div class="ex"><div class="eh" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="et">Memory timeline and allocation tracking</span><span class="bg b5">Memory</span></div><div class="eb">
+<p>This is PyTorch Profiler's strongest advantage over Nsight — it understands the PyTorch caching allocator, not just raw CUDA memory.</p>
+
+<h4>Three levels of memory profiling</h4>
+<table class="rt">
+<tr><th>Level</th><th>Tool</th><th>What it shows</th></tr>
+<tr><td><strong>Quick snapshot</strong></td><td><code>torch.cuda.memory_summary()</code></td><td>Current state: active allocations, cached blocks, fragmentation. No profiler needed.</td></tr>
+<tr><td><strong>Timeline</strong></td><td><code>profile(profile_memory=True)</code> + TensorBoard Memory view</td><td>Memory usage over time. Shows allocation/deallocation events correlated with ops.</td></tr>
+<tr><td><strong>Deep snapshot</strong></td><td><code>torch.cuda.memory._record_memory_history()</code></td><td>Full allocation stack traces. Can visualize at <a href="https://pytorch.org/memory_viz">pytorch.org/memory_viz</a>.</td></tr>
+</table>
+
+<pre><span class="c"># Level 1: Quick snapshot (run anytime, no profiler)</span>
+print(torch.cuda.memory_summary(device=0))
+<span class="c"># Shows:</span>
+<span class="c"># |             CUDA memory |  Allocated  |   Cached   |</span>
+<span class="c"># | Peak usage:            |    42.3 GiB |   48.0 GiB |</span>
+<span class="c"># | Current usage:         |    28.1 GiB |   48.0 GiB |</span>
+<span class="c"># | Num alloc retries:     |           5 |            |  ← fragmentation!</span>
+<span class="c"># | Num OOM:               |           0 |            |</span>
+
+<span class="c"># Level 2: Timeline (in profiler)</span>
+with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+             <span class="f">profile_memory=True</span>) as prof:
+    train_step(model, batch)
+<span class="c"># View in TensorBoard → Memory view</span>
+
+<span class="c"># Level 3: Deep snapshot with allocation stacks</span>
+<span class="f">torch.cuda.memory._record_memory_history(max_entries=100000)</span>
+train_step(model, batch)
+<span class="f">snapshot = torch.cuda.memory._snapshot()</span>
+torch.cuda.memory._record_memory_history(enabled=None)  <span class="c"># stop recording</span>
+
+<span class="c"># Save and visualize</span>
+import pickle
+with open("memory_snapshot.pkl", "wb") as f:
+    pickle.dump(snapshot, f)
+<span class="c"># Upload to https://pytorch.org/memory_viz to see interactive visualization</span>
+<span class="c"># Shows: every allocation with its Python stack trace, lifetime, and size</span></pre>
+
+<div class="ic fix">
+<p class="il">What the memory visualizer reveals that Nsight cannot</p>
+<p>Nsight Systems sees <code>cudaMalloc</code> and <code>cudaFree</code> — the raw CUDA calls. But PyTorch's caching allocator intercepts these. Most PyTorch allocations reuse cached blocks and never call <code>cudaMalloc</code>. The PyTorch memory snapshot shows you: (1) which tensors are alive and why (full stack trace), (2) fragmentation within the caching allocator (blocks that are cached but unusable), (3) peak memory vs current memory, (4) allocation retry count (how many times the allocator had to consolidate blocks). This level of detail is simply invisible to Nsight.</p>
+</div>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c7"><span class="ph"><span class="pn">7</span></span> Profiling distributed training</h2>
+
+<div class="ex"><div class="eh" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="et">DDP and FSDP profiling</span><span class="bg b6">Distributed</span></div><div class="eb">
+<pre><span class="c"># Profile a specific rank (typically rank 0)</span>
+rank = torch.distributed.get_rank()
+
+if rank == 0:
+    prof_context = profile(
+        activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+        schedule=schedule(wait=1, warmup=1, active=3, repeat=1),
+        on_trace_ready=tensorboard_trace_handler("./log/profiler"),
+        record_shapes=True,
+        profile_memory=True,
+    )
+else:
+    <span class="c"># No profiling on other ranks (reduces overhead)</span>
+    prof_context = contextlib.nullcontext()
+
+with prof_context as prof:
+    for step in range(10):
+        train_step(model, batch)
+        if prof is not None:
+            prof.step()</pre>
+
+<h4>What PyTorch Profiler shows for distributed</h4>
+<table class="rt">
+<tr><th>What you see</th><th>How it appears</th><th>Limitation</th></tr>
+<tr><td>NCCL collective ops</td><td><code>nccl:allreduce</code>, <code>nccl:all_gather</code> appear as CPU ops with corresponding CUDA kernels</td><td>You see one rank's view. Can't see cross-rank timing alignment.</td></tr>
+<tr><td>Communication vs compute overlap</td><td>NCCL CUDA kernels should overlap with compute CUDA kernels on the timeline</td><td>Less precise than Nsight Systems for overlap analysis — PyTorch Profiler aggregates at op level, not µs kernel level.</td></tr>
+<tr><td>Gradient bucketing</td><td>DDP shows <code>record_function</code> ranges for each gradient bucket</td><td>Limited detail on NCCL algorithm selection.</td></tr>
+</table>
+
+<div class="co ci"><i class="ti ti-info-circle"></i><div><strong>For serious communication analysis, use Nsight Systems.</strong> PyTorch Profiler shows you that communication is happening, but Nsight Systems shows you the exact timing relationship between NCCL kernels and compute kernels across all GPUs simultaneously. The cross-GPU timeline alignment in Nsight is essential for diagnosing straggler GPUs, communication/compute overlap failures, and NCCL algorithm issues.</div></div>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c8"><span class="ph"><span class="pn">8</span></span> Profiling torch.compile</h2>
+
+<div class="ex"><div class="eh" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="et">Profiling compiled models and Triton kernels</span><span class="bg b4">Compile</span></div><div class="eb">
+<p>When <code>torch.compile</code> is active, the profiler shows fused Triton kernels instead of individual PyTorch ops. This changes how you interpret the output.</p>
+
+<pre><span class="c"># Profile compiled model</span>
+model_compiled = torch.compile(model, mode="max-autotune")
+
+<span class="c"># First run triggers compilation (slow — don't profile this)</span>
+model_compiled(warmup_input)
+
+<span class="c"># Profile steady-state</span>
+with profile(
+    activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+    record_shapes=True,
+    with_stack=True,
+) as prof:
+    for _ in range(3):
+        output = model_compiled(input)
+        loss = criterion(output, target)
+        loss.backward()
+
+print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=20))</pre>
+
+<h4>What changes in the profiler output</h4>
+<table class="rt">
+<tr><th>Without torch.compile</th><th>With torch.compile</th></tr>
+<tr><td>Many individual ops: <code>aten::mm</code>, <code>aten::add</code>, <code>aten::relu</code>, <code>aten::layer_norm</code></td><td>Fewer, larger fused ops: <code>triton_poi_fused_add_relu_0</code>, <code>triton_red_fused_layer_norm_1</code></td></tr>
+<tr><td>Easy to map ops to model code</td><td>Fused kernel names are auto-generated — harder to trace back to source</td></tr>
+<tr><td>Many small CUDA kernels on GPU timeline</td><td>Fewer, larger CUDA kernels (the whole point of compilation)</td></tr>
+<tr><td>High kernel launch overhead visible</td><td>Reduced launch overhead (fewer launches)</td></tr>
+</table>
+
+<pre><span class="c"># Debugging torch.compile with the profiler</span>
+
+<span class="c"># 1. Check for graph breaks (regions that couldn't be compiled)</span>
+import torch._dynamo as dynamo
+dynamo.config.verbose = True
+explanation = dynamo.explain(model)(sample_input)
+print(explanation)
+<span class="c"># Shows: number of graph breaks, reasons, which ops broke the graph</span>
+
+<span class="c"># 2. Compare compiled vs eager in profiler</span>
+<span class="c"># Profile both, compare CUDA kernel count and total GPU time</span>
+<span class="c"># Compiled should have: fewer kernels, less total GPU time, same correctness</span>
+
+<span class="c"># 3. Inspect generated Triton code</span>
+<span class="c"># TORCH_COMPILE_DEBUG=1 python train.py</span>
+<span class="c"># Writes generated code to torch_compile_debug/ directory</span></pre>
+
+<div class="ic warn">
+<p class="il">Profile AFTER compilation, not during</p>
+<p>The first forward pass through a compiled model triggers JIT compilation, which can take 30–120 seconds and dominates the profile. Always run 1–2 warmup iterations before starting the profiler. The <code>schedule(wait=1, warmup=1, ...)</code> pattern handles this if the first iteration triggers compilation.</p>
+</div>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c9"><span class="ph"><span class="pn">9</span></span> Pattern diagnosis</h2>
+
+<div class="ex"><div class="eh" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="et">Six common problems diagnosed with PyTorch Profiler</span><span class="bg b5">Diagnosis</span></div><div class="eb">
+
+<div class="tb">
+<button class="tbn active" onclick="showTab('pd1',this)">CPU bottleneck</button>
+<button class="tbn" onclick="showTab('pd2',this)">Launch overhead</button>
+<button class="tbn" onclick="showTab('pd3',this)">Sync stalls</button>
+<button class="tbn" onclick="showTab('pd4',this)">Memory issues</button>
+<button class="tbn" onclick="showTab('pd5',this)">No Tensor Cores</button>
+<button class="tbn" onclick="showTab('pd6',this)">Comm bottleneck</button>
+</div>
+
+<div class="tp active" id="pd1">
+<h4>1. CPU bottleneck (data loading, preprocessing)</h4>
+<div class="ic warn"><p class="il">What you see in PyTorch Profiler</p>
+<p>TensorBoard Overview shows high "Other" or "CPU compute" percentage (>30%). The Trace view shows long gaps on the CUDA row while the CPU row is busy. Operator table shows high CPU time for <code>DataLoader</code> operations or custom preprocessing functions.</p></div>
+<div class="ic info"><p class="il">What Nsight Systems would show additionally</p>
+<p>The OS Runtime trace would reveal which syscalls are slow (<code>read()</code>, <code>futex()</code>, <code>poll()</code>), distinguishing disk I/O from CPU compute from thread contention. PyTorch Profiler doesn't trace OS-level calls.</p></div>
+<div class="ic fix"><p class="il">Verdict: PyTorch Profiler is sufficient</p>
+<p>PyTorch Profiler identifies the problem (CPU bottleneck). The fix (more workers, GPU augmentation, DALI) doesn't require Nsight-level detail to determine. Use Nsight Systems only if you need to distinguish between disk I/O, CPU compute, and thread contention as the specific CPU sub-bottleneck.</p></div>
+</div>
+
+<div class="tp" id="pd2">
+<h4>2. Kernel launch overhead (too many small ops)</h4>
+<div class="ic warn"><p class="il">What you see in PyTorch Profiler</p>
+<p>Operator table shows hundreds of ops with <1ms CUDA time each, but thousands of calls. Total GPU time is dominated by many tiny ops rather than a few large ones. The GPU kernel view shows many kernels under 10µs.</p></div>
+<div class="ic info"><p class="il">What Nsight Systems would show additionally</p>
+<p>The CUDA API row would be a solid wall of <code>cudaLaunchKernel</code> calls. Power draw trace would show low power despite high time-occupancy. The gap analysis would quantify exactly how much time is lost to inter-kernel gaps.</p></div>
+<div class="ic fix"><p class="il">Verdict: PyTorch Profiler is sufficient for diagnosis, Nsight for quantification</p>
+<p>PyTorch Profiler identifies the pattern (many small ops). The fix is <code>torch.compile</code>. If you want to precisely quantify the launch overhead cost (e.g., "launch gaps account for 35% of iteration time"), Nsight Systems is more accurate.</p></div>
+</div>
+
+<div class="tp" id="pd3">
+<h4>3. Synchronization stalls (.item(), .cpu())</h4>
+<div class="ic warn"><p class="il">What you see in PyTorch Profiler</p>
+<p>Operator table shows <code>aten::item</code> or <code>aten::_local_scalar_dense</code> with very high CUDA time (these ops force a GPU→CPU sync). With <code>with_stack=True</code>, you can see exactly which line of Python code triggered the sync.</p></div>
+<div class="ic info"><p class="il">What Nsight Systems would show additionally</p>
+<p>The CUDA API row would show <code>cudaStreamSynchronize</code> or <code>cudaMemcpyAsync D2H</code>. The GPU kernel row would show a gap during the sync. The visual pattern is more dramatic in Nsight but the information is the same.</p></div>
+<div class="ic fix"><p class="il">Verdict: PyTorch Profiler is better here</p>
+<p>PyTorch Profiler with <code>with_stack=True</code> tells you the exact Python line that called <code>.item()</code>. Nsight Systems only shows the CUDA API call — you'd have to manually trace it back to Python code. This is a case where PyTorch Profiler is strictly more useful.</p></div>
+</div>
+
+<div class="tp" id="pd4">
+<h4>4. Memory issues (OOM, fragmentation, leaks)</h4>
+<div class="ic warn"><p class="il">What you see in PyTorch Profiler</p>
+<p>Memory view shows peak usage, allocation timeline, and per-op memory consumption. <code>torch.cuda.memory_summary()</code> shows "Num alloc retries" (fragmentation) and "Num OOM" events. The deep snapshot at <code>pytorch.org/memory_viz</code> shows every live tensor with its allocation stack.</p></div>
+<div class="ic info"><p class="il">What Nsight Systems would show additionally</p>
+<p>Nsight sees <code>cudaMalloc</code>/<code>cudaFree</code> calls that bypass the caching allocator — useful for detecting when the allocator can't serve a request and falls back to CUDA. But it doesn't understand the allocator's internal state (cached blocks, fragmentation).</p></div>
+<div class="ic fix"><p class="il">Verdict: PyTorch Profiler is strictly better for memory</p>
+<p>For PyTorch memory issues, always use PyTorch's built-in memory tools. They understand the caching allocator, tensor lifetimes, and Python stack traces. Nsight only sees the raw CUDA allocations, which are a tiny fraction of PyTorch's actual allocation activity.</p></div>
+</div>
+
+<div class="tp" id="pd5">
+<h4>5. No Tensor Core utilization</h4>
+<div class="ic warn"><p class="il">What you see in PyTorch Profiler</p>
+<p>TensorBoard GPU kernel view has a "TC eligible" column. Operator table with <code>record_shapes=True</code> shows GEMM dimensions — you can check alignment manually. Kernel names may contain <code>sgemm</code> (FP32, no TC) vs <code>h884gemm</code> (TC).</p></div>
+<div class="ic info"><p class="il">What Nsight Compute would show additionally</p>
+<p>Direct measurement of Tensor Core pipe utilization as a percentage. Roofline analysis showing where the kernel sits relative to the TC ceiling. Instruction mix showing FMA vs Tensor Core pipe usage. This is definitive — no heuristic guessing.</p></div>
+<div class="ic fix"><p class="il">Verdict: PyTorch Profiler for detection, Nsight Compute for confirmation</p>
+<p>PyTorch Profiler is usually sufficient: check shapes for alignment (÷8), check kernel names, verify autocast is active. Use Nsight Compute only when you're sure autocast is on, shapes are aligned, but you suspect the GEMM still isn't hitting TCs (e.g., a custom kernel or unusual cuBLAS path).</p></div>
+</div>
+
+<div class="tp" id="pd6">
+<h4>6. Communication bottleneck</h4>
+<div class="ic warn"><p class="il">What you see in PyTorch Profiler</p>
+<p>TensorBoard Overview shows high "Communication" percentage (>20%). Operator table shows <code>nccl:allreduce</code> or <code>nccl:all_gather</code> with significant CUDA time. Trace view shows NCCL kernels serialized after backward, not overlapped.</p></div>
+<div class="ic info"><p class="il">What Nsight Systems would show additionally</p>
+<p>Cross-GPU timeline: see all 8 GPUs simultaneously, identify stragglers, measure exact overlap of NCCL kernels with compute. NCCL kernel names reveal algorithm selection (Ring vs Tree). Power trace correlation across GPUs shows load imbalance. The multi-GPU view is Nsight's killer feature for distributed profiling.</p></div>
+<div class="ic fix"><p class="il">Verdict: PyTorch Profiler for detection, Nsight Systems for diagnosis</p>
+<p>PyTorch Profiler tells you "communication is 20% of step time." Nsight Systems tells you "NCCL AllReduce on GPU 3 starts 15ms after GPU 0 because GPU 3's backward is slower due to thermal throttling, and the Ring algorithm is suboptimal for this message size — Tree would be 30% faster." If you just need to know whether communication is a problem, PyTorch Profiler is fine. If you need to fix it, Nsight Systems is required.</p></div>
+</div>
+
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c10"><span class="ph"><span class="pn">10</span></span> Decision tree: which tool when</h2>
+
+<div class="ex"><div class="eh" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="et">The systematic profiling decision tree</span><span class="bg b1">Decision</span></div><div class="eb">
+
+<table class="rt">
+<tr><th>Question</th><th>Tool</th><th>Why</th></tr>
+<tr><td>"Which PyTorch ops are consuming the most time?"</td><td><strong>PyTorch Profiler</strong></td><td>Operator table with PyTorch-native op names, shapes, call counts. Nsight doesn't know about aten ops.</td></tr>
+<tr><td>"Where is the GPU idle and why?"</td><td><strong>Nsight Systems</strong></td><td>µs-precision GPU kernel timeline with gap analysis. PyTorch Profiler's trace is less precise for gap measurement.</td></tr>
+<tr><td>"Why is this specific GEMM kernel slow?"</td><td><strong>Nsight Compute</strong></td><td>Roofline, warp stalls, occupancy, Tensor Core pipe utilization. Neither PyTorch Profiler nor Nsight Systems can answer kernel-internal questions.</td></tr>
+<tr><td>"What is using all the GPU memory?"</td><td><strong>PyTorch Profiler</strong> (memory snapshot)</td><td>Understands the caching allocator, shows tensor-level allocations with Python stack traces.</td></tr>
+<tr><td>"Is communication overlapping with compute?"</td><td><strong>Nsight Systems</strong></td><td>Cross-GPU timeline with simultaneous kernel visibility. PyTorch Profiler only sees one rank.</td></tr>
+<tr><td>"Which line of Python code launched this slow op?"</td><td><strong>PyTorch Profiler</strong> (<code>with_stack=True</code>)</td><td>Python call stacks per op. Nsight has no Python-level visibility.</td></tr>
+<tr><td>"Is torch.compile actually fusing my ops?"</td><td><strong>PyTorch Profiler</strong></td><td>Kernel count reduction, Triton kernel names. Plus <code>dynamo.explain()</code> for graph breaks.</td></tr>
+<tr><td>"Quick sanity check — is the GPU busy?"</td><td><strong>nvidia-smi</strong> or <strong>PyTorch Profiler Overview</strong></td><td>Either works. nvidia-smi for 2-second check, PyTorch Profiler Overview for per-step breakdown.</td></tr>
+<tr><td>"I'm on a restricted cloud VM and can't install NVIDIA tools"</td><td><strong>PyTorch Profiler</strong></td><td>Built into PyTorch — no additional installation, no root access needed.</td></tr>
+<tr><td>"I need to compare two training configurations rigorously"</td><td><strong>Nsight Systems</strong> + <strong>Nsight Compute</strong></td><td>Nsight's A/B diff mode and deterministic counter collection give more rigorous comparisons than PyTorch Profiler's statistical traces.</td></tr>
+</table>
+
+<div class="co ct"><i class="ti ti-bulb"></i><div><strong>The recommended workflow:</strong> (1) Start with <strong>PyTorch Profiler</strong> — it answers most questions, requires no install, and gives you Python-level insight. (2) If you see GPU idle gaps or communication issues, switch to <strong>Nsight Systems</strong> for µs-precision timeline analysis. (3) If you find a specific kernel that's underperforming, use <strong>Nsight Compute</strong> for hardware counter analysis. Most investigations stop at step 1 or 2.</div></div>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c11"><span class="ph"><span class="pn">11</span></span> Cross-tool workflows</h2>
+
+<div class="ex"><div class="eh" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="et">Combining PyTorch Profiler with Nsight</span><span class="bg b7">Workflow</span></div><div class="eb">
+
+<h4>Workflow 1: PyTorch Profiler → Nsight Systems</h4>
+<pre><span class="c"># Step 1: PyTorch Profiler identifies "aten::linear accounts for 40% of GPU time"</span>
+<span class="c"># Step 2: Add record_function markers around the hot region</span>
+with torch.profiler.record_function("hot_linear_block"):
+    x = self.mlp(x)
+
+<span class="c"># Step 3: Run Nsight Systems — the record_function emits NVTX markers</span>
+<span class="c"># nsys profile --trace=cuda,nvtx ... python train.py</span>
+<span class="c"># Step 4: In Nsight GUI, filter by the NVTX range to zoom into the hot region</span>
+<span class="c"># Now you see the exact GPU kernels, gaps, and timing at µs resolution</span></pre>
+
+<h4>Workflow 2: PyTorch Profiler → Nsight Compute</h4>
+<pre><span class="c"># Step 1: PyTorch Profiler shows shapes: aten::mm [bs, 4096] × [4096, 11008]</span>
+<span class="c"># Step 2: Identify the CUDA kernel name from PyTorch Profiler GPU kernel view</span>
+<span class="c"># e.g., "sm90_xmma_gemm_bf16bf16_bf16f32_f32_tn_n_tilesize256x128x64..."</span>
+<span class="c"># Step 3: Profile that specific kernel in Nsight Compute</span>
+<span class="c"># ncu --set full --kernel-name "regex:xmma_gemm_bf16" \</span>
+<span class="c">#     --launch-skip 200 --launch-count 3 python train.py</span>
+<span class="c"># Step 4: Check roofline, Tensor Core pipe, occupancy</span></pre>
+
+<h4>Workflow 3: All three tools together (deep investigation)</h4>
+<table class="rt">
+<tr><th>Phase</th><th>Tool</th><th>Action</th><th>Outcome</th></tr>
+<tr><td>1. Survey</td><td>PyTorch Profiler</td><td>Schedule-based capture, TensorBoard Overview</td><td>Identify top-3 time consumers, GPU utilization %, memory usage</td></tr>
+<tr><td>2. Timeline</td><td>Nsight Systems</td><td>Capture 3 iterations with NVTX from record_function</td><td>Find GPU idle gaps, measure communication overlap, check for stragglers</td></tr>
+<tr><td>3. Kernel</td><td>Nsight Compute</td><td>Profile the #1 kernel from phase 1</td><td>Determine if compute- or memory-bound, check Tensor Core usage, occupancy</td></tr>
+<tr><td>4. Fix</td><td>—</td><td>Apply targeted fix (compile, precision, layout, fusion)</td><td>—</td></tr>
+<tr><td>5. Verify</td><td>PyTorch Profiler</td><td>Re-profile to confirm improvement</td><td>Compare step time, op distribution, GPU utilization</td></tr>
+</table>
+</div></div>
+
+<div class="ex"><div class="eh" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="et">Exporting from PyTorch Profiler to Nsight-compatible formats</span><span class="bg b7">Workflow</span></div><div class="eb">
+<pre><span class="c"># Export Chrome Trace (viewable in Perfetto or Chrome)</span>
+prof.export_chrome_trace("trace.json")
+
+<span class="c"># Export raw events for custom analysis</span>
+events = prof.key_averages()
+for e in events:
+    print(f"{e.key}: CPU={e.cpu_time_total/1000:.1f}ms, "
+          f"CUDA={e.cuda_time_total/1000:.1f}ms, "
+          f"calls={e.count}, FLOPs={e.flops}")
+
+<span class="c"># Export stacks for flamegraph visualization</span>
+prof.export_stacks("profiler_stacks.txt", metric="self_cuda_time_total")
+<span class="c"># Then use flamegraph.pl to generate an SVG flamegraph</span>
+<span class="c"># cat profiler_stacks.txt | flamegraph.pl > flamegraph.svg</span>
+
+<span class="c"># Emit NVTX for simultaneous Nsight Systems capture</span>
+<span class="c"># Just add emit_nvtx to your existing profile context:</span>
+with torch.autograd.profiler.emit_nvtx():
+    with profile(...) as prof:
+        train_step(model, batch)
+<span class="c"># Now the same run produces both a PyTorch Profiler trace AND NVTX markers</span>
+<span class="c"># for Nsight Systems — if you're running under nsys profile simultaneously</span></pre>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c12"><span class="ph"><span class="pn">12</span></span> Quick reference</h2>
+
+<div class="ex"><div class="eh" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="et">PyTorch Profiler API cheat sheet</span><span class="bg b7">Reference</span></div><div class="eb">
+<table class="rt">
+<tr><th>API</th><th>Purpose</th></tr>
+<tr><td><code>torch.profiler.profile()</code></td><td>Main profiler context manager</td></tr>
+<tr><td><code>ProfilerActivity.CPU</code></td><td>Trace CPU ops (Python + PyTorch dispatch)</td></tr>
+<tr><td><code>ProfilerActivity.CUDA</code></td><td>Trace CUDA kernels and memcpy</td></tr>
+<tr><td><code>schedule(wait, warmup, active, repeat)</code></td><td>Profiling schedule — control which steps are profiled</td></tr>
+<tr><td><code>prof.step()</code></td><td>Signal end of an iteration (required for schedule)</td></tr>
+<tr><td><code>tensorboard_trace_handler(dir)</code></td><td>Auto-export traces for TensorBoard</td></tr>
+<tr><td><code>prof.export_chrome_trace(path)</code></td><td>Export to Chrome Trace JSON</td></tr>
+<tr><td><code>prof.key_averages()</code></td><td>Aggregate stats by operator name</td></tr>
+<tr><td><code>.table(sort_by, row_limit)</code></td><td>Print formatted table. Sort by: <code>cpu_time_total</code>, <code>cuda_time_total</code>, <code>self_cpu_time_total</code>, <code>self_cuda_time_total</code>, <code>cpu_memory_usage</code>, <code>cuda_memory_usage</code></td></tr>
+<tr><td><code>prof.export_stacks(path, metric)</code></td><td>Export for flamegraph visualization</td></tr>
+<tr><td><code>torch.profiler.record_function(name)</code></td><td>Custom annotation (visible in both PyTorch Profiler and NVTX)</td></tr>
+<tr><td><code>torch.cuda.memory_summary()</code></td><td>Quick memory snapshot (no profiler needed)</td></tr>
+<tr><td><code>torch.cuda.memory._record_memory_history()</code></td><td>Deep memory allocation tracking with stacks</td></tr>
+<tr><td><code>torch.cuda.memory._snapshot()</code></td><td>Capture memory snapshot for pytorch.org/memory_viz</td></tr>
+<tr><td><code>torch.autograd.profiler.emit_nvtx()</code></td><td>Emit NVTX markers for Nsight Systems compatibility</td></tr>
+</table>
+</div></div>
+
+<div class="ex"><div class="eh" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="et">Complete comparison matrix</span><span class="bg b7">Reference</span></div><div class="eb">
+<table class="rt">
+<tr><th>Scenario</th><th>Best tool</th><th>Runner-up</th><th>Why</th></tr>
+<tr><td>First profiling pass on any workload</td><td>PyTorch Profiler</td><td>—</td><td>Zero install, Python-native, 80% of answers</td></tr>
+<tr><td>Identifying slow PyTorch operators</td><td>PyTorch Profiler</td><td>—</td><td>Only tool that knows aten op names and shapes</td></tr>
+<tr><td>Tracing an op back to Python source code</td><td>PyTorch Profiler</td><td>—</td><td><code>with_stack=True</code> gives full Python call stacks</td></tr>
+<tr><td>Diagnosing OOM or memory fragmentation</td><td>PyTorch Profiler</td><td>—</td><td>Understands caching allocator internals</td></tr>
+<tr><td>Profiling torch.compile / graph breaks</td><td>PyTorch Profiler</td><td>—</td><td><code>dynamo.explain()</code> + compiled kernel visibility</td></tr>
+<tr><td>Measuring GPU idle gaps precisely</td><td>Nsight Systems</td><td>PyTorch Profiler</td><td>µs-precision kernel timeline with gap analysis tool</td></tr>
+<tr><td>Communication/compute overlap analysis</td><td>Nsight Systems</td><td>PyTorch Profiler</td><td>Cross-GPU timeline with NCCL kernel alignment</td></tr>
+<tr><td>Multi-GPU straggler detection</td><td>Nsight Systems</td><td>—</td><td>Only tool that shows all GPUs on one timeline</td></tr>
+<tr><td>Power/thermal correlation</td><td>Nsight Systems</td><td>nvidia-smi</td><td>GPU metrics traces overlaid on kernel timeline</td></tr>
+<tr><td>OS-level bottleneck (disk I/O, futex)</td><td>Nsight Systems</td><td>—</td><td>OS Runtime trace (PyTorch Profiler doesn't trace syscalls)</td></tr>
+<tr><td>NCCL algorithm analysis</td><td>Nsight Systems</td><td>—</td><td>NCCL kernel names encode Ring/Tree/CollNet</td></tr>
+<tr><td>Kernel roofline analysis</td><td>Nsight Compute</td><td>—</td><td>Only tool with per-kernel FLOP/byte roofline</td></tr>
+<tr><td>Tensor Core pipe utilization (definitive)</td><td>Nsight Compute</td><td>PyTorch Profiler (heuristic)</td><td>Direct hardware counter vs kernel name guessing</td></tr>
+<tr><td>Warp stall analysis</td><td>Nsight Compute</td><td>—</td><td>Only tool that measures warp stall reasons</td></tr>
+<tr><td>Occupancy and register pressure</td><td>Nsight Compute</td><td>—</td><td>Occupancy calculator with limiter identification</td></tr>
+<tr><td>Kernel A/B comparison (baseline vs optimized)</td><td>Nsight Compute</td><td>—</td><td>Side-by-side hardware counter diff</td></tr>
+<tr><td>Custom CUDA/Triton kernel optimization</td><td>Nsight Compute</td><td>—</td><td>Source-level counter mapping (with -lineinfo)</td></tr>
+</table>
+</div></div>
+
+
+<div class="sum">
+<p><strong style="color:var(--tx)">The profiling mental model:</strong> Think of the three tools as a zoom lens. <strong>PyTorch Profiler</strong> is the wide-angle view — it shows the full picture at the Python/operator level, answers "what's slow?" and "where's the memory going?" with zero setup friction. <strong>Nsight Systems</strong> is the standard zoom — it shows the system-level timeline at µs precision, answers "why is the GPU idle?" and "is communication overlapped?" when PyTorch Profiler isn't detailed enough. <strong>Nsight Compute</strong> is the microscope — it shows a single kernel's hardware utilization, answers "why is this kernel at 50% of peak?" when you've already identified the bottleneck kernel. Start wide, zoom in only as needed. Most problems are visible at the PyTorch Profiler level.</p>
+</div>
+
+</div>
+<script>
+function toggle(el){el.classList.toggle('open');el.nextElementSibling.classList.toggle('open')}
+function showTab(id,btn){
+var p=btn.closest('.eb')||document;
+p.querySelectorAll('.tp').forEach(function(t){t.classList.remove('active')});
+p.querySelectorAll('.tbn').forEach(function(b){b.classList.remove('active')});
+document.getElementById(id).classList.add('active');
+btn.classList.add('active');
+}
+</script>
+</body>
+</html>

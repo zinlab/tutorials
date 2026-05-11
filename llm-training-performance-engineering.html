@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LLM training performance engineering — the complete guide</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.6.0/dist/tabler-icons.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,wght@0,400;0,600;1,400&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+--bg:#FAFAF7;--bg2:#F0EFEB;--bg3:#E6E5E0;--card:#fff;
+--tx:#1C1C1A;--tx2:#6B6B65;--tx3:#9C9C95;
+--bdr:rgba(0,0,0,0.08);--bdr2:rgba(0,0,0,0.15);
+--acc:#1B4D6E;--acc-bg:#E8F0F6;--acc-tx:#0D3B56;
+--warn:#8B6914;--warn-bg:#FFF8E1;--warn-tx:#5C4400;
+--err:#9B2C2C;--err-bg:#FFF0F0;--err-tx:#6B1A1A;
+--info:#1A5276;--info-bg:#E8F4FD;--info-tx:#0D3B56;
+--green:#2D5A27;--green-bg:#E8F0E7;--green-tx:#1E3D1A;
+--blue:#3B82F6;--gre:#22C55E;--amber:#F59E0B;--red:#EF4444;--purple:#8B5CF6;--teal:#14B8A6;--pink:#EC4899;--gray:#94A3B8;--orange:#F97316;--cyan:#06B6D4;
+--font:'Instrument Sans',sans-serif;--serif:'Source Serif 4',Georgia,serif;--mono:'JetBrains Mono','Consolas',monospace;
+--radius:8px;--radius-lg:12px;
+}
+@media(prefers-color-scheme:dark){:root{
+--bg:#1A1A18;--bg2:#242422;--bg3:#2E2E2B;--card:#222220;
+--tx:#E8E8E4;--tx2:#9C9C95;--tx3:#6B6B65;
+--bdr:rgba(255,255,255,0.08);--bdr2:rgba(255,255,255,0.15);
+--acc:#60A5FA;--acc-bg:#1A2836;--acc-tx:#93C5FD;
+--warn:#D4A529;--warn-bg:#2E2610;--warn-tx:#E8C556;
+--err:#F87171;--err-bg:#2E1A1A;--err-tx:#FCA5A5;
+--info:#60A5FA;--info-bg:#1A2836;--info-tx:#93C5FD;
+--green:#6ABF62;--green-bg:#1E2E1C;--green-tx:#A0D89A;
+}}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:var(--font);background:var(--bg);color:var(--tx);line-height:1.72;font-size:15px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:860px;margin:0 auto;padding:2.5rem 1.5rem 6rem}
+h1{font-family:var(--serif);font-size:32px;font-weight:600;line-height:1.25;margin:0 0 8px;letter-spacing:-0.02em}
+.hero-sub{font-size:15px;color:var(--tx2);margin:0 0 2.5rem;max-width:660px;line-height:1.65}
+h2{font-size:21px;font-weight:600;margin:3rem 0 1rem;padding-top:1.5rem;border-top:1.5px solid var(--bdr);letter-spacing:-0.01em}
+h2:first-of-type{border-top:none;padding-top:0}
+h3{font-size:16px;font-weight:600;margin:1.5rem 0 0.5rem}
+h4{font-size:14px;font-weight:600;margin:1.2rem 0 0.4rem}
+p{margin:0 0 0.85rem}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+code{font-family:var(--mono);font-size:12.5px;background:var(--bg2);padding:2px 6px;border-radius:4px;word-break:break-word}
+pre{font-family:var(--mono);font-size:12.5px;line-height:1.65;background:var(--bg2);border:1px solid var(--bdr);border-radius:var(--radius);padding:16px 20px;overflow-x:auto;margin:0 0 1rem;white-space:pre}
+pre .flag{color:var(--acc)}
+pre .comment{color:var(--tx3);font-style:italic}
+ul,ol{margin:0 0 1rem;padding-left:1.4rem}
+li{margin:0 0 0.3rem}
+
+/* TOC */
+.toc{background:var(--card);border:1px solid var(--bdr);border-radius:var(--radius-lg);padding:20px 24px;margin:0 0 2.5rem}
+.toc-title{font-size:13px;font-weight:600;color:var(--tx2);text-transform:uppercase;letter-spacing:0.8px;margin:0 0 10px}
+.toc-grid{display:grid;grid-template-columns:1fr 1fr;gap:3px 24px;list-style:none;padding:0}
+.toc-grid a{font-size:13.5px;color:var(--tx);display:flex;align-items:center;gap:6px;padding:4px 0;transition:color 0.15s}
+.toc-grid a:hover{color:var(--acc);text-decoration:none}
+.toc-grid .ti{font-size:14px;color:var(--tx3)}
+@media(max-width:600px){.toc-grid{grid-template-columns:1fr}}
+
+/* Expandable */
+.ex{border:1px solid var(--bdr);border-radius:var(--radius-lg);margin:0 0 10px;background:var(--card);overflow:hidden}
+.ex-h{display:flex;align-items:center;gap:10px;padding:14px 18px;cursor:pointer;user-select:none;transition:background 0.15s}
+.ex-h:hover{background:var(--bg2)}
+.ex-h .ti{font-size:18px;color:var(--tx3);transition:transform 0.25s}
+.ex-h.open .ti{transform:rotate(90deg)}
+.ex-t{font-size:15px;font-weight:500;flex:1}
+.ex-b{font-size:11px;font-weight:500;padding:3px 10px;border-radius:20px;text-transform:uppercase;letter-spacing:0.5px}
+.b-hw{background:var(--info-bg);color:var(--info-tx)}
+.b-mem{background:var(--err-bg);color:var(--err-tx)}
+.b-dist{background:#F0E6FF;color:#5B21B6}
+.b-data{background:var(--green-bg);color:var(--green-tx)}
+.b-opt{background:var(--warn-bg);color:var(--warn-tx)}
+.b-prec{background:var(--acc-bg);color:var(--acc-tx)}
+.b-prof{background:var(--bg3);color:var(--tx2)}
+.b-kern{background:#FFE4E6;color:#9F1239}
+.b-arch{background:#E0F2FE;color:#075985}
+.ex-bd{display:none;padding:0 18px 18px;animation:fadeIn 0.2s ease}
+.ex-bd.open{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+
+/* Tables */
+.rt{width:100%;border-collapse:collapse;font-size:13px;margin:12px 0 16px}
+.rt th{text-align:left;font-weight:500;padding:8px 12px;border-bottom:2px solid var(--bdr2);color:var(--tx2);font-size:12px;text-transform:uppercase;letter-spacing:0.5px}
+.rt td{padding:8px 12px;border-bottom:1px solid var(--bdr);vertical-align:top;line-height:1.55}
+.rt tr:last-child td{border-bottom:none}
+
+/* Issue cards */
+.ic{border-left:3px solid;border-radius:0 var(--radius) var(--radius) 0;padding:14px 18px;margin:10px 0}
+.ic.warn{border-color:var(--amber);background:var(--warn-bg)}
+.ic.info{border-color:var(--blue);background:var(--info-bg)}
+.ic.fix{border-color:var(--gre);background:var(--green-bg)}
+.ic.err{border-color:var(--red);background:var(--err-bg)}
+.ic .ic-l{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin:0 0 4px}
+.ic.warn .ic-l{color:var(--warn-tx)}.ic.info .ic-l{color:var(--info-tx)}.ic.fix .ic-l{color:var(--green-tx)}.ic.err .ic-l{color:var(--err-tx)}
+.ic p{margin:0;font-size:14px;line-height:1.6}
+
+/* Callouts */
+.co{display:flex;gap:10px;padding:14px 16px;border-radius:var(--radius);margin:12px 0 16px;font-size:14px;line-height:1.6}
+.co .ti{font-size:18px;flex-shrink:0;margin-top:2px}
+.co-i{background:var(--info-bg);color:var(--info-tx)}
+.co-w{background:var(--warn-bg);color:var(--warn-tx)}
+.co-t{background:var(--acc-bg);color:var(--acc-tx)}
+.co-g{background:var(--green-bg);color:var(--green-tx)}
+
+/* Metric grids */
+.mg{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:12px 0 16px}
+.mc{background:var(--bg2);border-radius:var(--radius);padding:12px 14px}
+.mc-l{font-size:11px;color:var(--tx3);text-transform:uppercase;letter-spacing:0.5px;margin:0 0 2px}
+.mc-v{font-size:18px;font-weight:500;margin:0}
+
+/* Tabs */
+.tb{display:flex;gap:4px;flex-wrap:wrap}
+.tbn{font-family:var(--font);font-size:13px;padding:8px 14px;border:1px solid var(--bdr);border-bottom:none;border-radius:var(--radius) var(--radius) 0 0;background:var(--bg2);color:var(--tx2);cursor:pointer;transition:all 0.15s;font-weight:500}
+.tbn:hover{background:var(--bg3)}
+.tbn.active{background:var(--card);color:var(--tx);border-color:var(--bdr);position:relative;z-index:1}
+.tp{display:none;border:1px solid var(--bdr);border-radius:0 var(--radius) var(--radius) var(--radius);background:var(--card);padding:20px;margin:0 0 16px;position:relative;top:-1px}
+.tp.active{display:block}
+
+/* Phase marker */
+.ph{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.8px;color:var(--tx3);margin:0 0 8px}
+.ph-n{width:24px;height:24px;border-radius:50%;background:var(--acc);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:12px}
+
+/* Formula blocks */
+.formula{background:var(--bg2);border:1px solid var(--bdr);border-radius:var(--radius);padding:14px 20px;margin:12px 0 16px;font-family:var(--mono);font-size:13px;line-height:1.8;overflow-x:auto}
+.formula .label{color:var(--tx3);font-size:11px;text-transform:uppercase;letter-spacing:0.5px}
+.formula .val{color:var(--acc);font-weight:500}
+
+/* Bar visualizations */
+.bar-row{display:flex;align-items:center;gap:10px;margin:0 0 5px}
+.bar-label{font-family:var(--mono);font-size:11px;color:var(--tx2);width:130px;flex-shrink:0;text-align:right}
+.bar-track{flex:1;height:18px;background:var(--bg);border-radius:3px;overflow:hidden;border:1px solid var(--bdr)}
+.bar-fill{height:100%;border-radius:2px;display:flex;align-items:center;padding:0 6px;font-size:10px;font-weight:500;color:#fff;white-space:nowrap}
+
+/* Summary */
+.sum{margin-top:3rem;padding:20px;background:var(--bg2);border-radius:var(--radius-lg);font-size:14px;color:var(--tx2);line-height:1.7}
+.sum p{margin:0}
+
+/* Timeline diagrams */
+.tl-viz{background:var(--bg2);border-radius:var(--radius);padding:16px;margin:12px 0 16px;overflow-x:auto}
+.tl-row{display:flex;align-items:center;margin:0 0 5px;min-width:500px}
+.tl-row:last-child{margin:0}
+.tl-lb{font-family:var(--mono);font-size:10px;color:var(--tx2);width:90px;flex-shrink:0;text-align:right;padding-right:8px}
+.tl-tk{flex:1;height:20px;background:var(--bg);border-radius:3px;position:relative;overflow:hidden;border:1px solid var(--bdr)}
+.tl-bl{position:absolute;top:2px;height:16px;border-radius:2px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:8px;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 2px}
+.tl-cap{font-size:12px;color:var(--tx2);margin:8px 0 0;text-align:center;font-style:italic}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>LLM training performance engineering</h1>
+<p class="hero-sub">Everything a performance engineer needs to know to train large language models efficiently with PyTorch — from GPU architecture through distributed systems to kernel-level optimization.</p>
+
+<nav class="toc">
+<p class="toc-title">12 chapters</p>
+<ol class="toc-grid">
+<li><a href="#c1"><i class="ti ti-cpu" aria-hidden="true"></i> Hardware foundations</a></li>
+<li><a href="#c2"><i class="ti ti-building-arch" aria-hidden="true"></i> Transformer anatomy</a></li>
+<li><a href="#c3"><i class="ti ti-calculator" aria-hidden="true"></i> Memory math</a></li>
+<li><a href="#c4"><i class="ti ti-percentage" aria-hidden="true"></i> Numerical precision</a></li>
+<li><a href="#c5"><i class="ti ti-database" aria-hidden="true"></i> Data pipeline</a></li>
+<li><a href="#c6"><i class="ti ti-brain" aria-hidden="true"></i> Memory optimization</a></li>
+<li><a href="#c7"><i class="ti ti-network" aria-hidden="true"></i> Distributed training</a></li>
+<li><a href="#c8"><i class="ti ti-arrows-exchange" aria-hidden="true"></i> Communication</a></li>
+<li><a href="#c9"><i class="ti ti-flame" aria-hidden="true"></i> Kernel optimization</a></li>
+<li><a href="#c10"><i class="ti ti-adjustments-alt" aria-hidden="true"></i> Optimizer efficiency</a></li>
+<li><a href="#c11"><i class="ti ti-chart-line" aria-hidden="true"></i> Throughput engineering</a></li>
+<li><a href="#c12"><i class="ti ti-search" aria-hidden="true"></i> Profiling workflow</a></li>
+</ol>
+</nav>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- CHAPTER 1 -->
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c1"><span class="ph"><span class="ph-n">1</span></span> Hardware foundations</h2>
+<p>Every optimization decision flows from the hardware. You must know the compute, memory, and interconnect ceilings to judge whether your training run is efficient.</p>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">H100 SXM specifications and what they mean</span><span class="ex-b b-hw">Hardware</span></div><div class="ex-bd">
+<table class="rt">
+<tr><th>Spec</th><th>Value</th><th>Performance implication</th></tr>
+<tr><td>BF16 Tensor Core TFLOP/s</td><td>990</td><td>Peak throughput for matrix multiply. All linear layers should target this. If your GEMMs hit 80%+ (790+ TFLOP/s), you're doing well.</td></tr>
+<tr><td>FP8 (E4M3) Tensor Core</td><td>1,979 TFLOP/s</td><td>2× BF16. Requires Transformer Engine and careful loss scaling. The next frontier beyond BF16 training.</td></tr>
+<tr><td>FP32 CUDA Core</td><td>67 TFLOP/s</td><td>~15× slower than BF16 Tensor Core. Any GEMM running in FP32 is leaving 93% of peak performance on the table.</td></tr>
+<tr><td>HBM3 capacity</td><td>80 GB</td><td>Sets the upper bound on model + optimizer + activation memory per GPU. A 7B parameter model in BF16 is ~14 GB of weights alone.</td></tr>
+<tr><td>HBM3 bandwidth</td><td>3.35 TB/s</td><td>Determines throughput for memory-bound kernels (element-wise, reductions, norm layers). 42 bytes/FLOP at BF16 peak — below this arithmetic intensity, you're memory-bound.</td></tr>
+<tr><td>L2 cache</td><td>50 MB</td><td>FlashAttention and tiled algorithms exploit this heavily. Working sets that fit in L2 avoid HBM round-trips.</td></tr>
+<tr><td>SM count</td><td>132</td><td>Sets the parallelism floor — you need at least 132 thread blocks to fill the GPU. Small batch sizes can leave SMs idle.</td></tr>
+<tr><td>NVLink 4.0</td><td>900 GB/s bidirectional</td><td>18 links. Critical for multi-GPU collective communication (AllReduce in DDP, AllGather/ReduceScatter in FSDP). ~7× faster than PCIe Gen5.</td></tr>
+<tr><td>PCIe Gen5</td><td>128 GB/s bidirectional</td><td>Host ↔ device data transfer. Relevant for data loading and CPU offloading. Not for GPU-to-GPU communication on NVLink nodes.</td></tr>
+<tr><td>TDP</td><td>700 W</td><td>Maximum power draw. Power is the best proxy for real GPU utilization — more informative than nvidia-smi's GPU-Util %.</td></tr>
+</table>
+
+<h4>The key ratios to internalize</h4>
+<div class="formula">
+<span class="label">Arithmetic intensity threshold (BF16)</span><br>
+<span class="val">990 TFLOP/s ÷ 3.35 TB/s = 295 FLOP/byte</span><br><br>
+<span class="label">This means:</span><br>
+If a kernel does fewer than 295 FLOPs per byte loaded from HBM, it's memory-bound.<br>
+If it does more, it's compute-bound.<br><br>
+<span class="label">Typical arithmetic intensities:</span><br>
+Large GEMM (M=4096, N=4096, K=4096, BF16):  <span class="val">~2048 FLOP/byte → compute-bound ✓</span><br>
+Small GEMM (M=32, N=4096, K=4096, BF16):    <span class="val">~64 FLOP/byte → memory-bound ✗</span><br>
+Element-wise ReLU:                            <span class="val">~0.5 FLOP/byte → heavily memory-bound</span><br>
+LayerNorm:                                    <span class="val">~5 FLOP/byte → memory-bound</span><br>
+Softmax:                                      <span class="val">~4 FLOP/byte → memory-bound</span>
+</div>
+
+<div class="co co-t"><i class="ti ti-bulb"></i><div><strong>The fundamental insight:</strong> In LLM training, GEMMs (from linear layers) dominate total FLOP count and should be compute-bound. Everything else (norm layers, activations, dropout, softmax) is memory-bound. The performance engineer's job is to: (1) ensure GEMMs actually hit the Tensor Core ceiling, and (2) fuse everything else to minimize HBM traffic.</div></div>
+</div></div>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">Multi-node interconnect: NVLink, NVSwitch, InfiniBand</span><span class="ex-b b-hw">Hardware</span></div><div class="ex-bd">
+<table class="rt">
+<tr><th>Interconnect</th><th>Scope</th><th>Bandwidth</th><th>Latency</th><th>Used for</th></tr>
+<tr><td><strong>NVLink 4.0</strong></td><td>GPU ↔ GPU (same node)</td><td>900 GB/s bidirectional</td><td>~1 μs</td><td>Tensor parallelism AllReduce, FSDP AllGather within a node</td></tr>
+<tr><td><strong>NVSwitch</strong></td><td>All-to-all within 8 GPUs</td><td>Full bisection bandwidth</td><td>~1 μs</td><td>Enables any GPU to communicate with any other at full NVLink speed. Non-blocking crossbar.</td></tr>
+<tr><td><strong>InfiniBand NDR</strong></td><td>Node ↔ node (across network)</td><td>400 Gb/s (50 GB/s) per port, typically 8 ports/node</td><td>~1–5 μs</td><td>Data parallelism gradient sync, pipeline parallelism micro-batch transfer across nodes</td></tr>
+<tr><td><strong>RoCE (RDMA over Ethernet)</strong></td><td>Node ↔ node</td><td>100–400 Gb/s</td><td>~2–10 μs</td><td>Alternative to IB in some cloud environments. Higher tail latency, lower cost.</td></tr>
+</table>
+
+<div class="co co-i"><i class="ti ti-info-circle"></i><div><strong>Parallelism placement rule:</strong> Place communication-heavy parallelism strategies on the fastest interconnect. Tensor parallelism (AllReduce every layer) goes within a node over NVLink. Data parallelism (AllReduce once per step) goes across nodes over InfiniBand. Pipeline parallelism (point-to-point per micro-batch) goes across nodes over IB. Getting this mapping wrong — e.g., tensor parallel across nodes — is the #1 multi-node performance mistake.</div></div>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- CHAPTER 2 -->
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c2"><span class="ph"><span class="ph-n">2</span></span> Transformer anatomy for performance</h2>
+<p>To optimize a Transformer, you must understand which components dominate compute, memory, and communication — and how they scale with model size and sequence length.</p>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">FLOP breakdown of a Transformer layer</span><span class="ex-b b-arch">Architecture</span></div><div class="ex-bd">
+<p>A standard Transformer decoder layer (as in GPT/LLaMA) has these components. For hidden dim <code>d</code>, sequence length <code>s</code>, batch size <code>b</code>, and <code>h</code> attention heads:</p>
+
+<table class="rt">
+<tr><th>Component</th><th>Operation</th><th>FLOPs (forward)</th><th>Memory access pattern</th><th>Bound by</th></tr>
+<tr><td><strong>QKV projection</strong></td><td>3 × [b,s,d] @ [d,d]</td><td>6·b·s·d²</td><td>Large GEMM</td><td>Compute</td></tr>
+<tr><td><strong>Attention scores</strong></td><td>[b,h,s,d/h] @ [b,h,d/h,s]</td><td>2·b·h·s²·(d/h)</td><td>Batched GEMM (many small GEMMs)</td><td>Compute (long seq) / Memory (short seq)</td></tr>
+<tr><td><strong>Softmax</strong></td><td>exp, sum, div over [b,h,s,s]</td><td>~5·b·h·s²</td><td>Element-wise on attention matrix</td><td>Memory</td></tr>
+<tr><td><strong>Attention value</strong></td><td>[b,h,s,s] @ [b,h,s,d/h]</td><td>2·b·h·s²·(d/h)</td><td>Batched GEMM</td><td>Compute/Memory</td></tr>
+<tr><td><strong>Output projection</strong></td><td>[b,s,d] @ [d,d]</td><td>2·b·s·d²</td><td>Large GEMM</td><td>Compute</td></tr>
+<tr><td><strong>MLP up-proj</strong></td><td>[b,s,d] @ [d,4d] (×2 for SwiGLU)</td><td>8·b·s·d² (SwiGLU) or 8·b·s·d²</td><td>Large GEMM</td><td>Compute</td></tr>
+<tr><td><strong>MLP down-proj</strong></td><td>[b,s,4d] @ [4d,d]</td><td>8·b·s·d²</td><td>Large GEMM</td><td>Compute</td></tr>
+<tr><td><strong>RMSNorm / LayerNorm</strong></td><td>mean, variance, normalize</td><td>~10·b·s·d</td><td>Per-token reduction</td><td>Memory</td></tr>
+<tr><td><strong>Activations (SiLU/GELU)</strong></td><td>Element-wise nonlinearity</td><td>~b·s·4d</td><td>Element-wise</td><td>Memory</td></tr>
+<tr><td><strong>Residual add</strong></td><td>Element-wise addition</td><td>~b·s·d</td><td>Element-wise</td><td>Memory</td></tr>
+</table>
+
+<h4>Where the FLOPs actually go</h4>
+<div class="bar-row"><span class="bar-label">QKV + Out proj</span><span class="bar-track"><span class="bar-fill" style="width:28%;background:var(--blue)">28%</span></span></div>
+<div class="bar-row"><span class="bar-label">Attention QK+V</span><span class="bar-track"><span class="bar-fill" style="width:8%;background:var(--purple)">8%</span></span></div>
+<div class="bar-row"><span class="bar-label">MLP (up+down)</span><span class="bar-track"><span class="bar-fill" style="width:57%;background:var(--teal)">57%</span></span></div>
+<div class="bar-row"><span class="bar-label">Norm+Act+Other</span><span class="bar-track"><span class="bar-fill" style="width:7%;background:var(--gray)">~7%</span></span></div>
+<p style="font-size:12px;color:var(--tx3);margin:4px 0 16px">Approximate FLOP distribution for a standard LLaMA-style layer (d=4096, MLP=11008, SwiGLU) with sequence length 4096</p>
+
+<div class="co co-t"><i class="ti ti-bulb"></i><div><strong>Performance implication:</strong> ~85% of FLOPs are in large GEMMs (QKV, output proj, MLP). These <em>must</em> use Tensor Cores in BF16/FP8 — any FP32 fallback decimates throughput. The remaining ~15% (softmax, norms, activations, residuals) are memory-bound and should be fused together wherever possible to minimize HBM round-trips.</div></div>
+</div></div>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">Scaling laws: how FLOPs scale with model and sequence</span><span class="ex-b b-arch">Architecture</span></div><div class="ex-bd">
+<div class="formula">
+<span class="label">Total FLOPs per training step (forward + backward ≈ 3× forward)</span><br>
+<span class="val">FLOPs ≈ 6 × N × B × S</span><br>
+where N = total parameters, B = batch size (sequences), S = sequence length<br><br>
+<span class="label">For a 70B model, batch=1M tokens, sequence=4096:</span><br>
+<span class="val">6 × 70×10⁹ × 256 × 4096 ≈ 4.4 × 10¹⁷ FLOPs per step</span><br><br>
+<span class="label">On 256 H100s at 50% MFU (Model FLOP Utilization):</span><br>
+<span class="val">256 × 990 TFLOP/s × 0.5 = 126,720 TFLOP/s</span><br>
+<span class="val">Time per step ≈ 4.4×10¹⁷ / 126,720×10¹² ≈ 3.47 seconds</span>
+</div>
+
+<h4>The two scaling axes</h4>
+<table class="rt">
+<tr><th>What scales</th><th>FLOPs scale as</th><th>Memory scales as</th><th>Communication scales as</th></tr>
+<tr><td>Model width (d)</td><td>O(d²) per token</td><td>O(d²) for weights</td><td>O(d²) for gradient sync</td></tr>
+<tr><td>Sequence length (s)</td><td>O(s²) for attention, O(s) for MLP</td><td>O(s²) for attention activations (without Flash)</td><td>Minimal (gradients same size)</td></tr>
+<tr><td>Batch size (b)</td><td>O(b) — linear</td><td>O(b) for activations</td><td>Constant (gradients same size)</td></tr>
+<tr><td>Number of layers (L)</td><td>O(L) — linear</td><td>O(L) for weights and activations</td><td>O(L) for gradient sync</td></tr>
+</table>
+
+<div class="co co-w"><i class="ti ti-alert-triangle"></i><div><strong>The attention wall:</strong> At sequence length 32K+, the O(s²) attention compute and memory become dominant. Without FlashAttention, a 32K sequence produces a 32K×32K attention matrix per head — ~4 GB per layer in FP32 for a single sample. FlashAttention eliminates the materialized attention matrix entirely, making long-context training viable.</div></div>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- CHAPTER 3 -->
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c3"><span class="ph"><span class="ph-n">3</span></span> Memory math</h2>
+<p>Memory is typically the binding constraint for LLM training — not compute. Understanding exactly where every byte goes determines your parallelism strategy, batch size, and whether you can train at all.</p>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">The four memory consumers</span><span class="ex-b b-mem">Memory</span></div><div class="ex-bd">
+
+<h4>1. Model parameters</h4>
+<div class="formula">
+<span class="label">Parameter memory = N × bytes_per_param</span><br>
+BF16: 7B model → <span class="val">7×10⁹ × 2 bytes = 14 GB</span><br>
+FP32: 7B model → <span class="val">7×10⁹ × 4 bytes = 28 GB</span>
+</div>
+
+<h4>2. Gradients</h4>
+<div class="formula">
+<span class="label">Gradient memory = N × bytes_per_grad</span><br>
+Same shape as parameters. BF16 training with BF16 grads:<br>
+7B model → <span class="val">14 GB</span>
+</div>
+
+<h4>3. Optimizer states</h4>
+<div class="formula">
+<span class="label">AdamW stores 2 additional states per parameter:</span><br>
+- First moment (m): FP32, N × 4 bytes<br>
+- Second moment (v): FP32, N × 4 bytes<br>
+- FP32 master copy of weights: N × 4 bytes (for mixed precision)<br><br>
+7B model, AdamW, mixed precision:<br>
+<span class="val">(4 + 4 + 4) × 7×10⁹ = 84 GB of optimizer state</span><br><br>
+<span class="label">Total weight-related memory (params + grads + optimizer):</span><br>
+<span class="val">14 (params) + 14 (grads) + 84 (optimizer) = 112 GB for 7B</span><br>
+This already exceeds a single H100's 80 GB → need sharding.
+</div>
+
+<h4>4. Activations (the variable cost)</h4>
+<div class="formula">
+<span class="label">Activation memory per Transformer layer (approximate, without recomputation):</span><br>
+<span class="val">≈ b × s × d × (34 + 5·s·h/d) bytes (BF16, no Flash)</span><br><br>
+For LLaMA-7B (d=4096, h=32), b=4, s=4096, without FlashAttention:<br>
+Per layer: <span class="val">≈ 2.1 GB</span><br>
+32 layers: <span class="val">≈ 67 GB of activations</span><br><br>
+With FlashAttention (no materialized attention matrix):<br>
+Per layer: <span class="val">≈ 0.5 GB</span><br>
+32 layers: <span class="val">≈ 16 GB of activations</span>
+</div>
+
+<div class="co co-w"><i class="ti ti-alert-triangle"></i><div><strong>FlashAttention is not optional for LLMs.</strong> It doesn't just save memory (4× reduction in activation memory from attention) — it also eliminates O(s²) HBM reads by keeping the attention computation tiled in SRAM/L2. Without it, attention is both memory-capacity and memory-bandwidth bound.</div></div>
+</div></div>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">Memory budgeting worksheet</span><span class="ex-b b-mem">Memory</span></div><div class="ex-bd">
+<p>Use this to estimate whether a model fits in your GPU memory before running anything.</p>
+<table class="rt">
+<tr><th>Component</th><th>Formula</th><th>7B (1 GPU, no shard)</th><th>70B (8 GPUs, FSDP)</th></tr>
+<tr><td>Parameters (BF16)</td><td>N × 2</td><td>14 GB</td><td>140/8 = 17.5 GB/GPU</td></tr>
+<tr><td>Gradients (BF16)</td><td>N × 2</td><td>14 GB</td><td>140/8 = 17.5 GB/GPU</td></tr>
+<tr><td>Optimizer (FP32 m,v,master)</td><td>N × 12</td><td>84 GB ✗</td><td>840/8 = 105 GB → too much → need CPU offload or 64+ GPUs</td></tr>
+<tr><td>Activations (per micro-batch, Flash)</td><td>~b·s·d·L·10 bytes</td><td>~16 GB (b=4)</td><td>~20 GB (b=1)</td></tr>
+<tr><td>Temp buffers, comm buffers</td><td>~2–5 GB overhead</td><td>~3 GB</td><td>~5 GB</td></tr>
+<tr><td><strong>Total</strong></td><td></td><td><strong>~131 GB</strong> ✗</td><td><strong>~60 GB/GPU</strong> ✓ (with grad ckpt)</td></tr>
+</table>
+
+<div class="co co-i"><i class="ti ti-info-circle"></i><div><strong>Rule of thumb:</strong> Total memory ≈ 18× model parameters (in bytes, BF16 mixed precision with AdamW). A 7B model needs ~126 GB just for weights+optimizer — at least 2 H100s. A 70B model needs ~1.26 TB — at least 16 H100s, typically 64+ for comfortable batch sizes.</div></div>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- CHAPTER 4 -->
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c4"><span class="ph"><span class="ph-n">4</span></span> Numerical precision</h2>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">Data types: FP32, TF32, BF16, FP16, FP8</span><span class="ex-b b-prec">Precision</span></div><div class="ex-bd">
+<table class="rt">
+<tr><th>Type</th><th>Bits</th><th>Exponent</th><th>Mantissa</th><th>Range</th><th>H100 TFLOP/s</th><th>When to use</th></tr>
+<tr><td><strong>FP32</strong></td><td>32</td><td>8</td><td>23</td><td>±3.4×10³⁸</td><td>67</td><td>Optimizer states, loss accumulation, master weights</td></tr>
+<tr><td><strong>TF32</strong></td><td>19 (stored as 32)</td><td>8</td><td>10</td><td>Same as FP32</td><td>495</td><td>Automatic in cuBLAS for FP32 inputs when enabled. 7.4× faster than FP32 with ~FP16 precision.</td></tr>
+<tr><td><strong>BF16</strong></td><td>16</td><td>8</td><td>7</td><td>Same as FP32</td><td>990</td><td>Default for LLM training. Same range as FP32 (no overflow), good enough precision. Forward/backward compute.</td></tr>
+<tr><td><strong>FP16</strong></td><td>16</td><td>5</td><td>10</td><td>±65,504</td><td>990</td><td>Older mixed precision. Requires loss scaling due to narrow range. More mantissa bits = slightly more precise than BF16 but overflows easily.</td></tr>
+<tr><td><strong>FP8 E4M3</strong></td><td>8</td><td>4</td><td>3</td><td>±448</td><td>1,979</td><td>Forward pass in Transformer Engine. 2× BF16 throughput. Needs per-tensor scaling.</td></tr>
+<tr><td><strong>FP8 E5M2</strong></td><td>8</td><td>5</td><td>2</td><td>±57,344</td><td>1,979</td><td>Backward pass (gradients need more range, less precision).</td></tr>
+</table>
+
+<h4>The mixed precision training recipe</h4>
+<pre><span class="comment"># Standard BF16 mixed precision for LLMs</span>
+model = model.to(torch.bfloat16)  <span class="comment"># weights in BF16</span>
+optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4)
+<span class="comment"># AdamW internally keeps FP32 master weights + FP32 m,v states</span>
+
+for batch in loader:
+    with torch.autocast('cuda', dtype=torch.bfloat16):
+        output = model(batch)      <span class="comment"># forward in BF16</span>
+        loss = criterion(output)   <span class="comment"># loss in FP32 (autocast promotes)</span>
+
+    loss.backward()                <span class="comment"># backward in BF16</span>
+    optimizer.step()               <span class="comment"># update FP32 master weights</span>
+    optimizer.zero_grad()
+
+<span class="comment"># Note: No GradScaler needed for BF16 (same exponent range as FP32)</span>
+<span class="comment"># GradScaler IS needed for FP16 to prevent underflow in gradients</span></pre>
+
+<div class="co co-t"><i class="ti ti-bulb"></i><div><strong>BF16 is the default for modern LLM training.</strong> Use BF16 for all compute (forward + backward). Keep optimizer states and master weights in FP32. No grad scaler needed. Autocast handles the casting automatically — it promotes operations that need higher precision (loss, softmax, norm) to FP32 and keeps GEMMs in BF16.</div></div>
+</div></div>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">Tensor Core alignment requirements</span><span class="ex-b b-prec">Precision</span></div><div class="ex-bd">
+<p>Tensor Cores process matrix tiles of fixed sizes. If your matrix dimensions don't align, the kernel falls back to CUDA cores or pads internally (wasting compute).</p>
+<table class="rt">
+<tr><th>Data type</th><th>Required alignment</th><th>Tensor Core tile size (H100)</th></tr>
+<tr><td>BF16 / FP16</td><td>Multiples of 8</td><td>16×8×16 (M×N×K MMA instruction)</td></tr>
+<tr><td>TF32</td><td>Multiples of 4</td><td>16×8×8</td></tr>
+<tr><td>FP8</td><td>Multiples of 16</td><td>16×16×32</td></tr>
+<tr><td>INT8</td><td>Multiples of 16</td><td>16×16×32</td></tr>
+</table>
+
+<h4>Dimensions to check in your model config</h4>
+<table class="rt">
+<tr><th>Dimension</th><th>Example (LLaMA-7B)</th><th>Aligned?</th><th>If not, fix by...</th></tr>
+<tr><td>Hidden dim (d_model)</td><td>4096</td><td>✓ (÷8 = 512)</td><td>Round up to nearest multiple of 8</td></tr>
+<tr><td>FFN intermediate (d_ff)</td><td>11008</td><td>✓ (÷8 = 1376)</td><td>Common oversight with SwiGLU: (4d × 2/3) may not be aligned</td></tr>
+<tr><td>Attention heads × head_dim</td><td>32 × 128</td><td>✓</td><td>head_dim should be 64 or 128 (both ÷8)</td></tr>
+<tr><td>Vocabulary size</td><td>32000</td><td>✓ (÷8 = 4000)</td><td>Pad to next multiple of 8 or 64. E.g., 32001→32008</td></tr>
+<tr><td>Batch size × seq_len (M dim)</td><td>varies</td><td>Check</td><td>The M dimension of the GEMM = batch × seq_len. Keep batch × seq_len divisible by 8.</td></tr>
+</table>
+
+<div class="co co-w"><i class="ti ti-alert-triangle"></i><div><strong>Vocabulary size is the sneakiest misalignment.</strong> Many tokenizers produce vocab sizes like 32,001 or 50,257 (GPT-2). The output projection GEMM does [b×s, d] × [d, vocab]. If vocab isn't a multiple of 8, the N dimension is misaligned and every output projection falls back to CUDA cores. Pad the embedding and output projection to the next multiple of 64 (for best FP8 compatibility too).</div></div>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- CHAPTER 5 -->
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c5"><span class="ph"><span class="ph-n">5</span></span> Data pipeline</h2>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">Building a data pipeline that never starves the GPU</span><span class="ex-b b-data">Data</span></div><div class="ex-bd">
+<p>For LLM training, the data pipeline is simpler than vision (no augmentation) but can still be a bottleneck if done wrong, especially at scale.</p>
+
+<h4>LLM data pipeline components</h4>
+<table class="rt">
+<tr><th>Stage</th><th>What happens</th><th>Bottleneck risk</th><th>Solution</th></tr>
+<tr><td><strong>Storage read</strong></td><td>Read tokenized data from disk/network</td><td>NFS or cloud storage I/O limits</td><td>Local NVMe SSD. Pre-tokenize and store in memory-mapped binary format (numpy mmap, safetensors, or Arrow/Parquet).</td></tr>
+<tr><td><strong>Tokenization</strong></td><td>Convert text → token IDs</td><td>CPU-bound for on-the-fly tokenization</td><td>Pre-tokenize offline and save as binary. For 1T tokens at 4 bytes/token = 4 TB on disk — feasible on NVMe.</td></tr>
+<tr><td><strong>Sequence packing</strong></td><td>Pack multiple documents into fixed-length sequences</td><td>Python-level sequence construction</td><td>Pre-pack during preprocessing. Use document boundary masks to prevent cross-document attention.</td></tr>
+<tr><td><strong>Collation</strong></td><td>Stack sequences into a batch tensor</td><td>Rarely bottleneck for packed sequences</td><td>Pre-collated batches stored as contiguous tensors on disk.</td></tr>
+<tr><td><strong>H2D transfer</strong></td><td>Move batch from CPU to GPU</td><td>PCIe bandwidth (128 GB/s)</td><td>For token IDs (int32): 4M tokens × 4 bytes = 16 MB per batch — negligible. Use <code>pin_memory=True</code> for async transfer.</td></tr>
+</table>
+
+<pre><span class="comment"># Optimal LLM DataLoader configuration</span>
+loader = DataLoader(
+    dataset,
+    batch_size=micro_batch_size,
+    <span class="flag">num_workers=4</span>,            <span class="comment"># 4–8 usually sufficient for pre-tokenized data</span>
+    <span class="flag">pin_memory=True</span>,            <span class="comment"># enables async H2D via pinned host memory</span>
+    <span class="flag">persistent_workers=True</span>,    <span class="comment"># avoids worker respawn cost every epoch</span>
+    <span class="flag">prefetch_factor=2</span>,          <span class="comment"># pipeline next batch while GPU trains</span>
+    shuffle=False,              <span class="comment"># use pre-shuffled indices for reproducibility</span>
+)
+
+<span class="comment"># For memory-mapped datasets (ideal):</span>
+class MMapTokenDataset(torch.utils.data.Dataset):
+    def __init__(self, path, seq_len):
+        self.data = np.memmap(path, dtype=np.uint16, mode='r')
+        self.seq_len = seq_len
+    def __len__(self):
+        return len(self.data) // self.seq_len
+    def __getitem__(self, idx):
+        start = idx * self.seq_len
+        chunk = self.data[start:start + self.seq_len + 1]
+        x = torch.from_numpy(chunk[:-1].astype(np.int64))
+        y = torch.from_numpy(chunk[1:].astype(np.int64))
+        return x, y</pre>
+
+<div class="co co-g"><i class="ti ti-check"></i><div><strong>For LLM pretraining, the data pipeline is usually NOT the bottleneck</strong> (unlike vision training) because the data is pre-tokenized binary that loads in microseconds. If you see data loading gaps in Nsight Systems, it's almost certainly a misconfiguration — fix <code>num_workers</code> and <code>persistent_workers</code> first.</div></div>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- CHAPTER 6 -->
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c6"><span class="ph"><span class="ph-n">6</span></span> Memory optimization techniques</h2>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">Activation checkpointing (gradient checkpointing)</span><span class="ex-b b-mem">Memory</span></div><div class="ex-bd">
+<p>The biggest memory savings technique. Instead of storing all intermediate activations for backward, throw them away and recompute them during backward.</p>
+
+<table class="rt">
+<tr><th>Strategy</th><th>Memory saved</th><th>Compute cost</th><th>When to use</th></tr>
+<tr><td><strong>No checkpointing</strong></td><td>0%</td><td>1× forward + 1× backward = baseline</td><td>Small models that fit in memory</td></tr>
+<tr><td><strong>Per-layer checkpointing</strong></td><td>~60–70% of activation memory</td><td>~33% more compute (re-forward each layer)</td><td>Standard for large LLMs. Best tradeoff.</td></tr>
+<tr><td><strong>Selective checkpointing</strong></td><td>~40–50%</td><td>~15–20% more compute</td><td>Keep memory-cheap activations (after GEMM), recompute memory-expensive ones (attention). Tunable sweet spot.</td></tr>
+<tr><td><strong>Full recomputation</strong></td><td>~90%+</td><td>~100% more compute</td><td>Extreme memory pressure. Rarely used for LLMs.</td></tr>
+</table>
+
+<pre><span class="comment"># Per-layer checkpointing in PyTorch</span>
+from torch.utils.checkpoint import checkpoint
+
+class TransformerBlock(nn.Module):
+    def forward(self, x):
+        <span class="comment"># Without checkpointing: all intermediates stored</span>
+        <span class="comment"># With checkpointing: only input x is stored, rest recomputed</span>
+        return checkpoint(self._forward, x, use_reentrant=False)
+
+    def _forward(self, x):
+        x = x + self.attn(self.norm1(x))
+        x = x + self.mlp(self.norm2(x))
+        return x
+
+<span class="comment"># Or apply to all layers at once:</span>
+from torch.distributed.algorithms._checkpoint.checkpoint_wrapper import (
+    checkpoint_wrapper, CheckpointImpl
+)
+for layer in model.layers:
+    checkpoint_wrapper(layer, checkpoint_impl=CheckpointImpl.NO_REENTRANT)</pre>
+
+<div class="co co-i"><i class="ti ti-info-circle"></i><div><strong>Always use <code>use_reentrant=False</code></strong> (or <code>CheckpointImpl.NO_REENTRANT</code>). The legacy reentrant implementation has subtle bugs with <code>torch.compile</code>, FSDP, and non-deterministic ops. Non-reentrant is the default in newer PyTorch versions and handles all edge cases correctly.</div></div>
+</div></div>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">FlashAttention: memory and compute</span><span class="ex-b b-mem">Memory</span></div><div class="ex-bd">
+<p>FlashAttention is both a memory optimization (avoids materializing the s×s attention matrix) and a speed optimization (tiles computation to exploit fast SRAM).</p>
+
+<table class="rt">
+<tr><th>Metric</th><th>Standard attention</th><th>FlashAttention</th><th>Improvement</th></tr>
+<tr><td>Activation memory (attention)</td><td>O(b·h·s²) — quadratic in sequence length</td><td>O(b·h·s) — linear in sequence length</td><td>~s× reduction (e.g., 128× at seq_len=32K)</td></tr>
+<tr><td>HBM reads</td><td>O(b·h·s²·d) — read/write full attention matrix</td><td>O(b·h·s²·d / M) where M = SRAM size</td><td>~2–4× fewer HBM accesses</td></tr>
+<tr><td>Wall-clock speed</td><td>Baseline</td><td>2–4× faster</td><td>IO-aware tiling eliminates HBM bottleneck</td></tr>
+</table>
+
+<pre><span class="comment"># Using FlashAttention via PyTorch's SDPA (recommended)</span>
+import torch.nn.functional as F
+
+<span class="comment"># This automatically uses FlashAttention when available</span>
+attn_output = F.scaled_dot_product_attention(
+    query, key, value,
+    attn_mask=None,         <span class="comment"># causal masking via is_causal</span>
+    dropout_p=0.0,          <span class="comment"># Flash fuses dropout</span>
+    is_causal=True,         <span class="comment"># enables causal mask without materializing it</span>
+)
+
+<span class="comment"># Verify Flash is being used (in profiler, look for "flash_" kernel names)</span>
+<span class="comment"># Or check at runtime:</span>
+<span class="comment"># torch.backends.cuda.flash_sdp_enabled()  # should be True</span></pre>
+
+<div class="co co-t"><i class="ti ti-bulb"></i><div><strong>FlashAttention versions matter:</strong> FA-2 is the standard. FA-3 (Hopper-optimized) exploits H100-specific features like warp-specialized kernels and TMA (Tensor Memory Accelerator) for additional 1.5–2× speedup on H100. Use the latest <code>flash-attn</code> package or PyTorch's built-in SDPA which selects the best backend automatically.</div></div>
+</div></div>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">Other memory techniques: offloading, quantization, paging</span><span class="ex-b b-mem">Memory</span></div><div class="ex-bd">
+<table class="rt">
+<tr><th>Technique</th><th>How it works</th><th>Memory saved</th><th>Performance cost</th><th>When to use</th></tr>
+<tr><td><strong>CPU offloading</strong></td><td>Move optimizer states (or parameters) to CPU RAM, transfer to GPU for each step</td><td>Huge — 84 GB of optimizer states move to CPU</td><td>10–50% throughput loss from PCIe transfers</td><td>When GPU memory is the hard constraint and you can't add more GPUs. FSDP and DeepSpeed support this.</td></tr>
+<tr><td><strong>Gradient accumulation</strong></td><td>Run multiple micro-batches, accumulate gradients, do one optimizer step</td><td>Reduces peak activation memory (only one micro-batch's activations at a time)</td><td>None (same total compute)</td><td>Always use to simulate large batch sizes without large activation memory. Standard in all LLM training.</td></tr>
+<tr><td><strong>Mixed precision master weights</strong></td><td>Keep master weights in FP32 only in optimizer; compute in BF16</td><td>Half the parameter storage during forward/backward</td><td>None</td><td>Standard. AdamW in PyTorch does this automatically.</td></tr>
+<tr><td><strong>QLoRA / quantized training</strong></td><td>Quantize base model to 4-bit, train LoRA adapters in BF16</td><td>~75% parameter memory reduction</td><td>Some quality loss vs full fine-tuning</td><td>Fine-tuning only. Not used for pretraining.</td></tr>
+</table>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- CHAPTER 7 -->
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c7"><span class="ph"><span class="ph-n">7</span></span> Distributed training</h2>
+<p>No LLM fits on a single GPU for training. Distributed training combines multiple parallelism strategies, each with different trade-offs for compute efficiency, memory, and communication.</p>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">The four parallelism dimensions</span><span class="ex-b b-dist">Distributed</span></div><div class="ex-bd">
+
+<div class="tb">
+<button class="tbn active" onclick="showTab('dp',this)">Data parallel</button>
+<button class="tbn" onclick="showTab('tp',this)">Tensor parallel</button>
+<button class="tbn" onclick="showTab('pp',this)">Pipeline parallel</button>
+<button class="tbn" onclick="showTab('sp',this)">Sequence parallel</button>
+</div>
+
+<div class="tp active" id="dp">
+<h4>Data parallelism (DP / DDP / FSDP / ZeRO)</h4>
+<p>Each GPU holds a copy of the model and processes different data. Gradients are synchronized (AllReduced) across GPUs after each backward pass.</p>
+
+<table class="rt">
+<tr><th>Variant</th><th>What's replicated</th><th>What's sharded</th><th>Communication</th><th>Memory per GPU</th></tr>
+<tr><td><strong>DDP</strong></td><td>Params, optimizer, grads</td><td>Nothing</td><td>AllReduce gradients</td><td>Full model × 18 bytes/param</td></tr>
+<tr><td><strong>ZeRO Stage 1</strong></td><td>Params, grads</td><td>Optimizer states</td><td>AllReduce + ReduceScatter optimizer</td><td>~6 bytes/param saved</td></tr>
+<tr><td><strong>ZeRO Stage 2</strong></td><td>Params</td><td>Optimizer + grads</td><td>ReduceScatter grads + AllGather params</td><td>~8 bytes/param saved</td></tr>
+<tr><td><strong>ZeRO Stage 3 / FSDP</strong></td><td>Nothing (fully sharded)</td><td>Everything</td><td>AllGather before forward, ReduceScatter after backward</td><td>~(18/N) bytes/param</td></tr>
+</table>
+
+<div class="co co-t"><i class="ti ti-bulb"></i><div><strong>FSDP is the standard for LLM training in PyTorch.</strong> It shards parameters, gradients, and optimizer states across GPUs. Each GPU holds only 1/N of the model. During forward, it AllGathers the full parameters for each layer just-in-time, computes, then frees the gathered parameters. During backward, it does the same plus ReduceScatter for gradients.</div></div>
+
+<pre><span class="comment"># FSDP2 (PyTorch 2.x preferred API)</span>
+from torch.distributed._composable.fsdp import fully_shard
+
+<span class="comment"># Shard each Transformer layer independently</span>
+for layer in model.layers:
+    fully_shard(layer)
+<span class="comment"># Shard the entire model (top-level)</span>
+fully_shard(model)
+
+<span class="comment"># Key configuration for performance:</span>
+<span class="comment"># - Wrap at the Transformer block level (not too fine, not too coarse)</span>
+<span class="comment"># - Use BF16 for communication: reshard_after_forward=True</span></pre>
+</div>
+
+<div class="tp" id="tp">
+<h4>Tensor parallelism (TP)</h4>
+<p>Splits individual layer operations (GEMMs) across GPUs. Each GPU computes a slice of the weight matrix and they AllReduce to combine results.</p>
+
+<table class="rt">
+<tr><th>Layer</th><th>How it's split</th><th>Communication</th></tr>
+<tr><td>Linear (column split)</td><td>Weight [d, d] → each GPU gets [d, d/tp]. Output is partial sum.</td><td>AllReduce after the layer to combine partial outputs.</td></tr>
+<tr><td>Linear (row split)</td><td>Weight [d, d] → each GPU gets [d/tp, d]. Input is split across GPUs.</td><td>AllReduce after the layer.</td></tr>
+<tr><td>Attention heads</td><td>Heads distributed across GPUs (h/tp heads per GPU)</td><td>AllReduce after output projection.</td></tr>
+<tr><td>MLP</td><td>Up-proj column-parallel, down-proj row-parallel</td><td>One AllReduce per MLP (not two).</td></tr>
+</table>
+
+<div class="co co-w"><i class="ti ti-alert-triangle"></i><div><strong>TP requires AllReduce at every layer — twice per Transformer block</strong> (once after attention, once after MLP). This must go over NVLink (900 GB/s) — it's far too frequent for inter-node InfiniBand. Never use TP across nodes. Typical TP degree: 2, 4, or 8 (within one node's NVLink domain).</div></div>
+</div>
+
+<div class="tp" id="pp">
+<h4>Pipeline parallelism (PP)</h4>
+<p>Splits the model by layers across GPUs. GPU 0 runs layers 0–7, GPU 1 runs layers 8–15, etc. Micro-batches flow through the pipeline.</p>
+
+<table class="rt">
+<tr><th>Aspect</th><th>Detail</th></tr>
+<tr><td>Communication pattern</td><td>Point-to-point: each GPU sends activations to the next GPU in the pipeline. Much less bandwidth than AllReduce.</td></tr>
+<tr><td>Pipeline bubble</td><td>GPUs at the start/end of the pipeline idle while waiting for micro-batches to flow through. Bubble fraction ≈ (pp_degree - 1) / num_microbatches.</td></tr>
+<tr><td>Memory</td><td>Each GPU holds only L/pp_degree layers. But must buffer activations for all in-flight micro-batches.</td></tr>
+<tr><td>Scheduling</td><td>1F1B (one forward, one backward) minimizes bubble. Interleaved schedules (virtual stages) reduce bubble further at the cost of more communication.</td></tr>
+</table>
+
+<div class="formula">
+<span class="label">Pipeline bubble overhead:</span><br>
+<span class="val">Bubble = (pp_stages - 1) / total_microbatches</span><br><br>
+Example: PP=4, 32 micro-batches → bubble = 3/32 = <span class="val">9.4% overhead</span><br>
+Example: PP=4, 8 micro-batches → bubble = 3/8 = <span class="val">37.5% overhead</span> ← too high
+</div>
+
+<div class="co co-i"><i class="ti ti-info-circle"></i><div><strong>Pipeline parallelism is used for models too large for TP alone</strong> (which is limited to 8 GPUs within a node). For 70B+ models on 64+ GPUs: use TP=8 within each node, PP=4–8 across nodes, and FSDP for data parallelism within each pipeline stage.</div></div>
+</div>
+
+<div class="tp" id="sp">
+<h4>Sequence parallelism (SP) and context parallelism (CP)</h4>
+<p>These split along the sequence dimension rather than the model dimension.</p>
+
+<table class="rt">
+<tr><th>Type</th><th>What it splits</th><th>When to use</th></tr>
+<tr><td><strong>Sequence parallelism</strong></td><td>The non-tensor-parallel regions (LayerNorm, dropout, residual add) are split across the TP group. During TP, these ops are redundantly computed on all GPUs — SP eliminates this redundancy.</td><td>Always use with TP. It's essentially free — reduces memory without adding communication (converts AllReduce to AllGather + ReduceScatter which has the same total volume).</td></tr>
+<tr><td><strong>Context parallelism</strong></td><td>Splits the sequence dimension of attention across GPUs. Each GPU handles a chunk of the sequence and uses ring attention to exchange KV chunks.</td><td>Very long sequences (32K+) where even FlashAttention's memory is prohibitive for a single GPU. Adds AllToAll communication per attention layer.</td></tr>
+</table>
+</div>
+
+</div></div>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">3D parallelism: combining TP + PP + DP</span><span class="ex-b b-dist">Distributed</span></div><div class="ex-bd">
+<p>Real LLM training uses a combination of all three. The art is choosing the right degree for each dimension.</p>
+
+<div class="tl-viz">
+<div class="tl-row"><span class="tl-lb">Node 0</span><span class="tl-tk">
+<span class="tl-bl" style="left:0%;width:12%;background:var(--blue)">G0</span>
+<span class="tl-bl" style="left:13%;width:12%;background:var(--blue)">G1</span>
+<span class="tl-bl" style="left:26%;width:12%;background:var(--blue)">G2</span>
+<span class="tl-bl" style="left:39%;width:12%;background:var(--blue)">G3</span>
+<span class="tl-bl" style="left:52%;width:12%;background:var(--purple)">G4</span>
+<span class="tl-bl" style="left:65%;width:12%;background:var(--purple)">G5</span>
+<span class="tl-bl" style="left:78%;width:12%;background:var(--purple)">G6</span>
+<span class="tl-bl" style="left:91%;width:8%;background:var(--purple)">G7</span>
+</span></div>
+<div class="tl-row"><span class="tl-lb">Node 1</span><span class="tl-tk">
+<span class="tl-bl" style="left:0%;width:12%;background:var(--teal)">G0</span>
+<span class="tl-bl" style="left:13%;width:12%;background:var(--teal)">G1</span>
+<span class="tl-bl" style="left:26%;width:12%;background:var(--teal)">G2</span>
+<span class="tl-bl" style="left:39%;width:12%;background:var(--teal)">G3</span>
+<span class="tl-bl" style="left:52%;width:12%;background:var(--pink)">G4</span>
+<span class="tl-bl" style="left:65%;width:12%;background:var(--pink)">G5</span>
+<span class="tl-bl" style="left:78%;width:12%;background:var(--pink)">G6</span>
+<span class="tl-bl" style="left:91%;width:8%;background:var(--pink)">G7</span>
+</span></div>
+</div>
+<p style="font-size:12px;color:var(--tx3);margin:2px 0 12px">Blue=TP group (layers 0-15, data shard A), Purple=TP group (layers 16-31, data shard A), Teal=TP group (layers 0-15, data shard B), Pink=TP group (layers 16-31, data shard B). TP=4 within node, PP=2 across TP groups, DP=2 across nodes.</p>
+
+<h4>Configuration rules of thumb</h4>
+<table class="rt">
+<tr><th>Rule</th><th>Rationale</th></tr>
+<tr><td>TP ≤ 8, always within one node</td><td>TP communication (AllReduce per layer) is too frequent for inter-node bandwidth</td></tr>
+<tr><td>PP across nodes, minimize stages</td><td>PP communication is point-to-point and infrequent, tolerates higher latency. But pipeline bubbles grow with more stages.</td></tr>
+<tr><td>DP = total_GPUs / (TP × PP)</td><td>Data parallelism fills the remaining GPUs. FSDP shards model state across the DP group.</td></tr>
+<tr><td>TP degree = smallest that fits model per layer</td><td>TP has the highest communication overhead per step. Use the minimum needed.</td></tr>
+<tr><td>Microbatches ≥ 4 × PP stages</td><td>Keeps the pipeline bubble below ~25%. More microbatches = smaller bubble.</td></tr>
+</table>
+
+<div class="formula">
+<span class="label">Example: 70B model on 128 H100s (16 nodes × 8 GPUs)</span><br>
+TP = 8 (within each node, required — single layer doesn't fit in 1 GPU)<br>
+PP = 4 (4 pipeline stages across 4 node-groups)<br>
+DP = 128 / (8 × 4) = <span class="val">4 data-parallel replicas</span><br>
+Microbatches = 32 → bubble = 3/32 = <span class="val">9.4%</span> overhead
+</div>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- CHAPTER 8 -->
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c8"><span class="ph"><span class="ph-n">8</span></span> Communication patterns and NCCL</h2>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">Collective operations: AllReduce, AllGather, ReduceScatter</span><span class="ex-b b-dist">Distributed</span></div><div class="ex-bd">
+<table class="rt">
+<tr><th>Collective</th><th>Input per GPU</th><th>Output per GPU</th><th>Data moved</th><th>Used by</th></tr>
+<tr><td><strong>AllReduce</strong></td><td>Full gradient tensor</td><td>Summed gradient (identical on all GPUs)</td><td>2×(N-1)/N × tensor_size</td><td>DDP gradient sync, TP layer reduction</td></tr>
+<tr><td><strong>ReduceScatter</strong></td><td>Full gradient tensor</td><td>1/N of the summed gradient</td><td>(N-1)/N × tensor_size</td><td>FSDP gradient sharding</td></tr>
+<tr><td><strong>AllGather</strong></td><td>1/N of parameter tensor</td><td>Full parameter tensor</td><td>(N-1)/N × tensor_size</td><td>FSDP parameter unsharding before forward/backward</td></tr>
+<tr><td><strong>Broadcast</strong></td><td>Tensor on root GPU</td><td>Identical tensor on all GPUs</td><td>tensor_size</td><td>Initial parameter broadcast, pipeline activations</td></tr>
+<tr><td><strong>AllToAll</strong></td><td>Different chunk to each GPU</td><td>Different chunk from each GPU</td><td>(N-1)/N × tensor_size</td><td>Context parallelism, expert routing in MoE</td></tr>
+</table>
+
+<h4>Communication volume per training step</h4>
+<div class="formula">
+<span class="label">DDP (AllReduce):</span> <span class="val">2 × model_size</span> per step<br>
+<span class="label">FSDP (AllGather + ReduceScatter):</span> <span class="val">3 × model_size</span> per step (2× AllGather fwd+bwd, 1× ReduceScatter)<br>
+<span class="label">TP AllReduce per layer:</span> <span class="val">2 × b × s × d × 2 bytes × 2</span> (twice per block: after attn + after MLP)<br><br>
+<span class="label">For a 70B model, FSDP across 8 GPUs:</span><br>
+<span class="val">3 × 70B × 2 bytes = 420 GB of communication per step</span><br>
+Over NVLink (900 GB/s): <span class="val">~0.47 seconds</span> if not overlapped<br>
+With overlap (AllGather during compute): effectively free if compute > comm per layer
+</div>
+
+<div class="co co-t"><i class="ti ti-bulb"></i><div><strong>The overlap principle:</strong> Communication should be fully hidden behind compute. FSDP achieves this by AllGathering the next layer's parameters while the current layer is computing, and ReduceScattering the previous layer's gradients while the current layer's backward is running. When communication time per layer < compute time per layer, communication is "free." When it's not, you see it as a gap in the Nsight Systems timeline.</div></div>
+</div></div>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">NCCL tuning and debugging</span><span class="ex-b b-dist">Distributed</span></div><div class="ex-bd">
+<table class="rt">
+<tr><th>Environment variable</th><th>Values</th><th>Effect</th></tr>
+<tr><td><code>NCCL_DEBUG=INFO</code></td><td>WARN, INFO</td><td>Logs NCCL initialization, algorithm selection, channel count. Essential for debugging.</td></tr>
+<tr><td><code>NCCL_ALGO</code></td><td>Ring, Tree, CollNet</td><td>Override algorithm selection. Ring is best for small messages and ≤8 GPUs. Tree better for large messages on many nodes.</td></tr>
+<tr><td><code>NCCL_PROTO</code></td><td>LL, LL128, Simple</td><td>Low-level protocol. LL/LL128 for latency-sensitive small messages. Simple for bandwidth-optimal large messages.</td></tr>
+<tr><td><code>NCCL_BUFFSIZE</code></td><td>Bytes (default 4MB)</td><td>Per-channel buffer size. Larger buffers improve throughput for large messages but consume more GPU memory.</td></tr>
+<tr><td><code>NCCL_MIN_NCHANNELS</code></td><td>Integer</td><td>Minimum number of channels (parallel communication paths). More channels = more bandwidth utilization.</td></tr>
+<tr><td><code>NCCL_IB_HCA</code></td><td>Device names</td><td>Specify which InfiniBand HCAs to use. Important for topology-aware routing.</td></tr>
+<tr><td><code>NCCL_SOCKET_IFNAME</code></td><td>Interface name</td><td>Network interface for inter-node communication. Must be set correctly on multi-homed nodes.</td></tr>
+<tr><td><code>NCCL_P2P_LEVEL</code></td><td>SYS, PHB, PIX, NVL</td><td>Controls peer-to-peer transport selection. NVL forces NVLink. Set if NCCL falls back to PCIe incorrectly.</td></tr>
+</table>
+
+<pre><span class="comment"># Verify NVLink topology</span>
+nvidia-smi topo -m
+<span class="comment"># Should show NV18 (NVLink) between all GPU pairs in a DGX/HGX H100</span>
+<span class="comment"># If any pair shows PHB or SYS, NVLink is not working for that path</span>
+
+<span class="comment"># Run NCCL test to benchmark actual communication throughput</span>
+<span class="comment"># Build from: https://github.com/NVIDIA/nccl-tests</span>
+./build/all_reduce_perf -b 8 -e 2G -f 2 -g 8
+<span class="comment"># Expect ~850 GB/s bus bandwidth on 8xH100 NVLink</span>
+<span class="comment"># If significantly lower, check topology, driver, NCCL version</span></pre>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- CHAPTER 9 -->
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c9"><span class="ph"><span class="ph-n">9</span></span> Kernel optimization</h2>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">torch.compile: the primary optimization tool</span><span class="ex-b b-kern">Kernels</span></div><div class="ex-bd">
+<p><code>torch.compile</code> is a JIT compiler that fuses operations, eliminates Python overhead, and generates optimized CUDA kernels via Triton or inductor.</p>
+
+<h4>What torch.compile does</h4>
+<table class="rt">
+<tr><th>Optimization</th><th>What happens</th><th>Typical speedup</th></tr>
+<tr><td><strong>Operator fusion</strong></td><td>Combines element-wise ops (add, mul, ReLU, dropout) into single kernels, eliminating HBM round-trips for intermediates</td><td>1.5–3× for memory-bound regions</td></tr>
+<tr><td><strong>Python overhead elimination</strong></td><td>Captures the computation graph once, replays it without Python dispatch overhead</td><td>10–30% for overhead-dominated workloads</td></tr>
+<tr><td><strong>Layout optimization</strong></td><td>Chooses optimal memory layouts (channels_last, contiguous) for each operation</td><td>5–15% for convolutions</td></tr>
+<tr><td><strong>Autotuning</strong></td><td>Tries multiple Triton kernel configurations and selects the fastest</td><td>5–20% for individual kernels</td></tr>
+</table>
+
+<pre><span class="comment"># Basic usage</span>
+model = torch.compile(model)  <span class="comment"># default mode="default"</span>
+
+<span class="comment"># Options:</span>
+model = torch.compile(model, mode="reduce-overhead")   <span class="comment"># uses CUDA Graphs</span>
+model = torch.compile(model, mode="max-autotune")      <span class="comment"># more tuning time, faster kernels</span>
+model = torch.compile(model, fullgraph=True)            <span class="comment"># error if graph breaks</span>
+
+<span class="comment"># Debugging graph breaks:</span>
+import torch._dynamo as dynamo
+dynamo.config.verbose = True  <span class="comment"># logs why compilation failed</span>
+explanation = dynamo.explain(model)(sample_input)
+print(explanation)  <span class="comment"># shows what was captured vs what broke</span></pre>
+
+<h4>Common graph break causes in LLM training</h4>
+<table class="rt">
+<tr><th>Cause</th><th>Example</th><th>Fix</th></tr>
+<tr><td>Data-dependent control flow</td><td><code>if x.item() > 0:</code></td><td>Use <code>torch.where</code> or <code>torch.cond</code></td></tr>
+<tr><td>Unsupported Python operations</td><td>Calling numpy inside forward</td><td>Use pure PyTorch ops</td></tr>
+<tr><td>Dynamic shapes</td><td>Variable sequence lengths per batch</td><td>Pad to fixed lengths or use <code>dynamic=True</code></td></tr>
+<tr><td>Custom C++ extensions</td><td>Non-standard CUDA kernels</td><td>Register as custom ops with <code>torch.library</code></td></tr>
+<tr><td><code>print(tensor)</code> in forward</td><td>Debugging statements</td><td>Remove or guard with <code>if not torch.compiler.is_compiling():</code></td></tr>
+</table>
+</div></div>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">Key fused kernels for LLMs</span><span class="ex-b b-kern">Kernels</span></div><div class="ex-bd">
+<p>Beyond torch.compile, several critical operations benefit from hand-optimized fused kernels:</p>
+<table class="rt">
+<tr><th>Operation</th><th>Unfused cost</th><th>Fused version</th><th>Benefit</th></tr>
+<tr><td>Attention (QK softmax V)</td><td>3 separate GEMMs + softmax + dropout, materializes s×s matrix in HBM</td><td>FlashAttention (<code>F.scaled_dot_product_attention</code>)</td><td>2–4× speed, O(s) memory instead of O(s²)</td></tr>
+<tr><td>RMSNorm / LayerNorm</td><td>3 HBM passes (mean, variance, normalize)</td><td>Apex <code>FusedRMSNorm</code> or PyTorch built-in fused</td><td>~2× speed (single HBM pass)</td></tr>
+<tr><td>SwiGLU activation</td><td>Split + SiLU + multiply as 3 kernels</td><td>Fused via torch.compile or Triton kernel</td><td>Eliminates 2 HBM round-trips for intermediates</td></tr>
+<tr><td>Cross-entropy loss</td><td>Materialize full logits [b×s, vocab], then softmax + nll_loss</td><td>Fused cross-entropy (liger-kernel, or chunked computation)</td><td>Huge memory saving — avoids materializing [b×s, vocab] in memory</td></tr>
+<tr><td>Rotary position embedding</td><td>Construct rotation matrices + 2 matmuls</td><td>Fused RoPE (in FlashAttention or Triton kernel)</td><td>Eliminates temporary tensors and HBM traffic</td></tr>
+<tr><td>Adam optimizer step</td><td>4 separate passes over parameters (update m, v, weights, decay)</td><td><code>torch.optim.AdamW(fused=True)</code></td><td>Single pass over all parameters — 4× less HBM traffic</td></tr>
+</table>
+
+<div class="co co-g"><i class="ti ti-check"></i><div><strong>Minimum fused kernel checklist for LLM training:</strong> FlashAttention (SDPA) ✓, Fused RMSNorm ✓, Fused optimizer (<code>fused=True</code>) ✓, Fused cross-entropy ✓ (when possible), torch.compile for everything else ✓. Missing any one of these can leave 10–30% performance on the table.</div></div>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- CHAPTER 10 -->
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c10"><span class="ph"><span class="ph-n">10</span></span> Optimizer efficiency</h2>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">AdamW memory and compute profile</span><span class="ex-b b-opt">Optimizer</span></div><div class="ex-bd">
+<p>The optimizer step is often overlooked but can be 5–15% of the training step time, and dominates memory consumption.</p>
+
+<table class="rt">
+<tr><th>Aspect</th><th>AdamW (standard)</th><th>AdamW (fused=True)</th><th>8-bit Adam (bitsandbytes)</th><th>Adafactor</th></tr>
+<tr><td>Memory per param</td><td>12 bytes (4B m + 4B v + 4B master)</td><td>Same</td><td>~5 bytes (1B m + 1B v + 2B master + quantization tables)</td><td>~8 bytes (row + col factors instead of full v)</td></tr>
+<tr><td>HBM passes</td><td>4 separate (m, v, weight, decay)</td><td>1 fused</td><td>1 fused + dequant overhead</td><td>1 pass</td></tr>
+<tr><td>Speed</td><td>Baseline</td><td>~2–3× faster</td><td>Similar to fused</td><td>~1.5× slower</td></tr>
+<tr><td>Training quality</td><td>Gold standard</td><td>Identical</td><td>Near-identical</td><td>Slightly worse for small models</td></tr>
+</table>
+
+<pre><span class="comment"># Always use fused AdamW</span>
+optimizer = torch.optim.AdamW(
+    model.parameters(),
+    lr=3e-4,
+    betas=(0.9, 0.95),
+    weight_decay=0.1,
+    <span class="flag">fused=True</span>,          <span class="comment"># single-pass GPU kernel</span>
+)
+
+<span class="comment"># For extreme memory savings (70B+ on limited GPUs):</span>
+<span class="comment"># pip install bitsandbytes</span>
+import bitsandbytes as bnb
+optimizer = bnb.optim.AdamW8bit(model.parameters(), lr=3e-4)</pre>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- CHAPTER 11 -->
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c11"><span class="ph"><span class="ph-n">11</span></span> Throughput engineering</h2>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">MFU: the metric that matters</span><span class="ex-b b-prof">Metric</span></div><div class="ex-bd">
+<p><strong>Model FLOP Utilization (MFU)</strong> is the gold-standard efficiency metric for LLM training. It measures what fraction of the GPU's theoretical peak FLOP/s is actually used for model computation.</p>
+
+<div class="formula">
+<span class="label">MFU = Model FLOPs per step / (GPU peak FLOP/s × time per step × num_GPUs)</span><br><br>
+<span class="label">Where Model FLOPs ≈ 6 × N × B × S (forward + backward)</span><br><br>
+<span class="label">Example: 7B model, 1M tokens/step, 8 H100s, step time = 2.5s</span><br>
+Model FLOPs = 6 × 7×10⁹ × 1×10⁶ = 4.2 × 10¹⁶<br>
+Peak = 8 × 990 × 10¹² = 7.92 × 10¹⁵ FLOP/s<br>
+MFU = 4.2×10¹⁶ / (7.92×10¹⁵ × 2.5) = <span class="val">~21.2%</span> ← poor<br><br>
+If step time improved to 0.6s:<br>
+MFU = 4.2×10¹⁶ / (7.92×10¹⁵ × 0.6) = <span class="val">~88.4%</span> ← excellent
+</div>
+
+<h4>MFU benchmarks (what to target)</h4>
+<table class="rt">
+<tr><th>MFU range</th><th>Assessment</th><th>Typical cause if low</th></tr>
+<tr><td>&gt; 55%</td><td>Excellent — near state-of-the-art</td><td>—</td></tr>
+<tr><td>40–55%</td><td>Good — room for optimization</td><td>Communication not fully overlapped, suboptimal batch size, missing fused kernels</td></tr>
+<tr><td>25–40%</td><td>Mediocre — significant waste</td><td>No torch.compile, FP32 GEMMs, poor TP/PP configuration, data loading gaps</td></tr>
+<tr><td>&lt; 25%</td><td>Poor — debugging required</td><td>Major bottleneck: data starvation, sync stalls, wrong parallelism config, single-GPU bottleneck</td></tr>
+</table>
+
+<div class="co co-i"><i class="ti ti-info-circle"></i><div><strong>MFU vs HFU:</strong> MFU counts only model FLOPs (the theoretical minimum compute). Hardware FLOP Utilization (HFU) also counts recomputation from activation checkpointing. HFU is always higher than MFU (since recomputation adds ~33% FLOPs). MFU is the more honest metric — it tells you how much of the GPU's capacity goes to <em>useful</em> work.</div></div>
+</div></div>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">Batch size tuning: the throughput curve</span><span class="ex-b b-opt">Throughput</span></div><div class="ex-bd">
+<p>Batch size is the most important throughput lever. Larger batches amortize fixed costs (communication, kernel launches, pipeline bubbles) over more useful compute.</p>
+
+<h4>The batch size → throughput relationship</h4>
+<p>As batch size increases:</p>
+<table class="rt">
+<tr><th>Phase</th><th>What happens</th><th>Throughput behavior</th></tr>
+<tr><td>Too small (bs < 8K tokens)</td><td>GEMMs don't fill the GPU (M dimension too small). Communication overhead dominates. Pipeline bubbles are large.</td><td>Low throughput, low MFU. Near-linear scaling with batch size.</td></tr>
+<tr><td>Sweet spot (bs = 0.5–2M tokens)</td><td>GEMMs saturate Tensor Cores. Communication is hidden behind compute. Pipeline is efficiently utilized.</td><td>Peak throughput. MFU plateaus at maximum.</td></tr>
+<tr><td>Too large (bs > 4M tokens)</td><td>Activation memory grows, forcing more gradient accumulation or checkpointing. Diminishing returns on MFU. Potential convergence issues (learning rate needs adjustment).</td><td>Throughput flat or declining. Memory pressure increases.</td></tr>
+</table>
+
+<div class="formula">
+<span class="label">Batch size = micro_batch_size × gradient_accumulation_steps × DP_degree × seq_len</span><br><br>
+<span class="label">Tune micro_batch_size first (maximize GPU memory usage)</span><br>
+<span class="label">Then tune gradient_accumulation to reach target global batch size</span><br>
+<span class="label">Target: global batch size in tokens = 0.5M–4M for most LLMs</span>
+</div>
+
+<div class="co co-t"><i class="ti ti-bulb"></i><div><strong>The micro-batch size should be the largest that fits in GPU memory.</strong> This maximizes the M dimension of GEMMs (= micro_batch_size × seq_len), which maximizes arithmetic intensity and Tensor Core utilization. Use gradient accumulation to reach the target global batch size without increasing memory.</div></div>
+</div></div>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">End-to-end throughput checklist</span><span class="ex-b b-opt">Throughput</span></div><div class="ex-bd">
+<p>Walk through this checklist systematically before profiling. Each item has been covered in previous chapters — this is the aggregated action list.</p>
+
+<table class="rt">
+<tr><th>#</th><th>Check</th><th>How to verify</th><th>Impact</th></tr>
+<tr><td>1</td><td>BF16 mixed precision enabled</td><td>Check kernel names for <code>h884gemm</code> in Nsight. Verify <code>torch.autocast</code> wraps forward.</td><td>~2–8× vs FP32</td></tr>
+<tr><td>2</td><td>Tensor Core alignment (dims ÷ 8)</td><td>Print model config: hidden_size, intermediate_size, vocab_size. All must be multiples of 8.</td><td>5–30% if misaligned</td></tr>
+<tr><td>3</td><td>FlashAttention enabled</td><td>Look for <code>flash_</code> kernel names in profiler. Or <code>torch.backends.cuda.flash_sdp_enabled()</code>.</td><td>2–4× for attention</td></tr>
+<tr><td>4</td><td>torch.compile applied</td><td>Check for <code>triton_</code> or <code>inductor_</code> kernel names. Run <code>dynamo.explain()</code> for graph breaks.</td><td>10–30% overall</td></tr>
+<tr><td>5</td><td>Fused optimizer</td><td><code>fused=True</code> in AdamW constructor.</td><td>2–3× optimizer step speed</td></tr>
+<tr><td>6</td><td>Fused normalization</td><td>Check if RMSNorm/LayerNorm is a single kernel vs 3 separate kernels in profiler.</td><td>~2× for norm layers</td></tr>
+<tr><td>7</td><td>Activation checkpointing</td><td>Memory usage should drop significantly. Only per-layer inputs stored.</td><td>60–70% activation memory savings</td></tr>
+<tr><td>8</td><td>Micro-batch size maximized</td><td>GPU memory usage should be 70–85%. Increase until near OOM.</td><td>Higher arithmetic intensity</td></tr>
+<tr><td>9</td><td>Communication overlap (FSDP/DDP)</td><td>In Nsight, NCCL kernels should overlap with compute kernels.</td><td>Hides 100% of comm cost</td></tr>
+<tr><td>10</td><td>TP within node only</td><td><code>nvidia-smi topo -m</code> confirms NVLink between TP peers.</td><td>Avoids 5–10× comm slowdown</td></tr>
+<tr><td>11</td><td>Pipeline bubble minimized</td><td>Microbatches ≥ 4 × PP stages. Check Nsight for idle gaps between stages.</td><td>Reduces 10–40% idle time</td></tr>
+<tr><td>12</td><td>No sync stalls (.item(), .cpu())</td><td>Grep codebase. Check Nsight for <code>cudaStreamSynchronize</code> mid-iteration.</td><td>5–50% if present</td></tr>
+<tr><td>13</td><td>Persistence mode on</td><td><code>nvidia-smi -q | grep Persistence</code> → should be Enabled.</td><td>Eliminates 1–3s per launch</td></tr>
+<tr><td>14</td><td>cuDNN benchmark mode</td><td><code>torch.backends.cudnn.benchmark = True</code> (for fixed shapes).</td><td>5–15% for conv workloads</td></tr>
+<tr><td>15</td><td>No unnecessary <code>torch.cuda.empty_cache()</code></td><td>Grep codebase.</td><td>Eliminates allocation churn</td></tr>
+</table>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- CHAPTER 12 -->
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c12"><span class="ph"><span class="ph-n">12</span></span> Profiling workflow</h2>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">The complete profiling loop for LLM training</span><span class="ex-b b-prof">Profiling</span></div><div class="ex-bd">
+<p>This section ties together the Nsight Systems and Nsight Compute guides with the LLM-specific context above.</p>
+
+<h4>Step 1: Quick sanity check (2 minutes)</h4>
+<pre><span class="comment"># While training is running:</span>
+nvidia-smi dmon -s pucvmet -d 1  <span class="comment"># streaming GPU metrics</span>
+<span class="comment"># Check: GPU-Util ~95%, Power ~500–650W, Temp < 80°C</span>
+<span class="comment"># Check: All 8 GPUs similar (no straggler)</span></pre>
+
+<h4>Step 2: Nsight Systems capture (5 minutes)</h4>
+<pre>nsys profile --trace=cuda,nvtx,osrt,cudnn,cublas \
+    --cuda-memory-usage=true --gpu-metrics-device=all \
+    --capture-range=cudaProfilerApi --output=llm_baseline \
+    torchrun --nproc_per_node=8 train.py</pre>
+
+<h4>Step 3: Timeline analysis (10 minutes)</h4>
+<p>Open the <code>.nsys-rep</code> and answer these questions in order:</p>
+<table class="rt">
+<tr><th>#</th><th>Question</th><th>Where to look</th><th>If bad →</th></tr>
+<tr><td>1</td><td>How long is one training iteration?</td><td>NVTX markers → measure wall time</td><td>Compute MFU. If < 40%, continue diagnosis.</td></tr>
+<tr><td>2</td><td>Is the GPU idle between iterations?</td><td>GPU kernel row → gaps between iterations</td><td>Data pipeline issue (Chapter 5)</td></tr>
+<tr><td>3</td><td>Are GEMMs using Tensor Cores?</td><td>Kernel names: <code>h884</code> vs <code>sgemm</code></td><td>Precision issue (Chapter 4)</td></tr>
+<tr><td>4</td><td>Are there many tiny kernels?</td><td>Kernel stats → sort by count/duration</td><td>Missing torch.compile (Chapter 9)</td></tr>
+<tr><td>5</td><td>Is communication overlapped?</td><td>NCCL kernels during or after backward?</td><td>FSDP/DDP config issue (Chapter 7)</td></tr>
+<tr><td>6</td><td>Are there sync stalls mid-iteration?</td><td><code>cudaStreamSynchronize</code> on CUDA API row</td><td>Code issue — .item()/.cpu() (Chapter 9)</td></tr>
+<tr><td>7</td><td>Is there allocation churn?</td><td><code>cudaMalloc</code> during steady-state</td><td>Memory management issue (Chapter 6)</td></tr>
+<tr><td>8</td><td>Is there a straggler GPU?</td><td>Compare iteration times across GPUs</td><td>Thermal throttling or load imbalance</td></tr>
+</table>
+
+<h4>Step 4: Nsight Compute for hot kernels (10 minutes)</h4>
+<p>If the timeline shows no idle gaps but MFU is still low, the bottleneck is inside the kernels themselves.</p>
+<pre><span class="comment"># Profile the top GEMM kernel</span>
+ncu --set full --kernel-name "regex:gemm" \
+    --launch-skip 500 --launch-count 3 \
+    -o gemm_deep_dive python train.py
+
+<span class="comment"># Check:</span>
+<span class="comment"># - SOL: SM% > 80%? Memory% < 50%? (should be compute-bound)</span>
+<span class="comment"># - Roofline: near the BF16 Tensor Core ceiling?</span>
+<span class="comment"># - Tensor Core pipe utilization > 0%?</span></pre>
+
+<h4>Step 5: Fix → re-profile → iterate</h4>
+<p>Apply the smallest targeted fix, re-profile, verify the bottleneck moved. Repeat until MFU is satisfactory or the remaining bottleneck is irreducible (near hardware limits).</p>
+
+<div class="co co-t"><i class="ti ti-bulb"></i><div><strong>The profiling priority stack for LLMs:</strong> (1) Is it using BF16 Tensor Cores? (2) Is communication overlapped? (3) Is batch size large enough? (4) Are kernels fused? (5) Is the data pipeline keeping up? Address them in this order — each subsequent item matters less if the previous ones aren't fixed.</div></div>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- SUMMARY -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="sum">
+<p><strong style="color:var(--tx)">The performance engineer's mental model for LLM training:</strong> Everything is either a GEMM or not. GEMMs (85% of FLOPs) must hit Tensor Cores at BF16/FP8, with aligned dimensions and large batch sizes. Non-GEMMs (15% of FLOPs but 50%+ of memory traffic) must be fused to minimize HBM round-trips. Communication must overlap with compute. Memory must be sharded (FSDP) and checkpointed. Then measure MFU — the single number that tells you if you've succeeded.</p>
+</div>
+
+</div>
+<script>
+function toggle(el){el.classList.toggle('open');el.nextElementSibling.classList.toggle('open')}
+function showTab(id,btn){
+var p=btn.closest('.ex-bd')||document;
+p.querySelectorAll('.tp').forEach(function(t){t.classList.remove('active')});
+p.querySelectorAll('.tbn').forEach(function(b){b.classList.remove('active')});
+document.getElementById(id).classList.add('active');
+btn.classList.add('active');
+}
+</script>
+</body>
+</html>

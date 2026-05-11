@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Large vision model training — performance engineering guide</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.6.0/dist/tabler-icons.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,wght@0,400;0,600;1,400&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+--bg:#F9FAF7;--bg2:#EEF0EB;--bg3:#E3E6DE;--card:#fff;
+--tx:#1A1C18;--tx2:#656B5F;--tx3:#959C8F;
+--bdr:rgba(0,0,0,0.08);--bdr2:rgba(0,0,0,0.15);
+--acc:#5B4A1E;--acc-bg:#F5F0E2;--acc-tx:#4A3C16;
+--warn:#8B6914;--warn-bg:#FFF8E1;--warn-tx:#5C4400;
+--err:#9B2C2C;--err-bg:#FFF0F0;--err-tx:#6B1A1A;
+--info:#1A5276;--info-bg:#E8F4FD;--info-tx:#0D3B56;
+--green:#2D5A27;--green-bg:#E8F0E7;--green-tx:#1E3D1A;
+--blue:#3B82F6;--gre:#22C55E;--amber:#F59E0B;--red:#EF4444;--purple:#8B5CF6;--teal:#14B8A6;--pink:#EC4899;--gray:#94A3B8;--orange:#F97316;--cyan:#06B6D4;
+--font:'Instrument Sans',sans-serif;--serif:'Source Serif 4',Georgia,serif;--mono:'JetBrains Mono','Consolas',monospace;
+--radius:8px;--radius-lg:12px;
+}
+@media(prefers-color-scheme:dark){:root{
+--bg:#1A1A18;--bg2:#242422;--bg3:#2E2E2B;--card:#222220;
+--tx:#E8E8E4;--tx2:#9C9C95;--tx3:#6B6B65;
+--bdr:rgba(255,255,255,0.08);--bdr2:rgba(255,255,255,0.15);
+--acc:#D4B96B;--acc-bg:#2E2818;--acc-tx:#E8D496;
+--warn:#D4A529;--warn-bg:#2E2610;--warn-tx:#E8C556;
+--err:#F87171;--err-bg:#2E1A1A;--err-tx:#FCA5A5;
+--info:#60A5FA;--info-bg:#1A2836;--info-tx:#93C5FD;
+--green:#6ABF62;--green-bg:#1E2E1C;--green-tx:#A0D89A;
+}}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:var(--font);background:var(--bg);color:var(--tx);line-height:1.72;font-size:15px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:860px;margin:0 auto;padding:2.5rem 1.5rem 6rem}
+h1{font-family:var(--serif);font-size:32px;font-weight:600;line-height:1.25;margin:0 0 8px;letter-spacing:-0.02em}
+.hero-sub{font-size:15px;color:var(--tx2);margin:0 0 2.5rem;max-width:660px;line-height:1.65}
+h2{font-size:21px;font-weight:600;margin:3rem 0 1rem;padding-top:1.5rem;border-top:1.5px solid var(--bdr);letter-spacing:-0.01em}
+h2:first-of-type{border-top:none;padding-top:0}
+h3{font-size:16px;font-weight:600;margin:1.5rem 0 0.5rem}
+h4{font-size:14px;font-weight:600;margin:1.2rem 0 0.4rem}
+p{margin:0 0 0.85rem}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+code{font-family:var(--mono);font-size:12.5px;background:var(--bg2);padding:2px 6px;border-radius:4px;word-break:break-word}
+pre{font-family:var(--mono);font-size:12.5px;line-height:1.65;background:var(--bg2);border:1px solid var(--bdr);border-radius:var(--radius);padding:16px 20px;overflow-x:auto;margin:0 0 1rem;white-space:pre}
+pre .flag{color:var(--acc)}
+pre .cm{color:var(--tx3);font-style:italic}
+
+.toc{background:var(--card);border:1px solid var(--bdr);border-radius:var(--radius-lg);padding:20px 24px;margin:0 0 2.5rem}
+.toc-title{font-size:13px;font-weight:600;color:var(--tx2);text-transform:uppercase;letter-spacing:0.8px;margin:0 0 10px}
+.toc-grid{display:grid;grid-template-columns:1fr 1fr;gap:3px 24px;list-style:none;padding:0}
+.toc-grid a{font-size:13.5px;color:var(--tx);display:flex;align-items:center;gap:6px;padding:4px 0;transition:color 0.15s}
+.toc-grid a:hover{color:var(--acc);text-decoration:none}
+.toc-grid .ti{font-size:14px;color:var(--tx3)}
+@media(max-width:600px){.toc-grid{grid-template-columns:1fr}}
+
+.ex{border:1px solid var(--bdr);border-radius:var(--radius-lg);margin:0 0 10px;background:var(--card);overflow:hidden}
+.ex-h{display:flex;align-items:center;gap:10px;padding:14px 18px;cursor:pointer;user-select:none;transition:background 0.15s}
+.ex-h:hover{background:var(--bg2)}
+.ex-h .ti{font-size:18px;color:var(--tx3);transition:transform 0.25s}
+.ex-h.open .ti{transform:rotate(90deg)}
+.ex-t{font-size:15px;font-weight:500;flex:1}
+.ex-b{font-size:11px;font-weight:500;padding:3px 10px;border-radius:20px;text-transform:uppercase;letter-spacing:0.5px}
+.b-hw{background:var(--info-bg);color:var(--info-tx)}
+.b-mem{background:var(--err-bg);color:var(--err-tx)}
+.b-dist{background:#F0E6FF;color:#5B21B6}
+.b-data{background:var(--green-bg);color:var(--green-tx)}
+.b-opt{background:var(--warn-bg);color:var(--warn-tx)}
+.b-prec{background:var(--acc-bg);color:var(--acc-tx)}
+.b-prof{background:var(--bg3);color:var(--tx2)}
+.b-kern{background:#FFE4E6;color:#9F1239}
+.b-arch{background:#E0F2FE;color:#075985}
+.b-diff{background:#FFF0FB;color:#86198F}
+.ex-bd{display:none;padding:0 18px 18px;animation:fadeIn 0.2s ease}
+.ex-bd.open{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+
+.rt{width:100%;border-collapse:collapse;font-size:13px;margin:12px 0 16px}
+.rt th{text-align:left;font-weight:500;padding:8px 12px;border-bottom:2px solid var(--bdr2);color:var(--tx2);font-size:12px;text-transform:uppercase;letter-spacing:0.5px}
+.rt td{padding:8px 12px;border-bottom:1px solid var(--bdr);vertical-align:top;line-height:1.55}
+.rt tr:last-child td{border-bottom:none}
+
+.ic{border-left:3px solid;border-radius:0 var(--radius) var(--radius) 0;padding:14px 18px;margin:10px 0}
+.ic.warn{border-color:var(--amber);background:var(--warn-bg)}
+.ic.info{border-color:var(--blue);background:var(--info-bg)}
+.ic.fix{border-color:var(--gre);background:var(--green-bg)}
+.ic.err{border-color:var(--red);background:var(--err-bg)}
+.ic .ic-l{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin:0 0 4px}
+.ic.warn .ic-l{color:var(--warn-tx)}.ic.info .ic-l{color:var(--info-tx)}.ic.fix .ic-l{color:var(--green-tx)}.ic.err .ic-l{color:var(--err-tx)}
+.ic p{margin:0;font-size:14px;line-height:1.6}
+
+.co{display:flex;gap:10px;padding:14px 16px;border-radius:var(--radius);margin:12px 0 16px;font-size:14px;line-height:1.6}
+.co .ti{font-size:18px;flex-shrink:0;margin-top:2px}
+.co-i{background:var(--info-bg);color:var(--info-tx)}
+.co-w{background:var(--warn-bg);color:var(--warn-tx)}
+.co-t{background:var(--acc-bg);color:var(--acc-tx)}
+.co-g{background:var(--green-bg);color:var(--green-tx)}
+
+.mg{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:12px 0 16px}
+.mc{background:var(--bg2);border-radius:var(--radius);padding:12px 14px}
+.mc-l{font-size:11px;color:var(--tx3);text-transform:uppercase;letter-spacing:0.5px;margin:0 0 2px}
+.mc-v{font-size:18px;font-weight:500;margin:0}
+
+.tb{display:flex;gap:4px;flex-wrap:wrap}
+.tbn{font-family:var(--font);font-size:13px;padding:8px 14px;border:1px solid var(--bdr);border-bottom:none;border-radius:var(--radius) var(--radius) 0 0;background:var(--bg2);color:var(--tx2);cursor:pointer;transition:all 0.15s;font-weight:500}
+.tbn:hover{background:var(--bg3)}
+.tbn.active{background:var(--card);color:var(--tx);border-color:var(--bdr);position:relative;z-index:1}
+.tp{display:none;border:1px solid var(--bdr);border-radius:0 var(--radius) var(--radius) var(--radius);background:var(--card);padding:20px;margin:0 0 16px;position:relative;top:-1px}
+.tp.active{display:block}
+
+.ph{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.8px;color:var(--tx3);margin:0 0 8px}
+.ph-n{width:24px;height:24px;border-radius:50%;background:var(--acc);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:12px}
+
+.formula{background:var(--bg2);border:1px solid var(--bdr);border-radius:var(--radius);padding:14px 20px;margin:12px 0 16px;font-family:var(--mono);font-size:13px;line-height:1.8;overflow-x:auto}
+.formula .label{color:var(--tx3);font-size:11px;text-transform:uppercase;letter-spacing:0.5px}
+.formula .val{color:var(--acc);font-weight:500}
+
+.bar-row{display:flex;align-items:center;gap:10px;margin:0 0 5px}
+.bar-label{font-family:var(--mono);font-size:11px;color:var(--tx2);width:130px;flex-shrink:0;text-align:right}
+.bar-track{flex:1;height:18px;background:var(--bg);border-radius:3px;overflow:hidden;border:1px solid var(--bdr)}
+.bar-fill{height:100%;border-radius:2px;display:flex;align-items:center;padding:0 6px;font-size:10px;font-weight:500;color:#fff;white-space:nowrap}
+
+.tl-viz{background:var(--bg2);border-radius:var(--radius);padding:16px;margin:12px 0 16px;overflow-x:auto}
+.tl-row{display:flex;align-items:center;margin:0 0 5px;min-width:500px}
+.tl-row:last-child{margin:0}
+.tl-lb{font-family:var(--mono);font-size:10px;color:var(--tx2);width:100px;flex-shrink:0;text-align:right;padding-right:8px}
+.tl-tk{flex:1;height:20px;background:var(--bg);border-radius:3px;position:relative;overflow:hidden;border:1px solid var(--bdr)}
+.tl-bl{position:absolute;top:2px;height:16px;border-radius:2px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:8px;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 2px}
+.tl-cap{font-size:12px;color:var(--tx2);margin:8px 0 0;text-align:center;font-style:italic}
+
+.vs-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:12px 0 16px}
+@media(max-width:600px){.vs-grid{grid-template-columns:1fr}}
+.vs-card{background:var(--bg2);border-radius:var(--radius-lg);padding:16px 18px}
+.vs-card h4{margin:0 0 8px;font-size:15px}
+.vs-card p{font-size:13px;color:var(--tx2);margin:0}
+
+.sum{margin-top:3rem;padding:20px;background:var(--bg2);border-radius:var(--radius-lg);font-size:14px;color:var(--tx2);line-height:1.7}
+.sum p{margin:0}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Large vision model training</h1>
+<p class="hero-sub">Performance engineering for ViTs, ConvNets, diffusion models, and multimodal vision systems — where the data pipeline is king, memory layouts matter, and the problem shape is fundamentally different from LLMs.</p>
+
+<nav class="toc">
+<p class="toc-title">12 chapters</p>
+<ol class="toc-grid">
+<li><a href="#c1"><i class="ti ti-arrows-diff" aria-hidden="true"></i> Vision vs language: what changes</a></li>
+<li><a href="#c2"><i class="ti ti-building-arch" aria-hidden="true"></i> Architecture zoo</a></li>
+<li><a href="#c3"><i class="ti ti-calculator" aria-hidden="true"></i> Compute and memory math</a></li>
+<li><a href="#c4"><i class="ti ti-database" aria-hidden="true"></i> The data pipeline</a></li>
+<li><a href="#c5"><i class="ti ti-layout-grid" aria-hidden="true"></i> Memory layout: NCHW vs NHWC</a></li>
+<li><a href="#c6"><i class="ti ti-percentage" aria-hidden="true"></i> Precision and Tensor Cores</a></li>
+<li><a href="#c7"><i class="ti ti-brain" aria-hidden="true"></i> Memory optimization</a></li>
+<li><a href="#c8"><i class="ti ti-network" aria-hidden="true"></i> Distributed training</a></li>
+<li><a href="#c9"><i class="ti ti-flame" aria-hidden="true"></i> Kernel optimization</a></li>
+<li><a href="#c10"><i class="ti ti-photo-ai" aria-hidden="true"></i> Diffusion model specifics</a></li>
+<li><a href="#c11"><i class="ti ti-eye" aria-hidden="true"></i> Multimodal (vision + language)</a></li>
+<li><a href="#c12"><i class="ti ti-chart-line" aria-hidden="true"></i> Throughput engineering</a></li>
+</ol>
+</nav>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c1"><span class="ph"><span class="ph-n">1</span></span> Vision vs language: what changes</h2>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">The five fundamental differences from LLM training</span><span class="ex-b b-arch">Overview</span></div><div class="ex-bd">
+
+<div class="vs-grid">
+<div class="vs-card">
+<h4>1. Data pipeline is the #1 bottleneck</h4>
+<p>LLM data is pre-tokenized binary (microseconds to load). Vision data requires JPEG decode (0.5–5ms), resize, augmentation (random crop, flip, color jitter, mixup), and normalization — all CPU-intensive. The data pipeline is the first thing to fix, not the last.</p>
+</div>
+<div class="vs-card">
+<h4>2. Memory layout matters enormously</h4>
+<p>Convolutions and vision ops are deeply sensitive to whether data is stored as NCHW (channels-first, PyTorch default) or NHWC (channels-last, cuDNN preference). Wrong layout = up to 30% slower. LLMs don't have this issue — their tensors are [batch, seq, hidden], always contiguous.</p>
+</div>
+<div class="vs-card">
+<h4>3. Spatial dimensions create variable compute</h4>
+<p>Unlike fixed-length token sequences, images have spatial dimensions (H×W) that affect GEMM shapes at every layer (through feature maps). Multi-scale training, variable resolutions, and progressive resizing change the compute profile dynamically.</p>
+</div>
+<div class="vs-card">
+<h4>4. ConvNets and ViTs have different profiles</h4>
+<p>ConvNets are dominated by implicit-GEMM convolutions with cuDNN algorithm selection. ViTs look like LLMs but with patch-based tokenization and no causal masking — different attention patterns, different memory characteristics.</p>
+</div>
+</div>
+
+<p><strong>The fifth difference: activation memory dominates even more.</strong> Vision models process high-resolution feature maps. A single conv layer's output at 256 channels × 56×56 spatial × batch 256 is already 400 MB in FP32. LLMs have large activations too, but vision activations scale with H×W×C per layer, not just sequence×hidden — and vision models often have more layers with gradual resolution reduction creating a pyramid of differently-sized feature maps.</p>
+
+<div class="co co-t"><i class="ti ti-bulb"></i><div><strong>Priority shift:</strong> For LLMs, the profiling priority is Tensor Cores → communication → batch size → fusion. For vision, it's <strong>data pipeline → memory layout → Tensor Cores → augmentation on GPU → communication</strong>. The data pipeline being first is the defining characteristic of vision model performance engineering.</div></div>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c2"><span class="ph"><span class="ph-n">2</span></span> Architecture zoo</h2>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">Architecture compute profiles: ConvNets, ViTs, hybrids, and diffusion</span><span class="ex-b b-arch">Architecture</span></div><div class="ex-bd">
+
+<table class="rt">
+<tr><th>Architecture</th><th>Examples</th><th>Dominant op</th><th>Compute bound?</th><th>Key bottleneck</th></tr>
+<tr><td><strong>Classic ConvNet</strong></td><td>ResNet, ConvNeXt, EfficientNet</td><td>3×3 and 1×1 convolutions (implicit GEMM)</td><td>Yes, if using Tensor Cores</td><td>cuDNN algorithm selection, memory layout (NHWC), data pipeline</td></tr>
+<tr><td><strong>Vision Transformer (ViT)</strong></td><td>ViT-L/H/G, DINOv2, SigLIP</td><td>GEMMs (QKV, MLP) — same as LLM</td><td>Yes, large GEMMs</td><td>Patch embedding conv, attention with full (not causal) mask, data pipeline</td></tr>
+<tr><td><strong>Hybrid CNN-Transformer</strong></td><td>Swin, CoAtNet, EfficientViT</td><td>Mix of convs and attention (often windowed)</td><td>Varies by layer</td><td>Transitions between conv and attention stages, window partitioning overhead</td></tr>
+<tr><td><strong>Diffusion U-Net</strong></td><td>Stable Diffusion, SDXL, Imagen</td><td>Conv + cross-attention + timestep conditioning</td><td>Mixed — convs dominate at high res, attention at low res</td><td>Variable resolution in U-Net, cross-attention with text conditioning, iterative denoising (20–50 forward passes)</td></tr>
+<tr><td><strong>Diffusion Transformer (DiT)</strong></td><td>DiT, Flux, Sora-class models</td><td>Pure Transformer on latent patches</td><td>Yes, very similar to LLM</td><td>Iterative denoising multiplies all compute by step count, classifier-free guidance doubles batch</td></tr>
+<tr><td><strong>Multimodal (Vision+Language)</strong></td><td>LLaVA, GPT-4V, Qwen-VL</td><td>Vision encoder + LLM</td><td>Both pipelines</td><td>Image tokenization bottleneck, mixed-modality attention, vision encoder vs LLM throughput mismatch</td></tr>
+</table>
+
+<h4>FLOP distribution by architecture type</h4>
+<p><strong>ResNet-50 (224×224):</strong></p>
+<div class="bar-row"><span class="bar-label">3×3 convolutions</span><span class="bar-track"><span class="bar-fill" style="width:62%;background:var(--blue)">62%</span></span></div>
+<div class="bar-row"><span class="bar-label">1×1 convolutions</span><span class="bar-track"><span class="bar-fill" style="width:30%;background:var(--teal)">30%</span></span></div>
+<div class="bar-row"><span class="bar-label">BN + ReLU + pool</span><span class="bar-track"><span class="bar-fill" style="width:8%;background:var(--gray)">8%</span></span></div>
+
+<p style="margin-top:16px"><strong>ViT-Large (224×224, 196 patches):</strong></p>
+<div class="bar-row"><span class="bar-label">QKV + out proj</span><span class="bar-track"><span class="bar-fill" style="width:28%;background:var(--blue)">28%</span></span></div>
+<div class="bar-row"><span class="bar-label">MLP (up + down)</span><span class="bar-track"><span class="bar-fill" style="width:56%;background:var(--teal)">56%</span></span></div>
+<div class="bar-row"><span class="bar-label">Attention scores</span><span class="bar-track"><span class="bar-fill" style="width:8%;background:var(--purple)">8%</span></span></div>
+<div class="bar-row"><span class="bar-label">Norm + act + other</span><span class="bar-track"><span class="bar-fill" style="width:8%;background:var(--gray)">8%</span></span></div>
+
+<p style="margin-top:16px"><strong>Stable Diffusion U-Net (64×64 latent):</strong></p>
+<div class="bar-row"><span class="bar-label">ResNet convs</span><span class="bar-track"><span class="bar-fill" style="width:45%;background:var(--blue)">45%</span></span></div>
+<div class="bar-row"><span class="bar-label">Self-attention</span><span class="bar-track"><span class="bar-fill" style="width:25%;background:var(--purple)">25%</span></span></div>
+<div class="bar-row"><span class="bar-label">Cross-attention</span><span class="bar-track"><span class="bar-fill" style="width:18%;background:var(--pink)">18%</span></span></div>
+<div class="bar-row"><span class="bar-label">Timestep/norm/other</span><span class="bar-track"><span class="bar-fill" style="width:12%;background:var(--gray)">12%</span></span></div>
+</div></div>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">ViT vs ConvNet: performance trade-offs</span><span class="ex-b b-arch">Architecture</span></div><div class="ex-bd">
+<table class="rt">
+<tr><th>Aspect</th><th>ConvNet (e.g., ConvNeXt-L)</th><th>ViT (e.g., ViT-L/16)</th></tr>
+<tr><td>Dominant operation</td><td>Implicit-GEMM convolution (cuDNN)</td><td>Dense GEMM (cuBLAS)</td></tr>
+<tr><td>cuDNN algorithm sensitivity</td><td>Very high — wrong algorithm can be 3× slower</td><td>Low — standard GEMMs, no algorithm search</td></tr>
+<tr><td>NHWC benefit</td><td>Critical — 15–30% speedup</td><td>Minimal — tensors are [B, patches, hidden]</td></tr>
+<tr><td>Scaling behavior</td><td>FLOPs scale with H²×W²×C² per layer</td><td>FLOPs scale with patches²×hidden² (attention) or patches×hidden² (MLP)</td></tr>
+<tr><td>Memory layout</td><td>Feature maps: [B,C,H,W] or [B,H,W,C]</td><td>Patch sequences: [B, N, D] — always contiguous</td></tr>
+<tr><td>torch.compile benefit</td><td>Moderate — cuDNN already optimized</td><td>High — fuses norm/activation/dropout like LLMs</td></tr>
+<tr><td>FlashAttention applicability</td><td>N/A (no attention)</td><td>Applicable but less impactful than LLMs — patch sequences are shorter (196–1024 vs 4K–32K)</td></tr>
+<tr><td>Multi-scale training</td><td>Naturally handles variable resolutions</td><td>Requires positional embedding interpolation</td></tr>
+</table>
+
+<div class="co co-i"><i class="ti ti-info-circle"></i><div><strong>The ViT convergence:</strong> Large-scale vision is converging on ViTs (DINOv2, SigLIP, EVA) because they scale better with data and compute, and benefit from the same software stack as LLMs. ConvNets are still used for detection/segmentation backbones and mobile architectures. Performance engineering for ViTs is almost identical to LLM engineering, except the data pipeline is radically different.</div></div>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c3"><span class="ph"><span class="ph-n">3</span></span> Compute and memory math</h2>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">FLOP counting for vision architectures</span><span class="ex-b b-hw">Compute</span></div><div class="ex-bd">
+
+<h4>Convolution FLOPs</h4>
+<div class="formula">
+<span class="label">Conv2d FLOPs:</span><br>
+<span class="val">2 × B × C_out × H_out × W_out × C_in × K_h × K_w</span><br><br>
+<span class="label">ResNet-50 (B=1, 224×224 input):</span><br>
+Forward: <span class="val">~4.1 GFLOP</span><br>
+Forward + Backward: <span class="val">~12.3 GFLOP</span><br>
+Batch of 256: <span class="val">~3.1 TFLOP per step</span><br><br>
+<span class="label">At 50% MFU on H100 BF16 (495 TFLOP/s effective):</span><br>
+<span class="val">3.1 TFLOP / 495 TFLOP/s ≈ 6.3ms per step</span> ← extremely fast<br>
+<span class="label">Actual time is ~40–80ms because data pipeline is the bottleneck</span>
+</div>
+
+<h4>ViT FLOPs</h4>
+<div class="formula">
+<span class="label">ViT FLOPs ≈ same formula as LLM Transformer layers:</span><br>
+<span class="val">6 × N × B × num_patches</span> (forward + backward)<br><br>
+<span class="label">ViT-Huge (632M params), 224×224, 14×14 patches = 256 patches, B=256:</span><br>
+<span class="val">6 × 632×10⁶ × 256 × 256 ≈ 249 TFLOP per step</span><br><br>
+<span class="label">ViT-Giant (1.8B params), 224×224, B=128:</span><br>
+<span class="val">6 × 1.8×10⁹ × 128 × 256 ≈ 354 TFLOP per step</span>
+</div>
+
+<div class="co co-w"><i class="ti ti-alert-triangle"></i><div><strong>Vision models are often under-compute, over-data.</strong> A ResNet-50 training step has ~3 TFLOP of compute — an H100 can do that in 6ms. But loading, decoding, and augmenting 256 images takes 30–100ms on CPU. The GPU spends 80%+ of its time idle waiting for data. This is why the data pipeline chapter comes before everything else for vision.</div></div>
+</div></div>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">Activation memory for vision models</span><span class="ex-b b-mem">Memory</span></div><div class="ex-bd">
+<p>Vision activations are dominated by spatial feature maps, especially at early layers where resolution is high.</p>
+
+<table class="rt">
+<tr><th>Model</th><th>Input</th><th>Peak activation memory (BF16, B=1)</th><th>At B=256</th><th>Key insight</th></tr>
+<tr><td>ResNet-50</td><td>224²</td><td>~28 MB</td><td>~7.2 GB</td><td>First conv layer (64ch × 112²) is 1.6MB/sample — largest single activation</td></tr>
+<tr><td>ConvNeXt-Large</td><td>224²</td><td>~105 MB</td><td>~27 GB</td><td>Wider channels (192→384→768→1536) with depthwise convs</td></tr>
+<tr><td>ViT-Large</td><td>224² (196 patches)</td><td>~55 MB</td><td>~14 GB</td><td>Dominated by QKV activations — same as LLM</td></tr>
+<tr><td>ViT-Huge</td><td>224² (196 patches)</td><td>~110 MB</td><td>~28 GB</td><td>Wider hidden dim (1280) and more layers (32)</td></tr>
+<tr><td>SD U-Net</td><td>64² latent (512×512 image)</td><td>~400 MB</td><td>~3.2 GB (B=8)</td><td>Multi-resolution feature maps + attention maps at each scale</td></tr>
+<tr><td>DiT-XL</td><td>32² latent (256×256)</td><td>~120 MB</td><td>~3.8 GB (B=32)</td><td>Transformer-style — patch sequence × hidden</td></tr>
+</table>
+
+<div class="formula">
+<span class="label">Feature map memory rule of thumb:</span><br>
+<span class="val">Activation per conv layer ≈ B × C_out × H_out × W_out × 2 bytes (BF16)</span><br><br>
+<span class="label">The pyramid problem:</span><br>
+Early layers: low channels, high resolution → moderate memory<br>
+Late layers: high channels, low resolution → moderate memory<br>
+Mid layers: moderate both → <span class="val">often the peak</span><br>
+Total: sum across all layers (must store all for backward)
+</div>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c4"><span class="ph"><span class="ph-n">4</span></span> The data pipeline</h2>
+<p>This is the most critical chapter for vision performance engineering. The data pipeline determines whether your GPU runs at 20% or 90% utilization.</p>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">Anatomy of a vision data pipeline and where time goes</span><span class="ex-b b-data">Data</span></div><div class="ex-bd">
+
+<div class="tl-viz">
+<div class="tl-row"><span class="tl-lb">Disk read</span><span class="tl-tk">
+<span class="tl-bl" style="left:0%;width:15%;background:var(--gray)">read JPEG</span>
+</span></div>
+<div class="tl-row"><span class="tl-lb">Decode</span><span class="tl-tk">
+<span class="tl-bl" style="left:15%;width:25%;background:var(--red)">JPEG decode</span>
+</span></div>
+<div class="tl-row"><span class="tl-lb">Augment</span><span class="tl-tk">
+<span class="tl-bl" style="left:40%;width:30%;background:var(--amber)">resize + crop + flip + jitter</span>
+</span></div>
+<div class="tl-row"><span class="tl-lb">Normalize</span><span class="tl-tk">
+<span class="tl-bl" style="left:70%;width:8%;background:var(--teal)">norm</span>
+</span></div>
+<div class="tl-row"><span class="tl-lb">Collate + H2D</span><span class="tl-tk">
+<span class="tl-bl" style="left:78%;width:7%;background:var(--blue)">stack</span>
+<span class="tl-bl" style="left:86%;width:5%;background:var(--purple)">H2D</span>
+</span></div>
+<div class="tl-row"><span class="tl-lb">GPU compute</span><span class="tl-tk">
+<span class="tl-bl" style="left:91%;width:9%;background:var(--gre)">fwd+bwd</span>
+</span></div>
+</div>
+<p class="tl-cap">Typical CPU-bottlenecked pipeline: 90% of time is data preparation, GPU idles</p>
+
+<h4>Time breakdown per component (single image, CPU)</h4>
+<table class="rt">
+<tr><th>Stage</th><th>Time (ms)</th><th>CPU-bound?</th><th>Can be moved to GPU?</th></tr>
+<tr><td>Disk read (NVMe SSD)</td><td>0.05–0.5</td><td>I/O</td><td>No</td></tr>
+<tr><td>JPEG decode (libjpeg-turbo)</td><td>1–5</td><td>Yes, heavily</td><td>Yes — nvJPEG, DALI</td></tr>
+<tr><td>Resize (bilinear, 224→256)</td><td>0.5–2</td><td>Yes</td><td>Yes — Kornia, DALI</td></tr>
+<tr><td>Random crop (224×224)</td><td>0.01</td><td>Negligible</td><td>Yes</td></tr>
+<tr><td>Horizontal flip</td><td>0.01</td><td>Negligible</td><td>Yes</td></tr>
+<tr><td>Color jitter</td><td>0.5–2</td><td>Yes</td><td>Yes — Kornia</td></tr>
+<tr><td>Normalize</td><td>0.1–0.3</td><td>Yes</td><td>Yes</td></tr>
+<tr><td>To tensor + collate</td><td>0.1–0.5</td><td>Memcpy</td><td>N/A</td></tr>
+<tr><td><strong>Total per image</strong></td><td><strong>3–10 ms</strong></td><td></td><td></td></tr>
+<tr><td><strong>Batch of 256 images (8 workers)</strong></td><td><strong>96–320 ms</strong></td><td></td><td></td></tr>
+</table>
+
+<p>Compare to GPU compute for ResNet-50 at batch 256: <strong>~6–15 ms</strong>. The data pipeline is 10–50× slower than the GPU. This is the fundamental problem.</p>
+</div></div>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">Solution tier list: from quick fixes to full rewrites</span><span class="ex-b b-data">Data</span></div><div class="ex-bd">
+
+<div class="tb">
+<button class="tbn active" onclick="showTab('d1',this)">Tier 1: DataLoader tuning</button>
+<button class="tbn" onclick="showTab('d2',this)">Tier 2: GPU augmentation</button>
+<button class="tbn" onclick="showTab('d3',this)">Tier 3: DALI / FFCV</button>
+<button class="tbn" onclick="showTab('d4',this)">Tier 4: Pre-processing</button>
+</div>
+
+<div class="tp active" id="d1">
+<h4>Tier 1: DataLoader tuning (10 minutes, no code changes)</h4>
+<pre>loader = DataLoader(
+    dataset,
+    batch_size=256,
+    <span class="flag">num_workers=12</span>,            <span class="cm"># rule: num_cpus / num_gpus, typically 8–16</span>
+    <span class="flag">pin_memory=True</span>,            <span class="cm"># async H2D via pinned host memory</span>
+    <span class="flag">persistent_workers=True</span>,    <span class="cm"># don't respawn workers every epoch</span>
+    <span class="flag">prefetch_factor=3</span>,          <span class="cm"># prefetch 3 batches ahead</span>
+    <span class="flag">drop_last=True</span>,             <span class="cm"># avoid small last batch (uneven compute)</span>
+)</pre>
+
+<div class="ic fix">
+<p class="ic-l">Expected improvement</p>
+<p>Going from <code>num_workers=2</code> to <code>num_workers=12</code> on a 96-CPU node with 8 GPUs typically gives 2–4× data loading speedup. <code>persistent_workers</code> eliminates 1–3 seconds of worker respawn per epoch. <code>prefetch_factor=3</code> pipelines the next batch during GPU compute.</p>
+</div>
+
+<div class="ic warn">
+<p class="ic-l">Common mistake: too many workers</p>
+<p>Setting <code>num_workers=32</code> on a machine with 32 CPUs and 8 GPUs means each GPU claims 32 workers, totaling 256 processes competing for 32 cores. CPU contention makes things slower. Always divide: <code>num_workers ≈ num_cpus // num_gpus</code>.</p>
+</div>
+</div>
+
+<div class="tp" id="d2">
+<h4>Tier 2: Move augmentations to GPU (moderate code changes)</h4>
+<p>The insight: GPU SMs are 100× faster than CPU cores for pixel operations. Move everything after decode to the GPU.</p>
+
+<pre><span class="cm"># Using Kornia for GPU augmentations</span>
+import kornia.augmentation as K
+
+gpu_transforms = nn.Sequential(
+    K.Resize(256),
+    K.RandomCrop((224, 224)),
+    K.RandomHorizontalFlip(p=0.5),
+    K.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1),
+    K.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+).cuda()
+
+<span class="cm"># DataLoader only does: read → decode → to_tensor → H2D</span>
+<span class="cm"># GPU does: resize → crop → flip → jitter → normalize</span>
+for images, labels in loader:
+    images = images.cuda(non_blocking=True)
+    images = gpu_transforms(images)     <span class="cm"># augmentation on GPU — microseconds</span>
+    output = model(images)</pre>
+
+<div class="ic fix">
+<p class="ic-l">Expected improvement</p>
+<p>Removes ~50–70% of the CPU data pipeline time. JPEG decode remains on CPU (the remaining bottleneck). Total pipeline time drops from ~100ms to ~30–50ms for a batch of 256.</p>
+</div>
+</div>
+
+<div class="tp" id="d3">
+<h4>Tier 3: NVIDIA DALI — end-to-end GPU pipeline</h4>
+<p>DALI moves the entire pipeline (including JPEG decode) to GPU using nvJPEG hardware decoder, eliminating the CPU bottleneck entirely.</p>
+
+<pre><span class="cm"># DALI pipeline (simplified)</span>
+from nvidia.dali import pipeline_def, fn, types
+
+@pipeline_def(batch_size=256, num_threads=8, device_id=0)
+def training_pipeline():
+    jpegs, labels = fn.readers.file(
+        file_root="/data/imagenet/train", random_shuffle=True
+    )
+    images = fn.decoders.image(
+        jpegs, <span class="flag">device="mixed"</span>    <span class="cm"># nvJPEG decode on GPU</span>
+    )
+    images = fn.resize(images, resize_x=256, resize_y=256)
+    images = fn.crop_mirror_normalize(
+        images,
+        crop=[224, 224],
+        mean=[0.485*255, 0.456*255, 0.406*255],
+        std=[0.229*255, 0.224*255, 0.225*255],
+        mirror=fn.random.coin_flip(probability=0.5),
+        output_layout="CHW",
+    )
+    return images, labels</pre>
+
+<div class="ic fix">
+<p class="ic-l">Expected improvement</p>
+<p>Eliminates CPU bottleneck entirely. Data pipeline drops to ~2–5ms per batch (GPU decode + GPU augment), making it negligible compared to model compute. This is the gold standard for ImageNet-scale training. Throughput often improves 2–5× over PyTorch DataLoader for ConvNets.</p>
+</div>
+</div>
+
+<div class="tp" id="d4">
+<h4>Tier 4: Pre-processed data formats (FFCV, WebDataset, TFRecord)</h4>
+<p>Eliminate decode entirely by storing pre-decoded, pre-resized images in optimized binary formats.</p>
+
+<table class="rt">
+<tr><th>Format</th><th>Decode speed</th><th>Storage</th><th>Trade-off</th></tr>
+<tr><td><strong>FFCV (.beton)</strong></td><td>~0.1ms/image (pre-decoded)</td><td>~3× ImageNet size</td><td>Fastest reading, but requires preprocessing step and more disk space</td></tr>
+<tr><td><strong>WebDataset (.tar)</strong></td><td>~1–2ms (still JPEG)</td><td>~1× ImageNet</td><td>Streaming-friendly (good for cloud/NFS), sequential I/O</td></tr>
+<tr><td><strong>Mosaic StreamingDataset</strong></td><td>~1ms</td><td>~1× + index</td><td>Cloud-native, elastic workers, deterministic shuffling</td></tr>
+</table>
+
+<pre><span class="cm"># FFCV — fastest option</span>
+from ffcv.loader import Loader, OrderOption
+from ffcv.transforms import ToTensor, ToDevice, ToTorchImage, NormalizeImage
+from ffcv.fields.decoders import IntDecoder, SimpleRGBImageDecoder
+
+loader = Loader(
+    '/data/imagenet_train.beton',
+    batch_size=256,
+    order=OrderOption.QUASI_RANDOM,
+    pipelines={
+        'image': [SimpleRGBImageDecoder(), ToTensor(), ToDevice(0), ToTorchImage(),
+                  NormalizeImage(mean, std, type=np.float16)],
+        'label': [IntDecoder(), ToTensor(), ToDevice(0)],
+    },
+    num_workers=8,
+)</pre>
+</div>
+
+</div></div>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">Diagnosing data pipeline bottlenecks in Nsight Systems</span><span class="ex-b b-prof">Profiling</span></div><div class="ex-bd">
+<p>In Nsight Systems, data pipeline problems have a distinctive visual signature:</p>
+
+<div class="tl-viz">
+<div class="tl-row"><span class="tl-lb">CPU workers</span><span class="tl-tk">
+<span class="tl-bl" style="left:0%;width:100%;background:var(--red);opacity:0.4">continuously busy — decode + augment</span>
+</span></div>
+<div class="tl-row"><span class="tl-lb">GPU kernels</span><span class="tl-tk">
+<span class="tl-bl" style="left:0%;width:8%;background:var(--gre)">fwd+bwd</span>
+<span class="tl-bl" style="left:50%;width:8%;background:var(--gre)">fwd+bwd</span>
+</span></div>
+</div>
+<p class="tl-cap">Classic vision data starvation: GPU active <20% of the time, CPU workers at 100%</p>
+
+<h4>What to check in the OS Runtime trace</h4>
+<table class="rt">
+<tr><th>Syscall pattern</th><th>Diagnosis</th><th>Fix</th></tr>
+<tr><td>High <code>read()</code> time</td><td>Slow storage (NFS, HDD)</td><td>Use local NVMe SSD or memory-mapped datasets</td></tr>
+<tr><td>High <code>futex()</code> contention</td><td>DataLoader workers fighting for CPU/GIL</td><td>Reduce workers, use <code>persistent_workers</code>, consider DALI (no Python GIL)</td></tr>
+<tr><td>CPU utilization at 100% across all cores</td><td>Decode + augment consuming all CPU</td><td>Move transforms to GPU (Tier 2) or use DALI (Tier 3)</td></tr>
+<tr><td>Periodic GPU gaps every N iterations</td><td>Prefetch buffer drained</td><td>Increase <code>prefetch_factor</code>, increase <code>num_workers</code></td></tr>
+</table>
+
+<div class="co co-t"><i class="ti ti-bulb"></i><div><strong>Quick diagnostic:</strong> Run <code>nvidia-smi dmon -s u -d 1</code> during training. If GPU-Util oscillates between 0% and 100% in a sawtooth pattern, that's data starvation. If GPU-Util is steady at 95%+ with power at 500W+, the data pipeline is keeping up.</div></div>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c5"><span class="ph"><span class="ph-n">5</span></span> Memory layout: NCHW vs NHWC</h2>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">Why channels_last gives 15–30% speedup for ConvNets</span><span class="ex-b b-kern">Layout</span></div><div class="ex-bd">
+
+<p>PyTorch defaults to NCHW (batch, channels, height, width) — but cuDNN's fastest convolution implementations prefer NHWC (batch, height, width, channels). The mismatch means cuDNN internally transposes data on every convolution, wasting bandwidth and compute.</p>
+
+<table class="rt">
+<tr><th>Layout</th><th>Memory order</th><th>GPU friendliness</th><th>Why</th></tr>
+<tr><td><strong>NCHW</strong> (default)</td><td>All pixels of channel 0, then all of channel 1, ...</td><td>Poor for Tensor Cores</td><td>Tensor Cores operate on matrix tiles where the reduction dimension should be contiguous. In conv, the reduction is over C_in — which is the slowest-varying dimension in NCHW, causing uncoalesced access.</td></tr>
+<tr><td><strong>NHWC</strong> (channels_last)</td><td>All channels of pixel (0,0), then all channels of pixel (0,1), ...</td><td>Optimal for Tensor Cores</td><td>Channels are contiguous per pixel — cuDNN can load aligned tiles directly into Tensor Core MMA instructions without transposing.</td></tr>
+</table>
+
+<pre><span class="cm"># Enable channels_last — one line of code</span>
+model = model.to(memory_format=torch.channels_last)
+
+<span class="cm"># Convert input data too:</span>
+images = images.to(memory_format=torch.channels_last)
+
+<span class="cm"># Or do it in the training loop:</span>
+for images, labels in loader:
+    images = images.cuda(non_blocking=True).to(memory_format=torch.channels_last)
+    output = model(images)</pre>
+
+<div class="ic fix">
+<p class="ic-l">Expected speedup</p>
+<p>ResNet-50: <strong>+20–30%</strong>. ConvNeXt: <strong>+15–25%</strong>. EfficientNet: <strong>+10–20%</strong>. The speedup comes from: (1) cuDNN selects Tensor Core–optimized algorithms, (2) no internal transposes, (3) better memory coalescing. This is the single highest-impact optimization for ConvNet training — literally one line of code.</p>
+</div>
+
+<div class="ic warn">
+<p class="ic-l">Gotchas with channels_last</p>
+<p><strong>Not all ops support it natively.</strong> If an op doesn't support NHWC, PyTorch silently converts back to NCHW, computes, and converts back — incurring two transposes that negate the benefit. Check with <code>torch.channels_last_strides_2d(tensor)</code>. Common offenders: some custom CUDA ops, older norm implementations, some interpolation modes.<br><br>
+<strong>ViTs don't benefit.</strong> ViTs work with [B, N, D] tensors after patch embedding — there's no spatial H/W dimension to reorder. The patch embedding conv benefits, but that's one layer out of 24+.</p>
+</div>
+</div></div>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">cuDNN algorithm selection and benchmarking</span><span class="ex-b b-kern">Kernels</span></div><div class="ex-bd">
+<p>cuDNN offers multiple convolution algorithms (Winograd, FFT, implicit GEMM, tiled convolution). The fastest one depends on kernel size, stride, dilation, channels, spatial size, batch size, and data type. cuDNN's heuristic doesn't always pick the best one.</p>
+
+<pre><span class="cm"># Enable cuDNN autotuning (CRITICAL for ConvNets)</span>
+<span class="flag">torch.backends.cudnn.benchmark = True</span>
+<span class="cm"># On the first iteration, cuDNN benchmarks all applicable algorithms</span>
+<span class="cm"># and caches the fastest for each conv configuration.</span>
+<span class="cm"># Subsequent iterations use the cached selection.</span>
+
+<span class="cm"># IMPORTANT: only works with FIXED input sizes.</span>
+<span class="cm"># Variable-size inputs (detection, segmentation with different image sizes)</span>
+<span class="cm"># trigger re-benchmarking on every new size — massive overhead.</span>
+<span class="cm"># For variable sizes, use torch.backends.cudnn.benchmark = False</span>
+<span class="cm"># and pad/resize to a small set of fixed sizes instead.</span></pre>
+
+<table class="rt">
+<tr><th>Algorithm</th><th>Best for</th><th>Memory overhead</th></tr>
+<tr><td><strong>Implicit GEMM</strong></td><td>Most 1×1 and 3×3 convs. Tensor Core compatible. The workhorse.</td><td>Low</td></tr>
+<tr><td><strong>Winograd</strong></td><td>3×3 convs with stride=1. Up to 2.5× fewer multiplications.</td><td>Moderate (extra workspace)</td></tr>
+<tr><td><strong>FFT</strong></td><td>Large kernels (5×5+). Rarely used in modern architectures.</td><td>High (frequency domain buffers)</td></tr>
+<tr><td><strong>Tiled convolution</strong></td><td>Depthwise convs (groups=C_in).</td><td>Low</td></tr>
+</table>
+
+<div class="co co-i"><i class="ti ti-info-circle"></i><div><strong>Nsight Compute diagnosis:</strong> Profile a conv kernel and check: (1) is the Tensor Core pipe active? (2) which cuDNN algorithm was selected (shown in the kernel name)? If you see <code>scudnn_winograd</code> where <code>scudnn_128x128_relu_...bn</code> (fused implicit GEMM) would be faster, cuDNN made a suboptimal choice. Forcing <code>benchmark=True</code> and running with NHWC usually resolves this.</div></div>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c6"><span class="ph"><span class="ph-n">6</span></span> Precision and Tensor Cores</h2>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">Mixed precision for vision models</span><span class="ex-b b-prec">Precision</span></div><div class="ex-bd">
+<p>The precision strategy is similar to LLMs but with important differences in which ops get autocast.</p>
+
+<pre><span class="cm"># Standard vision mixed precision</span>
+scaler = torch.amp.GradScaler('cuda')  <span class="cm"># needed for FP16, optional for BF16</span>
+
+for images, labels in loader:
+    images = images.cuda(non_blocking=True).to(memory_format=torch.channels_last)
+
+    with torch.autocast('cuda', dtype=torch.float16):  <span class="cm"># or torch.bfloat16</span>
+        output = model(images)
+        loss = criterion(output, labels)
+
+    scaler.scale(loss).backward()
+    scaler.step(optimizer)
+    scaler.update()
+    optimizer.zero_grad()
+
+<span class="cm"># BF16 is simpler (no scaler needed):</span>
+with torch.autocast('cuda', dtype=torch.bfloat16):
+    output = model(images)
+    loss = criterion(output, labels)
+loss.backward()
+optimizer.step()</pre>
+
+<h4>FP16 vs BF16 for vision</h4>
+<table class="rt">
+<tr><th>Aspect</th><th>FP16</th><th>BF16</th><th>Recommendation</th></tr>
+<tr><td>Dynamic range</td><td>±65,504 — narrow, needs GradScaler</td><td>Same as FP32 — no scaling needed</td><td>BF16 preferred on H100/A100</td></tr>
+<tr><td>Precision (mantissa)</td><td>10 bits — more precise</td><td>7 bits — less precise</td><td>FP16 can be slightly better for fine-grained spatial features</td></tr>
+<tr><td>Throughput (H100)</td><td>990 TFLOP/s</td><td>990 TFLOP/s</td><td>Identical on H100</td></tr>
+<tr><td>Stability</td><td>Occasional overflow in large batch training</td><td>Very stable</td><td>BF16 for simplicity</td></tr>
+<tr><td>Diffusion models</td><td>Can overflow with high-variance noise</td><td>Handles noise range well</td><td>BF16 strongly preferred for diffusion</td></tr>
+</table>
+
+<div class="co co-w"><i class="ti ti-alert-triangle"></i><div><strong>Convolution + BatchNorm precision trap:</strong> cuDNN's BatchNorm always accumulates statistics in FP32 internally (correct), but the affine parameters (gamma, beta) and their gradients can underflow in FP16. Autocast handles this correctly by keeping BN in FP32, but custom implementations may not. Always verify that BN statistics are computed in FP32.</div></div>
+</div></div>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">Tensor Core alignment for vision</span><span class="ex-b b-prec">Precision</span></div><div class="ex-bd">
+<p>Vision has its own alignment considerations distinct from LLMs:</p>
+<table class="rt">
+<tr><th>Dimension</th><th>What it maps to</th><th>Alignment</th><th>Common values</th></tr>
+<tr><td>Input channels (C_in)</td><td>Reduction dim (K) of conv GEMM</td><td>Multiple of 8 (BF16)</td><td>3 (RGB) ✗ → padded to 4 or 8 internally by cuDNN</td></tr>
+<tr><td>Output channels (C_out)</td><td>N dim of conv GEMM</td><td>Multiple of 8</td><td>64, 128, 256, 512, 1024, 2048 ✓</td></tr>
+<tr><td>Batch size</td><td>M dim of conv GEMM</td><td>Multiple of 8</td><td>32, 64, 128, 256 ✓</td></tr>
+<tr><td>Group count (depthwise)</td><td>Splits C into groups</td><td>C_in/groups must be ÷8</td><td>Depthwise (groups=C_in) → group_size=1 ✗ — Tensor Cores can't help</td></tr>
+<tr><td>ViT patch embed output</td><td>Hidden dim → GEMM K and N</td><td>Multiple of 8</td><td>768, 1024, 1280 ✓</td></tr>
+<tr><td>ViT num_patches</td><td>Sequence length → GEMM M</td><td>Multiple of 8</td><td>196 (14²) ✓, 256 (16²) ✓, 576 (24²) ✓</td></tr>
+</table>
+
+<div class="ic info">
+<p class="ic-l">The RGB input problem</p>
+<p>The first conv layer takes 3-channel (RGB) input. C_in=3 is not a multiple of 8, so Tensor Cores can't be used for this layer. cuDNN pads internally to 4 or 8 channels. This is one conv layer out of ~50+ in a ResNet — negligible impact. But for architectures with many early narrow-channel layers, the misalignment can accumulate. Modern architectures (ConvNeXt, EfficientNet) use stem layers that quickly project to ≥32 channels.</p>
+</div>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c7"><span class="ph"><span class="ph-n">7</span></span> Memory optimization</h2>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">Vision-specific memory techniques</span><span class="ex-b b-mem">Memory</span></div><div class="ex-bd">
+
+<h4>Activation checkpointing — layer selection matters more</h4>
+<p>Vision models have heterogeneous layer costs. Unlike LLMs where every Transformer layer is similar, vision models have early high-resolution layers (large activations, cheap compute) and late low-resolution layers (small activations, expensive compute). Checkpoint the early layers first — they save the most memory with the least recomputation cost.</p>
+
+<pre><span class="cm"># Selective checkpointing for ResNet — checkpoint early (memory-heavy) stages</span>
+from torch.utils.checkpoint import checkpoint
+
+class ResNet(nn.Module):
+    def forward(self, x):
+        x = self.stem(x)
+        x = checkpoint(self.layer1, x, use_reentrant=False)  <span class="cm"># 56×56 — huge</span>
+        x = checkpoint(self.layer2, x, use_reentrant=False)  <span class="cm"># 28×28 — large</span>
+        x = self.layer3(x)                                    <span class="cm"># 14×14 — moderate</span>
+        x = self.layer4(x)                                    <span class="cm"># 7×7 — small</span>
+        return self.head(x)</pre>
+
+<h4>Multi-scale training memory management</h4>
+<p>Training at progressively higher resolutions (common for detection/segmentation: 320→480→640→800) changes memory requirements mid-training. The caching allocator can fragment when resolution jumps.</p>
+
+<table class="rt">
+<tr><th>Technique</th><th>How it helps</th></tr>
+<tr><td>Pad to fixed resolution set</td><td>Instead of arbitrary sizes, use a small set of sizes (320, 480, 640, 800). The caching allocator can reuse blocks across the same size.</td></tr>
+<tr><td><code>torch.cuda.empty_cache()</code> at resolution change</td><td>Rare valid use case — when switching to a dramatically larger resolution, clear the cache to avoid fragmentation. Don't call within a fixed-resolution training loop.</td></tr>
+<tr><td>Gradient accumulation at high res</td><td>When resolution doubles, activation memory quadruples. Reduce micro-batch size and accumulate more steps.</td></tr>
+</table>
+
+<h4>Specific to diffusion models</h4>
+<table class="rt">
+<tr><th>Technique</th><th>Memory saving</th><th>Used by</th></tr>
+<tr><td>VAE encode in FP16 with no_grad</td><td>~30% of VAE memory</td><td>All latent diffusion training — the VAE encoder is frozen</td></tr>
+<tr><td>Gradient checkpointing on U-Net/DiT</td><td>~60% activation memory</td><td>Standard for SDXL-class training</td></tr>
+<tr><td>xFormers memory-efficient attention</td><td>No materialized attention matrix</td><td>Stable Diffusion training (alternative to SDPA FlashAttention)</td></tr>
+<tr><td>EMA model on CPU</td><td>Saves one full model copy of GPU memory</td><td>Move the exponential moving average model to CPU, sync periodically</td></tr>
+</table>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c8"><span class="ph"><span class="ph-n">8</span></span> Distributed training</h2>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">Distributed strategy for vision models</span><span class="ex-b b-dist">Distributed</span></div><div class="ex-bd">
+<p>Vision models are typically smaller than LLMs (300M–4B vs 7B–70B+), which simplifies the distributed strategy.</p>
+
+<table class="rt">
+<tr><th>Model size</th><th>Examples</th><th>Strategy</th><th>Rationale</th></tr>
+<tr><td>< 500M params</td><td>ResNet-50/152, ViT-B/L, EfficientNet</td><td><strong>DDP only</strong></td><td>Full model fits on 1 GPU (< 4 GB in BF16). No sharding needed. DDP is simpler and faster than FSDP for models that fit.</td></tr>
+<tr><td>500M–2B params</td><td>ViT-H, ViT-G, ConvNeXt-XXL, DINOv2</td><td><strong>FSDP</strong> (ZeRO-3)</td><td>Optimizer states (12× params) exceed single GPU memory. FSDP shards across GPUs.</td></tr>
+<tr><td>2B+ params</td><td>ViT-22B, large multimodal encoders</td><td><strong>FSDP + TP</strong> (or PP)</td><td>Same approach as LLMs — TP within node, FSDP across nodes.</td></tr>
+<tr><td>Diffusion training</td><td>SDXL U-Net (~2.6B), Flux (~12B)</td><td><strong>FSDP</strong>, potentially TP for > 10B</td><td>Similar to LLMs. Additional memory pressure from EMA model and conditioning encoders.</td></tr>
+</table>
+
+<h4>Large-batch training considerations</h4>
+<p>Vision models are typically trained with very large global batch sizes (4K–32K images) across many GPUs. This introduces convergence challenges:</p>
+
+<table class="rt">
+<tr><th>Issue</th><th>Solution</th><th>PyTorch implementation</th></tr>
+<tr><td>Learning rate scaling</td><td>Linear scaling rule: LR × batch_size / 256. Or square root scaling for larger batches.</td><td>Multiply <code>lr</code> in optimizer by <code>global_batch_size / 256</code></td></tr>
+<tr><td>Warmup</td><td>Linear warmup over 5–10 epochs to the target LR. Prevents divergence at large LR.</td><td>Use <code>torch.optim.lr_scheduler.LinearLR</code> for warmup phase</td></tr>
+<tr><td>LARS/LAMB optimizer</td><td>Layer-wise Adaptive Rate Scaling — adjusts LR per layer based on weight/gradient norm ratio. Enables batch sizes up to 32K.</td><td><code>timm.optim.Lars</code> or <code>apex.parallel.LARC</code></td></tr>
+<tr><td>BatchNorm synchronization</td><td>With DDP, each GPU computes BN stats on its local batch. With small per-GPU batch sizes, stats are noisy. SyncBatchNorm computes global stats.</td><td><code>nn.SyncBatchNorm.convert_sync_batchnorm(model)</code></td></tr>
+</table>
+
+<div class="ic warn">
+<p class="ic-l">SyncBatchNorm performance cost</p>
+<p>SyncBatchNorm adds an AllReduce for mean and variance at every BN layer (2 AllReduces × number of BN layers × per step). For ResNet-50 with 53 BN layers, that's 106 extra AllReduces per step. On NVLink this is fast (~0.5ms total), but across nodes on InfiniBand it can add 5–20ms. If per-GPU batch size ≥ 32, standard BatchNorm is usually sufficient. Use SyncBN only when per-GPU batch is small (< 16).</p>
+</div>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c9"><span class="ph"><span class="ph-n">9</span></span> Kernel optimization</h2>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">torch.compile for vision workloads</span><span class="ex-b b-kern">Kernels</span></div><div class="ex-bd">
+<p><code>torch.compile</code> benefits vision models differently than LLMs:</p>
+
+<table class="rt">
+<tr><th>Architecture</th><th>Compile benefit</th><th>Why</th></tr>
+<tr><td>ConvNets (ResNet, ConvNeXt)</td><td>5–15%</td><td>cuDNN convolutions are already highly optimized. Compile mainly fuses BN+ReLU and residual adds.</td></tr>
+<tr><td>ViTs</td><td>15–30%</td><td>Same as LLMs — fuses norm/activation/dropout between GEMMs. Big win.</td></tr>
+<tr><td>Diffusion U-Net</td><td>10–20%</td><td>Fuses SiLU activations, GroupNorm, timestep conditioning. The conv portions benefit less.</td></tr>
+<tr><td>DiT</td><td>20–35%</td><td>Pure Transformer — maximum fusion benefit for norms, activations, adaLN conditioning.</td></tr>
+</table>
+
+<pre><span class="cm"># For vision — compile the model and the augmentation pipeline</span>
+model = torch.compile(model, mode="max-autotune")
+
+<span class="cm"># Also compile the GPU augmentation pipeline if using Kornia:</span>
+gpu_transforms = torch.compile(gpu_transforms)
+
+<span class="cm"># For diffusion — compile the denoiser separately:</span>
+unet = torch.compile(unet, mode="reduce-overhead")  <span class="cm"># CUDA Graphs for iterative denoising</span></pre>
+
+<div class="co co-t"><i class="ti ti-bulb"></i><div><strong>CUDA Graphs for diffusion:</strong> The <code>reduce-overhead</code> mode uses CUDA Graphs, which record and replay the entire forward pass without CPU involvement. This is especially valuable for diffusion denoising where the same model runs 20–50 times with identical input shapes — the graph is recorded once and replayed for free. This alone can give 10–30% speedup for diffusion inference and training.</div></div>
+</div></div>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">Fused operations checklist for vision</span><span class="ex-b b-kern">Kernels</span></div><div class="ex-bd">
+<table class="rt">
+<tr><th>Operation</th><th>Unfused</th><th>Fused version</th><th>Speedup</th></tr>
+<tr><td>Conv + BN + ReLU</td><td>3 separate kernels, 3 HBM passes</td><td>cuDNN fused conv-bias-activation (automatic with NHWC + benchmark)</td><td>15–25%</td></tr>
+<tr><td>Conv + BN (inference/frozen BN)</td><td>Conv then BN affine</td><td>Fold BN into conv weights at load time: <code>torch.nn.utils.fusion.fuse_conv_bn_eval()</code></td><td>~20% (eliminates entire BN layer)</td></tr>
+<tr><td>GroupNorm + SiLU (diffusion)</td><td>2 separate memory-bound kernels</td><td>torch.compile fuses automatically, or use custom Triton kernel</td><td>~2×</td></tr>
+<tr><td>Attention (ViT, cross-attn)</td><td>QK matmul + softmax + V matmul</td><td><code>F.scaled_dot_product_attention()</code></td><td>1.5–2× (less than LLMs because sequences are shorter)</td></tr>
+<tr><td>Fused AdamW</td><td>4 HBM passes per param group</td><td><code>torch.optim.AdamW(fused=True)</code></td><td>2–3×</td></tr>
+<tr><td>Bilinear interpolation + conv (upsampling)</td><td>F.interpolate then conv — separate kernels</td><td>Transposed convolution or PixelShuffle (single kernel)</td><td>~1.5×</td></tr>
+</table>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c10"><span class="ph"><span class="ph-n">10</span></span> Diffusion model specifics</h2>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">Performance anatomy of diffusion training</span><span class="ex-b b-diff">Diffusion</span></div><div class="ex-bd">
+<p>Diffusion training has unique characteristics that change the performance engineering approach.</p>
+
+<h4>The training step anatomy</h4>
+<div class="tl-viz">
+<div class="tl-row"><span class="tl-lb">CPU</span><span class="tl-tk">
+<span class="tl-bl" style="left:0%;width:5%;background:var(--gray)">load</span>
+</span></div>
+<div class="tl-row"><span class="tl-lb">VAE encode</span><span class="tl-tk">
+<span class="tl-bl" style="left:5%;width:8%;background:var(--cyan)">encode (no grad)</span>
+</span></div>
+<div class="tl-row"><span class="tl-lb">Noise + timestep</span><span class="tl-tk">
+<span class="tl-bl" style="left:13%;width:2%;background:var(--amber)">noise</span>
+</span></div>
+<div class="tl-row"><span class="tl-lb">Text encode</span><span class="tl-tk">
+<span class="tl-bl" style="left:15%;width:5%;background:var(--pink)">CLIP/T5 (no grad)</span>
+</span></div>
+<div class="tl-row"><span class="tl-lb">Denoiser fwd</span><span class="tl-tk">
+<span class="tl-bl" style="left:20%;width:30%;background:var(--blue)">U-Net / DiT forward</span>
+</span></div>
+<div class="tl-row"><span class="tl-lb">Loss</span><span class="tl-tk">
+<span class="tl-bl" style="left:50%;width:2%;background:var(--amber)">MSE</span>
+</span></div>
+<div class="tl-row"><span class="tl-lb">Denoiser bwd</span><span class="tl-tk">
+<span class="tl-bl" style="left:52%;width:38%;background:var(--teal)">backward</span>
+</span></div>
+<div class="tl-row"><span class="tl-lb">Optimizer</span><span class="tl-tk">
+<span class="tl-bl" style="left:90%;width:5%;background:var(--purple)">step</span>
+</span></div>
+<div class="tl-row"><span class="tl-lb">EMA update</span><span class="tl-tk">
+<span class="tl-bl" style="left:95%;width:5%;background:var(--gray)">EMA</span>
+</span></div>
+</div>
+<p class="tl-cap">Latent diffusion training step — single denoising step (not iterative during training)</p>
+
+<h4>Memory budget for diffusion training</h4>
+<table class="rt">
+<tr><th>Component</th><th>SDXL U-Net (~2.6B)</th><th>Flux DiT (~12B)</th></tr>
+<tr><td>Denoiser params (BF16)</td><td>~5.2 GB</td><td>~24 GB</td></tr>
+<tr><td>Gradients (BF16)</td><td>~5.2 GB</td><td>~24 GB</td></tr>
+<tr><td>Optimizer states (FP32 m,v,master)</td><td>~31 GB</td><td>~144 GB → FSDP required</td></tr>
+<tr><td>EMA model (BF16)</td><td>~5.2 GB</td><td>~24 GB (or CPU offload)</td></tr>
+<tr><td>VAE encoder (frozen, BF16)</td><td>~0.2 GB</td><td>~0.2 GB</td></tr>
+<tr><td>Text encoder(s) (frozen)</td><td>~1.5 GB (CLIP+OpenCLIP)</td><td>~5 GB (CLIP+T5-XXL)</td></tr>
+<tr><td>Activations (denoiser, with checkpointing)</td><td>~4–8 GB</td><td>~10–20 GB</td></tr>
+<tr><td><strong>Total per GPU</strong></td><td><strong>~52–56 GB</strong> (fits 1 H100)</td><td><strong>~250+ GB</strong> (needs 4+ H100s with FSDP)</td></tr>
+</table>
+
+<h4>Diffusion-specific optimizations</h4>
+<table class="rt">
+<tr><th>Optimization</th><th>What it does</th><th>Impact</th></tr>
+<tr><td>Precompute latents + text embeddings</td><td>Run VAE encoder and text encoder once on the entire dataset, save to disk. Load precomputed [latent, text_emb] pairs during training — skip both encoders.</td><td>10–20% faster steps, much less GPU memory (remove VAE + text encoder from GPU)</td></tr>
+<tr><td>Min-SNR weighting</td><td>Reweights loss per timestep — not a speed optimization but avoids wasting compute on easy timesteps</td><td>Better convergence (same compute, faster progress)</td></tr>
+<tr><td>Aspect ratio bucketing</td><td>Instead of cropping all images to square, group by aspect ratio and train on native shapes. Avoids wasting compute on padding.</td><td>Better quality per FLOP, slight data pipeline complexity</td></tr>
+<tr><td>Cached text conditioning</td><td>Cache CLIP/T5 embeddings per caption → skip text encoder forward pass each step</td><td>10–15% step time reduction</td></tr>
+</table>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c11"><span class="ph"><span class="ph-n">11</span></span> Multimodal (vision + language)</h2>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">Performance engineering for vision-language models</span><span class="ex-b b-arch">Multimodal</span></div><div class="ex-bd">
+<p>Models like LLaVA, Qwen-VL, and GPT-4V-class systems combine a vision encoder with an LLM. This creates unique performance challenges.</p>
+
+<h4>Architecture components and their cost</h4>
+<table class="rt">
+<tr><th>Component</th><th>Example</th><th>FLOPs per sample</th><th>Key bottleneck</th></tr>
+<tr><td><strong>Vision encoder</strong></td><td>ViT-L/14 (SigLIP), 384×384</td><td>~190 GFLOP</td><td>Usually frozen — no backward. Image decode + encode is the cost.</td></tr>
+<tr><td><strong>Projection layer</strong></td><td>MLP mapping vision → text embedding space</td><td>~1 GFLOP</td><td>Negligible. Small linear layers.</td></tr>
+<tr><td><strong>LLM backbone</strong></td><td>LLaMA-7B/13B, processing interleaved image+text tokens</td><td>~2000+ GFLOP (depends on total sequence length)</td><td>Dominates training cost. Same as pure LLM training.</td></tr>
+</table>
+
+<h4>Performance pitfalls specific to multimodal</h4>
+
+<div class="ic warn">
+<p class="ic-l">Pitfall 1: Image tokenization creates variable-length sequences</p>
+<p>A single high-res image might produce 256–1024 vision tokens, while text might be 50–500 tokens. Each sample has a different total token count. This makes batching inefficient — either pad everything to the longest sequence (wasting compute on padding) or use dynamic batching (complex, but more efficient). Solutions: pack samples to fixed total lengths (like LLM sequence packing), or group by similar image+text length and pad within groups.</p>
+</div>
+
+<div class="ic warn">
+<p class="ic-l">Pitfall 2: Frozen vision encoder throughput mismatch</p>
+<p>The vision encoder runs with <code>torch.no_grad()</code> (no backward), which is much faster than the LLM's training forward+backward. If the vision encoder produces tokens faster than the LLM can process them, the encoder's GPU time is wasted. Solutions: (1) precompute vision embeddings offline (best), (2) run the vision encoder in a separate stream overlapped with the LLM's backward of the previous step, (3) use a smaller/faster vision encoder.</p>
+</div>
+
+<div class="ic warn">
+<p class="ic-l">Pitfall 3: Mixed modality attention is memory-expensive</p>
+<p>When image tokens (256–1024) are concatenated with text tokens (500+), the total sequence length can reach 1500+ tokens. Attention is O(s²), so multimodal attention is much more expensive than pure text at the same "content" amount. FlashAttention is critical here. Also consider: use cross-attention instead of concatenation (separate attention for text-to-image and image-to-text) to avoid the full s² cost.</p>
+</div>
+
+<pre><span class="cm"># Multimodal training — optimal pipeline</span>
+<span class="cm"># Step 1: Precompute vision features (one-time cost)</span>
+vision_encoder.eval()
+with torch.no_grad(), torch.autocast('cuda', dtype=torch.bfloat16):
+    for images in image_dataset:
+        features = vision_encoder(images.cuda())
+        save_features(features, path)
+
+<span class="cm"># Step 2: Training loop — load precomputed features + text</span>
+<span class="cm"># No vision encoder in training loop → saves memory + compute</span>
+for vision_features, text_tokens in multimodal_loader:
+    combined_input = project_and_interleave(vision_features, text_tokens)
+    with torch.autocast('cuda', dtype=torch.bfloat16):
+        output = llm(combined_input)
+        loss = criterion(output, targets)
+    loss.backward()
+    optimizer.step()</pre>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c12"><span class="ph"><span class="ph-n">12</span></span> Throughput engineering</h2>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">End-to-end throughput checklist for vision models</span><span class="ex-b b-prof">Throughput</span></div><div class="ex-bd">
+
+<p>The unified checklist — ordered by typical impact for vision workloads:</p>
+
+<table class="rt">
+<tr><th>#</th><th>Priority</th><th>Check</th><th>Impact</th></tr>
+<tr><td>1</td><td>★★★</td><td><strong>Data pipeline not bottlenecked</strong> — GPU-Util steady >90%, power >400W. If not, apply Tier 1→4 from Chapter 4.</td><td>2–10× if data-starved</td></tr>
+<tr><td>2</td><td>★★★</td><td><strong>channels_last memory format</strong> for ConvNets — <code>model.to(memory_format=torch.channels_last)</code></td><td>15–30% for ConvNets</td></tr>
+<tr><td>3</td><td>★★★</td><td><strong>Mixed precision enabled</strong> — BF16 autocast + Tensor Core verification in profiler</td><td>2–8× vs FP32</td></tr>
+<tr><td>4</td><td>★★★</td><td><strong>cuDNN benchmark mode</strong> — <code>torch.backends.cudnn.benchmark = True</code> (fixed-size inputs only)</td><td>10–30% for ConvNets</td></tr>
+<tr><td>5</td><td>★★☆</td><td><strong>torch.compile</strong> — especially for ViTs and DiTs</td><td>5–35% depending on arch</td></tr>
+<tr><td>6</td><td>★★☆</td><td><strong>Micro-batch size maximized</strong> — GPU memory at 70–85% utilization</td><td>Better GEMM efficiency</td></tr>
+<tr><td>7</td><td>★★☆</td><td><strong>Fused optimizer</strong> — <code>AdamW(fused=True)</code> or LARS/LAMB for large batch</td><td>2–3× optimizer speed</td></tr>
+<tr><td>8</td><td>★★☆</td><td><strong>FlashAttention for ViTs</strong> — <code>F.scaled_dot_product_attention()</code></td><td>1.5–2× for attention layers</td></tr>
+<tr><td>9</td><td>★☆☆</td><td><strong>SyncBatchNorm only when needed</strong> — per-GPU batch < 16</td><td>Removes 5–20ms of comm overhead</td></tr>
+<tr><td>10</td><td>★☆☆</td><td><strong>Precompute encodings for diffusion/multimodal</strong> — cache VAE latents and text embeddings</td><td>10–20% step time</td></tr>
+<tr><td>11</td><td>★☆☆</td><td><strong>Gradient accumulation at high resolution</strong> — reduce micro-batch, accumulate more</td><td>Enables larger effective batch without OOM</td></tr>
+<tr><td>12</td><td>★☆☆</td><td><strong>EMA on CPU</strong> — for diffusion, offload EMA model to CPU</td><td>Saves 1 full model copy of GPU memory</td></tr>
+</table>
+
+<h4>Throughput benchmarks (images/sec, 8×H100 DDP, BF16)</h4>
+<table class="rt">
+<tr><th>Model</th><th>Resolution</th><th>Baseline</th><th>Optimized</th><th>Key optimizations</th></tr>
+<tr><td>ResNet-50</td><td>224²</td><td>~6,000</td><td>~18,000+</td><td>DALI, channels_last, cuDNN benchmark, compile</td></tr>
+<tr><td>ConvNeXt-Large</td><td>224²</td><td>~1,500</td><td>~3,500</td><td>channels_last, compile, fused optimizer</td></tr>
+<tr><td>ViT-Large</td><td>224²</td><td>~2,000</td><td>~4,500</td><td>DALI, FlashAttention, compile, fused optimizer</td></tr>
+<tr><td>ViT-Huge</td><td>224²</td><td>~900</td><td>~2,200</td><td>FSDP, FlashAttention, compile, gradient checkpointing</td></tr>
+</table>
+<p style="font-size:12px;color:var(--tx3);margin-top:4px">Approximate figures. "Optimized" means applying all relevant checklist items. Actual numbers depend on GPU interconnect, storage speed, and software versions.</p>
+</div></div>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">Profiling workflow for vision models</span><span class="ex-b b-prof">Profiling</span></div><div class="ex-bd">
+<p>The diagnostic sequence for vision is different from LLMs because the most likely bottleneck is the data pipeline, not compute.</p>
+
+<h4>Step 1: Is the data pipeline keeping up?</h4>
+<pre><span class="cm"># Quick check — should see GPU-Util steady, not oscillating</span>
+nvidia-smi dmon -s u -d 1
+
+<span class="cm"># Measure data loading time separately:</span>
+for i, (images, labels) in enumerate(loader):
+    if i == 50: break        <span class="cm"># time 50 batches without GPU work</span>
+<span class="cm"># If this takes > 50% of training step time → data bottleneck</span></pre>
+
+<h4>Step 2: Is channels_last active? (ConvNets)</h4>
+<pre><span class="cm"># Check in Nsight Systems — conv kernel names should show NHWC variants</span>
+<span class="cm"># Or check directly:</span>
+print(next(model.parameters()).is_contiguous(memory_format=torch.channels_last))</pre>
+
+<h4>Step 3: Are Tensor Cores in use?</h4>
+<pre><span class="cm"># Nsight Compute — profile a conv kernel</span>
+ncu --set full --kernel-name "regex:conv" --launch-skip 200 --launch-count 3 \
+    -o conv_analysis python train.py
+<span class="cm"># Check: Tensor Core pipe utilization > 0%</span>
+<span class="cm"># Check: kernel name contains "implicit_gemm" not "winograd" for 1x1 convs</span></pre>
+
+<h4>Step 4: Standard Nsight Systems analysis</h4>
+<p>Same as the LLM workflow: look for GPU idle gaps, sync stalls, allocation churn, communication overhead. The patterns are identical — only the likelihood differs (data pipeline is the most common culprit for vision vs compute for LLMs).</p>
+
+<div class="co co-g"><i class="ti ti-check"></i><div><strong>The vision performance engineer's decision tree:</strong> (1) GPU-Util oscillating → fix data pipeline. (2) GPU-Util steady but power low → check channels_last + Tensor Cores. (3) GPU-Util and power both high but images/sec still low → profile kernels with Nsight Compute, check for algorithm misselection. (4) Single-GPU is fast but multi-GPU doesn't scale → check communication overlap and SyncBN overhead.</div></div>
+</div></div>
+
+
+<div class="sum">
+<p><strong style="color:var(--tx)">The vision performance engineer's mental model:</strong> The data pipeline is the first bottleneck, not the last. Fix it with DALI, GPU augmentation, or preprocessed formats before touching anything else. For ConvNets, channels_last + cuDNN benchmark + BF16 are the three transformative optimizations — each is one line of code. For ViTs, the approach converges with LLM engineering (FlashAttention, torch.compile, FSDP). For diffusion, precompute everything you can (latents, text embeddings) and use CUDA Graphs for the iterative denoiser. Measure throughput in images/sec, diagnose with nvidia-smi first (is the GPU even busy?), and only reach for Nsight Systems/Compute after the data pipeline and layout are confirmed correct.</p>
+</div>
+
+</div>
+<script>
+function toggle(el){el.classList.toggle('open');el.nextElementSibling.classList.toggle('open')}
+function showTab(id,btn){
+var p=btn.closest('.ex-bd')||document;
+p.querySelectorAll('.tp').forEach(function(t){t.classList.remove('active')});
+p.querySelectorAll('.tbn').forEach(function(b){b.classList.remove('active')});
+document.getElementById(id).classList.add('active');
+btn.classList.add('active');
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Training diffusion models — the ML engineer's complete guide</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.6.0/dist/tabler-icons.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,wght@0,400;0,600;1,400&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+--bg:#F7F6F9;--bg2:#EDECF0;--bg3:#E2E1E6;--card:#fff;
+--tx:#1A1922;--tx2:#65647A;--tx3:#9594A5;
+--bdr:rgba(0,0,0,0.07);--bdr2:rgba(0,0,0,0.13);
+--acc:#5C3D8F;--acc-bg:#F0EBF7;--acc-tx:#432D6B;
+--warn:#8B6914;--warn-bg:#FFF8E1;--warn-tx:#5C4400;
+--err:#9B2C2C;--err-bg:#FFF0F0;--err-tx:#6B1A1A;
+--info:#1A5276;--info-bg:#E8F4FD;--info-tx:#0D3B56;
+--green:#2D5A27;--green-bg:#E8F0E7;--green-tx:#1E3D1A;
+--blue:#3B82F6;--gre:#22C55E;--amber:#F59E0B;--red:#EF4444;--purple:#8B5CF6;--teal:#14B8A6;--pink:#EC4899;--gray:#94A3B8;
+--font:'Instrument Sans',sans-serif;--serif:'Source Serif 4',Georgia,serif;--mono:'JetBrains Mono','Consolas',monospace;
+--radius:8px;--radius-lg:12px;
+}
+@media(prefers-color-scheme:dark){:root{
+--bg:#19181E;--bg2:#232228;--bg3:#2D2C33;--card:#21202A;
+--tx:#E6E5F0;--tx2:#9B9AAD;--tx3:#6B6A7D;
+--bdr:rgba(255,255,255,0.07);--bdr2:rgba(255,255,255,0.13);
+--acc:#B794F4;--acc-bg:#2A2038;--acc-tx:#D4B8FF;
+--warn:#D4A529;--warn-bg:#2E2610;--warn-tx:#E8C556;
+--err:#F87171;--err-bg:#2E1A1A;--err-tx:#FCA5A5;
+--info:#60A5FA;--info-bg:#1A2836;--info-tx:#93C5FD;
+--green:#6ABF62;--green-bg:#1E2E1C;--green-tx:#A0D89A;
+}}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:var(--font);background:var(--bg);color:var(--tx);line-height:1.72;font-size:15px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:860px;margin:0 auto;padding:2.5rem 1.5rem 6rem}
+h1{font-family:var(--serif);font-size:32px;font-weight:600;line-height:1.25;margin:0 0 8px;letter-spacing:-0.02em}
+.sub{font-size:15px;color:var(--tx2);margin:0 0 2.5rem;max-width:660px;line-height:1.65}
+h2{font-size:21px;font-weight:600;margin:3rem 0 1rem;padding-top:1.5rem;border-top:1.5px solid var(--bdr);letter-spacing:-0.01em}
+h2:first-of-type{border-top:none;padding-top:0}
+h3{font-size:16px;font-weight:600;margin:1.5rem 0 0.5rem}
+h4{font-size:14px;font-weight:600;margin:1.2rem 0 0.4rem}
+p{margin:0 0 0.85rem}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+code{font-family:var(--mono);font-size:12.5px;background:var(--bg2);padding:2px 6px;border-radius:4px;word-break:break-word}
+pre{font-family:var(--mono);font-size:12.5px;line-height:1.65;background:var(--bg2);border:1px solid var(--bdr);border-radius:var(--radius);padding:16px 20px;overflow-x:auto;margin:0 0 1rem;white-space:pre}
+pre .f{color:var(--acc)}pre .c{color:var(--tx3);font-style:italic}
+
+.toc{background:var(--card);border:1px solid var(--bdr);border-radius:var(--radius-lg);padding:20px 24px;margin:0 0 2.5rem}
+.toc-t{font-size:13px;font-weight:600;color:var(--tx2);text-transform:uppercase;letter-spacing:0.8px;margin:0 0 10px}
+.tg{display:grid;grid-template-columns:1fr 1fr;gap:3px 24px;list-style:none;padding:0}
+.tg a{font-size:13.5px;color:var(--tx);display:flex;align-items:center;gap:6px;padding:4px 0;transition:color 0.15s}
+.tg a:hover{color:var(--acc);text-decoration:none}
+.tg .ti{font-size:14px;color:var(--tx3)}
+@media(max-width:600px){.tg{grid-template-columns:1fr}}
+
+.ex{border:1px solid var(--bdr);border-radius:var(--radius-lg);margin:0 0 10px;background:var(--card);overflow:hidden}
+.eh{display:flex;align-items:center;gap:10px;padding:14px 18px;cursor:pointer;user-select:none;transition:background 0.15s}
+.eh:hover{background:var(--bg2)}
+.eh .ti{font-size:18px;color:var(--tx3);transition:transform 0.25s}
+.eh.open .ti{transform:rotate(90deg)}
+.et{font-size:15px;font-weight:500;flex:1}
+.bg{font-size:11px;font-weight:500;padding:3px 10px;border-radius:20px;text-transform:uppercase;letter-spacing:0.5px}
+.b1{background:var(--acc-bg);color:var(--acc-tx)}
+.b2{background:var(--info-bg);color:var(--info-tx)}
+.b3{background:var(--green-bg);color:var(--green-tx)}
+.b4{background:var(--warn-bg);color:var(--warn-tx)}
+.b5{background:var(--err-bg);color:var(--err-tx)}
+.b6{background:#E0F2FE;color:#075985}
+.b7{background:var(--bg3);color:var(--tx2)}
+.b8{background:#FFF0FB;color:#86198F}
+.eb{display:none;padding:0 18px 18px;animation:fi 0.2s ease}
+.eb.open{display:block}
+@keyframes fi{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+
+.rt{width:100%;border-collapse:collapse;font-size:13px;margin:12px 0 16px}
+.rt th{text-align:left;font-weight:500;padding:8px 12px;border-bottom:2px solid var(--bdr2);color:var(--tx2);font-size:12px;text-transform:uppercase;letter-spacing:0.5px}
+.rt td{padding:8px 12px;border-bottom:1px solid var(--bdr);vertical-align:top;line-height:1.55}
+.rt tr:last-child td{border-bottom:none}
+
+.ic{border-left:3px solid;border-radius:0 var(--radius) var(--radius) 0;padding:14px 18px;margin:10px 0}
+.ic.warn{border-color:var(--amber);background:var(--warn-bg)}
+.ic.info{border-color:var(--blue);background:var(--info-bg)}
+.ic.fix{border-color:var(--gre);background:var(--green-bg)}
+.ic.err{border-color:var(--red);background:var(--err-bg)}
+.ic .il{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin:0 0 4px}
+.ic.warn .il{color:var(--warn-tx)}.ic.info .il{color:var(--info-tx)}.ic.fix .il{color:var(--green-tx)}.ic.err .il{color:var(--err-tx)}
+.ic p{margin:0;font-size:14px;line-height:1.6}
+
+.co{display:flex;gap:10px;padding:14px 16px;border-radius:var(--radius);margin:12px 0 16px;font-size:14px;line-height:1.6}
+.co .ti{font-size:18px;flex-shrink:0;margin-top:2px}
+.ci{background:var(--info-bg);color:var(--info-tx)}
+.cw{background:var(--warn-bg);color:var(--warn-tx)}
+.ct{background:var(--acc-bg);color:var(--acc-tx)}
+.cg{background:var(--green-bg);color:var(--green-tx)}
+
+.mg{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:12px 0 16px}
+.mc{background:var(--bg2);border-radius:var(--radius);padding:12px 14px}
+.mc-l{font-size:11px;color:var(--tx3);text-transform:uppercase;letter-spacing:0.5px;margin:0 0 2px}
+.mc-v{font-size:18px;font-weight:500;margin:0}
+
+.tb{display:flex;gap:4px;flex-wrap:wrap}
+.tbn{font-family:var(--font);font-size:13px;padding:8px 14px;border:1px solid var(--bdr);border-bottom:none;border-radius:var(--radius) var(--radius) 0 0;background:var(--bg2);color:var(--tx2);cursor:pointer;transition:all 0.15s;font-weight:500}
+.tbn:hover{background:var(--bg3)}
+.tbn.active{background:var(--card);color:var(--tx);border-color:var(--bdr);position:relative;z-index:1}
+.tp{display:none;border:1px solid var(--bdr);border-radius:0 var(--radius) var(--radius) var(--radius);background:var(--card);padding:20px;margin:0 0 16px;position:relative;top:-1px}
+.tp.active{display:block}
+
+.ph{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.8px;color:var(--tx3);margin:0 0 8px}
+.pn{width:24px;height:24px;border-radius:50%;background:var(--acc);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:12px}
+
+.fm{background:var(--bg2);border:1px solid var(--bdr);border-radius:var(--radius);padding:14px 20px;margin:12px 0 16px;font-family:var(--mono);font-size:13px;line-height:1.8;overflow-x:auto}
+.fm .l{color:var(--tx3);font-size:11px;text-transform:uppercase;letter-spacing:0.5px}
+.fm .v{color:var(--acc);font-weight:500}
+
+.sum{margin-top:3rem;padding:20px;background:var(--bg2);border-radius:var(--radius-lg);font-size:14px;color:var(--tx2);line-height:1.7}
+.sum p{margin:0}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Training diffusion models</h1>
+<p class="sub">The ML engineer's complete guide — from the mathematics of denoising through noise schedules, architectures, conditioning, training recipes, fine-tuning, and sampling. Everything needed to train image, video, and audio generation systems with PyTorch.</p>
+
+<nav class="toc">
+<p class="toc-t">14 chapters</p>
+<ol class="tg">
+<li><a href="#c1"><i class="ti ti-math-function"></i> Diffusion fundamentals</a></li>
+<li><a href="#c2"><i class="ti ti-target"></i> Training objectives</a></li>
+<li><a href="#c3"><i class="ti ti-wave-sine"></i> Noise schedules</a></li>
+<li><a href="#c4"><i class="ti ti-building-arch"></i> Architecture</a></li>
+<li><a href="#c5"><i class="ti ti-photo-scan"></i> Latent diffusion (VAE)</a></li>
+<li><a href="#c6"><i class="ti ti-tag"></i> Conditioning</a></li>
+<li><a href="#c7"><i class="ti ti-database"></i> Data preparation</a></li>
+<li><a href="#c8"><i class="ti ti-settings"></i> Training recipe</a></li>
+<li><a href="#c9"><i class="ti ti-code"></i> Training loop</a></li>
+<li><a href="#c10"><i class="ti ti-shield-check"></i> Stability and debugging</a></li>
+<li><a href="#c11"><i class="ti ti-wand"></i> Sampling and inference</a></li>
+<li><a href="#c12"><i class="ti ti-adjustments"></i> Fine-tuning</a></li>
+<li><a href="#c13"><i class="ti ti-chart-bar"></i> Evaluation</a></li>
+<li><a href="#c14"><i class="ti ti-rocket"></i> Advanced: flow matching, consistency, distillation</a></li>
+</ol>
+</nav>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c1"><span class="ph"><span class="pn">1</span></span> Diffusion fundamentals</h2>
+
+<div class="ex"><div class="eh" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="et">The forward and reverse process</span><span class="bg b1">Theory</span></div><div class="eb">
+
+<h4>The forward process (adding noise)</h4>
+<p>Given a clean image x₀, the forward process gradually adds Gaussian noise over T timesteps, producing a sequence x₁, x₂, ..., x_T where x_T is approximately pure Gaussian noise.</p>
+
+<div class="fm">
+<span class="l">Forward process (single step):</span><br>
+<span class="v">q(xₜ | xₜ₋₁) = N(xₜ; √(1-βₜ) · xₜ₋₁, βₜ · I)</span><br><br>
+<span class="l">Key insight — jump directly to any timestep t from x₀:</span><br>
+<span class="v">xₜ = √(ᾱₜ) · x₀ + √(1 - ᾱₜ) · ε</span>     where ε ~ N(0, I)<br><br>
+<span class="l">Where:</span><br>
+αₜ = 1 - βₜ     (single-step signal retention)<br>
+ᾱₜ = ∏ᵢ₌₁ᵗ αᵢ   (cumulative signal retention — how much of x₀ remains at step t)<br><br>
+<span class="l">At t=0: ᾱ₀ ≈ 1 → xₜ ≈ x₀ (clean image)</span><br>
+<span class="l">At t=T: ᾱ_T ≈ 0 → xₜ ≈ ε (pure noise)</span>
+</div>
+
+<h4>The reverse process (denoising)</h4>
+<p>The model learns to reverse this process — given noisy xₜ and timestep t, predict either the noise ε, the clean image x₀, or the velocity v that was used to reach xₜ.</p>
+
+<div class="fm">
+<span class="l">Reverse process:</span><br>
+<span class="v">p_θ(xₜ₋₁ | xₜ) = N(xₜ₋₁; μ_θ(xₜ, t), σₜ² · I)</span><br><br>
+<span class="l">The model predicts one of:</span><br>
+• <span class="v">ε_θ(xₜ, t)</span> — the noise that was added (ε-prediction, DDPM)<br>
+• <span class="v">x₀_θ(xₜ, t)</span> — the clean image directly (x₀-prediction)<br>
+• <span class="v">v_θ(xₜ, t)</span> — the "velocity" (v-prediction, used by SDXL)<br><br>
+<span class="l">All three are mathematically equivalent (interconvertible):</span><br>
+x₀ = (xₜ - √(1-ᾱₜ) · ε) / √(ᾱₜ)<br>
+v = √(ᾱₜ) · ε - √(1-ᾱₜ) · x₀
+</div>
+
+<div class="co ct"><i class="ti ti-bulb"></i><div><strong>Intuition:</strong> Training a diffusion model is training a denoiser. You take a clean image, add a known amount of noise (sampled uniformly across timesteps), and train the model to predict either the noise, the clean image, or the velocity. At inference time, you start from pure noise and iteratively denoise, each step removing a bit of noise using the model's prediction.</div></div>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c2"><span class="ph"><span class="pn">2</span></span> Training objectives</h2>
+
+<div class="ex"><div class="eh" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="et">ε-prediction, v-prediction, x₀-prediction, and flow matching</span><span class="bg b1">Objective</span></div><div class="eb">
+
+<table class="rt">
+<tr><th>Objective</th><th>Target</th><th>Loss</th><th>Used by</th><th>Pros / cons</th></tr>
+<tr><td><strong>ε-prediction</strong></td><td>Noise ε added to x₀</td><td>‖ε - ε_θ(xₜ, t)‖²</td><td>DDPM, Stable Diffusion 1.x/2.x</td><td>Pro: stable, well-studied. Con: equal weight to all noise levels, which means high-noise (structureless) timesteps get as much gradient as low-noise (detail-preserving) ones.</td></tr>
+<tr><td><strong>v-prediction</strong></td><td>v = √ᾱₜ·ε - √(1-ᾱₜ)·x₀</td><td>‖v - v_θ(xₜ, t)‖²</td><td>SDXL, Imagen Video</td><td>Pro: smoother signal at both endpoints (doesn't predict nearly-zero noise at t≈0 or nearly-random noise at t≈T). Better for high-resolution and video.</td></tr>
+<tr><td><strong>x₀-prediction</strong></td><td>Clean image x₀</td><td>‖x₀ - x₀_θ(xₜ, t)‖²</td><td>Some early models, DALL-E 2</td><td>Pro: intuitive. Con: prediction is very noisy at high t (model sees near-random noise and must predict a sharp image). Typically combined with loss weighting.</td></tr>
+<tr><td><strong>Flow matching (rectified flow)</strong></td><td>Velocity field v = x₁ - x₀</td><td>‖(x₁ - x₀) - v_θ(xₜ, t)‖²</td><td>Stable Diffusion 3, Flux</td><td>Pro: simpler formulation (linear interpolation, not diffusion noise schedule), straighter sampling paths → fewer steps needed. The current frontier.</td></tr>
+</table>
+
+<pre><span class="c"># ε-prediction loss (DDPM)</span>
+noise = torch.randn_like(x_0)
+t = torch.randint(0, T, (batch_size,), device=device)
+x_t = sqrt_alpha_bar[t] * x_0 + sqrt_one_minus_alpha_bar[t] * noise
+predicted_noise = model(x_t, t)
+loss = F.mse_loss(predicted_noise, noise)
+
+<span class="c"># v-prediction loss (SDXL)</span>
+v_target = sqrt_alpha_bar[t] * noise - sqrt_one_minus_alpha_bar[t] * x_0
+predicted_v = model(x_t, t)
+loss = F.mse_loss(predicted_v, v_target)
+
+<span class="c"># Flow matching loss (SD3/Flux)</span>
+t = torch.rand(batch_size, device=device)          <span class="c"># continuous t ∈ [0,1]</span>
+x_1 = torch.randn_like(x_0)                        <span class="c"># noise sample</span>
+x_t = (1 - t.view(-1,1,1,1)) * x_0 + t.view(-1,1,1,1) * x_1  <span class="c"># linear interp</span>
+target_velocity = x_1 - x_0                        <span class="c"># straight-line velocity</span>
+predicted_v = model(x_t, t)
+loss = F.mse_loss(predicted_v, target_velocity)</pre>
+
+<div class="co ct"><i class="ti ti-bulb"></i><div><strong>The industry trajectory:</strong> ε-prediction (2020–2023) → v-prediction (2023–2024) → flow matching (2024+). Flow matching is simpler mathematically, trains faster, and produces straighter sampling trajectories (meaning fewer sampling steps for the same quality). If starting a new project, flow matching is the recommended choice.</div></div>
+</div></div>
+
+<div class="ex"><div class="eh" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="et">Loss weighting: Min-SNR and timestep-dependent weighting</span><span class="bg b1">Objective</span></div><div class="eb">
+<p>Not all timesteps contribute equally to image quality. Without weighting, the loss is dominated by mid-range timesteps, while low-noise timesteps (critical for fine details) and high-noise timesteps (critical for global structure) are under-learned.</p>
+
+<table class="rt">
+<tr><th>Weighting</th><th>Formula</th><th>Effect</th></tr>
+<tr><td><strong>Uniform (default)</strong></td><td>w(t) = 1</td><td>All timesteps weighted equally. Simple but suboptimal — mid-range dominates.</td></tr>
+<tr><td><strong>SNR weighting</strong></td><td>w(t) = SNR(t) = ᾱₜ / (1-ᾱₜ)</td><td>Upweights clean timesteps (low noise). Can focus too much on trivial predictions.</td></tr>
+<tr><td><strong>Min-SNR-γ</strong></td><td>w(t) = min(SNR(t), γ) / SNR(t)</td><td>Caps the SNR weight at γ (typically γ=5). Balances low-noise detail learning with high-noise structure learning. Recommended default.</td></tr>
+<tr><td><strong>P2 weighting</strong></td><td>w(t) = 1 / (k + SNR(t))^p</td><td>Perception-prioritized. Upweights perceptually important timesteps.</td></tr>
+</table>
+
+<pre><span class="c"># Min-SNR-γ weighting (recommended)</span>
+snr = alpha_bar / (1 - alpha_bar)                 <span class="c"># signal-to-noise ratio</span>
+gamma = 5.0
+min_snr_weight = torch.clamp(snr, max=gamma) / snr
+loss = (min_snr_weight[t] * F.mse_loss(pred, target, reduction='none').mean(dim=[1,2,3])).mean()</pre>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c3"><span class="ph"><span class="pn">3</span></span> Noise schedules</h2>
+
+<div class="ex"><div class="eh" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="et">β schedules and their impact on generation quality</span><span class="bg b2">Schedule</span></div><div class="eb">
+<table class="rt">
+<tr><th>Schedule</th><th>βₜ definition</th><th>Used by</th><th>Characteristics</th></tr>
+<tr><td><strong>Linear</strong></td><td>β₁=10⁻⁴ to β_T=0.02, linearly spaced</td><td>Original DDPM</td><td>Too aggressive — destroys signal too quickly at high resolution. Adequate for 32×32/64×64.</td></tr>
+<tr><td><strong>Cosine</strong></td><td>ᾱₜ = cos²(π/2 · (t/T + s)/(1+s))</td><td>Improved DDPM</td><td>Slower signal destruction. Better for higher resolutions. s=0.008 prevents ᾱₜ from reaching exactly 0.</td></tr>
+<tr><td><strong>Scaled linear</strong></td><td>β scaled to latent space statistics</td><td>Stable Diffusion</td><td>Adjusted for latent diffusion where latent values have different variance than pixels.</td></tr>
+<tr><td><strong>Zero-SNR</strong></td><td>Modified so ᾱ_T = 0 exactly</td><td>Recent models</td><td>Ensures the model trains on the full noise range including pure noise. Eliminates the "bright image" artifact at high CFG values.</td></tr>
+<tr><td><strong>Continuous (flow matching)</strong></td><td>t ∈ [0,1], no discrete schedule</td><td>SD3, Flux</td><td>No fixed T. Timestep is continuous. Logit-normal sampling of t during training concentrates samples at informative timesteps.</td></tr>
+</table>
+
+<div class="fm">
+<span class="l">Discrete schedules: T = 1000 timesteps (standard)</span><br>
+Linear: β₁ = 0.0001, β_T = 0.02<br>
+Cosine: ᾱₜ = cos²(π·(t/T + 0.008) / 1.008 · π/2)<br><br>
+<span class="l">Continuous (flow matching):</span><br>
+<span class="v">t ~ logit-normal(0, 1) clipped to [0, 1]</span><br>
+<span class="l">Logit-normal concentrates samples near t=0.5 where learning is most informative</span>
+</div>
+
+<div class="co cw"><i class="ti ti-alert-triangle"></i><div><strong>The zero-SNR issue:</strong> Standard schedules never reach ᾱ_T = 0 exactly, meaning the model never trains on pure noise. At inference, the first denoising step starts from pure noise — a distribution the model has never seen. This causes artifacts (over-saturated colors, bright images). Fix: use zero-terminal-SNR schedule or rescale the schedule so the last timestep has ᾱ_T = 0. This is increasingly standard.</div></div>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c4"><span class="ph"><span class="pn">4</span></span> Architecture</h2>
+
+<div class="ex"><div class="eh" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="et">U-Net vs DiT: architecture comparison</span><span class="bg b6">Architecture</span></div><div class="eb">
+
+<div class="tb">
+<button class="tbn active" onclick="showTab('unet',this)">U-Net</button>
+<button class="tbn" onclick="showTab('dit',this)">DiT</button>
+<button class="tbn" onclick="showTab('mmdit',this)">MM-DiT</button>
+</div>
+
+<div class="tp active" id="unet">
+<h4>U-Net (Stable Diffusion 1.x/2.x, SDXL)</h4>
+<p>Encoder-decoder with skip connections. Processes images at multiple resolutions with downsampling and upsampling blocks.</p>
+
+<table class="rt">
+<tr><th>Component</th><th>Details</th></tr>
+<tr><td>Downsampling blocks</td><td>ResNet blocks + self-attention (at lower resolutions) + downsample via strided conv or pooling. Typically 3–4 resolution levels (64→32→16→8 for latent diffusion).</td></tr>
+<tr><td>Bottleneck</td><td>ResNet + self-attention at the lowest resolution.</td></tr>
+<tr><td>Upsampling blocks</td><td>ResNet blocks + self-attention + upsample via transpose conv or interpolate+conv. Skip connections from encoder.</td></tr>
+<tr><td>Timestep conditioning</td><td>Sinusoidal embedding → MLP → added to each ResNet block via adaptive normalization (scale and shift).</td></tr>
+<tr><td>Text conditioning</td><td>Cross-attention layers between image features and text encoder (CLIP/T5) embeddings.</td></tr>
+<tr><td>Attention placement</td><td>Self-attention only at lower resolutions (16×16, 32×32) to manage O(s²) cost. No attention at 64×64.</td></tr>
+</table>
+</div>
+
+<div class="tp" id="dit">
+<h4>DiT — Diffusion Transformer (DiT, Flux)</h4>
+<p>Pure Transformer operating on a sequence of latent patches. No U-Net structure, no skip connections between resolutions.</p>
+
+<table class="rt">
+<tr><th>Component</th><th>Details</th></tr>
+<tr><td>Patchification</td><td>Latent image (e.g., 32×32×4) → patches (e.g., 2×2 patches → 256 tokens of dimension 4×2×2=16, projected to hidden dim).</td></tr>
+<tr><td>Transformer blocks</td><td>Standard Transformer with self-attention + MLP. Typically 28–38 layers.</td></tr>
+<tr><td>Timestep conditioning</td><td>adaLN-Zero: adaptive layer norm where scale/shift/gate are predicted from the timestep embedding. The gate initializes to zero so the model starts as identity.</td></tr>
+<tr><td>Text conditioning</td><td>Cross-attention (DiT-XL) or joint attention (MM-DiT in SD3/Flux).</td></tr>
+<tr><td>Position encoding</td><td>2D sinusoidal or RoPE-2D. Must handle 2D spatial positions, not 1D sequence positions.</td></tr>
+<tr><td>Output</td><td>Linear projection from hidden dim back to patch dimensions → unpatchify to latent image.</td></tr>
+</table>
+
+<div class="co ci"><i class="ti ti-info-circle"></i><div><strong>Why DiT is winning:</strong> DiTs scale better than U-Nets with compute — they benefit from the same scaling laws as LLMs. They're simpler (no skip connections, no multi-resolution engineering). They work with FlashAttention and torch.compile out of the box. The downside: no multi-resolution inductive bias means DiTs need more training data to learn spatial hierarchies that U-Nets get "for free" from their architecture.</div></div>
+</div>
+
+<div class="tp" id="mmdit">
+<h4>MM-DiT — Multimodal DiT (SD3, Flux)</h4>
+<p>Joint Transformer that processes image and text tokens together in the same attention operation.</p>
+
+<table class="rt">
+<tr><th>Innovation</th><th>How it works</th></tr>
+<tr><td>Joint attention</td><td>Image patches and text tokens are concatenated into one sequence. Self-attention sees both modalities simultaneously — no separate cross-attention needed.</td></tr>
+<tr><td>Separate weights per modality</td><td>Each modality has its own QKV projections and MLPs, but they share the attention operation. This gives each modality its own representation space while enabling direct interaction.</td></tr>
+<tr><td>Bidirectional text conditioning</td><td>Unlike cross-attention (text→image only), joint attention allows image→text information flow too. The text representation can adapt to the image being generated.</td></tr>
+</table>
+</div>
+</div></div>
+
+<div class="ex"><div class="eh" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="et">Timestep and conditioning injection mechanisms</span><span class="bg b6">Architecture</span></div><div class="eb">
+<table class="rt">
+<tr><th>Mechanism</th><th>How it works</th><th>Used in</th></tr>
+<tr><td><strong>Adaptive LayerNorm (adaLN)</strong></td><td>Timestep embedding predicts scale (γ) and shift (β) for each LayerNorm. Modulates the normalization: y = γ·LayerNorm(x) + β</td><td>DiT, SDXL</td></tr>
+<tr><td><strong>adaLN-Zero</strong></td><td>adaLN plus a learned gate that multiplies the attention/MLP output. Gate initializes to zero → each layer starts as identity → improves training stability.</td><td>DiT (recommended)</td></tr>
+<tr><td><strong>Cross-attention</strong></td><td>Image features are Q, conditioning (text) is K/V. Each attention layer has a cross-attention sublayer.</td><td>Stable Diffusion U-Net</td></tr>
+<tr><td><strong>Concatenation</strong></td><td>Conditioning tokens concatenated with image tokens → joint self-attention.</td><td>MM-DiT (SD3, Flux)</td></tr>
+<tr><td><strong>Addition (embedding)</strong></td><td>Conditioning embedding added directly to the input or to hidden states.</td><td>Class-conditional models, DDPM</td></tr>
+</table>
+
+<pre><span class="c"># adaLN-Zero implementation</span>
+class AdaLNZero(nn.Module):
+    def __init__(self, d_model, cond_dim):
+        super().__init__()
+        self.norm = nn.LayerNorm(d_model, elementwise_affine=False)
+        <span class="c"># Predict 6 values: scale1, shift1, gate1, scale2, shift2, gate2</span>
+        self.proj = nn.Linear(cond_dim, 6 * d_model)
+        <span class="f">nn.init.zeros_(self.proj.weight)</span>  <span class="c"># zero-init → starts as identity</span>
+        <span class="f">nn.init.zeros_(self.proj.bias)</span>
+
+    def forward(self, x, cond):
+        s1, b1, g1, s2, b2, g2 = self.proj(cond).chunk(6, dim=-1)
+        <span class="c"># Attention sublayer</span>
+        h = self.norm(x) * (1 + s1) + b1
+        h = self.attn(h)
+        x = x + g1 * h                <span class="c"># gate starts at 0 → no effect initially</span>
+        <span class="c"># MLP sublayer</span>
+        h = self.norm(x) * (1 + s2) + b2
+        h = self.mlp(h)
+        x = x + g2 * h
+        return x</pre>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c5"><span class="ph"><span class="pn">5</span></span> Latent diffusion (VAE)</h2>
+
+<div class="ex"><div class="eh" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="et">The VAE: encoding images to latent space</span><span class="bg b2">VAE</span></div><div class="eb">
+<p>Latent diffusion doesn't operate on raw pixels. A pretrained VAE compresses images from pixel space (3×H×W) to a lower-dimensional latent space (C×H/f×W/f), where f is the downsampling factor.</p>
+
+<table class="rt">
+<tr><th>Aspect</th><th>Detail</th></tr>
+<tr><td>Downsampling factor (f)</td><td>Typically f=8 (SD 1.x/2.x/XL, Flux) or f=16 (some video models). A 512×512 image → 64×64 latent at f=8.</td></tr>
+<tr><td>Latent channels</td><td>4 (SD 1.x/2.x, SDXL), 16 (SD3, Flux). More channels = richer representation but larger latents.</td></tr>
+<tr><td>KL regularization</td><td>The VAE is trained with a KL divergence term to keep the latent distribution close to N(0,1). This is critical — the diffusion model assumes Gaussian latents.</td></tr>
+<tr><td>Training the VAE</td><td>Pretrained separately on image reconstruction (not jointly with the diffusion model). Frozen during diffusion training.</td></tr>
+<tr><td>VAE quality matters</td><td>The VAE sets the quality ceiling — any detail lost in VAE encoding can never be recovered by the diffusion model. Modern VAEs (SDXL, Flux) have better reconstruction than SD 1.x.</td></tr>
+</table>
+
+<pre><span class="c"># Using the VAE during diffusion training</span>
+vae = AutoencoderKL.from_pretrained("stabilityai/sdxl-vae").to(device)
+vae.eval()
+<span class="f">vae.requires_grad_(False)</span>  <span class="c"># frozen — never train the VAE during diffusion</span>
+
+<span class="c"># Encode images to latents (once per batch, no gradients)</span>
+with torch.no_grad():
+    latents = vae.encode(images).latent_dist.sample()
+    latents = latents * <span class="f">vae.config.scaling_factor</span>  <span class="c"># scale to unit variance</span>
+
+<span class="c"># The diffusion model operates on these latents</span>
+noise = torch.randn_like(latents)
+noisy_latents = scheduler.add_noise(latents, noise, timesteps)
+predicted = model(noisy_latents, timesteps, conditioning)
+loss = F.mse_loss(predicted, target)
+
+<span class="c"># At inference — decode latents back to pixels</span>
+with torch.no_grad():
+    images = vae.decode(latents / vae.config.scaling_factor).sample</pre>
+
+<div class="co ct"><i class="ti ti-bulb"></i><div><strong>The scaling factor is critical.</strong> The VAE's latent space has a specific variance. The diffusion model expects inputs with unit variance (for the noise schedule to work correctly). The scaling factor normalizes the latents. Using the wrong scaling factor — or forgetting it entirely — is a common training bug that causes the model to learn a shifted noise distribution, producing washed-out or over-saturated images.</div></div>
+</div></div>
+
+<div class="ex"><div class="eh" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="et">Precomputing latents for training efficiency</span><span class="bg b3">Optimization</span></div><div class="eb">
+<p>Since the VAE is frozen during diffusion training, you can run it once on the entire dataset and cache the latent representations. This eliminates the VAE encoder from the training loop entirely.</p>
+
+<pre><span class="c"># Precompute latents (one-time cost)</span>
+for batch_idx, images in enumerate(full_dataset_loader):
+    with torch.no_grad(), torch.autocast('cuda', dtype=torch.float16):
+        latents = vae.encode(images.cuda()).latent_dist
+        <span class="c"># Save both mean and std for proper sampling</span>
+        torch.save({
+            'mean': latents.mean.cpu(),
+            'std': latents.std.cpu(),
+        }, f'latents/batch_{batch_idx}.pt')
+
+<span class="c"># During training — load precomputed latents (no VAE needed!)</span>
+class LatentDataset(Dataset):
+    def __getitem__(self, idx):
+        data = torch.load(f'latents/batch_{idx}.pt')
+        <span class="c"># Sample from the distribution (stochastic encoding)</span>
+        latent = data['mean'] + data['std'] * torch.randn_like(data['mean'])
+        return latent * scaling_factor, caption_embedding</pre>
+
+<div class="ic fix">
+<p class="il">Benefits</p>
+<p>Removes ~10–15% of step time (VAE forward) and ~2–5 GB of GPU memory (VAE weights). Also eliminates image decode from the data pipeline — you load pre-encoded tensors instead of JPEGs. The trade-off: requires disk space for the cached latents (~2× the original dataset for f=8, C=4 at FP16).</p>
+</div>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c6"><span class="ph"><span class="pn">6</span></span> Conditioning</h2>
+
+<div class="ex"><div class="eh" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="et">Text conditioning and classifier-free guidance</span><span class="bg b8">Conditioning</span></div><div class="eb">
+
+<h4>Text encoders</h4>
+<table class="rt">
+<tr><th>Encoder</th><th>Used by</th><th>Output dim</th><th>Max tokens</th><th>Strengths</th></tr>
+<tr><td><strong>CLIP ViT-L/14</strong></td><td>SD 1.x/2.x</td><td>768</td><td>77</td><td>Good image-text alignment. Short context limit.</td></tr>
+<tr><td><strong>OpenCLIP ViT-bigG</strong></td><td>SDXL (+ CLIP-L)</td><td>1280</td><td>77</td><td>Larger, better visual understanding. SDXL uses both encoders and concatenates.</td></tr>
+<tr><td><strong>T5-XXL</strong></td><td>Imagen, SD3, Flux</td><td>4096</td><td>256–512</td><td>Best text understanding. Handles complex prompts, spatial relationships, counting. Large (11B params).</td></tr>
+</table>
+
+<h4>Classifier-Free Guidance (CFG)</h4>
+<p>CFG is the key technique that makes conditional generation work well. During training, randomly drop the conditioning (replace with null/empty) with probability p_drop (typically 10%). At inference, run the model twice — once with conditioning, once without — and extrapolate:</p>
+
+<div class="fm">
+<span class="l">CFG formula:</span><br>
+<span class="v">ε_guided = ε_uncond + w · (ε_cond - ε_uncond)</span><br><br>
+<span class="l">Where w is the guidance scale:</span><br>
+w = 1.0: no guidance (just the conditional prediction)<br>
+w = 3–5: typical for photorealistic images<br>
+w = 7–9: standard for SDXL, high-quality but sometimes oversaturated<br>
+w = 15+: extreme — high contrast, artifacts, loss of diversity
+</div>
+
+<pre><span class="c"># Training with CFG (random conditioning dropout)</span>
+p_drop = 0.1  <span class="c"># 10% of the time, train unconditionally</span>
+
+<span class="c"># For each sample in the batch:</span>
+drop_mask = torch.rand(batch_size) < p_drop
+conditioning[drop_mask] = <span class="f">null_conditioning</span>  <span class="c"># empty/zero text embedding</span>
+
+<span class="c"># Inference with CFG (two forward passes)</span>
+noise_pred_uncond = model(x_t, t, null_conditioning)
+noise_pred_cond = model(x_t, t, text_conditioning)
+noise_pred = noise_pred_uncond + <span class="f">guidance_scale</span> * (noise_pred_cond - noise_pred_uncond)</pre>
+
+<div class="co cw"><i class="ti ti-alert-triangle"></i><div><strong>CFG doubles inference cost</strong> — every sampling step requires two model forward passes (conditional + unconditional). This is why guidance distillation (training a model to approximate CFG in a single forward pass) is a key research area. Some recent approaches (Flux-dev, LCM) eliminate or reduce the need for CFG through training modifications.</div></div>
+</div></div>
+
+<div class="ex"><div class="eh" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="et">Other conditioning modalities</span><span class="bg b8">Conditioning</span></div><div class="eb">
+<table class="rt">
+<tr><th>Conditioning type</th><th>How it's injected</th><th>Use case</th></tr>
+<tr><td><strong>Class label</strong></td><td>Embedding table → adaLN or addition</td><td>ImageNet generation (DiT), unconditional+class</td></tr>
+<tr><td><strong>Image (img2img)</strong></td><td>Encode reference image to latent, add noise at intermediate t, then denoise from there</td><td>Image editing, style transfer, inpainting</td></tr>
+<tr><td><strong>ControlNet</strong></td><td>Separate encoder (copy of U-Net encoder) processes spatial conditioning (edges, depth, pose). Outputs added to the main model's skip connections.</td><td>Controllable generation from edges, depth maps, pose</td></tr>
+<tr><td><strong>IP-Adapter</strong></td><td>Image features from CLIP image encoder → cross-attention (decoupled from text cross-attention)</td><td>Image-prompted generation, style transfer</td></tr>
+<tr><td><strong>Resolution / aspect ratio</strong></td><td>Encode target resolution and crop coordinates as additional conditioning (sinusoidal embeddings → adaLN)</td><td>SDXL — enables multi-resolution training and aspect-ratio-aware generation</td></tr>
+<tr><td><strong>Timestep (noise level)</strong></td><td>Sinusoidal embedding → MLP → adaLN</td><td>All diffusion models (fundamental requirement)</td></tr>
+</table>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c7"><span class="ph"><span class="pn">7</span></span> Data preparation</h2>
+
+<div class="ex"><div class="eh" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="et">Image-caption dataset curation</span><span class="bg b3">Data</span></div><div class="eb">
+
+<h4>Data sources</h4>
+<table class="rt">
+<tr><th>Source</th><th>Scale</th><th>Caption quality</th><th>Notes</th></tr>
+<tr><td><strong>LAION-5B / DataComp</strong></td><td>5B+ image-text pairs</td><td>Low (alt-text)</td><td>Web-scraped. Needs heavy filtering for quality, aesthetics, NSFW, and watermarks.</td></tr>
+<tr><td><strong>COYO, CC12M</strong></td><td>12M–700M</td><td>Low–medium</td><td>Curated subsets of web data. Better filtering than raw crawls.</td></tr>
+<tr><td><strong>Internal / licensed</strong></td><td>Variable</td><td>High (if human-labeled)</td><td>Shutterstock, Adobe Stock, Getty — licensed datasets with professional captions.</td></tr>
+<tr><td><strong>Synthetic captions</strong></td><td>Any scale</td><td>High</td><td>Re-caption existing images with a strong VLM (LLaVA, CogVLM). SDXL, Flux, and DALL-E 3 all improved quality by re-captioning training data with better models.</td></tr>
+</table>
+
+<h4>Data processing pipeline</h4>
+<table class="rt">
+<tr><th>Step</th><th>What it does</th><th>Why</th></tr>
+<tr><td><strong>Resolution filtering</strong></td><td>Remove images below minimum resolution (e.g., < 512px on shortest side)</td><td>Low-res images hurt quality. The model learns to generate blurry outputs.</td></tr>
+<tr><td><strong>Aesthetic filtering</strong></td><td>Score images with an aesthetic predictor (LAION aesthetic model, or custom), keep top percentiles</td><td>Training on ugly images makes ugly outputs. Aesthetic filtering is the single biggest quality lever after model architecture.</td></tr>
+<tr><td><strong>NSFW filtering</strong></td><td>Classifier-based filtering for explicit content</td><td>Legal and safety requirement.</td></tr>
+<tr><td><strong>Watermark detection</strong></td><td>Remove images with visible watermarks</td><td>The model will learn to generate watermarks otherwise. Very common in web-scraped data.</td></tr>
+<tr><td><strong>Deduplication</strong></td><td>Near-duplicate removal via perceptual hashing (pHash, SSCD)</td><td>Reduces memorization, improves diversity.</td></tr>
+<tr><td><strong>Aspect ratio bucketing</strong></td><td>Group images by similar aspect ratio, train at native proportions instead of square-cropping everything</td><td>Avoids cropping important content. Teaches the model different compositions.</td></tr>
+<tr><td><strong>Caption re-writing</strong></td><td>Re-caption with a VLM to produce detailed, accurate descriptions</td><td>Alt-text is often garbage ("IMG_2847.jpg"). Detailed captions dramatically improve prompt adherence.</td></tr>
+</table>
+
+<pre><span class="c"># Aspect ratio bucketing — group images into resolution buckets</span>
+BUCKETS = [
+    (512, 768), (768, 512),   <span class="c"># portrait/landscape</span>
+    (640, 640),                <span class="c"># square</span>
+    (512, 896), (896, 512),   <span class="c"># wider ratios</span>
+    (1024, 1024),              <span class="c"># high-res square</span>
+    (768, 1344), (1344, 768),  <span class="c"># cinematic</span>
+]
+
+<span class="c"># For each image, find the closest bucket by aspect ratio</span>
+<span class="c"># Resize to fit the bucket, center-crop if needed</span>
+<span class="c"># Batch images from the same bucket together</span></pre>
+
+<div class="co ct"><i class="ti ti-bulb"></i><div><strong>The caption quality revolution:</strong> DALL-E 3's key insight was that synthetic re-captioning (using a fine-tuned captioning model to replace short/incorrect alt-text with detailed, accurate descriptions) improved prompt adherence more than any architectural change. If your training data has web-scraped captions, re-captioning with a VLM is likely the highest-ROI improvement you can make.</div></div>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c8"><span class="ph"><span class="pn">8</span></span> Training recipe</h2>
+
+<div class="ex"><div class="eh" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="et">Hyperparameters for diffusion training</span><span class="bg b4">Recipe</span></div><div class="eb">
+<table class="rt">
+<tr><th>Hyperparameter</th><th>Typical value</th><th>Notes</th></tr>
+<tr><td><strong>Optimizer</strong></td><td>AdamW</td><td>Sometimes Adam (no weight decay) for the denoiser. Weight decay on the denoiser can hurt because it pushes weights toward zero, but the model needs to make fine-grained predictions across all timesteps.</td></tr>
+<tr><td><strong>Learning rate</strong></td><td>1×10⁻⁴ (U-Net), 1×10⁻⁴ (DiT)</td><td>Lower than LLM pretraining. Diffusion models are more sensitive to LR — too high causes mode collapse or quality degradation.</td></tr>
+<tr><td><strong>β₁, β₂</strong></td><td>0.9, 0.999 (or 0.99)</td><td>β₂=0.999 is more common for diffusion than the 0.95 used in LLMs. Some use β₂=0.99 for faster adaptation.</td></tr>
+<tr><td><strong>Weight decay</strong></td><td>0.0 or 0.01</td><td>Often zero. Some use small weight decay (0.01) on attention weights only.</td></tr>
+<tr><td><strong>EMA decay</strong></td><td>0.9999</td><td>Critical — always use EMA for diffusion. The EMA model produces much better samples than the raw trained model. Typical: 0.9999 (update EMA every step).</td></tr>
+<tr><td><strong>Batch size</strong></td><td>256–2048 images</td><td>Larger batches improve quality. SDXL used effective batch size of 2048.</td></tr>
+<tr><td><strong>Training steps</strong></td><td>500K–1M+ steps</td><td>Much longer than typical supervised training. Quality continues improving slowly even at 1M+ steps.</td></tr>
+<tr><td><strong>LR schedule</strong></td><td>Constant with warmup, or cosine</td><td>Many diffusion models use constant LR (no decay) with 10K-step warmup. Simpler than LLM schedules.</td></tr>
+<tr><td><strong>Gradient clipping</strong></td><td>1.0</td><td>Standard. Prevents explosive gradients at high-noise timesteps.</td></tr>
+<tr><td><strong>CFG dropout</strong></td><td>10% (p_drop=0.1)</td><td>Drop conditioning 10% of the time to enable classifier-free guidance at inference.</td></tr>
+<tr><td><strong>Precision</strong></td><td>BF16 mixed precision</td><td>Forward/backward in BF16, optimizer states in FP32. No GradScaler needed for BF16.</td></tr>
+</table>
+
+<div class="co ci"><i class="ti ti-info-circle"></i><div><strong>EMA is non-negotiable for diffusion.</strong> The EMA (exponential moving average) model averages weights over training, smoothing out noise in the optimization trajectory. Without EMA, generated samples have noticeable artifacts and lower quality. Always maintain an EMA model and sample from it at inference. The decay rate of 0.9999 means the EMA has an effective window of ~10K steps.</div></div>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c9"><span class="ph"><span class="pn">9</span></span> Training loop</h2>
+
+<div class="ex"><div class="eh" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="et">Complete latent diffusion training loop</span><span class="bg b2">Code</span></div><div class="eb">
+<pre><span class="c"># Complete latent diffusion training loop (DDPM-style ε-prediction)</span>
+import torch, torch.nn.functional as F
+from diffusers import AutoencoderKL, DDPMScheduler
+
+<span class="c"># Components</span>
+vae = AutoencoderKL.from_pretrained("...").to(device).eval()
+vae.requires_grad_(False)
+text_encoder = CLIPTextModel.from_pretrained("...").to(device).eval()
+text_encoder.requires_grad_(False)
+model = UNet2DConditionModel(...)  <span class="c"># or DiT</span>
+ema_model = copy.deepcopy(model)
+
+scheduler = DDPMScheduler(
+    num_train_timesteps=1000,
+    beta_schedule="scaled_linear",
+    prediction_type="epsilon",      <span class="c"># or "v_prediction"</span>
+)
+
+optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, betas=(0.9, 0.999), fused=True)
+
+for step in range(max_steps):
+    images, captions = next(dataloader)
+    images = images.to(device)
+
+    <span class="c"># 1. Encode images to latent space</span>
+    with torch.no_grad():
+        latents = vae.encode(images).latent_dist.sample() * vae.config.scaling_factor
+
+    <span class="c"># 2. Encode text</span>
+    with torch.no_grad():
+        text_embeds = text_encoder(captions).last_hidden_state
+
+    <span class="c"># 3. CFG dropout — randomly drop conditioning</span>
+    drop_mask = torch.rand(latents.shape[0]) < 0.1
+    text_embeds[drop_mask] = <span class="f">torch.zeros_like(text_embeds[drop_mask])</span>
+
+    <span class="c"># 4. Sample noise and timesteps</span>
+    noise = torch.randn_like(latents)
+    timesteps = torch.randint(0, scheduler.config.num_train_timesteps,
+                               (latents.shape[0],), device=device)
+
+    <span class="c"># 5. Add noise to latents</span>
+    noisy_latents = scheduler.add_noise(latents, noise, timesteps)
+
+    <span class="c"># 6. Predict noise (forward pass)</span>
+    with torch.autocast('cuda', dtype=torch.bfloat16):
+        predicted = model(noisy_latents, timesteps, encoder_hidden_states=text_embeds).sample
+        loss = F.mse_loss(predicted, noise)
+
+    <span class="c"># 7. Backward + optimize</span>
+    loss.backward()
+    torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+    optimizer.step()
+    optimizer.zero_grad()
+
+    <span class="c"># 8. EMA update</span>
+    with torch.no_grad():
+        ema_decay = 0.9999
+        for p_ema, p_model in zip(ema_model.parameters(), model.parameters()):
+            p_ema.data.mul_(ema_decay).add_(p_model.data, alpha=1 - ema_decay)
+
+    <span class="c"># 9. Logging + checkpointing</span>
+    if step % 100 == 0:
+        log({'loss': loss.item(), 'step': step})
+    if step % 5000 == 0:
+        save_checkpoint(model, ema_model, optimizer, step)
+        <span class="c"># Generate samples from EMA model for visual inspection</span>
+        generate_samples(ema_model, vae, sample_prompts)</pre>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c10"><span class="ph"><span class="pn">10</span></span> Stability and debugging</h2>
+
+<div class="ex"><div class="eh" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="et">Common training issues and visual diagnostics</span><span class="bg b5">Stability</span></div><div class="eb">
+<table class="rt">
+<tr><th>Visual symptom</th><th>Cause</th><th>Fix</th></tr>
+<tr><td>All outputs are gray/muddy</td><td>Model collapsed to the mean prediction. Often caused by LR too high, or loss computed incorrectly (not conditioned on timestep).</td><td>Reduce LR. Verify timestep embedding is connected and non-zero. Check that the model receives t as input.</td></tr>
+<tr><td>Images are over-saturated/bright</td><td>Non-zero-SNR schedule: the model never trains on pure noise. At inference, the first step from pure noise is out-of-distribution.</td><td>Use zero-terminal-SNR schedule. Or use v-prediction with rescaled schedule.</td></tr>
+<tr><td>Images have consistent color shift</td><td>VAE scaling factor wrong or missing. Or VAE mean/std not matching.</td><td>Verify <code>latents * scaling_factor</code> is applied consistently in encode and inverted in decode.</td></tr>
+<tr><td>Details are blurry but structure is fine</td><td>Low-noise timesteps under-learned (model focuses on high-noise structure). Or EMA not used.</td><td>Use Min-SNR weighting. Always sample from EMA model. Increase training steps (detail refinement is learned later).</td></tr>
+<tr><td>Text prompt is ignored</td><td>CFG dropout too high (e.g., 50% instead of 10%). Or text encoder frozen incorrectly (returning zeros). Or cross-attention not wired correctly.</td><td>Check CFG dropout rate. Verify text_embeds are non-zero. Test cross-attention connections by checking attention maps.</td></tr>
+<tr><td>Repeated patterns / artifacts</td><td>Positional encoding issues (2D position embeddings wrong). Or receptive field too small at certain resolutions.</td><td>Verify position encoding matches spatial dimensions. Check attention at all resolution levels in U-Net.</td></tr>
+<tr><td>Loss plateaus early and never improves</td><td>LR too low, model too small for the data, or data quality issue (captions don't match images).</td><td>Increase LR. Check image-caption alignment on random samples. Try a larger model.</td></tr>
+</table>
+
+<div class="ic info">
+<p class="il">Key monitoring metrics</p>
+<p><strong>Loss curve:</strong> should decrease smoothly to ~0.03–0.08 (MSE on normalized latents). <strong>Loss per timestep bucket:</strong> split loss into t∈[0,250], [250,500], [500,750], [750,1000] — all should decrease. If high-noise loss is stuck, the model isn't learning structure. If low-noise loss is stuck, it isn't learning details. <strong>Sample quality:</strong> generate images every 5K–10K steps from fixed prompts and visually inspect. This is the most important signal — loss improvements don't always translate to visible quality improvements.</p>
+</div>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c11"><span class="ph"><span class="pn">11</span></span> Sampling and inference</h2>
+
+<div class="ex"><div class="eh" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="et">Samplers: DDPM, DDIM, DPM-Solver, Euler, and more</span><span class="bg b7">Sampling</span></div><div class="eb">
+<table class="rt">
+<tr><th>Sampler</th><th>Steps needed</th><th>Stochastic?</th><th>Quality</th><th>Notes</th></tr>
+<tr><td><strong>DDPM</strong></td><td>1000</td><td>Yes</td><td>Best (with enough steps)</td><td>Original sampler. Too slow for practical use. Reference quality standard.</td></tr>
+<tr><td><strong>DDIM</strong></td><td>20–50</td><td>Optional (η=0 → deterministic)</td><td>Good</td><td>Deterministic when η=0. Enables latent interpolation. Standard for stable sampling.</td></tr>
+<tr><td><strong>DPM-Solver++</strong></td><td>15–25</td><td>Optional</td><td>Very good</td><td>Higher-order ODE solver. Fast convergence. Good default for ε-prediction models.</td></tr>
+<tr><td><strong>Euler</strong></td><td>20–30</td><td>Optional (a → ancestral)</td><td>Good</td><td>Simple first-order solver. Euler-a (ancestral) adds stochasticity for more variety.</td></tr>
+<tr><td><strong>UniPC</strong></td><td>10–20</td><td>No</td><td>Very good</td><td>Unified predictor-corrector. One of the fastest high-quality samplers.</td></tr>
+<tr><td><strong>Flow matching (Euler)</strong></td><td>20–50</td><td>No</td><td>Excellent</td><td>For flow-based models (SD3, Flux). Simple Euler ODE integration along the learned velocity field.</td></tr>
+</table>
+
+<pre><span class="c"># DDIM sampling loop (simplified)</span>
+x_t = torch.randn(1, 4, 64, 64, device=device)  <span class="c"># start from pure noise</span>
+timesteps = scheduler.set_timesteps(50)            <span class="c"># 50 denoising steps</span>
+
+for t in timesteps:
+    <span class="c"># CFG: two forward passes</span>
+    noise_uncond = model(x_t, t, null_cond).sample
+    noise_cond = model(x_t, t, text_cond).sample
+    noise_pred = noise_uncond + cfg_scale * (noise_cond - noise_uncond)
+
+    <span class="c"># DDIM step</span>
+    x_t = scheduler.step(noise_pred, t, x_t).prev_sample
+
+<span class="c"># Decode to pixels</span>
+images = vae.decode(x_t / scaling_factor).sample</pre>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c12"><span class="ph"><span class="pn">12</span></span> Fine-tuning</h2>
+
+<div class="ex"><div class="eh" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="et">Fine-tuning methods: full, LoRA, DreamBooth, textual inversion</span><span class="bg b8">Fine-tuning</span></div><div class="eb">
+<table class="rt">
+<tr><th>Method</th><th>What changes</th><th>Data needed</th><th>Use case</th></tr>
+<tr><td><strong>Full fine-tuning</strong></td><td>All denoiser weights</td><td>10K–1M+ images</td><td>Adapting to a new domain (medical, satellite, anime)</td></tr>
+<tr><td><strong>LoRA</strong></td><td>Low-rank adapters on attention layers</td><td>100–10K images</td><td>Style adaptation, character consistency, domain adaptation with limited data</td></tr>
+<tr><td><strong>DreamBooth</strong></td><td>Full model or LoRA, with prior preservation loss</td><td>3–30 images of one subject</td><td>Learning a specific subject (person, object, pet) with an identifier token</td></tr>
+<tr><td><strong>Textual inversion</strong></td><td>Only the text embedding for a new token</td><td>3–10 images</td><td>Learning a concept as a new "word" in the text encoder's vocabulary</td></tr>
+<tr><td><strong>ControlNet</strong></td><td>A copy of the encoder (new weights), frozen denoiser</td><td>10K–1M+ paired images</td><td>Adding spatial control (edge, depth, pose) to an existing model</td></tr>
+<tr><td><strong>IP-Adapter</strong></td><td>Image cross-attention adapters (new weights)</td><td>10K–1M+ images</td><td>Image-prompted generation, style transfer</td></tr>
+</table>
+
+<pre><span class="c"># DreamBooth with prior preservation (simplified)</span>
+<span class="c"># Training data: 5 photos of "sks dog" (identifier + class)</span>
+<span class="c"># Prior preservation: generate class images ("dog") from the pretrained model</span>
+
+for step in range(1000):
+    <span class="c"># Instance loss (learn the specific subject)</span>
+    instance_images, instance_prompts = next(instance_loader)
+    <span class="c"># prompt: "a photo of sks dog"</span>
+    instance_loss = diffusion_loss(model, instance_images, instance_prompts)
+
+    <span class="c"># Prior preservation loss (prevent forgetting "dog" in general)</span>
+    prior_images, prior_prompts = next(prior_loader)
+    <span class="c"># prompt: "a photo of dog" (generated by original model)</span>
+    prior_loss = diffusion_loss(model, prior_images, prior_prompts)
+
+    loss = instance_loss + <span class="f">prior_weight</span> * prior_loss  <span class="c"># prior_weight ≈ 1.0</span>
+    loss.backward()
+    optimizer.step()</pre>
+
+<h4>Fine-tuning hyperparameters</h4>
+<table class="rt">
+<tr><th>Method</th><th>LR</th><th>Steps</th><th>Key setting</th></tr>
+<tr><td>Full fine-tune</td><td>1–5 × 10⁻⁶</td><td>10K–100K</td><td>Much lower LR than pretraining. Use EMA. Monitor for catastrophic forgetting.</td></tr>
+<tr><td>LoRA (r=16–64)</td><td>1 × 10⁻⁴</td><td>1K–10K</td><td>Higher LR because LoRA weights start from zero. Target all attention + MLP layers.</td></tr>
+<tr><td>DreamBooth</td><td>2–5 × 10⁻⁶</td><td>400–1200</td><td>Very few steps. Prior preservation weight 1.0. Very easy to overfit.</td></tr>
+<tr><td>Textual inversion</td><td>5 × 10⁻⁴</td><td>3K–5K</td><td>Only optimizes 1 embedding vector. Very lightweight.</td></tr>
+</table>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c13"><span class="ph"><span class="pn">13</span></span> Evaluation</h2>
+
+<div class="ex"><div class="eh" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="et">Metrics for image generation quality</span><span class="bg b7">Evaluation</span></div><div class="eb">
+<table class="rt">
+<tr><th>Metric</th><th>What it measures</th><th>Good range</th><th>Limitations</th></tr>
+<tr><td><strong>FID</strong> (Fréchet Inception Distance)</td><td>Distribution similarity between generated and real images (via Inception features)</td><td>< 10 (excellent), 10–30 (good), > 50 (poor)</td><td>Needs 10K–50K samples for stability. Insensitive to specific artifacts. Biased by Inception network.</td></tr>
+<tr><td><strong>CLIP Score</strong></td><td>Alignment between generated image and text prompt (CLIP embedding cosine similarity)</td><td>> 0.30 (good), > 0.35 (excellent)</td><td>Biased toward CLIP's understanding. Short captions work better than long ones.</td></tr>
+<tr><td><strong>Aesthetic Score</strong></td><td>Predicted human aesthetic preference (LAION aesthetic model)</td><td>> 6.0 (high quality)</td><td>Subjective. Biased toward the aesthetic model's training data.</td></tr>
+<tr><td><strong>IS</strong> (Inception Score)</td><td>Diversity and quality (class-conditional confidence + diversity)</td><td>Higher is better</td><td>Only meaningful for class-conditional generation. Mostly deprecated in favor of FID.</td></tr>
+<tr><td><strong>Human evaluation</strong></td><td>Human preference judgments (A vs B, or rating scales)</td><td>Win rate > 50% vs baseline</td><td>Expensive, slow. But the most reliable metric. Use ELO-based ranking for comparing multiple models.</td></tr>
+<tr><td><strong>LPIPS</strong></td><td>Perceptual similarity (for reconstruction, not generation)</td><td>Lower is better (< 0.1 for VAE reconstruction)</td><td>Only for paired image comparison. Used to evaluate VAE quality.</td></tr>
+</table>
+
+<div class="co ct"><i class="ti ti-bulb"></i><div><strong>The evaluation reality:</strong> FID is the standard metric but correlates imperfectly with human judgment. A model with FID 5 can look worse than one with FID 8 if the FID-5 model has specific failure modes that FID doesn't capture (wrong anatomy, text rendering issues, compositional failures). Always complement FID with human evaluation and visual inspection of generated samples across diverse prompts.</div></div>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c14"><span class="ph"><span class="pn">14</span></span> Advanced: flow matching, consistency, distillation</h2>
+
+<div class="ex"><div class="eh" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="et">The frontier of efficient diffusion</span><span class="bg b1">Advanced</span></div><div class="eb">
+
+<div class="tb">
+<button class="tbn active" onclick="showTab('fm2',this)">Flow matching</button>
+<button class="tbn" onclick="showTab('cm2',this)">Consistency models</button>
+<button class="tbn" onclick="showTab('dist2',this)">Distillation</button>
+</div>
+
+<div class="tp active" id="fm2">
+<h4>Flow matching / Rectified flow</h4>
+<p>Instead of a diffusion process with a complex noise schedule, flow matching learns a velocity field that transports samples from a noise distribution to the data distribution along straight(er) paths.</p>
+
+<table class="rt">
+<tr><th>Aspect</th><th>DDPM (diffusion)</th><th>Flow matching</th></tr>
+<tr><td>Forward process</td><td>xₜ = √ᾱₜ·x₀ + √(1-ᾱₜ)·ε (curved path)</td><td>xₜ = (1-t)·x₀ + t·x₁ (straight line)</td></tr>
+<tr><td>Training target</td><td>Noise ε or velocity v</td><td>Velocity v = x₁ - x₀</td></tr>
+<tr><td>Noise schedule</td><td>Complex (β schedule, ᾱ cumprod)</td><td>None — just linear interpolation</td></tr>
+<tr><td>Sampling</td><td>Reverse SDE/ODE with scheduler</td><td>Simple ODE integration (Euler)</td></tr>
+<tr><td>Steps needed</td><td>20–50 (with good sampler)</td><td>20–50 (can be fewer with reflow)</td></tr>
+</table>
+
+<div class="fm">
+<span class="l">Flow matching training:</span><br>
+1. Sample x₀ ~ data, x₁ ~ N(0,I), t ~ p(t)<br>
+2. Interpolate: <span class="v">xₜ = (1-t)·x₀ + t·x₁</span><br>
+3. Target velocity: <span class="v">v = x₁ - x₀</span><br>
+4. Loss: <span class="v">‖v_θ(xₜ, t) - v‖²</span>
+</div>
+
+<p>Flow matching is simpler to implement, easier to reason about, and produces straighter sampling paths (meaning fewer sampling steps for the same quality). SD3 and Flux both use flow matching.</p>
+</div>
+
+<div class="tp" id="cm2">
+<h4>Consistency models</h4>
+<p>Instead of learning to denoise one step at a time, consistency models learn to map any point on the diffusion trajectory directly to the clean image x₀. This enables 1–4 step generation.</p>
+
+<table class="rt">
+<tr><th>Variant</th><th>How it's trained</th><th>Steps at inference</th></tr>
+<tr><td><strong>Consistency distillation (CD)</strong></td><td>Distill from a pretrained diffusion model. Train the consistency model to match the diffusion model's predictions at adjacent timesteps.</td><td>1–4</td></tr>
+<tr><td><strong>Consistency training (CT)</strong></td><td>Train from scratch without a teacher model. Use the model's own predictions as the learning signal (self-consistency).</td><td>1–4</td></tr>
+<tr><td><strong>Latent consistency models (LCM)</strong></td><td>Consistency distillation in latent space (from Stable Diffusion). Most practical for existing image generation pipelines.</td><td>2–8</td></tr>
+</table>
+</div>
+
+<div class="tp" id="dist2">
+<h4>Distillation for fewer steps</h4>
+<p>Distillation trains a student model that approximates many teacher steps in a single student step.</p>
+
+<table class="rt">
+<tr><th>Method</th><th>Approach</th><th>Quality vs teacher</th></tr>
+<tr><td><strong>Progressive distillation</strong></td><td>Halve the steps iteratively: 1024→512→256→...→4. Each round trains the student to match 2 teacher steps in 1.</td><td>~90–95% at 4 steps</td></tr>
+<tr><td><strong>Guidance distillation</strong></td><td>Train a model to produce CFG-like outputs in a single forward pass (no separate unconditional pass).</td><td>~95%+ (eliminates CFG cost, not steps)</td></tr>
+<tr><td><strong>SDXL-Turbo / SD-Turbo</strong></td><td>Adversarial + score distillation. Uses a discriminator + the teacher's score to train 1–4 step generation.</td><td>~85–90% at 1 step, ~95% at 4 steps</td></tr>
+<tr><td><strong>SDXL-Lightning / Hyper-SD</strong></td><td>Progressive + consistency distillation. Combines multiple techniques.</td><td>~92–98% at 4–8 steps</td></tr>
+</table>
+</div>
+
+</div></div>
+
+
+<div class="sum">
+<p><strong style="color:var(--tx)">The diffusion ML engineer's mental model:</strong> A diffusion model is a denoiser trained to reverse a noise process. The training loop is simple (add noise to data, predict the noise, MSE loss), but the details matter enormously: noise schedule (use cosine or zero-SNR), prediction type (flow matching for new projects), loss weighting (Min-SNR-γ), conditioning (CFG with 10% dropout), and EMA (always). Data quality is the biggest quality lever — aesthetic filtering and caption re-writing outweigh architectural improvements. The architecture is converging on DiTs (Transformers on latent patches) over U-Nets. After training: evaluate with FID + CLIP score + human inspection, fine-tune with LoRA/DreamBooth for specific domains, and distill for fast inference.</p>
+</div>
+
+</div>
+<script>
+function toggle(el){el.classList.toggle('open');el.nextElementSibling.classList.toggle('open')}
+function showTab(id,btn){
+var p=btn.closest('.eb')||document;
+p.querySelectorAll('.tp').forEach(function(t){t.classList.remove('active')});
+p.querySelectorAll('.tbn').forEach(function(b){b.classList.remove('active')});
+document.getElementById(id).classList.add('active');
+btn.classList.add('active');
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Training LLMs — the ML engineer's complete guide</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.6.0/dist/tabler-icons.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,wght@0,400;0,600;1,400&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+--bg:#F8F7F4;--bg2:#EEEDEA;--bg3:#E4E3DF;--card:#fff;
+--tx:#1B1B19;--tx2:#6A6A64;--tx3:#9A9A93;
+--bdr:rgba(0,0,0,0.08);--bdr2:rgba(0,0,0,0.14);
+--acc:#6B3A2A;--acc-bg:#F5EDE8;--acc-tx:#5A3020;
+--warn:#8B6914;--warn-bg:#FFF8E1;--warn-tx:#5C4400;
+--err:#9B2C2C;--err-bg:#FFF0F0;--err-tx:#6B1A1A;
+--info:#1A5276;--info-bg:#E8F4FD;--info-tx:#0D3B56;
+--green:#2D5A27;--green-bg:#E8F0E7;--green-tx:#1E3D1A;
+--blue:#3B82F6;--gre:#22C55E;--amber:#F59E0B;--red:#EF4444;--purple:#8B5CF6;--teal:#14B8A6;--pink:#EC4899;--gray:#94A3B8;
+--font:'Instrument Sans',sans-serif;--serif:'Source Serif 4',Georgia,serif;--mono:'JetBrains Mono','Consolas',monospace;
+--radius:8px;--radius-lg:12px;
+}
+@media(prefers-color-scheme:dark){:root{
+--bg:#1A1A18;--bg2:#242422;--bg3:#2E2E2B;--card:#222220;
+--tx:#E8E8E4;--tx2:#9C9C95;--tx3:#6B6B65;
+--bdr:rgba(255,255,255,0.08);--bdr2:rgba(255,255,255,0.14);
+--acc:#D4956B;--acc-bg:#2E2218;--acc-tx:#E8B896;
+--warn:#D4A529;--warn-bg:#2E2610;--warn-tx:#E8C556;
+--err:#F87171;--err-bg:#2E1A1A;--err-tx:#FCA5A5;
+--info:#60A5FA;--info-bg:#1A2836;--info-tx:#93C5FD;
+--green:#6ABF62;--green-bg:#1E2E1C;--green-tx:#A0D89A;
+}}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:var(--font);background:var(--bg);color:var(--tx);line-height:1.72;font-size:15px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:860px;margin:0 auto;padding:2.5rem 1.5rem 6rem}
+h1{font-family:var(--serif);font-size:32px;font-weight:600;line-height:1.25;margin:0 0 8px;letter-spacing:-0.02em}
+.hero-sub{font-size:15px;color:var(--tx2);margin:0 0 2.5rem;max-width:660px;line-height:1.65}
+h2{font-size:21px;font-weight:600;margin:3rem 0 1rem;padding-top:1.5rem;border-top:1.5px solid var(--bdr);letter-spacing:-0.01em}
+h2:first-of-type{border-top:none;padding-top:0}
+h3{font-size:16px;font-weight:600;margin:1.5rem 0 0.5rem}
+h4{font-size:14px;font-weight:600;margin:1.2rem 0 0.4rem}
+p{margin:0 0 0.85rem}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+code{font-family:var(--mono);font-size:12.5px;background:var(--bg2);padding:2px 6px;border-radius:4px;word-break:break-word}
+pre{font-family:var(--mono);font-size:12.5px;line-height:1.65;background:var(--bg2);border:1px solid var(--bdr);border-radius:var(--radius);padding:16px 20px;overflow-x:auto;margin:0 0 1rem;white-space:pre}
+pre .f{color:var(--acc)}
+pre .c{color:var(--tx3);font-style:italic}
+
+.toc{background:var(--card);border:1px solid var(--bdr);border-radius:var(--radius-lg);padding:20px 24px;margin:0 0 2.5rem}
+.toc-title{font-size:13px;font-weight:600;color:var(--tx2);text-transform:uppercase;letter-spacing:0.8px;margin:0 0 10px}
+.toc-grid{display:grid;grid-template-columns:1fr 1fr;gap:3px 24px;list-style:none;padding:0}
+.toc-grid a{font-size:13.5px;color:var(--tx);display:flex;align-items:center;gap:6px;padding:4px 0;transition:color 0.15s}
+.toc-grid a:hover{color:var(--acc);text-decoration:none}
+.toc-grid .ti{font-size:14px;color:var(--tx3)}
+@media(max-width:600px){.toc-grid{grid-template-columns:1fr}}
+
+.ex{border:1px solid var(--bdr);border-radius:var(--radius-lg);margin:0 0 10px;background:var(--card);overflow:hidden}
+.ex-h{display:flex;align-items:center;gap:10px;padding:14px 18px;cursor:pointer;user-select:none;transition:background 0.15s}
+.ex-h:hover{background:var(--bg2)}
+.ex-h .ti{font-size:18px;color:var(--tx3);transition:transform 0.25s}
+.ex-h.open .ti{transform:rotate(90deg)}
+.ex-t{font-size:15px;font-weight:500;flex:1}
+.badge{font-size:11px;font-weight:500;padding:3px 10px;border-radius:20px;text-transform:uppercase;letter-spacing:0.5px}
+.b1{background:var(--info-bg);color:var(--info-tx)}
+.b2{background:var(--err-bg);color:var(--err-tx)}
+.b3{background:var(--green-bg);color:var(--green-tx)}
+.b4{background:var(--warn-bg);color:var(--warn-tx)}
+.b5{background:var(--acc-bg);color:var(--acc-tx)}
+.b6{background:#F0E6FF;color:#5B21B6}
+.b7{background:var(--bg3);color:var(--tx2)}
+.b8{background:#E0F2FE;color:#075985}
+.b9{background:#FFF0FB;color:#86198F}
+.ex-bd{display:none;padding:0 18px 18px;animation:fadeIn 0.2s ease}
+.ex-bd.open{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+
+.rt{width:100%;border-collapse:collapse;font-size:13px;margin:12px 0 16px}
+.rt th{text-align:left;font-weight:500;padding:8px 12px;border-bottom:2px solid var(--bdr2);color:var(--tx2);font-size:12px;text-transform:uppercase;letter-spacing:0.5px}
+.rt td{padding:8px 12px;border-bottom:1px solid var(--bdr);vertical-align:top;line-height:1.55}
+.rt tr:last-child td{border-bottom:none}
+
+.ic{border-left:3px solid;border-radius:0 var(--radius) var(--radius) 0;padding:14px 18px;margin:10px 0}
+.ic.warn{border-color:var(--amber);background:var(--warn-bg)}
+.ic.info{border-color:var(--blue);background:var(--info-bg)}
+.ic.fix{border-color:var(--gre);background:var(--green-bg)}
+.ic.err{border-color:var(--red);background:var(--err-bg)}
+.ic .il{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin:0 0 4px}
+.ic.warn .il{color:var(--warn-tx)}.ic.info .il{color:var(--info-tx)}.ic.fix .il{color:var(--green-tx)}.ic.err .il{color:var(--err-tx)}
+.ic p{margin:0;font-size:14px;line-height:1.6}
+
+.co{display:flex;gap:10px;padding:14px 16px;border-radius:var(--radius);margin:12px 0 16px;font-size:14px;line-height:1.6}
+.co .ti{font-size:18px;flex-shrink:0;margin-top:2px}
+.co-i{background:var(--info-bg);color:var(--info-tx)}
+.co-w{background:var(--warn-bg);color:var(--warn-tx)}
+.co-t{background:var(--acc-bg);color:var(--acc-tx)}
+.co-g{background:var(--green-bg);color:var(--green-tx)}
+
+.mg{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:12px 0 16px}
+.mc{background:var(--bg2);border-radius:var(--radius);padding:12px 14px}
+.mc-l{font-size:11px;color:var(--tx3);text-transform:uppercase;letter-spacing:0.5px;margin:0 0 2px}
+.mc-v{font-size:18px;font-weight:500;margin:0}
+
+.tb{display:flex;gap:4px;flex-wrap:wrap}
+.tbn{font-family:var(--font);font-size:13px;padding:8px 14px;border:1px solid var(--bdr);border-bottom:none;border-radius:var(--radius) var(--radius) 0 0;background:var(--bg2);color:var(--tx2);cursor:pointer;transition:all 0.15s;font-weight:500}
+.tbn:hover{background:var(--bg3)}
+.tbn.active{background:var(--card);color:var(--tx);border-color:var(--bdr);position:relative;z-index:1}
+.tp{display:none;border:1px solid var(--bdr);border-radius:0 var(--radius) var(--radius) var(--radius);background:var(--card);padding:20px;margin:0 0 16px;position:relative;top:-1px}
+.tp.active{display:block}
+
+.ph{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.8px;color:var(--tx3);margin:0 0 8px}
+.ph-n{width:24px;height:24px;border-radius:50%;background:var(--acc);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:12px}
+
+.formula{background:var(--bg2);border:1px solid var(--bdr);border-radius:var(--radius);padding:14px 20px;margin:12px 0 16px;font-family:var(--mono);font-size:13px;line-height:1.8;overflow-x:auto}
+.formula .label{color:var(--tx3);font-size:11px;text-transform:uppercase;letter-spacing:0.5px}
+.formula .val{color:var(--acc);font-weight:500}
+
+.sum{margin-top:3rem;padding:20px;background:var(--bg2);border-radius:var(--radius-lg);font-size:14px;color:var(--tx2);line-height:1.7}
+.sum p{margin:0}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Training LLMs with PyTorch</h1>
+<p class="hero-sub">The ML engineer's complete guide — from architecture design and tokenization through training recipes, stability, scaling laws, fine-tuning, and alignment. Everything beyond the hardware and into the science of making models learn.</p>
+
+<nav class="toc">
+<p class="toc-title">14 chapters</p>
+<ol class="toc-grid">
+<li><a href="#c1"><i class="ti ti-building-arch" aria-hidden="true"></i> Architecture decisions</a></li>
+<li><a href="#c2"><i class="ti ti-abc" aria-hidden="true"></i> Tokenization</a></li>
+<li><a href="#c3"><i class="ti ti-database" aria-hidden="true"></i> Data curation</a></li>
+<li><a href="#c4"><i class="ti ti-settings" aria-hidden="true"></i> Training hyperparameters</a></li>
+<li><a href="#c5"><i class="ti ti-chart-line" aria-hidden="true"></i> Learning rate schedules</a></li>
+<li><a href="#c6"><i class="ti ti-shield-check" aria-hidden="true"></i> Training stability</a></li>
+<li><a href="#c7"><i class="ti ti-trending-up" aria-hidden="true"></i> Scaling laws</a></li>
+<li><a href="#c8"><i class="ti ti-eye" aria-hidden="true"></i> Evaluation</a></li>
+<li><a href="#c9"><i class="ti ti-code" aria-hidden="true"></i> Training loop</a></li>
+<li><a href="#c10"><i class="ti ti-adjustments" aria-hidden="true"></i> Fine-tuning (SFT)</a></li>
+<li><a href="#c11"><i class="ti ti-puzzle" aria-hidden="true"></i> Parameter-efficient methods</a></li>
+<li><a href="#c12"><i class="ti ti-users" aria-hidden="true"></i> RLHF and alignment</a></li>
+<li><a href="#c13"><i class="ti ti-bolt" aria-hidden="true"></i> Inference optimization</a></li>
+<li><a href="#c14"><i class="ti ti-bug" aria-hidden="true"></i> Debugging and monitoring</a></li>
+</ol>
+</nav>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c1"><span class="ph"><span class="ph-n">1</span></span> Architecture decisions</h2>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">The modern LLM architecture and every design choice</span><span class="badge b1">Architecture</span></div><div class="ex-bd">
+<p>Modern LLMs have converged on a near-standard recipe. Here's every choice, its options, and the current consensus.</p>
+
+<table class="rt">
+<tr><th>Component</th><th>Options</th><th>Current consensus</th><th>Why</th></tr>
+<tr><td><strong>Overall architecture</strong></td><td>Encoder-only, decoder-only, encoder-decoder</td><td>Decoder-only (autoregressive)</td><td>Simplest to scale, best for generation, competitive on understanding tasks too. GPT, LLaMA, Mistral, Qwen all use this.</td></tr>
+<tr><td><strong>Normalization</strong></td><td>LayerNorm, RMSNorm, pre-norm, post-norm</td><td>Pre-RMSNorm</td><td>RMSNorm is simpler (no mean subtraction), ~5% faster. Pre-norm (normalize before attention/MLP, not after) stabilizes training at scale.</td></tr>
+<tr><td><strong>Positional encoding</strong></td><td>Sinusoidal, learned, ALiBi, RoPE, NoPE</td><td>RoPE (Rotary Position Embedding)</td><td>Relative position encoding applied directly to Q/K. Extrapolates to longer sequences better than learned absolute. Used by LLaMA, Mistral, Qwen.</td></tr>
+<tr><td><strong>Attention</strong></td><td>MHA, MQA, GQA</td><td>GQA (Grouped Query Attention)</td><td>Shares KV heads across groups of query heads. Saves KV cache memory at inference (critical for long-context serving) with minimal quality loss vs MHA.</td></tr>
+<tr><td><strong>Activation function</strong></td><td>ReLU, GELU, SiLU, SwiGLU, GeGLU</td><td>SwiGLU</td><td>Gated linear unit with SiLU activation. ~1% better than GELU on downstream tasks. Used by LLaMA, Mistral, PaLM. Note: adds an extra weight matrix (gate projection), so MLP has 3 matrices instead of 2.</td></tr>
+<tr><td><strong>MLP hidden dimension</strong></td><td>4×d, 8/3×d (SwiGLU adjusted)</td><td>~8/3 × d (rounded to multiple of 256)</td><td>With SwiGLU, the intermediate dimension is 2/3 of what it would be with a standard MLP, keeping FLOPs roughly equal.</td></tr>
+<tr><td><strong>Bias terms</strong></td><td>With bias, without bias</td><td>No bias in linear layers</td><td>Removing biases simplifies sharding (no bias reduction needed in TP) and empirically doesn't hurt quality. LLaMA, Mistral, Qwen omit biases.</td></tr>
+<tr><td><strong>Embedding tying</strong></td><td>Tied (share input/output embeddings), untied</td><td>Untied for large models</td><td>Tying saves parameters but limits the output projection. Untied is standard for 7B+ models.</td></tr>
+<tr><td><strong>Vocabulary size</strong></td><td>32K, 64K, 128K, 256K</td><td>32K–128K, always a multiple of 64</td><td>Larger vocab → shorter sequences (more efficient), but larger embedding table. 32K (LLaMA), 128K (GPT-4). Must be aligned to 64 for Tensor Cores.</td></tr>
+<tr><td><strong>Context length</strong></td><td>2K, 4K, 8K, 32K, 128K+</td><td>8K–128K base, extendable via RoPE scaling</td><td>Longer context costs O(s) memory with FlashAttention but O(s²) FLOPs for attention. Train at shorter context, extend via NTK-aware RoPE scaling or YaRN.</td></tr>
+</table>
+
+<h4>Model size configurations (reference)</h4>
+<table class="rt">
+<tr><th>Model</th><th>Params</th><th>d_model</th><th>Layers</th><th>Heads</th><th>KV heads (GQA)</th><th>d_ff (SwiGLU)</th></tr>
+<tr><td>LLaMA-3 8B</td><td>8.0B</td><td>4096</td><td>32</td><td>32</td><td>8</td><td>14336</td></tr>
+<tr><td>LLaMA-3 70B</td><td>70.6B</td><td>8192</td><td>80</td><td>64</td><td>8</td><td>28672</td></tr>
+<tr><td>Mistral 7B</td><td>7.3B</td><td>4096</td><td>32</td><td>32</td><td>8</td><td>14336</td></tr>
+<tr><td>Qwen-2.5 72B</td><td>72.7B</td><td>8192</td><td>80</td><td>64</td><td>8</td><td>29568</td></tr>
+</table>
+
+<div class="co co-t"><i class="ti ti-bulb"></i><div><strong>The recipe is remarkably uniform.</strong> Decoder-only + pre-RMSNorm + RoPE + GQA + SwiGLU + no bias is the template for virtually every modern LLM. Differentiation comes from data, training recipe, and post-training — not architecture.</div></div>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c2"><span class="ph"><span class="ph-n">2</span></span> Tokenization</h2>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">Tokenizer design and its training impact</span><span class="badge b8">Tokenization</span></div><div class="ex-bd">
+
+<table class="rt">
+<tr><th>Algorithm</th><th>Examples</th><th>How it works</th><th>Pros / cons</th></tr>
+<tr><td><strong>BPE</strong></td><td>GPT-2/3/4, LLaMA</td><td>Iteratively merges the most frequent byte pair into a single token. Bottom-up.</td><td>Pro: handles any text (byte-level fallback). Con: tokenization is deterministic but can be sensitive to whitespace/casing.</td></tr>
+<tr><td><strong>Unigram</strong></td><td>T5, mBART</td><td>Starts with a large vocabulary, iteratively prunes tokens that minimally impact likelihood. Top-down.</td><td>Pro: probabilistic (can produce multiple valid tokenizations). Con: slightly slower training of the tokenizer itself.</td></tr>
+<tr><td><strong>SentencePiece BPE</strong></td><td>LLaMA, Mistral</td><td>BPE on raw byte sequences (language-agnostic). Treats text as raw bytes, then applies BPE.</td><td>Pro: handles any language/script, no unknown tokens. Standard for multilingual models.</td></tr>
+<tr><td><strong>tiktoken</strong></td><td>GPT-4, Claude</td><td>Byte-level BPE with optimized Rust implementation. Fast encoding/decoding.</td><td>Pro: 3–10× faster than SentencePiece. Con: OpenAI-specific tooling.</td></tr>
+</table>
+
+<h4>Tokenizer design decisions</h4>
+<table class="rt">
+<tr><th>Decision</th><th>Guidance</th></tr>
+<tr><td>Vocabulary size</td><td>32K is the minimum viable for English. 64K–128K for multilingual or code-heavy models. Larger vocab → fewer tokens per document → faster training (fewer steps for same data), but larger embedding table (~1 GB per 32K tokens at d=4096 in BF16).</td></tr>
+<tr><td>Special tokens</td><td>Minimum: <code>&lt;bos&gt;</code>, <code>&lt;eos&gt;</code>, <code>&lt;pad&gt;</code>. For instruction-tuned: add role tokens (<code>&lt;|user|&gt;</code>, <code>&lt;|assistant|&gt;</code>), tool call tokens. Plan these before training — adding special tokens later requires retraining the embedding layer.</td></tr>
+<tr><td>Whitespace handling</td><td>SentencePiece prepends a special whitespace marker (▁). This means "hello" at the start of a sentence tokenizes differently from " hello" mid-sentence. Be consistent — many training bugs come from inconsistent whitespace treatment between tokenization and data processing.</td></tr>
+<tr><td>Number tokenization</td><td>Standard BPE splits numbers inconsistently: "2024" might become ["20", "24"] or ["202", "4"]. This hurts arithmetic ability. Some approaches: digit-level tokenization (each digit is one token), or special number tokens. LLaMA-3 improved this with better BPE training on numeric data.</td></tr>
+<tr><td>Padding for efficiency</td><td>Pad vocab_size to a multiple of 64 for Tensor Core alignment on the output projection GEMM. E.g., 32001 → 32064.</td></tr>
+</table>
+
+<pre><span class="c"># Training a BPE tokenizer with sentencepiece</span>
+import sentencepiece as spm
+spm.SentencePieceTrainer.train(
+    input='training_corpus.txt',
+    model_prefix='tokenizer',
+    <span class="f">vocab_size=32000</span>,
+    <span class="f">model_type='bpe'</span>,
+    <span class="f">byte_fallback=True</span>,           <span class="c"># handle any UTF-8 character</span>
+    <span class="f">character_coverage=0.9999</span>,      <span class="c"># cover 99.99% of characters</span>
+    <span class="f">num_threads=16</span>,
+    split_by_whitespace=True,
+    split_digits=True,              <span class="c"># tokenize each digit separately</span>
+    user_defined_symbols=['<|user|>', '<|assistant|>', '<|system|>'],
+)</pre>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c3"><span class="ph"><span class="ph-n">3</span></span> Data curation</h2>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">Pretraining data: sources, cleaning, and mixing</span><span class="badge b3">Data</span></div><div class="ex-bd">
+
+<h4>Common pretraining data sources</h4>
+<table class="rt">
+<tr><th>Source</th><th>Volume</th><th>Quality</th><th>Notes</th></tr>
+<tr><td><strong>Common Crawl / Refined Web</strong></td><td>~15T+ tokens</td><td>Low→medium (needs heavy filtering)</td><td>The bulk of training data. Requires deduplication, quality filtering, and toxicity removal.</td></tr>
+<tr><td><strong>Wikipedia</strong></td><td>~6B tokens (English)</td><td>High</td><td>Factual, well-structured. Often upsampled 3–5× in the data mix.</td></tr>
+<tr><td><strong>Books (BookCorpus, Gutenberg)</strong></td><td>~5–20B tokens</td><td>High</td><td>Long-form, coherent text. Helps with narrative and reasoning. Copyright concerns.</td></tr>
+<tr><td><strong>Code (GitHub, StackOverflow)</strong></td><td>~500B+ tokens</td><td>Medium–high</td><td>Dramatically improves reasoning ability even for non-code tasks. LLaMA-2 used ~8% code. LLaMA-3 increased this.</td></tr>
+<tr><td><strong>Scientific papers (arXiv, PubMed)</strong></td><td>~50–100B tokens</td><td>High</td><td>Technical knowledge. Important for STEM capabilities.</td></tr>
+<tr><td><strong>Synthetic data</strong></td><td>Variable</td><td>Variable</td><td>Generated by stronger models. Used increasingly for math, reasoning, instruction-following. Must be carefully validated to avoid model collapse.</td></tr>
+</table>
+
+<h4>Data processing pipeline</h4>
+<table class="rt">
+<tr><th>Step</th><th>What it does</th><th>Tools</th><th>Impact</th></tr>
+<tr><td><strong>Language detection</strong></td><td>Filter to target languages</td><td>fastText lid, CLD3</td><td>Removes noise from web crawls</td></tr>
+<tr><td><strong>Quality filtering</strong></td><td>Remove low-quality text (short, repetitive, boilerplate, adult content)</td><td>Heuristic filters (perplexity, n-gram ratios, URL density), classifier-based</td><td>Critical — training on garbage makes garbage models</td></tr>
+<tr><td><strong>Deduplication</strong></td><td>Remove exact and near-duplicate documents</td><td>MinHash, SimHash, suffix arrays, exact n-gram matching</td><td>Reduces memorization, improves generalization. Typically removes 30–60% of web data.</td></tr>
+<tr><td><strong>PII removal</strong></td><td>Strip personal information (emails, phone numbers, SSNs)</td><td>Regex patterns, NER models</td><td>Legal and ethical requirement</td></tr>
+<tr><td><strong>Toxicity filtering</strong></td><td>Remove hate speech, explicit content</td><td>Perspective API, custom classifiers</td><td>Reduces harmful generation tendencies</td></tr>
+<tr><td><strong>Tokenization</strong></td><td>Convert text to token IDs</td><td>SentencePiece, tiktoken</td><td>Do this once offline, save as binary</td></tr>
+</table>
+
+<h4>Data mixing ratios</h4>
+<div class="formula">
+<span class="label">Typical pretraining data mix (approximate):</span><br>
+Web (filtered): <span class="val">~65–75%</span><br>
+Code:           <span class="val">~8–15%</span><br>
+Books:          <span class="val">~5–8%</span><br>
+Wikipedia:      <span class="val">~3–5%</span><br>
+Scientific:     <span class="val">~3–5%</span><br>
+Conversational: <span class="val">~2–3%</span><br>
+Math:           <span class="val">~2–3%</span>
+</div>
+
+<div class="co co-w"><i class="ti ti-alert-triangle"></i><div><strong>Data quality > data quantity.</strong> LLaMA-3's performance jump over LLaMA-2 came primarily from data quality improvements and scale (15T tokens), not from architecture changes. Phi-series models showed that heavily curated "textbook-quality" data can train strong small models. Spending 2 weeks on data cleaning is worth more than spending 2 weeks on architecture tweaks.</div></div>
+</div></div>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">Sequence packing and document boundaries</span><span class="badge b3">Data</span></div><div class="ex-bd">
+<p>Documents have variable lengths but training requires fixed-length sequences. Sequence packing combines multiple documents into a single training sequence to avoid padding waste.</p>
+
+<pre><span class="c"># Naive approach (wasteful): pad each document to seq_len</span>
+<span class="c"># [doc1_tokens + PAD + PAD + PAD ...]  ← 40% of compute wasted on padding</span>
+
+<span class="c"># Packing approach: concatenate documents with separator</span>
+<span class="c"># [doc1_tokens &lt;eos&gt; doc2_tokens &lt;eos&gt; doc3_tokens &lt;eos&gt; ...]</span>
+<span class="c"># Exactly seq_len tokens, no padding, no waste.</span>
+
+<span class="c"># CRITICAL: prevent cross-document attention with a document mask</span>
+<span class="c"># Tokens from doc1 should NOT attend to tokens from doc2</span>
+
+<span class="c"># Two implementations:</span>
+<span class="c"># 1. Document attention mask (supported by FlashAttention via cu_seqlens)</span>
+from flash_attn import flash_attn_varlen_func
+attn_output = flash_attn_varlen_func(
+    q, k, v,
+    <span class="f">cu_seqlens_q=cu_seqlens</span>,   <span class="c"># cumulative sequence lengths within the pack</span>
+    <span class="f">cu_seqlens_k=cu_seqlens</span>,
+    max_seqlen_q=max_doc_len,
+    max_seqlen_k=max_doc_len,
+    causal=True,
+)
+
+<span class="c"># 2. Loss masking: compute loss only on non-separator tokens</span>
+<span class="c"># Mask out &lt;eos&gt; and any padding from loss calculation</span>
+loss_mask = (targets != tokenizer.pad_id) & (targets != tokenizer.eos_id)
+loss = F.cross_entropy(logits.view(-1, vocab_size), targets.view(-1), reduction='none')
+loss = (loss * loss_mask.view(-1)).sum() / loss_mask.sum()</pre>
+
+<div class="co co-i"><i class="ti ti-info-circle"></i><div><strong>Document boundary masking is not optional.</strong> Without it, the model learns to predict the beginning of doc2 from the content of doc1 — which teaches it spurious cross-document correlations and degrades downstream performance. All modern training codebases (Megatron, torchtitan, Llama-recipes) support document-aware packing.</div></div>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c4"><span class="ph"><span class="ph-n">4</span></span> Training hyperparameters</h2>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">The standard pretraining recipe</span><span class="badge b4">Hyperparams</span></div><div class="ex-bd">
+<table class="rt">
+<tr><th>Hyperparameter</th><th>Typical value</th><th>Sensitivity</th><th>Notes</th></tr>
+<tr><td><strong>Optimizer</strong></td><td>AdamW</td><td>Low — AdamW is universal</td><td>Adam with decoupled weight decay. Always use <code>fused=True</code>.</td></tr>
+<tr><td><strong>Learning rate (peak)</strong></td><td>3×10⁻⁴ (7B), 1.5×10⁻⁴ (70B)</td><td>High — too high → divergence, too low → slow</td><td>Larger models generally use smaller peak LR. Scale as ~1/√(d_model) as a starting point.</td></tr>
+<tr><td><strong>β₁, β₂</strong></td><td>0.9, 0.95</td><td>Moderate</td><td>β₂=0.95 (not 0.999) is standard for LLMs. Lower β₂ gives more aggressive gradient history forgetting, which helps with data distribution shifts during training.</td></tr>
+<tr><td><strong>ε (Adam epsilon)</strong></td><td>1×10⁻⁸</td><td>Low</td><td>Rarely needs tuning. Some use 1×10⁻⁵ for stability.</td></tr>
+<tr><td><strong>Weight decay</strong></td><td>0.1</td><td>Low–moderate</td><td>Applied to all weights except biases, norms, and embeddings. Decoupled (AdamW, not Adam with L2).</td></tr>
+<tr><td><strong>Gradient clipping</strong></td><td>1.0 (global norm)</td><td>Important for stability</td><td>Clips the global gradient norm to prevent explosive updates. Always use this.</td></tr>
+<tr><td><strong>Batch size (tokens)</strong></td><td>1M–4M tokens per step</td><td>Moderate</td><td>Chinchilla used ~1M. LLaMA-3 ramped from 4M to 16M. Larger batches need LR adjustment.</td></tr>
+<tr><td><strong>Sequence length</strong></td><td>2K→4K→8K (progressive)</td><td>Low (training), high (inference)</td><td>Often start at shorter sequences and extend later. RoPE base frequency must be adjusted for longer contexts.</td></tr>
+<tr><td><strong>Warmup steps</strong></td><td>1000–2000 steps</td><td>Moderate</td><td>Linear warmup from 0 to peak LR. Too few → training instability. Too many → wasted compute at low LR.</td></tr>
+<tr><td><strong>Dropout</strong></td><td>0.0 (none)</td><td>N/A</td><td>Modern LLM pretraining uses no dropout. Data volume provides sufficient regularization.</td></tr>
+<tr><td><strong>Weight initialization</strong></td><td>Normal(0, 0.02) or Normal(0, 1/√d)</td><td>Moderate at scale</td><td>GPT-2-style: N(0, 0.02) for most weights, scaled by 1/√(2·num_layers) for residual connections. Incorrect init causes loss spikes early in training.</td></tr>
+</table>
+
+<pre><span class="c"># Standard pretraining hyperparameters</span>
+optimizer = torch.optim.AdamW(
+    model.parameters(),
+    <span class="f">lr=3e-4</span>,
+    <span class="f">betas=(0.9, 0.95)</span>,
+    <span class="f">weight_decay=0.1</span>,
+    <span class="f">fused=True</span>,
+)
+
+<span class="c"># Apply weight decay only to weight matrices, not biases/norms/embeddings</span>
+decay_params = [p for n, p in model.named_parameters()
+                if p.dim() >= 2]  <span class="c"># weight matrices are 2D+</span>
+no_decay_params = [p for n, p in model.named_parameters()
+                   if p.dim() < 2]  <span class="c"># biases and norm params are 1D</span>
+optimizer = torch.optim.AdamW([
+    {'params': decay_params, 'weight_decay': 0.1},
+    {'params': no_decay_params, 'weight_decay': 0.0},
+], lr=3e-4, betas=(0.9, 0.95), fused=True)</pre>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c5"><span class="ph"><span class="ph-n">5</span></span> Learning rate schedules</h2>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">Warmup + decay schedules</span><span class="badge b4">Schedule</span></div><div class="ex-bd">
+<table class="rt">
+<tr><th>Schedule</th><th>Formula (after warmup)</th><th>Used by</th><th>Pros / cons</th></tr>
+<tr><td><strong>Cosine decay</strong></td><td>LR = min_lr + 0.5×(peak_lr - min_lr)×(1 + cos(π × step/total))</td><td>LLaMA, GPT-3, Mistral</td><td>Pro: smooth decay, well-studied. Con: must know total steps in advance.</td></tr>
+<tr><td><strong>Linear decay</strong></td><td>LR = peak_lr × (1 - step/total)</td><td>Some smaller runs</td><td>Pro: simple. Con: decays too fast early on, too slow late.</td></tr>
+<tr><td><strong>Inverse sqrt</strong></td><td>LR = peak_lr × √(warmup_steps / step)</td><td>Original Transformer, PaLM</td><td>Pro: doesn't need total steps. Con: decays very slowly — may be too high late in training.</td></tr>
+<tr><td><strong>WSD (Warmup-Stable-Decay)</strong></td><td>Warmup → constant LR → rapid cooldown</td><td>MiniCPM, recent research</td><td>Pro: can continue training at any point (just extend the stable phase). Most flexible for large runs with unknown total steps.</td></tr>
+</table>
+
+<pre><span class="c"># Cosine schedule with warmup (most common)</span>
+import math
+
+def get_lr(step, warmup_steps, max_steps, peak_lr, min_lr):
+    <span class="c"># Linear warmup</span>
+    if step < warmup_steps:
+        return peak_lr * step / warmup_steps
+    <span class="c"># Cosine decay</span>
+    progress = (step - warmup_steps) / (max_steps - warmup_steps)
+    return min_lr + 0.5 * (peak_lr - min_lr) * (1 + math.cos(math.pi * progress))
+
+<span class="c"># Typical: min_lr = peak_lr / 10</span>
+<span class="c"># Warmup: 1000–2000 steps</span></pre>
+
+<div class="co co-i"><i class="ti ti-info-circle"></i><div><strong>The cooldown phase matters more than you think.</strong> Recent work (MiniCPM, DeepSeek) shows that a dedicated "cooldown" phase at the end of training — where LR drops rapidly to near-zero while training on higher-quality data — produces outsized quality improvements. The WSD schedule formalizes this: train at constant LR, then do a sharp decay over the final 10–20% of steps.</div></div>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c6"><span class="ph"><span class="ph-n">6</span></span> Training stability</h2>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">Loss spikes, divergence, and NaNs</span><span class="badge b2">Stability</span></div><div class="ex-bd">
+
+<h4>The three failure modes</h4>
+<table class="rt">
+<tr><th>Failure</th><th>What it looks like</th><th>Common causes</th><th>Fix</th></tr>
+<tr><td><strong>Loss spike</strong></td><td>Loss jumps 2–10× for a few steps then recovers</td><td>Bad data batch (corrupted, extremely long, unusual distribution), learning rate too high, gradient explosion before clipping kicks in</td><td>Log the offending batch and inspect. If recurring at specific data samples, filter them. If random, reduce peak LR by 10–20%. Ensure gradient clipping is at 1.0.</td></tr>
+<tr><td><strong>Slow divergence</strong></td><td>Loss gradually increases over hundreds of steps</td><td>LR too high for current phase, data quality degradation (later data in the curriculum is lower quality), numerical instability in norm layers</td><td>Reduce LR. Check data mix at current position. Verify FP32 accumulation in norms and loss.</td></tr>
+<tr><td><strong>NaN / Inf</strong></td><td>Loss becomes NaN, training stops</td><td>Overflow in FP16 (use BF16 or GradScaler), division by zero in norms, extreme outlier activations, corrupted optimizer states (from checkpoint)</td><td>Switch to BF16, add epsilon to norms, check for empty sequences (division by zero in loss averaging), validate checkpoint loading.</td></tr>
+</table>
+
+<h4>Monitoring for stability</h4>
+<pre><span class="c"># Key metrics to log every N steps</span>
+metrics = {
+    'loss': loss.item(),
+    'grad_norm': torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0),
+    'learning_rate': scheduler.get_last_lr()[0],
+    'tokens_seen': total_tokens,
+}
+
+<span class="c"># Watch for:</span>
+<span class="c"># 1. grad_norm consistently near clip value (1.0) → LR may be too high</span>
+<span class="c"># 2. grad_norm suddenly spikes to 100+ → bad batch or instability</span>
+<span class="c"># 3. loss plateau for >1000 steps → learning has stalled</span>
+<span class="c"># 4. Individual parameter norms (weight norms per layer)</span></pre>
+
+<div class="ic warn">
+<p class="il">The z-loss trick</p>
+<p>Large logit values before softmax can cause numerical instability. The z-loss adds a penalty on the log-partition function: <code>z_loss = 1e-4 * (torch.logsumexp(logits, dim=-1) ** 2).mean()</code>. This regularizes logit magnitudes and prevents softmax saturation. Used by PaLM and some other models. Small training quality cost for much better numerical stability.</p>
+</div>
+
+<div class="ic fix">
+<p class="il">Recovering from loss spikes</p>
+<p>If a loss spike doesn't self-recover within 50–100 steps: (1) roll back to the last checkpoint before the spike, (2) skip the offending data batches, (3) reduce LR by 10–20%, (4) resume. This is why frequent checkpointing (every 500–1000 steps) is essential. At the scale of training a 70B model, a single unrecoverable spike can waste $100K+ of compute.</p>
+</div>
+</div></div>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">Initialization schemes that prevent early instability</span><span class="badge b2">Stability</span></div><div class="ex-bd">
+<table class="rt">
+<tr><th>Component</th><th>Initialization</th><th>Why</th></tr>
+<tr><td>Embedding layer</td><td>Normal(0, σ) where σ = 1/√d_model</td><td>Scales embedding norms proportional to hidden dim</td></tr>
+<tr><td>Linear layers (most)</td><td>Normal(0, σ) where σ = 1/√d_model or 0.02</td><td>Prevents activation explosion at init time</td></tr>
+<tr><td>Output projection (residual)</td><td>Normal(0, σ/√(2·L)) where L = num_layers</td><td>The key stability trick: residual connections accumulate signal across layers. Scaling by 1/√(2L) keeps the total signal magnitude bounded regardless of depth.</td></tr>
+<tr><td>RMSNorm parameters (γ)</td><td>Ones</td><td>Identity transform at initialization — the norm layer does nothing initially.</td></tr>
+<tr><td>Biases (if used)</td><td>Zeros</td><td>No initial bias offset</td></tr>
+</table>
+
+<div class="co co-t"><i class="ti ti-bulb"></i><div><strong>The µP (maximal update parameterization) alternative:</strong> Standard parameterization (SP) requires retuning hyperparameters when changing model width. µP defines a parameterization where optimal hyperparameters transfer across model sizes. You can tune LR on a tiny model and directly apply it to the full model. This saves enormous hyperparameter search cost at scale. Implementation: adjust initialization, LR per-layer, and attention scaling by width-dependent factors.</div></div>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c7"><span class="ph"><span class="ph-n">7</span></span> Scaling laws</h2>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">Chinchilla scaling and compute-optimal training</span><span class="badge b5">Scaling</span></div><div class="ex-bd">
+
+<div class="formula">
+<span class="label">Kaplan (OpenAI) scaling law:</span><br>
+<span class="val">L(N, D) ≈ A/N^α + B/D^β + L∞</span><br>
+where N = parameters, D = training tokens, L = loss<br><br>
+<span class="label">Chinchilla optimal (Hoffmann et al.):</span><br>
+<span class="val">D_opt ≈ 20 × N</span><br>
+Train on ~20 tokens per parameter for compute-optimal loss.<br>
+7B model → ~140B tokens. 70B model → ~1.4T tokens.<br><br>
+<span class="label">But "compute-optimal" ≠ "inference-optimal":</span><br>
+LLaMA-3 8B was trained on <span class="val">15T tokens</span> (1875× params).<br>
+Massively over-trained relative to Chinchilla — because inference cost<br>
+depends only on model size, not training tokens. Training longer makes<br>
+the model better at fixed inference cost.
+</div>
+
+<h4>Practical implications of scaling laws</h4>
+<table class="rt">
+<tr><th>Insight</th><th>What it means for you</th></tr>
+<tr><td>Loss is predictable from N and D</td><td>You can estimate final loss (and roughly quality) before training by running small-scale experiments and extrapolating. This enables "scaling law runs" — train 100M, 300M, 1B models to predict 7B performance.</td></tr>
+<tr><td>Over-training is increasingly common</td><td>If you're deploying the model for inference, training well beyond Chinchilla-optimal is worth it. Training cost is one-time; inference cost is ongoing. Budget for 100–200× parameters in tokens.</td></tr>
+<tr><td>Data becomes the bottleneck</td><td>At 15T tokens, you may exhaust available high-quality data. This drives interest in synthetic data, multi-epoch training (repeat data), and data quality improvements.</td></tr>
+<tr><td>Hyperparameters don't transfer perfectly across scale</td><td>LR, batch size, and warmup need adjustment when going from small experiments to full-scale. µP can help, but empirically most teams still do some tuning at target scale.</td></tr>
+</table>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c8"><span class="ph"><span class="ph-n">8</span></span> Evaluation</h2>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">Benchmark suite for LLM evaluation</span><span class="badge b7">Evaluation</span></div><div class="ex-bd">
+<table class="rt">
+<tr><th>Benchmark</th><th>What it tests</th><th>Format</th><th>When to use</th></tr>
+<tr><td><strong>Perplexity (val set)</strong></td><td>Language modeling quality</td><td>Log-likelihood on held-out data</td><td>Always — cheapest, most reliable signal during training. Track on multiple domains.</td></tr>
+<tr><td><strong>MMLU</strong></td><td>Broad knowledge (57 subjects)</td><td>Multiple choice</td><td>Standard knowledge benchmark. 5-shot.</td></tr>
+<tr><td><strong>HellaSwag</strong></td><td>Commonsense reasoning</td><td>Sentence completion</td><td>Good for tracking reasoning during training.</td></tr>
+<tr><td><strong>ARC-Challenge</strong></td><td>Science reasoning</td><td>Multiple choice</td><td>Elementary science, harder than ARC-Easy.</td></tr>
+<tr><td><strong>GSM8K / MATH</strong></td><td>Mathematical reasoning</td><td>Word problems, proofs</td><td>Critical for assessing reasoning. Use chain-of-thought prompting.</td></tr>
+<tr><td><strong>HumanEval / MBPP</strong></td><td>Code generation</td><td>Function completion</td><td>Code synthesis quality. Pass@k metric.</td></tr>
+<tr><td><strong>WinoGrande</strong></td><td>Coreference resolution</td><td>Fill-in-the-blank</td><td>Tests contextual understanding.</td></tr>
+<tr><td><strong>TruthfulQA</strong></td><td>Factual accuracy, avoiding hallucination</td><td>Open-ended QA</td><td>Tests whether model avoids common misconceptions.</td></tr>
+<tr><td><strong>MT-Bench / AlpacaEval</strong></td><td>Instruction following quality</td><td>LLM-as-judge</td><td>For post-training (SFT/RLHF) evaluation.</td></tr>
+</table>
+
+<h4>Evaluation during training</h4>
+<pre><span class="c"># Evaluate at regular intervals (every 500–1000 steps)</span>
+<span class="c"># Minimum during pretraining:</span>
+<span class="c"># 1. Validation perplexity on held-out data (same distribution)</span>
+<span class="c"># 2. Validation perplexity on out-of-distribution data</span>
+<span class="c"># 3. A few few-shot benchmarks (HellaSwag, ARC, MMLU)</span>
+<span class="c">#</span>
+<span class="c"># Use lm-evaluation-harness for standardized evaluation:</span>
+<span class="c"># pip install lm-eval</span>
+<span class="c"># lm_eval --model hf --model_args pretrained=./checkpoint \</span>
+<span class="c">#   --tasks hellaswag,arc_challenge,mmlu --num_fewshot 5</span></pre>
+
+<div class="co co-w"><i class="ti ti-alert-triangle"></i><div><strong>Evaluation pitfalls:</strong> (1) Data contamination — if benchmark data leaked into pretraining data, scores are meaningless. Always check for contamination. (2) Prompt sensitivity — performance can vary 10–20% based on prompt format. Use standardized formats. (3) Random seed variance — run benchmarks 3–5 times for reliable averages on smaller benchmarks.</div></div>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c9"><span class="ph"><span class="ph-n">9</span></span> The training loop</h2>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">Complete pretraining loop with all best practices</span><span class="badge b1">Code</span></div><div class="ex-bd">
+<pre><span class="c"># Simplified but complete pretraining loop</span>
+import torch
+from torch.distributed import init_process_group
+from torch.distributed._composable.fsdp import fully_shard
+
+<span class="c"># 1. Setup distributed</span>
+init_process_group(backend='nccl')
+rank = torch.distributed.get_rank()
+device = torch.device(f'cuda:{rank % torch.cuda.device_count()}')
+
+<span class="c"># 2. Build model</span>
+model = build_llama_model(config).to(device).to(torch.bfloat16)
+
+<span class="c"># 3. Apply FSDP sharding</span>
+for layer in model.layers:
+    fully_shard(layer)
+fully_shard(model)
+
+<span class="c"># 4. Activation checkpointing</span>
+from torch.utils.checkpoint import checkpoint
+for layer in model.layers:
+    layer.forward = lambda *args, _layer=layer: \
+        checkpoint(_layer._original_forward, *args, use_reentrant=False)
+
+<span class="c"># 5. Optimizer</span>
+optimizer = torch.optim.AdamW(
+    get_param_groups(model),  <span class="c"># separate decay / no-decay groups</span>
+    lr=3e-4, betas=(0.9, 0.95), weight_decay=0.1, fused=True
+)
+
+<span class="c"># 6. Training loop</span>
+for step in range(max_steps):
+    <span class="c"># Gradient accumulation</span>
+    for micro_step in range(grad_accum_steps):
+        batch = next(data_iter)
+        input_ids = batch['input_ids'].to(device)
+        labels = batch['labels'].to(device)
+
+        with torch.autocast('cuda', dtype=torch.bfloat16):
+            logits = model(input_ids)
+            loss = F.cross_entropy(
+                logits.view(-1, vocab_size),
+                labels.view(-1),
+                ignore_index=-100,   <span class="c"># ignore padding</span>
+            )
+            loss = loss / grad_accum_steps  <span class="c"># normalize by accum steps</span>
+
+        loss.backward()
+
+    <span class="c"># Gradient clipping (CRITICAL for stability)</span>
+    grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), <span class="f">max_norm=1.0</span>)
+
+    <span class="c"># LR schedule</span>
+    lr = get_cosine_lr(step, warmup=2000, max_steps=max_steps,
+                       peak_lr=3e-4, min_lr=3e-5)
+    for pg in optimizer.param_groups:
+        pg['lr'] = lr
+
+    <span class="c"># Step</span>
+    optimizer.step()
+    optimizer.zero_grad()
+
+    <span class="c"># Logging</span>
+    if step % 10 == 0 and rank == 0:
+        log({'loss': loss.item() * grad_accum_steps,
+             'grad_norm': grad_norm.item(), 'lr': lr,
+             'tokens': step * global_batch_tokens})
+
+    <span class="c"># Checkpoint</span>
+    if step % 1000 == 0:
+        save_checkpoint(model, optimizer, step)
+
+    <span class="c"># Evaluation</span>
+    if step % 500 == 0:
+        val_loss = evaluate(model, val_loader)
+        if rank == 0:
+            log({'val_loss': val_loss})</pre>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c10"><span class="ph"><span class="ph-n">10</span></span> Fine-tuning (SFT)</h2>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">Supervised fine-tuning: data, format, and hyperparameters</span><span class="badge b6">Fine-tuning</span></div><div class="ex-bd">
+
+<h4>SFT data format</h4>
+<pre><span class="c"># Chat/instruction format (LLaMA-3 style)</span>
+<span class="c"># &lt;|begin_of_text|&gt;&lt;|start_header_id|&gt;system&lt;|end_header_id|&gt;</span>
+<span class="c"># You are a helpful assistant.&lt;|eot_id|&gt;</span>
+<span class="c"># &lt;|start_header_id|&gt;user&lt;|end_header_id|&gt;</span>
+<span class="c"># What is the capital of France?&lt;|eot_id|&gt;</span>
+<span class="c"># &lt;|start_header_id|&gt;assistant&lt;|end_header_id|&gt;</span>
+<span class="c"># The capital of France is Paris.&lt;|eot_id|&gt;</span>
+
+<span class="c"># CRITICAL: compute loss ONLY on assistant turns</span>
+<span class="c"># Mask system + user tokens in the loss calculation</span>
+labels = input_ids.clone()
+labels[system_and_user_mask] = -100  <span class="c"># ignore_index</span></pre>
+
+<h4>SFT hyperparameters</h4>
+<table class="rt">
+<tr><th>Hyperparameter</th><th>SFT value</th><th>vs Pretraining</th></tr>
+<tr><td>Learning rate</td><td>1–5 × 10⁻⁵</td><td>~10× lower than pretraining</td></tr>
+<tr><td>Epochs</td><td>1–3 (on the SFT dataset)</td><td>Pretraining = 1 epoch on massive data</td></tr>
+<tr><td>Batch size</td><td>128–512 sequences</td><td>Smaller than pretraining (dataset is smaller)</td></tr>
+<tr><td>Weight decay</td><td>0.0–0.1</td><td>Same or lower</td></tr>
+<tr><td>LR schedule</td><td>Cosine with short warmup (100–200 steps)</td><td>Shorter warmup</td></tr>
+<tr><td>Gradient clipping</td><td>1.0</td><td>Same</td></tr>
+<tr><td>Dropout</td><td>0.0–0.05</td><td>Sometimes add small dropout for regularization on small datasets</td></tr>
+</table>
+
+<h4>SFT data quality</h4>
+<table class="rt">
+<tr><th>Aspect</th><th>Guidance</th></tr>
+<tr><td>Quantity</td><td>10K–100K high-quality conversations is sufficient. Quality >> quantity. LIMA showed 1K carefully curated examples can match larger datasets.</td></tr>
+<tr><td>Diversity</td><td>Cover a wide range of tasks: Q&A, coding, math, creative writing, conversation, summarization. Under-representing a category means the model won't be good at it.</td></tr>
+<tr><td>Response quality</td><td>Every response must be the quality you want the model to produce. If 10% of your data has mediocre responses, the model learns to produce mediocre responses 10% of the time.</td></tr>
+<tr><td>Multi-turn</td><td>Include multi-turn conversations, not just single-turn Q&A. The model needs to learn conversation coherence.</td></tr>
+<tr><td>Refusals</td><td>Include examples of appropriate refusals for harmful requests. Without these, the model won't learn safety boundaries.</td></tr>
+</table>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c11"><span class="ph"><span class="ph-n">11</span></span> Parameter-efficient fine-tuning</h2>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">LoRA, QLoRA, and when to use them</span><span class="badge b6">PEFT</span></div><div class="ex-bd">
+
+<table class="rt">
+<tr><th>Method</th><th>How it works</th><th>Trainable params</th><th>Memory</th><th>Quality vs full SFT</th></tr>
+<tr><td><strong>Full SFT</strong></td><td>Update all parameters</td><td>100%</td><td>Full model + optimizer + gradients</td><td>Best quality (gold standard)</td></tr>
+<tr><td><strong>LoRA</strong></td><td>Freeze base model. Add low-rank matrices (A, B) to target layers: W' = W + BA where B∈ℝ^{d×r}, A∈ℝ^{r×d}, r << d</td><td>0.1–1%</td><td>~60% less (no optimizer states for frozen params)</td><td>90–95% of full SFT for most tasks. Can close the gap with higher rank.</td></tr>
+<tr><td><strong>QLoRA</strong></td><td>LoRA on a 4-bit quantized base model. NF4 quantization with double quantization.</td><td>0.1–1%</td><td>~75% less (4-bit base model)</td><td>85–95% of full SFT. Quality depends on quantization impact.</td></tr>
+<tr><td><strong>DoRA</strong></td><td>Decomposes weight into magnitude and direction, applies LoRA to direction only</td><td>0.1–1%</td><td>Similar to LoRA</td><td>Slight improvement over LoRA in some benchmarks</td></tr>
+</table>
+
+<pre><span class="c"># LoRA with PEFT library</span>
+from peft import LoraConfig, get_peft_model
+
+lora_config = LoraConfig(
+    <span class="f">r=16</span>,                      <span class="c"># rank — higher = more parameters, better quality</span>
+    <span class="f">lora_alpha=32</span>,              <span class="c"># scaling factor (usually 2×r)</span>
+    <span class="f">target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
+                     "gate_proj", "up_proj", "down_proj"]</span>,
+    lora_dropout=0.05,
+    task_type="CAUSAL_LM",
+)
+
+model = get_peft_model(model, lora_config)
+model.print_trainable_parameters()
+<span class="c"># "trainable params: 10M || all params: 7B || trainable%: 0.14%"</span>
+
+<span class="c"># QLoRA — combine with bitsandbytes 4-bit quantization</span>
+from transformers import BitsAndBytesConfig
+
+bnb_config = BitsAndBytesConfig(
+    load_in_4bit=True,
+    bnb_4bit_quant_type="nf4",
+    bnb_4bit_compute_dtype=torch.bfloat16,
+    bnb_4bit_use_double_quant=True,
+)
+model = AutoModelForCausalLM.from_pretrained("meta-llama/...",
+    quantization_config=bnb_config)
+model = get_peft_model(model, lora_config)</pre>
+
+<h4>LoRA hyperparameter guidance</h4>
+<table class="rt">
+<tr><th>Parameter</th><th>Typical value</th><th>Notes</th></tr>
+<tr><td>Rank (r)</td><td>8–64</td><td>Higher rank = more expressive but more memory. r=16 is a good default. r=64+ approaches full SFT quality.</td></tr>
+<tr><td>Alpha (α)</td><td>2×r</td><td>Scaling factor. The effective update is (α/r)×BA. Setting α=2r means the scaling is 2 regardless of rank.</td></tr>
+<tr><td>Target modules</td><td>All linear layers (Q,K,V,O,gate,up,down)</td><td>Applying LoRA to all linears is better than just attention. The marginal cost of adding MLP layers is small.</td></tr>
+<tr><td>Learning rate</td><td>1–5 × 10⁻⁴</td><td>Higher than full SFT — LoRA parameters start from zero and need to learn quickly.</td></tr>
+</table>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c12"><span class="ph"><span class="ph-n">12</span></span> RLHF and alignment</h2>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">Post-training alignment: RLHF, DPO, and alternatives</span><span class="badge b9">Alignment</span></div><div class="ex-bd">
+
+<table class="rt">
+<tr><th>Method</th><th>How it works</th><th>Pros</th><th>Cons</th></tr>
+<tr><td><strong>RLHF (PPO)</strong></td><td>Train a reward model on human preferences, then optimize the policy (LLM) using PPO to maximize reward while staying close to the SFT model (via KL penalty).</td><td>Most powerful alignment method. Can optimize complex objectives. Used by ChatGPT, Claude.</td><td>Complex infrastructure (4 models in memory: policy, reference, reward, critic). Unstable training. Expensive.</td></tr>
+<tr><td><strong>DPO</strong></td><td>Directly optimize preferences without a separate reward model. Reformulates the RLHF objective as a classification loss on preference pairs.</td><td>Simple — just a loss function on preference data. No reward model or PPO. Stable training.</td><td>May not optimize as well as RLHF for complex preferences. Requires well-curated preference pairs.</td></tr>
+<tr><td><strong>ORPO</strong></td><td>Combines SFT and preference optimization in a single stage.</td><td>Single-stage training, simpler pipeline.</td><td>Less studied than DPO. Newer method.</td></tr>
+<tr><td><strong>KTO</strong></td><td>Kahneman-Tversky Optimization — uses only binary thumbs-up/down signals, not pairwise preferences.</td><td>Doesn't require paired data — just good/bad labels.</td><td>May need more data to match DPO quality.</td></tr>
+</table>
+
+<pre><span class="c"># DPO loss (simplified)</span>
+<span class="c"># Given: preferred response y_w, dispreferred response y_l</span>
+<span class="c"># Reference model log-probs: ref_logp_w, ref_logp_l</span>
+<span class="c"># Policy model log-probs: policy_logp_w, policy_logp_l</span>
+
+beta = 0.1  <span class="c"># KL penalty strength</span>
+
+logp_ratio_w = policy_logp_w - ref_logp_w
+logp_ratio_l = policy_logp_l - ref_logp_l
+dpo_loss = -F.logsigmoid(beta * (logp_ratio_w - logp_ratio_l)).mean()
+
+<span class="c"># That's it — no reward model, no PPO, no critic.</span>
+<span class="c"># Just supervised training on preference pairs.</span></pre>
+
+<h4>RLHF / alignment data</h4>
+<table class="rt">
+<tr><th>Data type</th><th>Format</th><th>Volume needed</th></tr>
+<tr><td>Preference pairs</td><td>(prompt, chosen_response, rejected_response)</td><td>10K–100K pairs for DPO</td></tr>
+<tr><td>Reward model training</td><td>(prompt, response, rating) or pairwise comparisons</td><td>50K–500K for RLHF reward model</td></tr>
+<tr><td>Safety data</td><td>Harmful prompts + appropriate refusals</td><td>1K–10K covering diverse harm categories</td></tr>
+</table>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c13"><span class="ph"><span class="ph-n">13</span></span> Inference optimization</h2>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">Making your trained model serve efficiently</span><span class="badge b7">Inference</span></div><div class="ex-bd">
+
+<table class="rt">
+<tr><th>Technique</th><th>What it does</th><th>Speedup</th><th>Quality impact</th></tr>
+<tr><td><strong>KV cache</strong></td><td>Cache key/value tensors from previous tokens. Avoid recomputing attention over the full sequence for each new token.</td><td>~s× (linear instead of quadratic per token)</td><td>None — mathematically identical</td></tr>
+<tr><td><strong>GQA</strong></td><td>Fewer KV heads → smaller KV cache → more sequences in memory → higher throughput</td><td>2–4× memory reduction for KV cache</td><td>Minimal loss (designed during pretraining)</td></tr>
+<tr><td><strong>Quantization (GPTQ, AWQ)</strong></td><td>Compress weights from BF16 to INT4/INT8. Reduces memory and bandwidth.</td><td>2–4× memory, 1.5–2.5× throughput</td><td>Small — 0.1–1% quality degradation with good calibration</td></tr>
+<tr><td><strong>Speculative decoding</strong></td><td>Use a small "draft" model to propose N tokens, verify with the large model in parallel. Accept correct tokens.</td><td>2–3× tokens/sec (batch size 1)</td><td>None — output distribution is identical (rejection sampling)</td></tr>
+<tr><td><strong>Continuous batching</strong></td><td>Instead of waiting for all sequences in a batch to finish, add/remove sequences dynamically.</td><td>2–5× throughput for variable-length requests</td><td>None</td></tr>
+<tr><td><strong>PagedAttention (vLLM)</strong></td><td>Non-contiguous KV cache memory management. Eliminates memory fragmentation.</td><td>~90% GPU memory utilization vs ~50% without</td><td>None</td></tr>
+<tr><td><strong>Flash decoding</strong></td><td>Optimized attention kernel for the decode phase (single query token against long KV cache)</td><td>~2× decode speed for long sequences</td><td>None</td></tr>
+</table>
+
+<pre><span class="c"># Quantization with AutoGPTQ</span>
+from auto_gptq import AutoGPTQForCausalLM
+model = AutoGPTQForCausalLM.from_quantized(
+    "model-gptq-4bit",
+    device_map="auto",
+    use_safetensors=True,
+)
+
+<span class="c"># Serving with vLLM (production)</span>
+<span class="c"># pip install vllm</span>
+<span class="c"># python -m vllm.entrypoints.openai.api_server \</span>
+<span class="c">#   --model meta-llama/Meta-Llama-3-8B-Instruct \</span>
+<span class="c">#   --tensor-parallel-size 1 \</span>
+<span class="c">#   --dtype bfloat16</span></pre>
+</div></div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<h2 id="c14"><span class="ph"><span class="ph-n">14</span></span> Debugging and monitoring</h2>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">What to monitor, what can go wrong, and how to debug</span><span class="badge b2">Debug</span></div><div class="ex-bd">
+
+<h4>Essential monitoring dashboard</h4>
+<table class="rt">
+<tr><th>Metric</th><th>Log frequency</th><th>Healthy pattern</th><th>Red flag</th></tr>
+<tr><td>Training loss</td><td>Every step</td><td>Smooth downward curve</td><td>Spike > 2× baseline, plateau, or upward trend</td></tr>
+<tr><td>Validation loss</td><td>Every 500 steps</td><td>Tracks training loss with small gap</td><td>Val loss increasing while train loss decreases → overfitting (rare in pretraining, common in SFT)</td></tr>
+<tr><td>Gradient norm</td><td>Every step</td><td>Roughly stable, below clip threshold</td><td>Consistently at clip value → LR too high. Sudden spike → bad batch or instability.</td></tr>
+<tr><td>Learning rate</td><td>Every step</td><td>Follows the schedule exactly</td><td>Any deviation from expected schedule → scheduler bug</td></tr>
+<tr><td>Tokens processed</td><td>Every step</td><td>Linear growth</td><td>Stalls or slowdowns → data pipeline issue, checkpointing overhead, or hardware failure</td></tr>
+<tr><td>GPU utilization + power</td><td>Every 10s</td><td>Stable >90% util, >500W</td><td>Drops, oscillation, or asymmetry across GPUs</td></tr>
+<tr><td>Parameter norms</td><td>Every 100 steps</td><td>Stable or slowly growing</td><td>Any parameter norm exploding → likely attention logit growth</td></tr>
+<tr><td>Throughput (tokens/sec)</td><td>Every step</td><td>Stable after warmup</td><td>Degradation over time → memory leak, data pipeline degradation</td></tr>
+</table>
+
+<h4>Common bugs and their symptoms</h4>
+<table class="rt">
+<tr><th>Symptom</th><th>Likely bug</th><th>Debug approach</th></tr>
+<tr><td>Loss doesn't decrease at all</td><td>Labels are wrong (e.g., shifted incorrectly), LR is zero, model is frozen</td><td>Verify labels match shifted input_ids. Print LR. Check <code>requires_grad</code> on parameters.</td></tr>
+<tr><td>Loss decreases but model generates nonsense</td><td>Tokenizer mismatch (trained with different tokenizer than the one used for inference), or loss computed on wrong tokens</td><td>Decode a training batch to verify tokenization roundtrips correctly. Check loss mask.</td></tr>
+<tr><td>Loss is suspiciously low from the start</td><td>Data contamination (evaluation data in training set), or label leakage (model can "see" the answer in the input)</td><td>Check for overlap between train and eval data. Inspect attention patterns.</td></tr>
+<tr><td>Training runs fine on 1 GPU but fails on 8</td><td>Gradient reduction bug (averaging vs summing across GPUs), or all-gather returning stale parameters</td><td>Compare loss on 1 GPU vs 8 GPUs for same batch. Check DDP/FSDP wrapper correctness.</td></tr>
+<tr><td>OOM after N steps but not initially</td><td>Memory leak — typically from accumulating tensors in a list for logging, or not detaching loss before <code>.item()</code></td><td>Use <code>torch.cuda.memory_summary()</code> at multiple steps. Check for growing tensor counts.</td></tr>
+<tr><td>Model outputs are all the same token</td><td>Softmax collapse — logits dominated by one token. Often caused by incorrect loss masking or degenerate init.</td><td>Print logit distribution. Check if loss mask accidentally masks everything.</td></tr>
+</table>
+
+<pre><span class="c"># Quick sanity check before a full training run</span>
+<span class="c"># 1. Overfit on a single batch (should reach near-zero loss)</span>
+for step in range(200):
+    loss = train_step(single_batch)
+    if step % 50 == 0:
+        print(f"Step {step}: loss={loss:.4f}")
+<span class="c"># If loss doesn't approach 0, something is fundamentally wrong</span>
+
+<span class="c"># 2. Check gradient flow</span>
+for name, p in model.named_parameters():
+    if p.grad is not None:
+        print(f"{name}: grad_norm={p.grad.norm():.4f}, weight_norm={p.norm():.4f}")
+    else:
+        print(f"{name}: NO GRADIENT")  <span class="c"># ← problem if this is a trainable param</span>
+
+<span class="c"># 3. Verify tokenizer roundtrip</span>
+text = "The capital of France is Paris."
+tokens = tokenizer.encode(text)
+decoded = tokenizer.decode(tokens)
+assert decoded == text, f"Roundtrip failed: '{decoded}' != '{text}'"</pre>
+</div></div>
+
+<div class="ex"><div class="ex-h" onclick="toggle(this)"><i class="ti ti-chevron-right"></i><span class="ex-t">Checkpointing strategy</span><span class="badge b7">Operations</span></div><div class="ex-bd">
+<table class="rt">
+<tr><th>Aspect</th><th>Recommendation</th><th>Why</th></tr>
+<tr><td>Frequency</td><td>Every 500–1000 steps + keep last 3</td><td>Balances I/O overhead with recovery granularity. At $10K+/day for large runs, losing 1000 steps is expensive.</td></tr>
+<tr><td>What to save</td><td>Model state, optimizer state, scheduler state, RNG states, step count, data position</td><td>Full reproducibility requires all of these. Forgetting the data position means repeating or skipping data on resume.</td></tr>
+<tr><td>Format</td><td>Distributed checkpoint (torch.distributed.checkpoint) or FSDP state dict</td><td>Saves sharded checkpoints in parallel — much faster than gathering to rank 0 for large models.</td></tr>
+<tr><td>Async saving</td><td>Save to a background thread/process</td><td>Avoids blocking training for 30–60s during checkpoint writes on large models.</td></tr>
+<tr><td>Validation on load</td><td>After loading a checkpoint, run one forward pass and compare loss to the logged value at that step</td><td>Catches silent corruption in checkpoint files (bit rot, incomplete writes).</td></tr>
+</table>
+
+<pre><span class="c"># Distributed checkpointing with PyTorch</span>
+import torch.distributed.checkpoint as dcp
+
+<span class="c"># Save (parallel across all ranks)</span>
+state_dict = {
+    "model": model.state_dict(),
+    "optimizer": optimizer.state_dict(),
+    "step": step,
+    "rng": torch.cuda.get_rng_state(),
+}
+dcp.save(state_dict, checkpoint_id=f"checkpoints/step_{step}")
+
+<span class="c"># Load</span>
+state_dict = {"model": model.state_dict(), "optimizer": optimizer.state_dict()}
+dcp.load(state_dict, checkpoint_id=f"checkpoints/step_{step}")
+model.load_state_dict(state_dict["model"])
+optimizer.load_state_dict(state_dict["optimizer"])</pre>
+</div></div>
+
+
+<div class="sum">
+<p><strong style="color:var(--tx)">The ML engineer's mental model for LLM training:</strong> Architecture is mostly solved (decoder-only + RoPE + GQA + SwiGLU + RMSNorm). Data quality is the primary differentiator — invest heavily in curation, deduplication, and mixing. Use standard hyperparameters (AdamW, cosine LR, gradient clipping) and adjust LR + batch size based on scaling law experiments. Monitor training obsessively — loss, gradient norms, parameter norms — and checkpoint frequently enough to survive spikes. After pretraining: SFT on high-quality instruction data (quality >> quantity), then DPO/RLHF for alignment. Think of the training pipeline as four stages — pretraining → SFT → alignment → serving — each with its own data, hyperparameters, and failure modes.</p>
+</div>
+
+</div>
+<script>
+function toggle(el){el.classList.toggle('open');el.nextElementSibling.classList.toggle('open')}
+function showTab(id,btn){
+var p=btn.closest('.ex-bd')||document;
+p.querySelectorAll('.tp').forEach(function(t){t.classList.remove('active')});
+p.querySelectorAll('.tbn').forEach(function(b){b.classList.remove('active')});
+document.getElementById(id).classList.add('active');
+btn.classList.add('active');
+}
+</script>
+</body>
+</html>
