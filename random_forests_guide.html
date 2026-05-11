@@ -1,0 +1,1344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Random Forests &amp; Causal Random Forests — A Technical Walkthrough</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@9..144,300..900,0..100&family=Source+Serif+4:opsz,wght@8..60,300..700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+        onload="renderMathInElement(document.body, {delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false},{left:'\\\\[',right:'\\\\]',display:true},{left:'\\\\(',right:'\\\\)',display:false}], throwOnError:false});"></script>
+
+<style>
+  :root{
+    --paper:#f1ebde;
+    --paper-deep:#e7dfcc;
+    --paper-deepest:#d9cfb8;
+    --ink:#1a1714;
+    --ink-soft:#3d3530;
+    --ink-faint:#7a6f64;
+    --rule:#bfb29a;
+    --rust:#9c3a1d;
+    --rust-deep:#6e2611;
+    --moss:#2f4f3e;
+    --moss-deep:#1c3327;
+    --gold:#b8842b;
+    --maxw: 920px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Source Serif 4', Georgia, serif;
+    font-size:18px;
+    line-height:1.65;
+    font-feature-settings: "onum" 1, "kern" 1;
+    -webkit-font-smoothing:antialiased;
+  }
+  /* paper grain */
+  body::before{
+    content:"";
+    position:fixed; inset:0;
+    background-image:
+      radial-gradient(rgba(60,40,20,.04) 1px, transparent 1px),
+      radial-gradient(rgba(60,40,20,.025) 1px, transparent 1px);
+    background-size: 3px 3px, 7px 7px;
+    background-position: 0 0, 1px 2px;
+    pointer-events:none;
+    z-index:1;
+    mix-blend-mode:multiply;
+  }
+  main, header, footer{position:relative; z-index:2}
+
+  /* HERO */
+  header{
+    padding: 80px 32px 60px;
+    border-bottom: 1px solid var(--rule);
+    max-width: var(--maxw);
+    margin: 0 auto;
+  }
+  .eyebrow{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11.5px;
+    letter-spacing: .22em;
+    text-transform: uppercase;
+    color: var(--rust);
+    margin-bottom: 28px;
+    display:flex; align-items:center; gap: 14px;
+  }
+  .eyebrow::after{
+    content:"";
+    flex:1;
+    height:1px;
+    background:var(--rule);
+  }
+  h1{
+    font-family:'Fraunces', serif;
+    font-weight: 380;
+    font-variation-settings: "opsz" 144, "SOFT" 30;
+    font-size: clamp(46px, 7.5vw, 88px);
+    line-height: 0.95;
+    letter-spacing: -0.025em;
+    margin: 0 0 24px;
+    color: var(--ink);
+  }
+  h1 .amp{
+    font-style: italic;
+    font-weight: 320;
+    color: var(--rust);
+    font-variation-settings: "opsz" 144, "SOFT" 100;
+  }
+  h1 .secondline{ display:block; color: var(--moss); }
+  .deck{
+    font-size: 21px;
+    max-width: 640px;
+    color: var(--ink-soft);
+    line-height: 1.55;
+    font-style: italic;
+    margin-top: 24px;
+  }
+  .meta{
+    margin-top: 44px;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 12px;
+    letter-spacing: .08em;
+    color: var(--ink-faint);
+    display:flex; gap: 32px; flex-wrap:wrap;
+  }
+  .meta span b{ color:var(--ink); font-weight:500 }
+
+  /* CONTENT */
+  main{
+    max-width: var(--maxw);
+    margin: 0 auto;
+    padding: 60px 32px 100px;
+  }
+  section + section{ margin-top: 80px }
+  h2{
+    font-family:'Fraunces', serif;
+    font-weight: 420;
+    font-variation-settings: "opsz" 60;
+    font-size: 38px;
+    line-height: 1.1;
+    letter-spacing: -0.015em;
+    margin: 0 0 8px;
+    color:var(--ink);
+  }
+  h2 .num{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--rust);
+    display:block;
+    letter-spacing:.15em;
+    margin-bottom: 14px;
+    font-weight:500;
+  }
+  h3{
+    font-family:'Fraunces', serif;
+    font-weight: 500;
+    font-variation-settings: "opsz" 36;
+    font-size: 24px;
+    line-height: 1.25;
+    margin: 44px 0 8px;
+    color: var(--ink);
+  }
+  h4{
+    font-family:'JetBrains Mono', monospace;
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: .15em;
+    text-transform: uppercase;
+    color: var(--rust);
+    margin: 28px 0 6px;
+  }
+  p{ margin: 14px 0; }
+  p.lede:first-of-type::first-letter{
+    font-family:'Fraunces', serif;
+    font-weight: 500;
+    font-variation-settings: "opsz" 144;
+    font-size: 4.6em;
+    float:left;
+    line-height: 0.85;
+    padding: 6px 10px 0 0;
+    color: var(--rust);
+  }
+  .rule{
+    height:1px; background:var(--rule);
+    margin: 60px 0;
+    position:relative;
+  }
+  .rule::after{
+    content:"§";
+    position:absolute;
+    top:50%; left:50%;
+    transform:translate(-50%,-50%);
+    background:var(--paper);
+    padding: 0 16px;
+    color:var(--ink-faint);
+    font-family:'Fraunces',serif;
+    font-style:italic;
+  }
+
+  code, .mono{
+    font-family:'JetBrains Mono', monospace;
+    font-size: .86em;
+  }
+  p code{
+    background: var(--paper-deep);
+    padding: 1px 6px;
+    border-radius: 2px;
+    color: var(--rust-deep);
+  }
+
+  /* callouts */
+  .callout{
+    border-left: 2px solid var(--rust);
+    padding: 18px 22px 16px;
+    background: var(--paper-deep);
+    margin: 24px 0;
+    font-size: 16.5px;
+    line-height: 1.55;
+  }
+  .callout.moss{ border-color: var(--moss); }
+  .callout h5{
+    margin: 0 0 6px;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color: var(--rust);
+    font-weight: 600;
+  }
+  .callout.moss h5{ color: var(--moss); }
+
+  /* equations */
+  .eq{
+    margin: 22px 0;
+    padding: 16px 8px;
+    background: var(--paper-deep);
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+    text-align: center;
+    font-size: 17px;
+    overflow-x:auto;
+  }
+  .eq .lbl{
+    display:block;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: .15em;
+    color: var(--ink-faint);
+    text-transform: uppercase;
+    margin-top: 8px;
+  }
+
+  /* lists */
+  ul, ol{ padding-left: 1.4em; }
+  li{ margin: 6px 0; }
+  ul.dash{ list-style:none; padding-left:0 }
+  ul.dash li{ position:relative; padding-left: 28px; }
+  ul.dash li::before{
+    content:"—";
+    position:absolute; left:0;
+    color:var(--rust);
+    font-family:'Fraunces',serif;
+  }
+
+  /* compare table */
+  .compare{
+    width:100%;
+    border-collapse: collapse;
+    margin: 28px 0;
+    font-size: 15.5px;
+  }
+  .compare th, .compare td{
+    text-align:left;
+    padding: 14px 14px;
+    vertical-align: top;
+    border-bottom: 1px solid var(--rule);
+  }
+  .compare th{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: .15em;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: var(--ink);
+    border-bottom: 1.5px solid var(--ink);
+  }
+  .compare th.rf{ color: #1e3a5f }
+  .compare th.crf{ color: var(--moss) }
+  .compare td:first-child{
+    font-family:'Fraunces',serif;
+    font-style: italic;
+    color: var(--ink-soft);
+    width: 26%;
+  }
+  .compare tr:hover td{ background: var(--paper-deep); }
+
+  /* interactive demo */
+  .demo{
+    margin: 36px -8px;
+    padding: 28px;
+    background: linear-gradient(180deg, var(--paper-deep) 0%, var(--paper) 100%);
+    border: 1px solid var(--rule);
+    position: relative;
+  }
+  .demo-label{
+    position:absolute;
+    top:-10px; left: 20px;
+    background: var(--paper);
+    padding: 0 12px;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    letter-spacing: .22em;
+    text-transform: uppercase;
+    color: var(--rust);
+  }
+  .demo h4{ margin-top: 0; }
+  .demo-grid{
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-top: 18px;
+  }
+  @media (max-width: 720px){
+    .demo-grid{ grid-template-columns: 1fr; }
+  }
+  .plot-card{
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    padding: 14px 14px 10px;
+  }
+  .plot-card-title{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: .15em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    margin-bottom: 8px;
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  .badge{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: .1em;
+    padding: 2px 8px;
+    border-radius: 2px;
+    background: var(--ink);
+    color: var(--paper);
+  }
+  .badge.rf{ background: #1e3a5f }
+  .badge.crf{ background: var(--moss) }
+  .controls{
+    display:flex; gap: 10px; flex-wrap:wrap;
+    margin-top: 16px;
+    align-items: center;
+  }
+  button.btn{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11.5px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    padding: 9px 16px;
+    border: 1px solid var(--ink);
+    background: var(--paper);
+    color: var(--ink);
+    cursor: pointer;
+    transition: all .15s ease;
+  }
+  button.btn:hover{ background: var(--ink); color: var(--paper); }
+  button.btn.primary{ background: var(--rust); border-color: var(--rust); color: var(--paper); }
+  button.btn.primary:hover{ background: var(--rust-deep); border-color: var(--rust-deep); }
+  .legend{
+    display:flex; gap: 16px;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--ink-soft);
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .legend .dot{
+    display:inline-block; width:10px; height:10px;
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+  .control-row{
+    display:flex; gap: 18px;
+    font-family:'JetBrains Mono', monospace;
+    font-size:12px;
+    color: var(--ink-soft);
+    margin-top: 14px;
+    flex-wrap: wrap;
+  }
+  .control-row label{ display:flex; gap: 8px; align-items: center; }
+  input[type=range]{ width: 130px; accent-color: var(--rust); }
+
+  .demo-readout{
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    padding: 16px 18px;
+    margin-top: 14px;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    line-height: 1.7;
+  }
+  .demo-readout b{
+    color: var(--ink);
+    font-weight: 600;
+  }
+  .demo-readout .rfv{ color: #1e3a5f; font-weight:600 }
+  .demo-readout .crfv{ color: var(--moss); font-weight:600 }
+
+  /* footer */
+  footer{
+    max-width: var(--maxw);
+    margin: 0 auto;
+    padding: 40px 32px 80px;
+    border-top: 1px solid var(--rule);
+    font-size: 14.5px;
+    color: var(--ink-soft);
+  }
+  footer h4{ margin-top: 0; }
+  footer ul{ list-style: none; padding: 0; }
+  footer li{ padding: 6px 0; border-bottom: 1px dashed var(--rule); }
+  footer li i{ color: var(--ink-faint); font-family:'JetBrains Mono', monospace; font-size: 12px; font-style: normal; margin-left: 6px; }
+
+  /* table of contents */
+  .toc{
+    background: var(--paper-deep);
+    padding: 22px 24px;
+    margin: 36px 0 0;
+    border-left: 2px solid var(--ink);
+    font-size: 15px;
+  }
+  .toc h5{
+    margin:0 0 10px;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: .2em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    font-weight:600;
+  }
+  .toc ol{
+    columns: 2;
+    column-gap: 32px;
+    padding-left: 1.2em;
+    margin: 0;
+  }
+  .toc a{
+    color: var(--ink);
+    text-decoration: none;
+    border-bottom: 1px dotted var(--rule);
+  }
+  .toc a:hover{ color: var(--rust); border-color: var(--rust); }
+  @media (max-width: 720px){
+    .toc ol{ columns: 1; }
+  }
+
+  /* tree diagram */
+  .tree-fig{
+    background: var(--paper-deep);
+    padding: 24px;
+    margin: 30px 0;
+    border: 1px solid var(--rule);
+  }
+  .tree-fig svg{ width:100%; height:auto; display:block; }
+
+  /* asymptotic / pull quotes */
+  .pull{
+    font-family:'Fraunces', serif;
+    font-style: italic;
+    font-variation-settings:"opsz" 60, "SOFT" 50;
+    font-size: 27px;
+    line-height: 1.3;
+    color: var(--rust-deep);
+    margin: 36px 0;
+    padding: 0 0 0 32px;
+    border-left: 3px solid var(--rust);
+  }
+
+  /* annotation labels in svg */
+  .svg-label{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 10px;
+    fill: var(--ink-faint);
+    letter-spacing: .08em;
+  }
+</style>
+</head>
+
+<body>
+
+<header>
+  <div class="eyebrow">A technical walkthrough · ed. 2026</div>
+  <h1>
+    Random Forests <span class="amp">&amp;</span>
+    <span class="secondline">Causal Random Forests</span>
+  </h1>
+  <p class="deck">
+    Two algorithms that look almost identical from a distance, but answer fundamentally different questions: <em>what will happen?</em> versus <em>what would have happened?</em>
+  </p>
+  <div class="meta">
+    <span><b>Reading</b> · ~25 min</span>
+    <span><b>Prereq</b> · basic ML, basic stats</span>
+    <span><b>Math</b> · light, with notes</span>
+  </div>
+
+  <div class="toc">
+    <h5>Contents</h5>
+    <ol>
+      <li><a href="#rf">The Random Forest, in mechanism</a></li>
+      <li><a href="#splits-rf">Splitting criteria for prediction</a></li>
+      <li><a href="#demo1">Demo · how a tree carves space</a></li>
+      <li><a href="#crf">The Causal Random Forest</a></li>
+      <li><a href="#honesty">Honesty &amp; the leaf problem</a></li>
+      <li><a href="#splits-crf">Splitting on heterogeneity</a></li>
+      <li><a href="#demo2">Demo · RF vs CRF on the same data</a></li>
+      <li><a href="#grf">The GRF generalization</a></li>
+      <li><a href="#compare">Side-by-side comparison</a></li>
+      <li><a href="#assumptions">Assumptions</a></li>
+      <li><a href="#uses">Use scenarios</a></li>
+      <li><a href="#inference">Inference &amp; variance</a></li>
+      <li><a href="#pitfalls">Pitfalls &amp; practitioner notes</a></li>
+    </ol>
+  </div>
+</header>
+
+<main>
+
+<!-- ============================================================ -->
+<section id="rf">
+  <h2><span class="num">§ 01</span>The Random Forest, in mechanism</h2>
+
+  <p class="lede">The random forest, introduced by Leo Breiman in 2001, is an ensemble of decision trees. Each tree is grown on a noisy view of the data and on a noisy view of the features, so that the trees disagree in their errors. When you average the disagreements, the noise mostly cancels and the signal mostly survives. That is the entire idea, but the details are where it earns its reputation.</p>
+
+  <p>There are exactly two randomization devices, and they are doing different jobs:</p>
+
+  <h4>1 · Bagging (bootstrap aggregating)</h4>
+  <p>For each of the $B$ trees, draw a sample of size $n$ <em>with replacement</em> from the training data. Roughly $1 - 1/e \approx 63.2\%$ of the original points end up in any given bootstrap sample; the rest become the tree's <em>out-of-bag</em> set, useful later for free validation. Bagging gives each tree a slightly different empirical distribution to fit.</p>
+
+  <h4>2 · Random feature subsetting (the "random" in random forest)</h4>
+  <p>At every candidate split inside every tree, only a random subset of $m$ features is considered. Typical defaults are $m = \sqrt{p}$ for classification and $m = p/3$ for regression. This is the crucial second source of randomness — without it, bagged trees would all latch onto the same dominant feature and correlate too heavily, defeating the averaging benefit.</p>
+
+  <div class="callout">
+    <h5>Why both sources matter</h5>
+    The variance of an average of $B$ identically distributed but correlated variables with pairwise correlation $\rho$ and variance $\sigma^2$ is
+    $\rho\sigma^2 + (1-\rho)\sigma^2/B.$
+    As $B \to \infty$, only the $\rho\sigma^2$ term survives. So reducing $\rho$ — the correlation between trees — directly lowers the floor of the ensemble's variance. Random feature subsetting is the lever that reduces $\rho$.
+  </div>
+
+  <h3>Growing a single tree</h3>
+  <p>Each tree is built greedily and top-down. Starting from the root (the whole bootstrap sample), at each node we:</p>
+  <ol>
+    <li>Sample $m$ features at random from the $p$ available.</li>
+    <li>For each of those features, scan all candidate split points $s$ (typically midpoints between consecutive observed values) and compute an <em>impurity reduction</em> score.</li>
+    <li>Choose the (feature, split) pair that maximizes that reduction.</li>
+    <li>Partition the node into left ($X_j \leq s$) and right ($X_j > s$) children, and recurse.</li>
+  </ol>
+  <p>Trees are grown <em>deep</em> — typically until each leaf has very few observations (default <code>min_samples_leaf = 1</code> or <code>5</code>) — without pruning. Deep trees are low-bias and high-variance, which is exactly what the averaging step needs.</p>
+
+  <h3>Aggregation</h3>
+  <p>For a new $x$:</p>
+  <ul class="dash">
+    <li><strong>Regression.</strong> Predict $\hat{f}(x) = \frac{1}{B}\sum_{b=1}^{B} \hat{f}_b(x)$, the mean of the per-tree predictions.</li>
+    <li><strong>Classification.</strong> Each tree casts a vote (or returns class probabilities); the forest returns the modal class or the average probability vector.</li>
+  </ul>
+
+  <p>One way to view this aggregation, useful later, is as a <em>kernel</em>. For regression we can rewrite</p>
+
+  <div class="eq">
+    $\hat{f}(x) \;=\; \sum_{i=1}^{n} \alpha_i(x)\, y_i, \qquad \alpha_i(x) \;=\; \frac{1}{B}\sum_{b=1}^{B} \frac{\mathbf{1}\{x_i \in L_b(x)\}}{|L_b(x)|}$
+    <span class="lbl">forest as an adaptive kernel — $L_b(x)$ is the leaf of tree $b$ that contains $x$</span>
+  </div>
+
+  <p>The forest is implicitly learning <em>which training points are similar to $x$</em>, with similarity defined as "lands in the same leaf, often." This kernel view is the bridge to the causal forest.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="splits-rf">
+  <h2><span class="num">§ 02</span>Splitting criteria — for prediction</h2>
+
+  <p>The splitting rule is the heart of the tree. It encodes <em>what counts as a useful question to ask</em>. For ordinary random forests, "useful" means "reduces the noise in our prediction of $Y$."</p>
+
+  <h3>Regression: variance reduction</h3>
+  <p>At a node $N$ with response values $\{y_i : i \in N\}$ and mean $\bar y_N$, define the within-node sum of squares</p>
+  <div class="eq">
+    $\mathrm{SS}(N) \;=\; \sum_{i \in N}(y_i - \bar y_N)^2$
+    <span class="lbl">total squared deviation in node $N$</span>
+  </div>
+  <p>A split $(j, s)$ partitions $N$ into $N_L$ and $N_R$. The criterion chooses the split that maximizes the drop in SS:</p>
+  <div class="eq">
+    $\Delta(j,s) \;=\; \mathrm{SS}(N) - \bigl[\mathrm{SS}(N_L) + \mathrm{SS}(N_R)\bigr]$
+    <span class="lbl">equivalent to maximizing between-group variance of $\bar y$</span>
+  </div>
+  <p>Equivalently — and this reformulation matters later — maximize $\frac{|N_L|\,|N_R|}{|N|}\,(\bar y_L - \bar y_R)^2$: separate observations into groups whose <em>means differ as much as possible</em>.</p>
+
+  <h3>Classification: Gini and entropy</h3>
+  <p>Let $p_{N,c}$ be the fraction of observations of class $c$ in node $N$. Two standard impurities:</p>
+  <div class="eq">
+    $\text{Gini}(N) = \sum_c p_{N,c}(1 - p_{N,c}), \qquad \text{Entropy}(N) = -\sum_c p_{N,c}\log p_{N,c}$
+  </div>
+  <p>The split is again chosen to maximize $\text{impurity}(N) - \frac{|N_L|}{|N|}\text{impurity}(N_L) - \frac{|N_R|}{|N|}\text{impurity}(N_R).$ Gini and entropy almost always pick the same splits in practice; Gini is slightly faster and the scikit-learn default.</p>
+
+  <div class="callout moss">
+    <h5>Key point to carry forward</h5>
+    In all of these criteria, the target of splitting is <em>the outcome itself</em>. A node splits because doing so makes the children's <em>predictions of $Y$</em> more accurate. That assumption — that prediction accuracy on $Y$ is what we want — is exactly what changes when we turn to causal forests.
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="demo1">
+  <h2><span class="num">§ 03</span>Demo · how a tree carves the space</h2>
+  <p>The interactive below grows a single regression tree, greedy-split by greedy-split, on a synthetic 1-D dataset. Each split is chosen to minimize the residual sum of squares. Watch how the piecewise-constant prediction (the orange step function) progressively traces the underlying signal as depth grows.</p>
+
+  <div class="demo">
+    <div class="demo-label">Interactive · single tree</div>
+    <h4>Greedy regression tree, one split at a time</h4>
+    <div class="plot-card">
+      <div class="plot-card-title">
+        <span>x &rarr; y · piecewise-constant fit</span>
+        <span class="badge">DEPTH <span id="d1-depth">0</span></span>
+      </div>
+      <svg id="d1-svg" viewBox="0 0 720 360" preserveAspectRatio="xMidYMid meet"></svg>
+    </div>
+    <div class="controls">
+      <button class="btn primary" id="d1-step">Add a split &rarr;</button>
+      <button class="btn" id="d1-reset">Reset</button>
+      <button class="btn" id="d1-resample">Resample data</button>
+    </div>
+    <div class="demo-readout" id="d1-readout">
+      Click <b>Add a split</b> to grow the tree one node at a time. Each split is the one — over all features (here only $x$) and all candidate thresholds — that produces the largest reduction in the residual sum of squares.
+    </div>
+  </div>
+</section>
+
+<div class="rule"></div>
+
+<!-- ============================================================ -->
+<section id="crf">
+  <h2><span class="num">§ 04</span>The causal random forest</h2>
+
+  <p>Suppose we have observations $(X_i, W_i, Y_i)$ where $W_i \in \{0,1\}$ is a treatment indicator (e.g. received a drug, was shown an ad, enrolled in a program). The quantity we care about is no longer the mean outcome but the <em>conditional average treatment effect</em>:</p>
+
+  <div class="eq">
+    $\tau(x) \;=\; \mathbb{E}\bigl[\,Y_i(1) - Y_i(0) \,\big|\, X_i = x\,\bigr]$
+    <span class="lbl">CATE — how much does treatment help someone with covariates $x$?</span>
+  </div>
+
+  <p>The notation $Y_i(1), Y_i(0)$ is from the Rubin potential-outcomes framework: $Y_i(w)$ is the outcome we would observe if unit $i$ received treatment $w$. The fundamental problem is that for each unit we only ever see one of these — the other is counterfactual. You cannot directly compute $Y_i(1) - Y_i(0)$ for anyone. So a causal forest cannot simply minimize residual error on $\tau$; the target is unobservable.</p>
+
+  <p>The causal random forest, developed by Wager and Athey (2018) and extended to the <em>Generalized Random Forest</em> (Athey, Tibshirani, Wager, 2019), solves this with three structural modifications to the standard recipe:</p>
+
+  <ol>
+    <li><strong>Honesty.</strong> Within each tree, the data used to <em>choose splits</em> is disjoint from the data used to <em>estimate leaf values</em>.</li>
+    <li><strong>A different splitting criterion.</strong> Instead of maximizing variance of $Y$ between children, maximize the difference in <em>estimated treatment effects</em> between children.</li>
+    <li><strong>Local moment estimation.</strong> Inside each leaf — or rather, inside the neighborhood implicitly defined by the forest — solve the moment condition for $\tau$ locally, rather than just averaging $Y$.</li>
+  </ol>
+
+  <p class="pull">Where the random forest asks "which subgroup has different $Y$?", the causal forest asks "which subgroup responds differently to treatment?"</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="honesty">
+  <h2><span class="num">§ 05</span>Honesty and the leaf problem</h2>
+
+  <p>Why honesty? Because if the same data is used to find a split <em>and</em> to estimate the treatment effect inside the leaf created by that split, you get a textbook winner's-curse problem. The tree picks the split that makes children's treatment-effect estimates look maximally different. By construction, those estimates will be biased away from each other — they were chosen on that criterion.</p>
+
+  <p>Honesty fixes this by partitioning, for each tree, the subsample $\mathcal{S}_b$ into two halves:</p>
+  <ul class="dash">
+    <li>$\mathcal{J}_b$ — the <em>splitting set</em>, used only to decide the tree's structure (which feature, which threshold, at each node).</li>
+    <li>$\mathcal{I}_b$ — the <em>estimation set</em>, used only to compute the leaf-level statistic ($\hat\tau$ in each leaf) once the tree is built.</li>
+  </ul>
+
+  <p>An $\mathcal{I}_b$ observation never influenced which leaf it falls into; the leaf was defined without seeing it. The estimate in each leaf is therefore an honest empirical estimate from an i.i.d. sample drawn from the population restricted to that leaf's region. This is precisely what is needed for the leaf-level estimator to be asymptotically Gaussian — and hence for the whole forest to support pointwise confidence intervals.</p>
+
+  <div class="callout moss">
+    <h5>Costs of honesty</h5>
+    Honesty halves the data used for each job. Empirically, honest forests have <em>worse</em> point-prediction accuracy than non-honest forests on the same data — but their <em>uncertainty quantification is valid</em>, which is the whole point. If you only want to predict, use an ordinary forest. If you want to draw inferences about $\tau(x)$, the trade is worth it.
+  </div>
+
+  <p>A second technical change: causal forests use <em>subsampling without replacement</em> rather than bootstrap. Theoretical guarantees (consistency, asymptotic normality) rest on subsample size $s_n$ that grows more slowly than $n$, and the analysis is cleaner without replacement.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="splits-crf">
+  <h2><span class="num">§ 06</span>Splitting on heterogeneity in $\tau$</h2>
+
+  <p>The simplest causal-forest splitting criterion is a direct analog of variance reduction, but applied to $\tau$ instead of $Y$. At a candidate split $(j, s)$ of node $N$ into $N_L, N_R$, compute</p>
+
+  <div class="eq">
+    $\hat\tau_L = \frac{\sum_{i \in N_L, W_i=1} Y_i}{|\{i\in N_L: W_i=1\}|} - \frac{\sum_{i \in N_L, W_i=0} Y_i}{|\{i\in N_L: W_i=0\}|}, \qquad \hat\tau_R = \text{(same for $N_R$)}$
+    <span class="lbl">leaf-level treatment effect, child by child</span>
+  </div>
+
+  <p>And maximize the between-child variance of $\hat\tau$:</p>
+
+  <div class="eq">
+    $\Delta_\tau(j,s) \;=\; \frac{|N_L|\,|N_R|}{|N|}\,\bigl(\hat\tau_L - \hat\tau_R\bigr)^2$
+    <span class="lbl">causal splitting objective — find subgroups whose <em>treatment responses</em> differ</span>
+  </div>
+
+  <p>This is structurally the same expression as the regression criterion in §02, but with $\hat\tau$ playing the role that $\bar y$ played. The tree now grows by carving out subpopulations with maximally different sensitivity to treatment, not maximally different outcome means.</p>
+
+  <h3>The gradient trick (Athey–Tibshirani–Wager)</h3>
+  <p>Computing $\hat\tau_L$ and $\hat\tau_R$ for every candidate split would be expensive — naïvely, $O(n)$ per split. The GRF paper introduces an elegant approximation: linearize the moment condition around the parent-node estimate, derive a <em>pseudo-outcome</em> $\rho_i$ for each observation, and apply ordinary regression-tree splitting (i.e. variance reduction) on the $\rho_i$. Because regression-tree splits can be evaluated with running sums, this brings the cost back to $O(n \log n)$ per tree, identical to the classical algorithm.</p>
+
+  <div class="callout">
+    <h5>Pseudo-outcomes, in spirit</h5>
+    For each observation, $\rho_i$ is the score of the parent-node moment condition with respect to $\tau$, evaluated at observation $i$. Splits that produce children with very different sums of $\rho_i$ correspond, locally, to splits that produce children with very different fitted $\tau$ values. The math is in §2.2 of Athey–Tibshirani–Wager (2019); the operational consequence is that a causal-forest split looks computationally just like a regression-forest split, but on a transformed label.
+  </div>
+
+  <h3>Local centering (the R-learner connection)</h3>
+  <p>Before fitting the causal forest, it's standard to <em>residualize</em> both $Y$ and $W$ with respect to $X$:</p>
+
+  <div class="eq">
+    $\tilde Y_i = Y_i - \hat m(X_i), \qquad \tilde W_i = W_i - \hat e(X_i)$
+    <span class="lbl">$\hat m(x) = \widehat{\mathbb E}[Y|X=x]$, $\hat e(x) = \widehat{\mathbb E}[W|X=x]$ (the propensity score)</span>
+  </div>
+
+  <p>The nuisance functions $\hat m$ and $\hat e$ are typically estimated by separate (non-causal) random forests, often via cross-fitting. Building the causal forest on $(\tilde Y, \tilde W)$ instead of $(Y, W)$ makes the procedure <em>orthogonal</em> in the Neyman–Robinson sense: small errors in $\hat m$ and $\hat e$ have only second-order effect on the estimate of $\tau$. This is the same logic that underlies double machine learning and the R-learner.</p>
+
+  <p>Without this centering, a causal forest can still be consistent, but its variance is sensitive to misspecification of the conditional mean of $Y$. With it, you get rate-double-robustness essentially for free.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="demo2">
+  <h2><span class="num">§ 07</span>Demo · RF vs CRF on the same data</h2>
+
+  <p>This is the clearest single picture of the conceptual difference. The data below has two competing structures:</p>
+
+  <ul class="dash">
+    <li>The <em>baseline</em> outcome $\mu(x) = 5\sin(2\pi x)$ depends strongly on $x$ — but this dependence has nothing to do with treatment.</li>
+    <li>The <em>treatment effect</em> $\tau(x)$ is a step function: zero on the left half, positive on the right half. This is the structure a causal estimator should find.</li>
+  </ul>
+
+  <p>The plots below show, side by side, the best single split chosen by a regression criterion (left, blue) versus a causal criterion (right, green) on the same sample. The regression split chases whatever flexes the conditional mean of $Y$ — which is the sine wave. The causal split chases changes in treatment <em>responsiveness</em> — which lives at $x = 0.5$.</p>
+
+  <div class="demo">
+    <div class="demo-label">Interactive · the key distinction</div>
+    <h4>Best root split: regression objective vs causal objective</h4>
+
+    <div class="demo-grid">
+      <div class="plot-card">
+        <div class="plot-card-title">
+          <span>Regression-forest split</span>
+          <span class="badge rf">MIN MSE OF Y</span>
+        </div>
+        <svg id="d2-rf" viewBox="0 0 360 280" preserveAspectRatio="xMidYMid meet"></svg>
+      </div>
+      <div class="plot-card">
+        <div class="plot-card-title">
+          <span>Causal-forest split</span>
+          <span class="badge crf">MAX HET. IN τ</span>
+        </div>
+        <svg id="d2-crf" viewBox="0 0 360 280" preserveAspectRatio="xMidYMid meet"></svg>
+      </div>
+    </div>
+
+    <div class="control-row">
+      <label>baseline strength
+        <input type="range" id="d2-baseline" min="0" max="10" step="0.5" value="5">
+        <span id="d2-baseline-val" class="mono">5.0</span>
+      </label>
+      <label>noise σ
+        <input type="range" id="d2-noise" min="0" max="3" step="0.1" value="1.2">
+        <span id="d2-noise-val" class="mono">1.2</span>
+      </label>
+      <label>n
+        <input type="range" id="d2-n" min="60" max="500" step="20" value="240">
+        <span id="d2-n-val" class="mono">240</span>
+      </label>
+    </div>
+
+    <div class="controls">
+      <button class="btn primary" id="d2-resample">Resample</button>
+      <div class="legend" style="margin-left:auto">
+        <span><span class="dot" style="background:#1a1714"></span>treated (W=1)</span>
+        <span><span class="dot" style="background:#bfb29a;border:1px solid #1a1714"></span>control (W=0)</span>
+        <span><span class="dot" style="background:#9c3a1d;border-radius:0;width:14px;height:2px"></span>true τ change point</span>
+      </div>
+    </div>
+
+    <div class="demo-readout" id="d2-readout">
+      Resample to draw a fresh dataset. The <span class="rfv">regression criterion</span> locates its split wherever the mean of $Y$ changes most — usually a zero-crossing of the underlying sine. The <span class="crfv">causal criterion</span> locates its split near $x = 0.5$, the true τ change point, which is invisible to a regression tree.
+    </div>
+  </div>
+
+  <div class="callout">
+    <h5>What you should take from this demo</h5>
+    A regression tree and a causal tree, fed the same $(X, W, Y)$, will partition the covariate space in qualitatively different ways. They are answering different questions. A causal tree is not a "better" random forest — it is a different algorithm for a different estimand.
+  </div>
+</section>
+
+<div class="rule"></div>
+
+<!-- ============================================================ -->
+<section id="grf">
+  <h2><span class="num">§ 08</span>The GRF generalization</h2>
+
+  <p>Causal forests are one instance of a wider framework. The Generalized Random Forest views the forest as a way to learn <em>adaptive weights</em> $\alpha_i(x)$ — exactly the kernel from §01 — and then plug those weights into a <em>local estimating equation</em>:</p>
+
+  <div class="eq">
+    $\hat\theta(x) \;=\; \mathrm{argmin}_\theta \;\Bigl\| \sum_{i=1}^n \alpha_i(x)\, \psi_\theta(O_i) \Bigr\|$
+    <span class="lbl">local moment problem at $x$; $\psi_\theta$ is the score function of the parameter of interest, $O_i$ is the data tuple</span>
+  </div>
+
+  <p>Different choices of $\psi_\theta$ give different forests:</p>
+
+  <table class="compare">
+    <thead><tr><th>Estimand</th><th>Score function $\psi_\theta(O_i)$</th><th>Forest name</th></tr></thead>
+    <tbody>
+      <tr><td>Conditional mean</td><td>$Y_i - \theta$</td><td>Regression forest</td></tr>
+      <tr><td>Treatment effect (unconfounded)</td><td>$(Y_i - \theta\,W_i)(W_i - \hat e(X_i))$</td><td>Causal forest</td></tr>
+      <tr><td>Treatment effect (with IV $Z_i$)</td><td>$(Y_i - \theta\,W_i)(Z_i - \hat z(X_i))$</td><td>Instrumental forest</td></tr>
+      <tr><td>Conditional quantile</td><td>$\mathbf 1\{Y_i \leq \theta\} - q$</td><td>Quantile regression forest</td></tr>
+      <tr><td>Survival / hazard</td><td>partial-likelihood score</td><td>Survival forest</td></tr>
+    </tbody>
+  </table>
+
+  <p>The forest's role, in this view, is not to predict but to <em>discover similarity</em>. The estimator at the end is whatever classical estimator you would use if you actually had an i.i.d. sample of observations resembling $x$ — except now the "resembling $x$" part is learned by the trees, and weights are adaptive to the local structure of the problem.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="compare">
+  <h2><span class="num">§ 09</span>Random forest vs causal random forest — side by side</h2>
+
+  <table class="compare">
+    <thead>
+      <tr>
+        <th>Aspect</th>
+        <th class="rf">Random forest</th>
+        <th class="crf">Causal random forest</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Estimand</td>
+        <td>$\mu(x) = \mathbb E[Y \mid X = x]$</td>
+        <td>$\tau(x) = \mathbb E[Y(1) - Y(0) \mid X = x]$</td>
+      </tr>
+      <tr>
+        <td>Input data</td>
+        <td>$(X_i, Y_i)$</td>
+        <td>$(X_i, W_i, Y_i)$ — treatment indicator required</td>
+      </tr>
+      <tr>
+        <td>Split objective</td>
+        <td>Minimize within-child variance of $Y$ (regression) or impurity in class labels (classification)</td>
+        <td>Maximize between-child difference in $\hat\tau$ — find subgroups with heterogeneous treatment response</td>
+      </tr>
+      <tr>
+        <td>Leaf statistic</td>
+        <td>Mean of $Y$ in the leaf (regression) or class proportions (classification)</td>
+        <td>Local treatment-effect estimate, typically a doubly-robust / AIPW estimator using leaf observations</td>
+      </tr>
+      <tr>
+        <td>Honesty</td>
+        <td>Not required; usually not used (hurts accuracy)</td>
+        <td>Required for valid inference; splits and leaf estimates use disjoint subsamples</td>
+      </tr>
+      <tr>
+        <td>Resampling</td>
+        <td>Bootstrap (with replacement) is standard</td>
+        <td>Subsampling (without replacement) — needed for the asymptotic theory</td>
+      </tr>
+      <tr>
+        <td>Preprocessing</td>
+        <td>None required</td>
+        <td>Local centering: residualize $Y$ and $W$ on $X$ using out-of-sample nuisance estimates (cross-fit)</td>
+      </tr>
+      <tr>
+        <td>Inference</td>
+        <td>Bootstrap or quantile forests for prediction intervals; no standard pointwise CI for $\mu(x)$</td>
+        <td>Pointwise CIs for $\tau(x)$ via the infinitesimal jackknife / bag-of-little-bootstraps</td>
+      </tr>
+      <tr>
+        <td>Key assumptions</td>
+        <td>i.i.d. data; that's essentially it</td>
+        <td>Unconfoundedness, overlap, SUTVA — none testable, all consequential</td>
+      </tr>
+      <tr>
+        <td>Implementation</td>
+        <td>scikit-learn <code>RandomForestRegressor/Classifier</code>, R <code>randomForest</code>, <code>ranger</code></td>
+        <td>R <code>grf</code> (reference implementation), Python <code>econml</code>, <code>EconML.CausalForestDML</code></td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============================================================ -->
+<section id="assumptions">
+  <h2><span class="num">§ 10</span>Assumptions</h2>
+
+  <h3>What random forests assume</h3>
+  <p>Strikingly little. The procedure is consistent for $\mu(x) = \mathbb E[Y \mid X = x]$ under modest regularity conditions:</p>
+  <ul class="dash">
+    <li>i.i.d. or exchangeable training data.</li>
+    <li>The conditional mean $\mu$ is Lipschitz (or at least continuous) on the support of $X$.</li>
+    <li>Subsample size grows but $s_n / n \to 0$ — under classical settings this is automatic.</li>
+  </ul>
+  <p>That's why random forests are so robust as a prediction tool. They make almost no distributional or functional-form claim, and they handle mixed types, missing data, and high-dimensional inputs without ceremony.</p>
+
+  <h3>What causal random forests additionally assume</h3>
+
+  <h4>Unconfoundedness (conditional ignorability)</h4>
+  <div class="eq">
+    $\{Y_i(0), Y_i(1)\} \;\perp\!\!\!\perp\; W_i \mid X_i$
+    <span class="lbl">treatment assignment is as good as random within strata of $X$</span>
+  </div>
+  <p>All variables that <em>simultaneously</em> influence treatment assignment and the outcome must be in $X$. If some confounder is missing, the causal forest's $\hat\tau(x)$ recovers something — but it is not the causal effect. This is the assumption that does the most theoretical heavy lifting and cannot be tested with the data alone.</p>
+
+  <h4>Overlap (positivity)</h4>
+  <div class="eq">
+    $0 \;<\; \eta \;\leq\; e(x) := \mathbb P(W=1 \mid X=x) \;\leq\; 1 - \eta \;<\; 1 \quad\text{for all } x$
+    <span class="lbl">every subpopulation has a nonzero chance of being either treated or untreated</span>
+  </div>
+  <p>If some region of covariate space has $e(x) \approx 0$ or $e(x) \approx 1$, the causal effect there is unidentified — you have essentially no control units, or no treated units, locally. Practical advice: estimate $\hat e(x)$ first, inspect its distribution, and trim or warn on regions with extreme propensities.</p>
+
+  <h4>SUTVA — Stable Unit Treatment Value Assumption</h4>
+  <p>Two parts. <em>No interference</em>: unit $i$'s outcome depends only on $i$'s treatment, not anyone else's. <em>Consistency</em>: there is a single, well-defined version of "the treatment" — no hidden variation in what $W=1$ means. Violations of SUTVA are common in social settings (network effects, market equilibria) and in clinical trials with crossover, and they bias the estimator in subtle ways.</p>
+
+  <div class="callout moss">
+    <h5>None of these assumptions are testable from $(X, W, Y)$ alone.</h5>
+    They are <em>identifying</em> assumptions — they let you read causal quantities off the joint distribution. The data can sometimes flag overlap problems and obvious interference, but unconfoundedness must be argued from substantive knowledge of how treatment was assigned. A causal random forest doesn't relieve you of that argument; it just makes the estimator very flexible <em>given</em> the argument.
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="uses">
+  <h2><span class="num">§ 11</span>Use scenarios</h2>
+
+  <h3>When a random forest is the right tool</h3>
+  <ul class="dash">
+    <li><strong>Prediction in tabular settings</strong> — fraud risk, churn, default, claim severity. A strong default whenever interpretability isn't paramount and the data isn't too high-dimensional in pathological ways.</li>
+    <li><strong>Feature screening</strong> — quick ranking of which variables matter for predicting $Y$, via permutation importance or mean decrease in impurity. Treat these as suggestive, not definitive.</li>
+    <li><strong>Robust nonparametric regression</strong> as a building block — e.g. estimating nuisance functions $\hat m(x)$ and $\hat e(x)$ in double machine learning.</li>
+    <li><strong>Anomaly detection</strong> via isolation forests (a cousin algorithm).</li>
+  </ul>
+
+  <h3>When a causal random forest is the right tool</h3>
+  <ul class="dash">
+    <li><strong>Heterogeneous treatment effects from an experiment.</strong> A/B test or RCT data where you want to ask "for whom did this work?" rather than just "did it work on average?"</li>
+    <li><strong>Personalized medicine.</strong> Estimating $\tau(x)$ from clinical trial data to inform whether a particular patient profile is likely to benefit from a therapy.</li>
+    <li><strong>Policy targeting.</strong> A government program with a fixed budget — which subpopulations gain the most from being enrolled? The forest's $\hat\tau(x)$ feeds directly into an optimal-policy learner.</li>
+    <li><strong>Observational data with rich controls and plausible unconfoundedness</strong> — uplift modeling in marketing, where you ran a randomized holdout and have detailed user covariates.</li>
+    <li><strong>Instrumental variables with heterogeneous LATEs</strong> — encouragement designs, fuzzy regression discontinuity. Use the instrumental version of the forest (GRF with IV moment).</li>
+  </ul>
+
+  <h3>When neither is the right tool</h3>
+  <ul class="dash">
+    <li><strong>Image, text, audio data.</strong> Deep models dominate. Forests rarely beat a fine-tuned transformer on raw unstructured input.</li>
+    <li><strong>Causal questions without overlap or with severe unmeasured confounding.</strong> No flexible estimator rescues an unidentified parameter; you need a different design (instrument, regression discontinuity, difference-in-differences).</li>
+    <li><strong>Very small $n$.</strong> Tree ensembles need a few hundred observations at minimum for any kind of stability; causal forests want more like a few thousand because of the honesty halving.</li>
+  </ul>
+</section>
+
+<!-- ============================================================ -->
+<section id="inference">
+  <h2><span class="num">§ 12</span>Inference and variance</h2>
+
+  <p>A standard random forest gives a point prediction. A causal random forest aims for more: a confidence interval for $\tau(x)$ at every $x$ of interest. The machinery is Wager and Athey's <em>infinitesimal jackknife</em> (IJ) variance estimator.</p>
+
+  <p>Conceptually: each training observation $i$ enters some subset of trees and not others. The IJ estimator measures how much $\hat\tau(x)$ would change if observation $i$ were perturbed, via the covariance between $\hat\tau_b(x)$ (the per-tree estimate) and $N_{ib}$ (whether $i$ is in the $b$-th subsample). High covariance means high influence; total influence across observations is the variance.</p>
+
+  <div class="eq">
+    $\widehat{\mathrm{Var}}\bigl[\hat\tau(x)\bigr] \;=\; \frac{n-1}{n}\sum_{i=1}^n \mathrm{Cov}_b\bigl(\hat\tau_b(x),\, N_{ib}\bigr)^2$
+    <span class="lbl">infinitesimal jackknife — $b$ indexes trees, $N_{ib}$ is 1 if $i$ is in tree $b$'s subsample</span>
+  </div>
+
+  <p>Under the regularity conditions of Wager–Athey (subsample size $s_n$ growing as roughly $n^\beta$ with $\beta < 1$, honest trees, well-behaved DGP), $\hat\tau(x)$ is asymptotically Gaussian and the IJ estimator is consistent for its variance. You then form CIs as $\hat\tau(x) \pm 1.96 \sqrt{\widehat{\mathrm{Var}}}$. The <code>grf</code> R package returns these automatically.</p>
+
+  <p>This is one of the genuinely impressive accomplishments of the causal-forest framework: nonparametric estimation of a heterogeneous causal effect, with calibrated pointwise confidence bands, from a single i.i.d. sample. The closest comparable methods are local linear regression and kernel methods, which struggle in moderate to high dimensions.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="pitfalls">
+  <h2><span class="num">§ 13</span>Pitfalls and practitioner notes</h2>
+
+  <h4>For random forests</h4>
+  <ul class="dash">
+    <li><strong>Mean decrease in impurity importance is biased</strong> toward high-cardinality and continuous variables. Prefer permutation importance or model-agnostic methods (SHAP).</li>
+    <li><strong>Extrapolation is bad</strong>: forests cannot predict values outside the convex hull of the training $Y$. For a regression task with strong trends, gradient boosting or a linear model may extrapolate more gracefully.</li>
+    <li><strong>Probabilities from classification forests are not well calibrated</strong> out of the box. Use Platt scaling or isotonic regression if you need them to mean what they say.</li>
+    <li><strong>Hyperparameters that actually matter:</strong> <code>min_samples_leaf</code> (or <code>min.node.size</code>) and <code>max_features</code>. Number of trees mostly stops mattering past a few hundred.</li>
+  </ul>
+
+  <h4>For causal random forests</h4>
+  <ul class="dash">
+    <li><strong>Always check overlap first.</strong> Fit $\hat e(X)$ as a standalone regression forest. Plot its distribution by treatment group. If propensities pile up near 0 or 1, $\hat\tau(x)$ for those regions is essentially uninformative.</li>
+    <li><strong>Use cross-fit nuisance estimates.</strong> Don't estimate $\hat m$ and $\hat e$ on the same data you use to build the causal forest; cross-fitting (or out-of-bag predictions) is required for the orthogonality guarantee to hold.</li>
+    <li><strong>Don't interpret a single $\hat\tau(x)$ without its CI.</strong> Local treatment effects are noisy; the point estimate is uninterpretable in isolation. The grf package gives you the standard error — read it.</li>
+    <li><strong>Variable importance for a causal forest</strong> ranks features by how often they were split on, weighted by depth. It tells you which variables drive heterogeneity in $\tau$, not which drive $Y$. These can be entirely different sets.</li>
+    <li><strong>If the average treatment effect is your goal</strong>, average $\hat\tau(x_i)$ over the sample — but use the doubly-robust ATE estimator that <code>grf::average_treatment_effect</code> provides, not the simple mean. It has better small-sample properties.</li>
+    <li><strong>The forest does not validate your unconfoundedness assumption.</strong> No amount of cross-validation can. Argue it from the design.</li>
+  </ul>
+
+  <p class="pull">A causal forest is a flexible estimator wrapped around a rigid identifying assumption. The flexibility is the easy part.</p>
+</section>
+
+</main>
+
+<footer>
+  <h4>Primary sources</h4>
+  <ul>
+    <li>Breiman, L. (2001). <em>Random Forests.</em> Machine Learning 45 (1), 5–32. <i>the original</i></li>
+    <li>Wager, S. &amp; Athey, S. (2018). <em>Estimation and Inference of Heterogeneous Treatment Effects using Random Forests.</em> JASA 113 (523), 1228–1242. <i>honesty + asymptotic theory</i></li>
+    <li>Athey, S., Tibshirani, J. &amp; Wager, S. (2019). <em>Generalized Random Forests.</em> Annals of Statistics 47 (2), 1148–1178. <i>the GRF framework</i></li>
+    <li>Nie, X. &amp; Wager, S. (2021). <em>Quasi-Oracle Estimation of Heterogeneous Treatment Effects.</em> Biometrika 108 (2), 299–319. <i>R-learner, local centering rationale</i></li>
+    <li>Chernozhukov et al. (2018). <em>Double/debiased machine learning for treatment and structural parameters.</em> The Econometrics Journal 21 (1). <i>cross-fitting, orthogonal moments</i></li>
+  </ul>
+  <h4>Implementations</h4>
+  <ul>
+    <li><code>grf</code> (R) — the reference implementation by Wager, Athey, Tibshirani et al.</li>
+    <li><code>econml</code> (Python, Microsoft) — <code>CausalForestDML</code>, with double machine learning baked in</li>
+    <li><code>scikit-learn</code> — <code>RandomForestRegressor</code> / <code>RandomForestClassifier</code> for the standard forest</li>
+    <li><code>ranger</code> (R / Python) — extremely fast random forest, supports honest splitting</li>
+  </ul>
+</footer>
+
+<script>
+/* ============================================================
+   Utilities
+============================================================ */
+function mulberry32(seed){
+  return function(){
+    let t = seed += 0x6D2B79F5;
+    t = Math.imul(t ^ t >>> 15, t | 1);
+    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function mean(a){ let s=0; for (const v of a) s+=v; return s/a.length; }
+function sumSq(a){ let s=0; for (const v of a) s += v*v; return s; }
+function normal(rng){
+  // Box-Muller
+  let u = 0, v = 0;
+  while(u===0) u = rng();
+  while(v===0) v = rng();
+  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
+}
+
+/* ============================================================
+   DEMO 1 · single-tree growth on synthetic 1D regression
+============================================================ */
+const D1 = {
+  data: [],
+  splits: [],   // array of split points
+  seed: 7,
+  svg: null,
+  paper: '#f1ebde',
+  ink: '#1a1714',
+  ruleC: '#bfb29a',
+  rust: '#9c3a1d',
+  moss: '#2f4f3e',
+  fit: '#9c3a1d'
+};
+
+function d1Generate(){
+  const rng = mulberry32(D1.seed);
+  const n = 140;
+  D1.data = [];
+  for(let i=0;i<n;i++){
+    const x = rng();
+    // a piecewise smooth signal with a couple of distinct regimes
+    let y;
+    if(x < 0.35) y = -1.5 + 2.0*x;
+    else if(x < 0.7) y = 3.2 - 4.0*(x-0.35);
+    else y = 1.3 + 1.5*(x-0.7);
+    y += 0.45 * normal(rng);
+    D1.data.push({x,y});
+  }
+  D1.splits = [];
+  d1Render();
+}
+
+function d1BestSplit(subset){
+  // greedy MSE-reducing split
+  if(subset.length < 6) return null;
+  const sorted = [...subset].sort((a,b)=>a.x-b.x);
+  let total = 0, totalMu = mean(sorted.map(d=>d.y));
+  for(const d of sorted) total += (d.y - totalMu)**2;
+  let best = {gain:-Infinity, s:null};
+  for(let i=2;i<sorted.length-2;i++){
+    const L = sorted.slice(0,i+1), R = sorted.slice(i+1);
+    const muL = mean(L.map(d=>d.y)), muR = mean(R.map(d=>d.y));
+    let sL=0,sR=0;
+    for(const d of L) sL += (d.y - muL)**2;
+    for(const d of R) sR += (d.y - muR)**2;
+    const gain = total - (sL + sR);
+    if(gain > best.gain){
+      best = {gain, s:(sorted[i].x + sorted[i+1].x)/2};
+    }
+  }
+  return best.s;
+}
+
+function d1AddSplit(){
+  // find the leaf with highest variance and split it
+  // partition data by current splits
+  const sorted = [...D1.splits].sort((a,b)=>a-b);
+  const bins = [];
+  let prev = 0;
+  for(const s of sorted){ bins.push({lo:prev,hi:s}); prev = s; }
+  bins.push({lo:prev, hi:1});
+  // assign data
+  let bestVarBin = null, bestVar = -Infinity;
+  for(const b of bins){
+    const sub = D1.data.filter(d=>d.x>=b.lo && d.x<b.hi);
+    if(sub.length < 6) continue;
+    const mu = mean(sub.map(d=>d.y));
+    let v=0;
+    for(const d of sub) v += (d.y - mu)**2;
+    if(v > bestVar){ bestVar = v; bestVarBin = {b, sub}; }
+  }
+  if(!bestVarBin) return;
+  const s = d1BestSplit(bestVarBin.sub);
+  if(s===null) return;
+  D1.splits.push(s);
+  d1Render();
+}
+
+function d1Render(){
+  const svg = document.getElementById('d1-svg');
+  const W = 720, H = 360, pad = {l:48, r:24, t:20, b:38};
+  const ys = D1.data.map(d=>d.y);
+  const ymin = Math.min(...ys) - 0.4, ymax = Math.max(...ys) + 0.4;
+  const xToPx = x => pad.l + x * (W - pad.l - pad.r);
+  const yToPx = y => pad.t + (1 - (y - ymin)/(ymax - ymin)) * (H - pad.t - pad.b);
+
+  let s = `<rect width="${W}" height="${H}" fill="${D1.paper}"/>`;
+  // axes
+  s += `<line x1="${pad.l}" y1="${H-pad.b}" x2="${W-pad.r}" y2="${H-pad.b}" stroke="${D1.ink}" stroke-width="1"/>`;
+  s += `<line x1="${pad.l}" y1="${pad.t}" x2="${pad.l}" y2="${H-pad.b}" stroke="${D1.ink}" stroke-width="1"/>`;
+  // x ticks
+  for(let i=0;i<=10;i++){
+    const x = i/10, px = xToPx(x);
+    s += `<line x1="${px}" y1="${H-pad.b}" x2="${px}" y2="${H-pad.b+5}" stroke="${D1.ink}" stroke-width="1"/>`;
+    if(i%2===0) s += `<text class="svg-label" x="${px}" y="${H-pad.b+18}" text-anchor="middle">${x.toFixed(1)}</text>`;
+  }
+  s += `<text class="svg-label" x="${(pad.l+W-pad.r)/2}" y="${H-6}" text-anchor="middle">x</text>`;
+  s += `<text class="svg-label" x="${pad.l-32}" y="${(pad.t+H-pad.b)/2}" transform="rotate(-90 ${pad.l-32} ${(pad.t+H-pad.b)/2})" text-anchor="middle">y</text>`;
+
+  // current piecewise constant fit
+  const sorted = [...D1.splits].sort((a,b)=>a-b);
+  const bins = [];
+  let prev = 0;
+  for(const sp of sorted){ bins.push({lo:prev,hi:sp}); prev = sp; }
+  bins.push({lo:prev,hi:1});
+  for(const b of bins){
+    const sub = D1.data.filter(d=>d.x>=b.lo && d.x<b.hi);
+    if(sub.length===0) continue;
+    const mu = mean(sub.map(d=>d.y));
+    const x1 = xToPx(b.lo), x2 = xToPx(b.hi), y = yToPx(mu);
+    s += `<line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" stroke="${D1.fit}" stroke-width="2.5"/>`;
+    // little baseline marker
+    s += `<line x1="${x1}" y1="${y-5}" x2="${x1}" y2="${y+5}" stroke="${D1.fit}" stroke-width="1.5"/>`;
+    s += `<line x1="${x2}" y1="${y-5}" x2="${x2}" y2="${y+5}" stroke="${D1.fit}" stroke-width="1.5"/>`;
+  }
+
+  // splits as vertical dashed lines
+  for(const sp of D1.splits){
+    const px = xToPx(sp);
+    s += `<line x1="${px}" y1="${pad.t}" x2="${px}" y2="${H-pad.b}" stroke="${D1.moss}" stroke-width="1" stroke-dasharray="4 4" opacity="0.7"/>`;
+  }
+
+  // data points
+  for(const d of D1.data){
+    s += `<circle cx="${xToPx(d.x)}" cy="${yToPx(d.y)}" r="3" fill="${D1.ink}" opacity="0.6"/>`;
+  }
+
+  svg.innerHTML = s;
+  document.getElementById('d1-depth').textContent = D1.splits.length;
+
+  // compute current MSE
+  let totalSS = 0;
+  for(const b of bins){
+    const sub = D1.data.filter(d=>d.x>=b.lo && d.x<b.hi);
+    if(sub.length===0) continue;
+    const mu = mean(sub.map(d=>d.y));
+    for(const d of sub) totalSS += (d.y - mu)**2;
+  }
+  const mse = totalSS / D1.data.length;
+  const readout = document.getElementById('d1-readout');
+  if(D1.splits.length===0){
+    readout.innerHTML = `Click <b>Add a split</b> to grow the tree one node at a time. Each split is the one — over all features (here only $x$) and all candidate thresholds — that produces the largest reduction in the residual sum of squares. <br><br><b>Current MSE:</b> ${mse.toFixed(3)} · <b>Leaves:</b> 1`;
+  } else {
+    const lastSplit = D1.splits[D1.splits.length-1];
+    readout.innerHTML = `Latest split: <b>x = ${lastSplit.toFixed(3)}</b>. The greedy algorithm picked the leaf with highest residual variance and split it at the threshold maximizing variance reduction. <br><br><b>Current MSE:</b> ${mse.toFixed(3)} · <b>Leaves:</b> ${D1.splits.length+1}`;
+  }
+  if(window.renderMathInElement) renderMathInElement(readout, {delimiters:[{left:'$',right:'$',display:false}], throwOnError:false});
+}
+
+document.addEventListener('DOMContentLoaded', ()=>{
+  d1Generate();
+  document.getElementById('d1-step').addEventListener('click', ()=>{
+    if(D1.splits.length < 14) d1AddSplit();
+  });
+  document.getElementById('d1-reset').addEventListener('click', ()=>{
+    D1.splits = [];
+    d1Render();
+  });
+  document.getElementById('d1-resample').addEventListener('click', ()=>{
+    D1.seed = Math.floor(Math.random()*100000);
+    d1Generate();
+  });
+
+  d2Init();
+});
+
+/* ============================================================
+   DEMO 2 · RF split vs CRF split, same data
+============================================================ */
+const D2 = {
+  data: [],
+  seed: 17,
+  baseline: 5,
+  noise: 1.2,
+  n: 240
+};
+
+function d2Generate(){
+  const rng = mulberry32(D2.seed);
+  D2.data = [];
+  for(let i=0;i<D2.n;i++){
+    const x = rng();
+    const w = rng() < 0.5 ? 0 : 1;
+    const mu = D2.baseline * Math.sin(2*Math.PI*x);
+    const tau = x > 0.5 ? 2.5 : 0;   // step-function treatment effect at 0.5
+    const eps = D2.noise * normal(rng);
+    const y = mu + w * tau + eps;
+    D2.data.push({x, w, y});
+  }
+}
+
+function d2BestRegressionSplit(){
+  const sorted = [...D2.data].sort((a,b)=>a.x-b.x);
+  let total = 0, totalMu = mean(sorted.map(d=>d.y));
+  for(const d of sorted) total += (d.y - totalMu)**2;
+  let best = {gain:-Infinity, s:null};
+  for(let i=8;i<sorted.length-8;i++){
+    const L = sorted.slice(0,i+1), R = sorted.slice(i+1);
+    const muL = mean(L.map(d=>d.y)), muR = mean(R.map(d=>d.y));
+    let sL=0,sR=0;
+    for(const d of L) sL += (d.y - muL)**2;
+    for(const d of R) sR += (d.y - muR)**2;
+    const gain = total - (sL + sR);
+    if(gain > best.gain) best = {gain, s:(sorted[i].x + sorted[i+1].x)/2};
+  }
+  return best.s;
+}
+
+function d2BestCausalSplit(){
+  const sorted = [...D2.data].sort((a,b)=>a.x-b.x);
+  let best = {obj:-Infinity, s:null, tauL:null, tauR:null};
+  const minTreated = 4, minControl = 4;
+  for(let i=12;i<sorted.length-12;i++){
+    const L = sorted.slice(0,i+1), R = sorted.slice(i+1);
+    const Lt = L.filter(d=>d.w===1), Lc = L.filter(d=>d.w===0);
+    const Rt = R.filter(d=>d.w===1), Rc = R.filter(d=>d.w===0);
+    if(Lt.length<minTreated||Lc.length<minControl||Rt.length<minTreated||Rc.length<minControl) continue;
+    const tauL = mean(Lt.map(d=>d.y)) - mean(Lc.map(d=>d.y));
+    const tauR = mean(Rt.map(d=>d.y)) - mean(Rc.map(d=>d.y));
+    const n = L.length + R.length;
+    const obj = (L.length * R.length / n) * (tauL - tauR)**2;
+    if(obj > best.obj) best = {obj, s:(sorted[i].x + sorted[i+1].x)/2, tauL, tauR};
+  }
+  return best;
+}
+
+function d2RenderPlot(svgId, splitS, color, extras){
+  const svg = document.getElementById(svgId);
+  const W = 360, H = 280, pad = {l:38, r:14, t:14, b:32};
+  const ys = D2.data.map(d=>d.y);
+  const ymin = Math.min(...ys) - 0.6, ymax = Math.max(...ys) + 0.6;
+  const xToPx = x => pad.l + x * (W - pad.l - pad.r);
+  const yToPx = y => pad.t + (1 - (y - ymin)/(ymax - ymin)) * (H - pad.t - pad.b);
+
+  let s = `<rect width="${W}" height="${H}" fill="${D1.paper}"/>`;
+  // axes
+  s += `<line x1="${pad.l}" y1="${H-pad.b}" x2="${W-pad.r}" y2="${H-pad.b}" stroke="${D1.ink}" stroke-width="1"/>`;
+  s += `<line x1="${pad.l}" y1="${pad.t}" x2="${pad.l}" y2="${H-pad.b}" stroke="${D1.ink}" stroke-width="1"/>`;
+
+  // gridlines
+  for(let i=0;i<=10;i++){
+    const x = i/10, px = xToPx(x);
+    if(i%2===0){
+      s += `<line x1="${px}" y1="${H-pad.b}" x2="${px}" y2="${H-pad.b+4}" stroke="${D1.ink}"/>`;
+      s += `<text class="svg-label" x="${px}" y="${H-pad.b+15}" text-anchor="middle">${x.toFixed(1)}</text>`;
+    }
+  }
+  s += `<text class="svg-label" x="${(pad.l+W-pad.r)/2}" y="${H-4}" text-anchor="middle">x</text>`;
+  s += `<text class="svg-label" x="${pad.l-25}" y="${(pad.t+H-pad.b)/2}" transform="rotate(-90 ${pad.l-25} ${(pad.t+H-pad.b)/2})" text-anchor="middle">y</text>`;
+
+  // true tau change point
+  s += `<line x1="${xToPx(0.5)}" y1="${pad.t}" x2="${xToPx(0.5)}" y2="${H-pad.b}" stroke="${D1.rust}" stroke-width="1.5" stroke-dasharray="6 4" opacity="0.55"/>`;
+  s += `<text class="svg-label" x="${xToPx(0.5)+4}" y="${pad.t+10}" fill="${D1.rust}">τ change</text>`;
+
+  // points: treated = solid ink, control = open
+  for(const d of D2.data){
+    const cx = xToPx(d.x), cy = yToPx(d.y);
+    if(d.w === 1){
+      s += `<circle cx="${cx}" cy="${cy}" r="3" fill="${D1.ink}" opacity="0.85"/>`;
+    } else {
+      s += `<circle cx="${cx}" cy="${cy}" r="3" fill="${D1.ruleC}" stroke="${D1.ink}" stroke-width="0.8" opacity="0.9"/>`;
+    }
+  }
+
+  // chosen split
+  if(splitS !== null){
+    const sx = xToPx(splitS);
+    s += `<line x1="${sx}" y1="${pad.t-4}" x2="${sx}" y2="${H-pad.b+4}" stroke="${color}" stroke-width="2.2"/>`;
+    // arrow head at top
+    s += `<polygon points="${sx-5},${pad.t} ${sx+5},${pad.t} ${sx},${pad.t-6}" fill="${color}"/>`;
+    s += `<text class="svg-label" x="${sx+8}" y="${pad.t+18}" fill="${color}" style="font-weight:600">split = ${splitS.toFixed(3)}</text>`;
+  }
+
+  svg.innerHTML = s;
+}
+
+function d2Update(){
+  d2Generate();
+  const rfSplit = d2BestRegressionSplit();
+  const crf = d2BestCausalSplit();
+  d2RenderPlot('d2-rf', rfSplit, '#1e3a5f');
+  d2RenderPlot('d2-crf', crf.s, D1.moss);
+
+  const dist = (crf.s !== null) ? Math.abs(crf.s - 0.5) : null;
+  const readout = document.getElementById('d2-readout');
+  let html = `The <span class="rfv">regression criterion</span> chose <b>x = ${rfSplit.toFixed(3)}</b> — it minimizes within-child variance of $Y$, which is driven by the sine baseline.<br>`;
+  if(crf.s !== null){
+    html += `The <span class="crfv">causal criterion</span> chose <b>x = ${crf.s.toFixed(3)}</b> — within-child treatment-effect estimates are $\\hat\\tau_L = ${crf.tauL.toFixed(2)}$ and $\\hat\\tau_R = ${crf.tauR.toFixed(2)}$.<br>`;
+    html += `Distance from the true τ change point at x = 0.5: <b>${dist.toFixed(3)}</b>.<br>`;
+  } else {
+    html += `The causal criterion did not find a valid split (try increasing n).<br>`;
+  }
+  html += `<br>Try cranking up <b>baseline strength</b>: the regression split chases the sine more aggressively while the causal split stays anchored near 0.5. Try cranking up <b>noise</b>: both estimates degrade, but the causal split degrades faster because $\\hat\\tau$ is a difference and so doubles the noise.`;
+  readout.innerHTML = html;
+  if(window.renderMathInElement) renderMathInElement(readout, {delimiters:[{left:'$',right:'$',display:false}], throwOnError:false});
+}
+
+function d2Init(){
+  const bv = document.getElementById('d2-baseline');
+  const nv = document.getElementById('d2-noise');
+  const sv = document.getElementById('d2-n');
+  bv.addEventListener('input', ()=>{ D2.baseline = +bv.value; document.getElementById('d2-baseline-val').textContent = D2.baseline.toFixed(1); d2Update(); });
+  nv.addEventListener('input', ()=>{ D2.noise = +nv.value; document.getElementById('d2-noise-val').textContent = D2.noise.toFixed(1); d2Update(); });
+  sv.addEventListener('input', ()=>{ D2.n = +sv.value; document.getElementById('d2-n-val').textContent = D2.n; d2Update(); });
+  document.getElementById('d2-resample').addEventListener('click', ()=>{ D2.seed = Math.floor(Math.random()*100000); d2Update(); });
+  d2Update();
+}
+</script>
+
+</body>
+</html>
