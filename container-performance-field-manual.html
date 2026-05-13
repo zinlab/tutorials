@@ -1,0 +1,2691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Container Performance — Layers to Telemetry</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,600;9..144,800;9..144,900&family=JetBrains+Mono:wght@400;500;700&family=Inter+Tight:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink: #0a0a0a;
+  --paper: #f4f1ea;
+  --paper-dim: #ebe6db;
+  --rust: #b8401f;
+  --rust-dim: #8a3018;
+  --moss: #3d5a3d;
+  --gold: #c9a227;
+  --blue: #1e3a5f;
+  --plum: #6d4070;
+  --grid: rgba(10,10,10,0.06);
+  --rule: rgba(10,10,10,0.85);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: 'Inter Tight', sans-serif;
+  font-size: 16px;
+  line-height: 1.55;
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.masthead {
+  border-bottom: 3px double var(--rule);
+  padding: 24px 48px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  backdrop-filter: blur(8px);
+  background: rgba(244,241,234,0.95);
+}
+
+.masthead-left, .masthead-right {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+}
+
+.masthead-center {
+  font-family: 'Fraunces', serif;
+  font-weight: 900;
+  font-size: 22px;
+  font-style: italic;
+}
+
+.hero {
+  padding: 80px 48px 60px;
+  border-bottom: 1px solid var(--rule);
+  position: relative;
+  overflow: hidden;
+}
+
+.hero::before {
+  content: '⏱';
+  position: absolute;
+  font-family: 'Fraunces', serif;
+  font-size: 480px;
+  color: var(--rust);
+  opacity: 0.06;
+  top: -60px;
+  right: 20px;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.kicker {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.3em;
+  color: var(--rust);
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.kicker::before {
+  content: '';
+  width: 40px;
+  height: 1px;
+  background: var(--rust);
+}
+
+.hero h1 {
+  font-family: 'Fraunces', serif;
+  font-weight: 300;
+  font-size: clamp(48px, 7vw, 96px);
+  line-height: 0.95;
+  letter-spacing: -0.03em;
+  margin-bottom: 24px;
+  max-width: 1100px;
+}
+
+.hero h1 em { font-style: italic; font-weight: 900; color: var(--rust); }
+
+.hero-deck {
+  font-family: 'Fraunces', serif;
+  font-size: 22px;
+  font-style: italic;
+  max-width: 760px;
+  opacity: 0.75;
+  border-left: 2px solid var(--rust);
+  padding-left: 20px;
+  margin-top: 32px;
+}
+
+.toc {
+  padding: 40px 48px;
+  border-bottom: 1px solid var(--rule);
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 48px;
+  background: var(--paper-dim);
+}
+
+.toc-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  padding-top: 4px;
+}
+
+.toc-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 8px 32px;
+  list-style: none;
+}
+
+.toc-list li {
+  border-bottom: 1px dotted var(--rule);
+  padding: 8px 0;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.toc-list a {
+  color: var(--ink);
+  text-decoration: none;
+  flex: 1;
+  font-weight: 500;
+  transition: color 0.2s, transform 0.2s;
+}
+
+.toc-list a:hover { color: var(--rust); transform: translateX(4px); }
+
+.toc-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--rust);
+  font-weight: 700;
+}
+
+.toc-pill {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  padding: 1px 6px;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+}
+
+.toc-pill.image { background: var(--blue); color: var(--paper); border-color: var(--blue); }
+.toc-pill.runtime { background: var(--rust); color: var(--paper); border-color: var(--rust); }
+.toc-pill.gpu { background: var(--moss); color: var(--paper); border-color: var(--moss); }
+.toc-pill.obs { background: var(--plum); color: var(--paper); border-color: var(--plum); }
+
+section.chapter {
+  padding: 80px 48px;
+  border-bottom: 1px solid var(--rule);
+}
+
+section.chapter:nth-of-type(even) { background: var(--paper-dim); }
+section.image-ch { border-left: 6px solid var(--blue); }
+section.runtime-ch { border-left: 6px solid var(--rust); }
+section.gpu-ch { border-left: 6px solid var(--moss); }
+section.obs-ch { border-left: 6px solid var(--plum); }
+
+.chapter-head {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 48px;
+  margin-bottom: 56px;
+  align-items: end;
+}
+
+.chapter-meta {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  border-top: 2px solid var(--ink);
+  padding-top: 8px;
+}
+
+.chapter-meta .domain {
+  display: inline-block;
+  font-size: 9px;
+  padding: 3px 8px;
+  background: var(--ink);
+  color: var(--paper);
+  margin-bottom: 8px;
+  letter-spacing: 0.2em;
+}
+
+.chapter-meta .domain.image { background: var(--blue); }
+.chapter-meta .domain.runtime { background: var(--rust); }
+.chapter-meta .domain.gpu { background: var(--moss); }
+.chapter-meta .domain.obs { background: var(--plum); }
+
+.chapter-meta .num {
+  font-size: 64px;
+  font-family: 'Fraunces', serif;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  line-height: 0.9;
+  color: var(--rust);
+  display: block;
+  margin-top: 8px;
+}
+
+.chapter-title {
+  font-family: 'Fraunces', serif;
+  font-weight: 400;
+  font-size: clamp(36px, 5vw, 64px);
+  line-height: 1;
+  letter-spacing: -0.025em;
+}
+
+.chapter-title em { font-style: italic; color: var(--rust); }
+.image-ch .chapter-title em { color: var(--blue); }
+.gpu-ch .chapter-title em { color: var(--moss); }
+.obs-ch .chapter-title em { color: var(--plum); }
+
+.chapter-body {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 48px;
+}
+
+.chapter-aside {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  opacity: 0.65;
+}
+
+.chapter-aside strong {
+  display: block;
+  color: var(--rust);
+  margin-bottom: 6px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+}
+
+.image-ch .chapter-aside strong { color: var(--blue); }
+.gpu-ch .chapter-aside strong { color: var(--moss); }
+.obs-ch .chapter-aside strong { color: var(--plum); }
+
+.prose p {
+  font-size: 17px;
+  margin-bottom: 20px;
+  max-width: 680px;
+}
+
+.prose p.lead {
+  font-family: 'Fraunces', serif;
+  font-size: 24px;
+  line-height: 1.4;
+  margin-bottom: 32px;
+  max-width: 720px;
+}
+
+.prose p.lead::first-letter {
+  font-family: 'Fraunces', serif;
+  font-size: 72px;
+  font-weight: 900;
+  float: left;
+  line-height: 0.85;
+  margin: 4px 12px 0 0;
+  color: var(--rust);
+}
+
+.image-ch .prose p.lead::first-letter { color: var(--blue); }
+.gpu-ch .prose p.lead::first-letter { color: var(--moss); }
+.obs-ch .prose p.lead::first-letter { color: var(--plum); }
+
+.prose h3 {
+  font-family: 'Fraunces', serif;
+  font-weight: 600;
+  font-size: 28px;
+  margin: 48px 0 16px;
+  letter-spacing: -0.01em;
+}
+
+.prose h3::before {
+  content: '§';
+  color: var(--rust);
+  margin-right: 12px;
+  font-weight: 400;
+}
+
+.image-ch .prose h3::before { color: var(--blue); }
+.gpu-ch .prose h3::before { color: var(--moss); }
+.obs-ch .prose h3::before { color: var(--plum); }
+
+code, .mono {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.9em;
+  background: rgba(184,64,31,0.08);
+  padding: 1px 6px;
+  border-radius: 2px;
+  color: var(--rust-dim);
+}
+
+pre {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  background: var(--ink);
+  color: var(--paper);
+  padding: 24px 28px;
+  overflow-x: auto;
+  margin: 24px 0;
+  position: relative;
+  border-left: 4px solid var(--rust);
+}
+
+pre::before {
+  content: attr(data-label);
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--gold);
+  opacity: 0.7;
+}
+
+pre code { background: transparent; color: inherit; padding: 0; font-size: inherit; }
+
+.kw { color: #d59ad8; }
+.str { color: #b5d590; }
+.cmt { color: #6c6c6c; font-style: italic; }
+.num { color: #f5b85d; }
+.fn { color: #7dc9d9; }
+.err { color: #ff9580; }
+.ok { color: #b5d590; }
+
+.callout {
+  margin: 32px 0;
+  padding: 24px 28px;
+  border-left: 4px solid var(--rust);
+  background: rgba(184,64,31,0.06);
+}
+
+.callout.warn { border-color: var(--gold); background: rgba(201,162,39,0.08); }
+.callout.tip { border-color: var(--moss); background: rgba(61,90,61,0.06); }
+.callout.image { border-color: var(--blue); background: rgba(30,58,95,0.06); }
+.callout.obs { border-color: var(--plum); background: rgba(109,64,112,0.08); }
+
+.callout-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  color: var(--rust);
+  margin-bottom: 8px;
+  font-weight: 700;
+}
+
+.callout.warn .callout-label { color: #8a6a10; }
+.callout.tip .callout-label { color: var(--moss); }
+.callout.image .callout-label { color: var(--blue); }
+.callout.obs .callout-label { color: var(--plum); }
+.callout p { font-size: 15px; margin: 0; }
+
+/* Cold-start timeline */
+.timeline {
+  background: var(--ink);
+  color: var(--paper);
+  padding: 32px;
+  margin: 32px 0;
+}
+
+.timeline-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  color: var(--gold);
+  margin-bottom: 16px;
+}
+
+.timeline-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.timeline-tab {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  padding: 8px 14px;
+  background: transparent;
+  color: var(--paper);
+  border: 1px solid rgba(244,241,234,0.3);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.timeline-tab.active { background: var(--gold); color: var(--ink); border-color: var(--gold); }
+
+.timeline-bar-wrap {
+  background: rgba(244,241,234,0.04);
+  border-left: 3px solid var(--gold);
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.timeline-bar-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  color: var(--gold);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.timeline-bar-meta {
+  font-family: 'Fraunces', serif;
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+
+.timeline-bar-meta strong {
+  color: var(--gold);
+  font-weight: 700;
+  font-size: 22px;
+  font-style: italic;
+}
+
+.timeline-bar {
+  display: flex;
+  height: 28px;
+  border: 1px solid rgba(244,241,234,0.2);
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.tl-seg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--ink);
+  font-weight: 700;
+  position: relative;
+  cursor: help;
+  transition: all 0.2s;
+}
+
+.tl-seg.pull { background: #c95437; }
+.tl-seg.extract { background: #d49a3a; }
+.tl-seg.create { background: #5d8a5d; }
+.tl-seg.start { background: #4a6a8a; }
+.tl-seg.warmup { background: #9d6b9e; }
+
+.tl-seg:hover { transform: scaleY(1.15); z-index: 2; }
+
+.timeline-legend {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--paper);
+  opacity: 0.7;
+  margin-top: 12px;
+}
+
+.legend-item { display: flex; align-items: center; gap: 6px; }
+.legend-swatch { width: 12px; height: 12px; display: inline-block; }
+
+.timeline-summary {
+  margin-top: 16px;
+  padding: 16px 20px;
+  background: rgba(201,162,39,0.1);
+  border-left: 3px solid var(--gold);
+  font-family: 'Fraunces', serif;
+  font-style: italic;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--paper);
+}
+
+.timeline-summary strong {
+  font-family: 'JetBrains Mono', monospace;
+  font-style: normal;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  color: var(--gold);
+  text-transform: uppercase;
+  display: block;
+  margin-bottom: 6px;
+}
+
+/* Comparison grid */
+.cmp-table {
+  margin: 32px 0;
+  border-top: 2px solid var(--ink);
+  border-bottom: 2px solid var(--ink);
+}
+
+.cmp-row {
+  display: grid;
+  grid-template-columns: 200px 1fr 1fr;
+  border-bottom: 1px solid rgba(10,10,10,0.15);
+  padding: 14px 0;
+  gap: 24px;
+  align-items: start;
+}
+
+.cmp-row.head {
+  border-bottom: 2px solid var(--ink);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  padding: 12px 0;
+  color: var(--rust);
+}
+
+.cmp-axis {
+  font-family: 'Fraunces', serif;
+  font-size: 16px;
+  font-weight: 700;
+  font-style: italic;
+}
+
+.cmp-row p { font-size: 13px; line-height: 1.5; margin: 0; max-width: none; }
+
+/* Cards */
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 0;
+  border-top: 2px solid var(--ink);
+  border-left: 2px solid var(--ink);
+  margin: 32px 0;
+}
+
+.tech-card {
+  border-right: 2px solid var(--ink);
+  border-bottom: 2px solid var(--ink);
+  padding: 22px;
+  background: var(--paper);
+  min-height: 220px;
+  position: relative;
+}
+
+.tech-card .kind {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--rust);
+  margin-bottom: 8px;
+}
+
+.tech-card .name {
+  font-family: 'Fraunces', serif;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  margin-bottom: 10px;
+}
+
+.tech-card .desc { font-size: 13px; line-height: 1.5; margin-bottom: 12px; }
+
+.tech-card .pill {
+  position: absolute;
+  bottom: 12px;
+  right: 16px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  color: var(--ink);
+  opacity: 0.5;
+  letter-spacing: 0.15em;
+}
+
+/* Resource panel */
+.resource-panel {
+  background: var(--ink);
+  color: var(--paper);
+  padding: 32px;
+  margin: 32px 0;
+}
+
+.rp-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  color: var(--gold);
+  margin-bottom: 24px;
+}
+
+.rp-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.rp-tab {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  padding: 8px 14px;
+  background: transparent;
+  color: var(--paper);
+  border: 1px solid rgba(244,241,234,0.3);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.rp-tab.active { background: var(--gold); color: var(--ink); border-color: var(--gold); }
+
+.rp-body {
+  background: rgba(244,241,234,0.04);
+  padding: 24px;
+  border-left: 3px solid var(--gold);
+}
+
+.rp-body h4 {
+  font-family: 'Fraunces', serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--gold);
+  margin-bottom: 12px;
+}
+
+.rp-body p {
+  color: var(--paper);
+  opacity: 0.9;
+  font-size: 14px;
+  line-height: 1.6;
+  margin-bottom: 10px;
+}
+
+.rp-key {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 16px;
+  padding: 10px 0;
+  border-top: 1px dashed rgba(244,241,234,0.15);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+}
+
+.rp-key:first-of-type { border-top: none; padding-top: 0; }
+.rp-key-name { color: var(--gold); }
+.rp-key-val { color: var(--paper); opacity: 0.85; }
+
+/* Stack */
+.stack {
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  padding: 32px;
+  margin: 32px 0;
+}
+
+.stack-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  color: var(--rust);
+  margin-bottom: 8px;
+}
+
+.stack-h {
+  font-family: 'Fraunces', serif;
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: 24px;
+  letter-spacing: -0.01em;
+}
+
+.stack-layer {
+  background: var(--paper-dim);
+  border-left: 4px solid var(--rust);
+  padding: 14px 18px;
+  margin-bottom: 6px;
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 20px;
+  align-items: center;
+}
+
+.stack-layer:nth-child(odd) { border-left-color: var(--blue); }
+.stack-layer:nth-child(3n) { border-left-color: var(--moss); }
+.stack-layer:nth-child(4n) { border-left-color: var(--plum); }
+
+.stack-layer-name {
+  font-family: 'Fraunces', serif;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.stack-layer-name small {
+  display: block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  color: var(--rust);
+  font-weight: 400;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+
+.stack-layer-tools { font-size: 13px; line-height: 1.5; }
+.stack-layer-tools b { color: var(--rust); }
+
+/* Picker */
+.picker {
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  padding: 32px;
+  margin: 32px 0;
+}
+
+.picker-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  color: var(--rust);
+  margin-bottom: 8px;
+}
+
+.picker-title {
+  font-family: 'Fraunces', serif;
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: 24px;
+  letter-spacing: -0.01em;
+}
+
+.picker-step {
+  background: var(--ink);
+  color: var(--paper);
+  padding: 24px 28px;
+  margin-bottom: 16px;
+  border-left: 4px solid var(--gold);
+}
+
+.picker-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--gold);
+  letter-spacing: 0.2em;
+  margin-bottom: 6px;
+}
+
+.picker-q {
+  font-family: 'Fraunces', serif;
+  font-weight: 700;
+  font-size: 19px;
+  margin-bottom: 16px;
+  color: var(--gold);
+}
+
+.picker-choices { display: grid; gap: 8px; }
+
+.picker-choice {
+  background: rgba(244,241,234,0.08);
+  color: var(--paper);
+  border: 1px solid rgba(244,241,234,0.4);
+  padding: 12px 16px;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  transition: all 0.15s;
+}
+
+.picker-choice:hover {
+  background: var(--gold);
+  color: var(--ink);
+  border-color: var(--gold);
+}
+
+.picker-arrow {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  opacity: 0.6;
+}
+
+.picker-verdict {
+  background: var(--moss);
+  color: var(--paper);
+  padding: 24px 28px;
+  border-left: 4px solid var(--gold);
+}
+
+.picker-verdict h4 {
+  font-family: 'Fraunces', serif;
+  font-size: 22px;
+  margin-bottom: 12px;
+  color: var(--gold);
+}
+
+.picker-verdict p {
+  font-size: 14px;
+  line-height: 1.6;
+  margin-bottom: 8px;
+}
+
+.picker-verdict code {
+  background: rgba(0,0,0,0.4);
+  color: var(--gold);
+}
+
+.picker-reset {
+  margin-top: 16px;
+  padding: 8px 16px;
+  background: var(--ink);
+  color: var(--paper);
+  border: 1px solid var(--ink);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  cursor: pointer;
+}
+
+.picker-reset:hover { background: var(--rust); border-color: var(--rust); }
+
+/* Symptom-cause */
+.diag {
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  padding: 0;
+  margin: 32px 0;
+}
+
+.diag-row {
+  display: grid;
+  grid-template-columns: 240px 1fr 280px;
+  border-bottom: 1px solid var(--ink);
+}
+
+.diag-row:last-child { border-bottom: none; }
+
+.diag-row.head {
+  background: var(--ink);
+  color: var(--paper);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+}
+
+.diag-cell {
+  padding: 16px 18px;
+  border-right: 1px solid rgba(10,10,10,0.1);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.diag-cell:last-child { border-right: none; }
+
+.diag-row:not(.head) .diag-cell:first-child {
+  font-family: 'Fraunces', serif;
+  font-weight: 700;
+  font-style: italic;
+  color: var(--rust);
+}
+
+.diag-row:not(.head) .diag-cell:last-child code {
+  background: rgba(184,64,31,0.08);
+  font-size: 11px;
+  display: block;
+  padding: 6px 8px;
+  margin-top: 4px;
+}
+
+/* Checklist */
+.checklist {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+  margin: 32px 0;
+}
+
+.check-item {
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  padding: 18px 20px;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.2s;
+  display: flex;
+  gap: 14px;
+  align-items: start;
+}
+
+.check-item:hover { background: var(--paper-dim); }
+.check-item.done { background: var(--moss); color: var(--paper); border-color: var(--moss); }
+
+.check-box {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--ink);
+  flex-shrink: 0;
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.check-item.done .check-box {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: var(--ink);
+}
+
+.check-content { flex: 1; }
+
+.check-title {
+  font-family: 'Fraunces', serif;
+  font-weight: 700;
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+
+.check-desc { font-size: 12px; line-height: 1.5; opacity: 0.85; }
+
+.colophon {
+  padding: 48px;
+  background: var(--ink);
+  color: var(--paper);
+  text-align: center;
+}
+
+.colophon-mark {
+  font-family: 'Fraunces', serif;
+  font-style: italic;
+  font-weight: 300;
+  font-size: 32px;
+  margin-bottom: 12px;
+}
+
+.colophon-mark em { color: var(--gold); font-weight: 700; }
+
+.colophon p {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  opacity: 0.6;
+}
+
+@media (max-width: 900px) {
+  .chapter-head, .chapter-body, .toc { grid-template-columns: 1fr; gap: 16px; }
+  .masthead { padding: 16px 20px; flex-wrap: wrap; gap: 8px; }
+  .hero, section.chapter { padding: 48px 20px; }
+  .stack-layer { grid-template-columns: 1fr; }
+  .cmp-row, .diag-row { grid-template-columns: 1fr; }
+  .rp-key { grid-template-columns: 1fr; }
+  .hero::before { font-size: 240px; }
+}
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="masthead-left">Vol. I · Issue 06 · MMXXVI</div>
+  <div class="masthead-center">The Cluster Quarterly</div>
+  <div class="masthead-right">Container Performance</div>
+</header>
+
+<section class="hero">
+  <div class="kicker">A Systematic Field Manual · Companion to Issues 01–05</div>
+  <h1>Container <em>performance</em><br>— from <em>layer layout</em> to<br>runtime <em>telemetry.</em></h1>
+  <p class="hero-deck">Every container performance problem reduces to one of five questions: is the image too large, is the build too slow, is startup too slow, is the runtime starved, or are we measuring the wrong thing. This manual walks all five, with the levers that move the numbers and the instrumentation that proves it.</p>
+</section>
+
+<nav class="toc">
+  <div class="toc-label">Contents</div>
+  <ol class="toc-list">
+    <li><span class="toc-num">I.</span> <a href="#ch1">The Performance Surface · Five Questions</a> <span class="toc-pill obs">map</span></li>
+    <li><span class="toc-num">II.</span> <a href="#ch2">Layer Layout · The Cache Cliff</a> <span class="toc-pill image">image</span></li>
+    <li><span class="toc-num">III.</span> <a href="#ch3">Build Caching · BuildKit Deep Cuts</a> <span class="toc-pill image">image</span></li>
+    <li><span class="toc-num">IV.</span> <a href="#ch4">Startup Time · Cold-Start Anatomy</a> <span class="toc-pill image">image</span></li>
+    <li><span class="toc-num">V.</span> <a href="#ch5">Lazy Pull · SOCI, eStargz, Nydus</a> <span class="toc-pill image">image</span></li>
+    <li><span class="toc-num">VI.</span> <a href="#ch6">Memory · cgroup v2, OOM, Page Cache</a> <span class="toc-pill runtime">runtime</span></li>
+    <li><span class="toc-num">VII.</span> <a href="#ch7">CPU · Throttling, Pinning, NUMA</a> <span class="toc-pill runtime">runtime</span></li>
+    <li><span class="toc-num">VIII.</span> <a href="#ch8">I/O · Volumes &amp; Storage Drivers</a> <span class="toc-pill runtime">runtime</span></li>
+    <li><span class="toc-num">IX.</span> <a href="#ch9">Network · CNI, NAT, MTU, eBPF</a> <span class="toc-pill runtime">runtime</span></li>
+    <li><span class="toc-num">X.</span> <a href="#ch10">GPU · Utilization That Means Something</a> <span class="toc-pill gpu">gpu</span></li>
+    <li><span class="toc-num">XI.</span> <a href="#ch11">Metrics · Prometheus &amp; DCGM</a> <span class="toc-pill obs">obs</span></li>
+    <li><span class="toc-num">XII.</span> <a href="#ch12">Tracing &amp; Profiling · OTel + eBPF</a> <span class="toc-pill obs">obs</span></li>
+    <li><span class="toc-num">XIII.</span> <a href="#ch13">Symptom → Cause · The Diagnostic Table</a> <span class="toc-pill obs">obs</span></li>
+    <li><span class="toc-num">XIV.</span> <a href="#ch14">The Picker · What To Tune First</a> <span class="toc-pill obs">obs</span></li>
+    <li><span class="toc-num">XV.</span> <a href="#ch15">Performance Checklist</a> <span class="toc-pill obs">obs</span></li>
+  </ol>
+</nav>
+
+<!-- CHAPTER 1 -->
+<section class="chapter obs-ch" id="ch1">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain obs">MAP</span>
+      Chapter <span class="num">I</span>
+    </div>
+    <h2 class="chapter-title">The performance surface · <em>five questions.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>The frame</strong>
+      All container performance work reduces to five questions. Knowing which one applies tells you what to measure and what to change.<br><br>
+      <strong>The discipline</strong>
+      Measure before tuning. Tune one variable at a time. Stop at the SLO.
+    </aside>
+    <div class="prose">
+      <p class="lead">Container performance has five distinct surfaces, each with its own metrics, levers, and failure modes. Knowing which surface a problem lives on is more than half the work — most tuning failures come from optimizing the wrong layer.</p>
+
+      <h3>The five questions</h3>
+      <p><strong>1. Is the image too large?</strong> Affects pull time, registry cost, attack surface, and how much filesystem you have to mount. Levers: multi-stage builds, distroless bases, layer ordering. Metric: image size after compression.</p>
+      <p><strong>2. Is the build too slow?</strong> Affects developer iteration speed and CI cost. Levers: BuildKit cache mounts, registry-based cache, parallel stages. Metric: build wall-clock time, cache hit rate.</p>
+      <p><strong>3. Is startup too slow?</strong> Affects autoscaler reaction time, deploy time, scale-from-zero latency, fault recovery. Levers: lazy pulling, image distribution, lazy initialization in the app. Metric: time from <code>kubectl apply</code> to <code>readyz=200</code>.</p>
+      <p><strong>4. Is the runtime starved?</strong> Affects throughput and tail latency once steady-state. Levers: cgroup limits, page cache, CPU pinning, NUMA awareness, GPU sharing. Metric: throughput, p99 latency, throttling rate.</p>
+      <p><strong>5. Are we measuring the wrong thing?</strong> Affects every decision above. Levers: metrics taxonomy, traces, profiles, eBPF. Metric: signal-to-noise ratio in dashboards.</p>
+
+      <h3>The order of operations</h3>
+      <p>The five questions aren't independent — they layer on each other:</p>
+      <ol style="margin: 16px 0 24px 32px; line-height: 1.8;">
+        <li><strong>Measure first.</strong> Without instrumentation (Chapters XI–XII), every tuning effort is guesswork.</li>
+        <li><strong>Get image size and layer hygiene right.</strong> If the image is wrong, nothing downstream helps.</li>
+        <li><strong>Speed up build.</strong> Required for fast iteration on every other layer.</li>
+        <li><strong>Speed up startup.</strong> Determines how quickly the system reacts to load and failures.</li>
+        <li><strong>Tune steady-state runtime.</strong> This is where most tutorials start, and where most teams over-invest before the upstream layers are fixed.</li>
+      </ol>
+
+      <div class="callout">
+        <div class="callout-label">The performance budget</div>
+        <p>The real goal isn't "make it faster" — it's "meet the SLO with minimum complexity." Most production services have far more headroom than they need; spending two engineer-weeks on cgroups v2 micro-tuning to reclaim 3% throughput is rarely the right trade. The right trade is fixing the thing that's actually limiting your reliability or your bill. The remaining 14 chapters are arranged so you can stop at the first chapter that solves your problem.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 2 -->
+<section class="chapter image-ch" id="ch2">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain image">IMAGE</span>
+      Chapter <span class="num">II</span>
+    </div>
+    <h2 class="chapter-title">Layer layout · the <em>cache cliff.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>The premise</strong>
+      Every Dockerfile line creates a layer. Each layer that changes invalidates every layer below it. The "cache cliff" is when your build flips from 5 seconds (all cached) to 5 minutes (cache miss at the top).<br><br>
+      <strong>The discipline</strong>
+      Order by change frequency. Test the cliff by rebuilding without changes — it should take under 10s.
+    </aside>
+    <div class="prose">
+      <p class="lead">The cache cliff is the single most under-managed property of a Dockerfile. A well-ordered Dockerfile rebuilds in 5 seconds when only application code changed; a poorly-ordered one rebuilds in 5 minutes. The difference is one line of ordering, not any clever trick.</p>
+
+      <h3>The five rules of layer ordering</h3>
+      <p><strong>1. Stable first, volatile last.</strong> Order Dockerfile lines so that things that change rarely come first, and things that change often come last. Concretely: base image → system packages → language deps → app code. App code changes every commit; system packages change monthly; the base changes quarterly.</p>
+      <p><strong>2. Split <code>COPY</code> for dependency files first.</strong> Don't <code>COPY . .</code> before installing deps. Copy the lock file alone, install, then copy the rest. A code change shouldn't invalidate dep install.</p>
+      <pre data-label="bad vs good COPY ordering"><span class="cmt"># BAD — every code change re-runs pip install</span>
+<span class="kw">COPY</span> . .
+<span class="kw">RUN</span> pip install -r requirements.txt
+
+<span class="cmt"># GOOD — pip install only re-runs when requirements.txt changes</span>
+<span class="kw">COPY</span> requirements.txt .
+<span class="kw">RUN</span> pip install -r requirements.txt
+<span class="kw">COPY</span> . .</pre>
+
+      <p><strong>3. Combine related <code>RUN</code> commands; separate unrelated ones.</strong> Each <code>RUN</code> is a layer. Too many layers = registry overhead; too few = poor cache granularity. The rule: one <code>RUN</code> per "logical action" (install deps, build app, configure).</p>
+      <p><strong>4. Multi-stage to discard build context.</strong> Don't ship the compiler. Don't ship the test files. Don't ship <code>.git</code>. The build stage holds tools; the runtime stage copies only the artifacts.</p>
+      <p><strong>5. Use <code>.dockerignore</code> ruthlessly.</strong> Every byte in the build context is hashed and sent to the builder. <code>.git</code>, <code>node_modules</code>, <code>target/</code>, build outputs — all should be excluded.</p>
+
+      <h3>Cache invalidation, explained</h3>
+      <p>BuildKit's cache key for each step is composed of: the base image digest (changes when FROM changes), the previous step's cache key (transitive — any earlier change invalidates this and everything below), the exact text of the Dockerfile instruction, and for <code>COPY</code> steps, the hashes of the source files. Three implications: changing the base image invalidates everything; changing any instruction text invalidates everything below it; changing a file in a <code>COPY</code> source invalidates the layer and below.</p>
+
+      <h3>Verifying the cliff</h3>
+      <p>The fastest way to test your Dockerfile's cache behavior:</p>
+      <pre data-label="cache test"><span class="cmt"># 1. Build cold (clears cache)</span>
+docker buildx prune -af
+time docker buildx build --load -t myapp:test .
+<span class="cmt"># Cold time: 90s (example)</span>
+
+<span class="cmt"># 2. Touch a source code file (no actual change)</span>
+touch src/main.py
+
+<span class="cmt"># 3. Rebuild — should be fast if layer order is right</span>
+time docker buildx build --load -t myapp:test .
+<span class="cmt"># Should be: &lt; 10s on a well-ordered Dockerfile</span>
+
+<span class="cmt"># 4. Change requirements.txt (dep change)</span>
+echo <span class="str">"# bump"</span> &gt;&gt; requirements.txt
+time docker buildx build --load -t myapp:test .
+<span class="cmt"># Should re-run pip but skip base; maybe 30s</span></pre>
+
+      <p>If step 3 takes more than 10 seconds, your layer order is wrong. If step 4 fully rebuilds, your dep step isn't isolated.</p>
+
+      <div class="callout image">
+        <div class="callout-label">The unspoken rule</div>
+        <p>A Dockerfile's layer order is not "polish" — it's the single biggest determinant of how fast your CI runs. A team building 100 PRs a day on a 60-second image (well-ordered) vs. a 6-minute image (poorly ordered) recovers <em>10 engineer-hours per day</em>. The fix is a five-line reordering.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 3 -->
+<section class="chapter image-ch" id="ch3">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain image">IMAGE</span>
+      Chapter <span class="num">III</span>
+    </div>
+    <h2 class="chapter-title">Build caching · BuildKit <em>deep cuts.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>The premise</strong>
+      Layer cache is one of three caching surfaces in modern BuildKit. The others — RUN cache mounts and remote layer cache — multiply the speedup.<br><br>
+      <strong>The combination</strong>
+      Layer cache (skip the step) + cache mount (skip work inside the step) + remote cache (share across machines).
+    </aside>
+    <div class="prose">
+      <p class="lead">BuildKit's caching has three independent surfaces: <strong>layer cache</strong> (skip an entire step if its inputs match), <strong>cache mounts</strong> (persist a directory across builds even when the step runs), and <strong>remote cache</strong> (share both kinds across machines and CI runs). Each is independent; combining all three is what separates a 4-minute CI build from a 20-second one.</p>
+
+      <h3>Surface 1 — Cache mounts (the fastest win)</h3>
+      <p>Package managers (pip, apt, npm, go, cargo) have their own caches that they normally write into the build's filesystem — and therefore into a layer. With cache mounts, the cache lives outside the image but persists across builds.</p>
+      <pre data-label="cache mounts for common languages"><span class="cmt"># syntax=docker/dockerfile:1.7
+
+# Python — pip cache</span>
+<span class="kw">RUN</span> --mount=type=cache,target=/root/.cache/pip \
+    pip install -r requirements.txt
+
+<span class="cmt"># APT (Debian/Ubuntu) — needs to disable docker-clean</span>
+<span class="kw">RUN</span> --mount=type=cache,target=/var/cache/apt \
+    --mount=type=cache,target=/var/lib/apt \
+    rm -f /etc/apt/apt.conf.d/docker-clean <span class="kw">&amp;&amp;</span> \
+    apt-get update <span class="kw">&amp;&amp;</span> apt-get install -y --no-install-recommends curl
+
+<span class="cmt"># npm — package cache</span>
+<span class="kw">RUN</span> --mount=type=cache,target=/root/.npm \
+    npm ci --prefer-offline
+
+<span class="cmt"># Go — module &amp; build caches</span>
+<span class="kw">RUN</span> --mount=type=cache,target=/root/.cache/go-build \
+    --mount=type=cache,target=/go/pkg/mod \
+    go build -o /app ./cmd/myapp
+
+<span class="cmt"># Cargo (Rust)</span>
+<span class="kw">RUN</span> --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/build/target \
+    cargo build --release</pre>
+
+      <p>Cache mounts are surprisingly under-used. A Rust project building from scratch can take 8 minutes; with a cargo cache mount, an incremental rebuild after a one-line change is 12 seconds. The cache lives in the BuildKit daemon's storage, not in any image layer.</p>
+
+      <h3>Surface 2 — Remote cache backends</h3>
+      <p>The cache mounts above live in the local BuildKit instance. For CI/CD, you need the cache to be available on every runner. Four options, from simplest to most powerful:</p>
+
+      <div class="cards-grid">
+        <div class="tech-card">
+          <div class="kind">CI · simplest</div>
+          <div class="name">GitHub Actions cache</div>
+          <div class="desc"><code>cache-to: type=gha</code>. Free, automatic, integrated. Limits: 10 GB total per repo, slow read on cold runners. Fine for small projects.</div>
+          <div class="pill">10 GB cap</div>
+        </div>
+        <div class="tech-card">
+          <div class="kind">registry-based</div>
+          <div class="name">Registry cache</div>
+          <div class="desc"><code>cache-to: type=registry,ref=...</code>. Stores BuildKit cache as a separate OCI artifact in your container registry. Unlimited size, fast pulls, works across any CI provider.</div>
+          <div class="pill">production default</div>
+        </div>
+        <div class="tech-card">
+          <div class="kind">cloud · max throughput</div>
+          <div class="name">S3 / GCS cache</div>
+          <div class="desc"><code>cache-to: type=s3,...</code>. BuildKit's S3 backend (or GCS) for very large caches. Best for multi-GB CUDA images.</div>
+          <div class="pill">multi-GB caches</div>
+        </div>
+        <div class="tech-card">
+          <div class="kind">enterprise · shared</div>
+          <div class="name">Remote BuildKit</div>
+          <div class="desc">A dedicated BuildKit cluster shared across CI. The cache lives on persistent disk on the builders themselves. Used at hyperscale; cache is always warm.</div>
+          <div class="pill">shared builders</div>
+        </div>
+      </div>
+
+      <h3>Cache modes — <code>min</code> vs <code>max</code></h3>
+      <pre data-label="registry cache modes"><span class="cmt"># mode=min (default): cache only final layers; smaller, faster to write</span>
+docker buildx build \
+  --cache-to type=registry,ref=myorg/myapp:cache,mode=min ...
+
+<span class="cmt"># mode=max: cache ALL intermediate layers; bigger, much more reusable</span>
+docker buildx build \
+  --cache-to type=registry,ref=myorg/myapp:cache,mode=max ...</pre>
+
+      <p><strong>Use <code>mode=max</code> for CI/CD.</strong> Multi-stage builds have many intermediate layers (the build stage's outputs, for instance) that <code>mode=min</code> doesn't preserve. Recovery on a cold cache is much better with <code>mode=max</code>; the trade-off is registry storage.</p>
+
+      <h3>Parallel stage execution</h3>
+      <p>BuildKit runs multi-stage builds with parallelism automatically — independent stages run concurrently. Structure stages with minimal dependencies for maximum parallelism. Two stages that build independent artifacts (UI bundle + API binary) run side-by-side; the final stage combines them. Total time = max(stages) + final, not sum.</p>
+
+      <div class="callout image">
+        <div class="callout-label">The compounding effect</div>
+        <p>Cache mounts alone might save 60% of build time. Registry cache alone might save 80% (cold CI runner). Combined, on a well-ordered Dockerfile, a CI build that took 6 minutes drops to under a minute. The cost is approximately three lines of CI config and one BuildKit pragma.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 4 -->
+<section class="chapter image-ch" id="ch4">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain image">IMAGE</span>
+      Chapter <span class="num">IV</span>
+    </div>
+    <h2 class="chapter-title">Startup time · the <em>cold-start anatomy.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>The classic finding</strong>
+      Container image pull accounts for ~76% of total startup time on average.<br><br>
+      <strong>The diagnosis</strong>
+      Decompose the cold-start budget into pull / extract / create / start / warmup. Optimize the largest bar first.
+    </aside>
+    <div class="prose">
+      <p class="lead">A "cold start" is everything from "scheduler picks a node" to "pod serves first request." Most teams treat it as a single number; effective tuning decomposes it into five distinct phases, each with its own levers.</p>
+
+      <div class="timeline">
+        <div class="timeline-title">Interactive · Cold-start budget for four scenarios</div>
+        <div class="timeline-tabs" id="tlTabs">
+          <button class="timeline-tab active" data-tl="web">Small web · 180 MB</button>
+          <button class="timeline-tab" data-tl="cuda">CUDA inference · 8.4 GB</button>
+          <button class="timeline-tab" data-tl="nim">NIM (70B) · 47 GB</button>
+          <button class="timeline-tab" data-tl="lazy">Same NIM · lazy pull</button>
+        </div>
+        <div id="tlBody"></div>
+        <div class="timeline-summary" id="tlSummary"></div>
+      </div>
+
+      <h3>Decomposing the budget</h3>
+      <p><strong>Pull (network-bound).</strong> Bytes from registry to node. Dominates for large images. Levers: registry mirrors per region/cluster, parallel layer pull, lazy pulling (Chapter V).</p>
+      <p><strong>Extract (CPU/IO-bound).</strong> Decompress and unpack tarballs onto the filesystem. Often overlooked; can be 30–40% of an image's setup time. Levers: zstd compression (faster decompress than gzip), efficient snapshotters (overlay2, fuse-overlayfs).</p>
+      <p><strong>Create (kernel-bound).</strong> Set up namespaces, mount the overlayfs, plumb cgroups. Usually 100–500ms regardless of image size. Levers: avoid complex security profiles that delay setup.</p>
+      <p><strong>Start (app-bound).</strong> The process actually runs. Includes interpreter startup, library loads, configuration reads. Levers: ahead-of-time compilation (Native Image for JVM, AOT for Python), reducing imports.</p>
+      <p><strong>Warmup (app-bound).</strong> Model loading, JIT compilation, prefilling caches, opening connections. The hidden cost in ML serving: a 70B model can take 8 minutes to load weights into GPU memory. Levers: tiered model loading, persistent caches (PVCs), warming a healthy pod before traffic.</p>
+
+      <h3>The application-level startup</h3>
+      <p>Even with perfect image distribution, the app itself often takes longer than the pull:</p>
+      <pre data-label="measure where startup time goes"><span class="cmt"># In Python — log time at each phase</span>
+<span class="kw">import</span> time
+T0 = time.time()
+<span class="kw">def</span> <span class="fn">stamp</span>(label):
+    <span class="kw">print</span>(<span class="str">f"{label}: {time.time() - T0:.2f}s"</span>)
+
+stamp(<span class="str">"process_start"</span>)
+<span class="kw">import</span> torch                              <span class="cmt"># 1.5s</span>
+stamp(<span class="str">"torch_imported"</span>)
+<span class="kw">from</span> transformers <span class="kw">import</span> AutoModel       <span class="cmt"># 0.8s</span>
+stamp(<span class="str">"transformers_imported"</span>)
+model = AutoModel.from_pretrained(<span class="str">"..."</span>)   <span class="cmt"># 45s — bulk of startup</span>
+stamp(<span class="str">"model_loaded"</span>)
+model.to(<span class="str">"cuda"</span>)                           <span class="cmt"># 12s</span>
+stamp(<span class="str">"model_on_gpu"</span>)
+_ = model.generate(...)                       <span class="cmt"># 8s — JIT, kernels</span>
+stamp(<span class="str">"first_inference"</span>)
+<span class="cmt"># Total: ~70s after the image is on disk</span></pre>
+
+      <h3>The Kubernetes lifecycle clock</h3>
+      <p>K8s pod startup, in order: kubectl apply → etcd write (~50ms) → scheduler picks node (~50–500ms) → kubelet pulls image (seconds-to-minutes) → image extract → create container (100–500ms) → ENTRYPOINT runs → process initializes → startupProbe passes → readinessProbe passes → Service endpoint updates → traffic flows.</p>
+      <p>The two big consumers are image pull (network + extract) and the application's own warmup (interpreter + library + model load). Effective optimization addresses whichever is bigger first; for large CUDA/NIM workloads, application warmup often dominates after pulls are optimized.</p>
+
+      <div class="callout">
+        <div class="callout-label">The right SLO for cold start</div>
+        <p>For autoscaling response: cold start under 30s. For deploy speed: under 2 minutes. For NIM-class workloads: under 5 minutes from scratch, under 90 seconds with engine cache. If you're past these, the rest of your scaling story is broken regardless of how much GPU you throw at it.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 5 -->
+<section class="chapter image-ch" id="ch5">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain image">IMAGE</span>
+      Chapter <span class="num">V</span>
+    </div>
+    <h2 class="chapter-title">Lazy pull · <em>SOCI</em>, eStargz, Nydus.</h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>The trick</strong>
+      Start the container before the image is fully pulled. Pull each file on first access. Works because most container images contain large amounts of bytes that are never read at runtime.<br><br>
+      <strong>Production winners</strong>
+      SOCI (AWS, no image conversion needed) and eStargz (broader support, requires image conversion).
+    </aside>
+    <div class="prose">
+      <p class="lead">A typical 5 GB image has 80% of its bytes never touched at runtime — library variants, locale data, debug symbols, files for code paths the container doesn't execute. Lazy pulling exploits this: start the container immediately, fetch each file when something actually opens it.</p>
+
+      <h3>Why this works</h3>
+      <p>Research from FAST '16 documents that <strong>image pull accounts for 76% of container startup time</strong>. Most of the time the pull is moving bytes the application doesn't need on the critical path. Lazy pulling fixes that by:</p>
+      <ol style="margin: 16px 0 24px 32px; line-height: 1.8;">
+        <li>Building an <strong>index</strong> of every file in the image: offset, size, hash.</li>
+        <li>Mounting the image as a <strong>virtual filesystem</strong> backed by the registry, not local disk.</li>
+        <li>When the kernel opens a file, fetching that file's bytes via HTTP range request.</li>
+        <li>Caching what's fetched on the local disk, so subsequent reads are fast.</li>
+      </ol>
+      <p>The net effect: lazy pulling can reduce overhead from minutes to milliseconds, achieving up to 95% faster startup for large container images on supported platforms.</p>
+
+      <h3>The two production technologies</h3>
+      <div class="cmp-table">
+        <div class="cmp-row head">
+          <div>Axis</div>
+          <div>eStargz</div>
+          <div>SOCI (Seekable OCI)</div>
+        </div>
+        <div class="cmp-row">
+          <div class="cmp-axis">Origin</div>
+          <p>Google / containerd · 2020. Predates SOCI; the foundation for the whole pattern.</p>
+          <p>AWS · 2023. Borrowed design principles from stargz, pushed via Fargate adoption.</p>
+        </div>
+        <div class="cmp-row">
+          <div class="cmp-axis">Image conversion?</div>
+          <p>Required. eStargz is a backward-compatible extension of OCI tar.gz layers — files are individually compressed with a table-of-contents footer. Conversion changes the image digest, breaking signatures.</p>
+          <p>Not required. SOCI generates an index as a separate OCI Artifact in the registry, linked back to the unchanged image by OCI Reference Types. Image digests and signatures stay valid.</p>
+        </div>
+        <div class="cmp-row">
+          <div class="cmp-axis">Performance</div>
+          <p>Excellent pull-time reduction. Application startup can be slower than baseline if many small files are accessed on the critical path (each is an HTTP fetch).</p>
+          <p>SOCI maintains the same application startup time as standard images while still dramatically improving pull. The win is asymmetric.</p>
+        </div>
+        <div class="cmp-row">
+          <div class="cmp-axis">Snapshotter</div>
+          <p><code>stargz-snapshotter</code> — containerd plugin. Requires running a daemon on every node.</p>
+          <p><code>soci-snapshotter</code> — also containerd plugin. Natively supported on AWS Bottlerocket OS.</p>
+        </div>
+        <div class="cmp-row">
+          <div class="cmp-axis">Best fit</div>
+          <p>Multi-cloud or on-prem K8s where you control image conversion in CI. Mature ecosystem.</p>
+          <p>AWS-heavy fleets, especially on Bottlerocket / ECS / Fargate. Unchanged image signatures = supply-chain friendly.</p>
+        </div>
+      </div>
+
+      <h3>Nydus — the third option</h3>
+      <p>Nydus (CNCF Sandbox, originally Alibaba) takes a different approach: convert the image to a chunked, content-addressable format where files are broken into 1 MB blocks, each deduplicated across images in the registry. Reads are by chunk, not by file. The result: better deduplication across many similar images, slightly more random-access overhead. Used at hyperscale where many similar images share a base.</p>
+
+      <h3>The configuration story</h3>
+      <pre data-label="enable SOCI on a containerd node"><span class="cmt"># Install soci-snapshotter (binary or systemd service)</span>
+<span class="cmt"># /etc/containerd/config.toml additions:</span>
+
+[proxy_plugins]
+  [proxy_plugins.soci]
+    type = <span class="str">"snapshot"</span>
+    address = <span class="str">"/run/soci-snapshotter-grpc/soci-snapshotter-grpc.sock"</span>
+
+[plugins.<span class="str">"io.containerd.grpc.v1.cri"</span>.containerd]
+  snapshotter = <span class="str">"soci"</span>            <span class="cmt"># use SOCI by default</span>
+
+<span class="cmt"># Restart containerd</span>
+systemctl restart containerd
+
+<span class="cmt"># Generate SOCI index in CI after building image</span>
+soci create myorg/myapp:v1.2.3 --span-size <span class="num">4194304</span>
+soci push myorg/myapp:v1.2.3</pre>
+
+      <h3>When lazy pull is and isn't a win</h3>
+      <p><strong>Big wins:</strong> autoscaling response time (pod ready in 5s instead of 60s), CI ephemeral environments (PR previews spin up instantly), batch jobs with many short tasks, scale-from-zero serverless patterns.</p>
+      <p><strong>Marginal wins:</strong> long-running services where startup is a one-time cost amortized over hours of runtime, especially if the app touches most of the image at startup anyway.</p>
+      <p><strong>The trade-off to understand:</strong> lazy loading doesn't eliminate the time required to download image data — it redistributes it from startup time to runtime. Tune SOCI's parallel pull mode settings for your workload; production teams have reported a 60% improvement just by tuning these parameters.</p>
+
+      <div class="callout image">
+        <div class="callout-label">The deployment heuristic</div>
+        <p>If pod startup time matters and images are over 1 GB, lazy pulling is worth deploying. Below 500 MB or for long-lived services, the operational complexity (snapshotter daemon, index generation in CI) usually isn't justified. Mixed clusters (some lazy, some not) work fine — set the snapshotter via runtimeClass per pod.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 6 -->
+<section class="chapter runtime-ch" id="ch6">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain runtime">RUNTIME</span>
+      Chapter <span class="num">VI</span>
+    </div>
+    <h2 class="chapter-title">Memory · <em>cgroup v2</em>, OOM, page cache.</h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>The shift</strong>
+      cgroup v2 (default in all modern distros) introduces memory.high — a soft limit that triggers reclaim instead of OOM-kill. Used right, it prevents most "container died at midnight" pages.<br><br>
+      <strong>The page cache trap</strong>
+      Container memory includes file cache. RSS isn't enough to predict OOM behavior.
+    </aside>
+    <div class="prose">
+      <p class="lead">Container memory is the most mis-understood resource in modern containers. The kernel doesn't ramp up pressure as you approach the limit — it OOM-kills you the moment you exceed it. cgroup v2's <code>memory.high</code> changes this; understanding it is the single biggest reliability win for memory-bound workloads.</p>
+
+      <div class="resource-panel">
+        <div class="rp-title">Interactive · The cgroup v2 memory interface</div>
+        <div class="rp-tabs" id="memTabs">
+          <button class="rp-tab active" data-mem="max">memory.max</button>
+          <button class="rp-tab" data-mem="high">memory.high</button>
+          <button class="rp-tab" data-mem="low">memory.low</button>
+          <button class="rp-tab" data-mem="min">memory.min</button>
+          <button class="rp-tab" data-mem="pressure">memory.pressure (PSI)</button>
+        </div>
+        <div class="rp-body" id="memBody"></div>
+      </div>
+
+      <h3>The page cache trap</h3>
+      <p>A container's "memory" as the kernel accounts it includes both anonymous memory (your app's malloc'd RAM) and <strong>file-backed page cache</strong> (the kernel's cache of files the app has read). For a database or any heavy file reader, the page cache can dwarf the RSS — and counts toward <code>memory.max</code>.</p>
+      <pre data-label="inspect a container's memory composition"><span class="cmt"># Get the container's cgroup path</span>
+CG=<span class="str">"/sys/fs/cgroup/system.slice/docker-$(docker inspect --format '{{.Id}}' myapp).scope"</span>
+
+<span class="cmt"># All the memory breakdown</span>
+cat <span class="fn">$CG</span>/memory.stat
+<span class="cmt"># anon          4194304    ← actual app memory</span>
+<span class="cmt"># file          16777216   ← page cache (file reads)</span>
+<span class="cmt"># kernel        524288     ← kernel slabs</span>
+<span class="cmt"># file_mapped   8388608    ← mmap'd files (also in file)</span>
+
+<span class="cmt"># Current usage vs limit</span>
+cat <span class="fn">$CG</span>/memory.current        <span class="cmt"># total bytes used right now</span>
+cat <span class="fn">$CG</span>/memory.max            <span class="cmt"># hard limit (or "max")</span>
+
+<span class="cmt"># Did anything get throttled or OOM-killed?</span>
+cat <span class="fn">$CG</span>/memory.events</pre>
+
+      <h3>The MemoryQoS feature (Kubernetes v1.36)</h3>
+      <p>Kubernetes v1.36 (April 2026) graduated Memory QoS to a usable alpha that sets <code>memory.high</code> for you. Memory QoS uses the cgroup v2 memory controller to give the kernel better guidance on how to treat container memory:</p>
+      <pre data-label="kubelet config — MemoryQoS"><span class="kw">apiVersion</span>: kubelet.config.k8s.io/v1beta1
+<span class="kw">kind</span>: KubeletConfiguration
+<span class="kw">featureGates</span>:
+  MemoryQoS: <span class="ok">true</span>
+<span class="kw">memoryReservationPolicy</span>: TieredReservation
+<span class="kw">memoryThrottlingFactor</span>: <span class="num">0.9</span>             <span class="cmt"># memory.high = 90% of limit</span></pre>
+
+      <p>With this enabled, pods get smooth degradation under memory pressure instead of sudden OOM kills. <strong>Caveat: kernel 5.9+ required</strong> — earlier kernels have a livelock bug where memory.high triggers indefinite hangs.</p>
+
+      <h3>The three classes of memory problem</h3>
+      <div class="diag">
+        <div class="diag-row head">
+          <div class="diag-cell">Symptom</div>
+          <div class="diag-cell">Root cause</div>
+          <div class="diag-cell">Fix</div>
+        </div>
+        <div class="diag-row">
+          <div class="diag-cell">Pod OOMKilled on first request</div>
+          <div class="diag-cell">Working set just slightly exceeds memory.max. No gradual pressure; kernel just oom-kills at the cliff.</div>
+          <div class="diag-cell">Add headroom OR use MemoryQoS (memoryThrottlingFactor: 0.9) for early reclaim before max.</div>
+        </div>
+        <div class="diag-row">
+          <div class="diag-cell">Pod OOMKilled with low RSS (40% of limit)</div>
+          <div class="diag-cell">Page cache filling memory. App reads many files; cache accumulates until limit hit.</div>
+          <div class="diag-cell">App should call madvise(MADV_DONTNEED) or use O_DIRECT. Alternatively, increase memory.max.</div>
+        </div>
+        <div class="diag-row">
+          <div class="diag-cell">Pod survives but throughput dies</div>
+          <div class="diag-cell">memory.high set too low — kernel constantly reclaiming to stay below threshold.</div>
+          <div class="diag-cell">Check memory.pressure (PSI). If full.avg10 &gt; 5 sustained, raise memory.high or limit.</div>
+        </div>
+      </div>
+
+      <h3>Tuning per workload type</h3>
+      <p><strong>Web service / API.</strong> Set <code>memory.high</code> = 80–90% of <code>memory.max</code>. Triggers reclaim before OOM, keeps response times stable.</p>
+      <p><strong>Database / cache.</strong> Use <code>memory.min</code> (TieredReservation) to protect the page cache from being reclaimed under node pressure. Don't set high — these apps want to fill memory.</p>
+      <p><strong>ML training.</strong> Guaranteed QoS, requests=limits, no <code>memory.high</code>. Training peaks are predictable; you want hard limits.</p>
+      <p><strong>ML inference.</strong> Guaranteed QoS for the model server. The KV cache and activations are sized at startup; runtime memory should be flat. OOM here means a bug.</p>
+
+      <div class="callout">
+        <div class="callout-label">The single biggest reliability lever</div>
+        <p>Enable Memory QoS, set memory limits to peak × 1.5×, monitor <code>container_memory_working_set_bytes</code>. This eliminates ~80% of "the container died at 3 AM" pages. It's free; it requires kernel 5.9+. The trade-off (slightly slower operation when memory.high triggers reclaim) is almost always worth it.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 7 -->
+<section class="chapter runtime-ch" id="ch7">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain runtime">RUNTIME</span>
+      Chapter <span class="num">VII</span>
+    </div>
+    <h2 class="chapter-title">CPU · <em>throttling</em>, pinning, NUMA.</h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>The trap</strong>
+      CPU limits don't behave like memory limits. A container at "0% CPU" can still be heavily throttled if its quota is set wrong.<br><br>
+      <strong>The watch metric</strong>
+      <code>container_cpu_cfs_throttled_seconds_total</code> increasing while the app waits.
+    </aside>
+    <div class="prose">
+      <p class="lead">CPU is the most subtly mis-tuned resource in containers. Where memory has an unambiguous limit and a clear "OOM" failure mode, CPU operates in 100ms quota windows that produce invisible latency spikes. A perfectly healthy-looking pod can be losing 30% of its work to throttling without anyone noticing.</p>
+
+      <h3>How CPU limits actually work</h3>
+      <p>Linux's CFS bandwidth controller divides time into 100ms "periods." Each period, your container gets a quota proportional to its <code>cpu.max</code> setting. If <code>cpu.max</code> says "200ms per 100ms period" (i.e., 2 CPUs), your container can use 200ms of CPU time across all its threads in any 100ms window. Run over → throttled until the next period.</p>
+      <pre data-label="check throttling on a container"><span class="cmt"># Find throttling metrics in cgroup v2</span>
+CG=<span class="str">"/sys/fs/cgroup/system.slice/docker-$(docker inspect --format '{{.Id}}' myapp).scope"</span>
+cat <span class="fn">$CG</span>/cpu.stat
+<span class="cmt"># usage_usec         12000000      # total CPU used</span>
+<span class="cmt"># user_usec          10000000</span>
+<span class="cmt"># system_usec        2000000</span>
+<span class="cmt"># nr_periods         60000         # how many 100ms windows passed</span>
+<span class="cmt"># nr_throttled       8400          # how many of those throttled</span>
+<span class="cmt"># throttled_usec     420000000     # total time the container was throttled (μs)</span>
+
+<span class="cmt"># Throttling rate = nr_throttled / nr_periods = 8400/60000 = 14%</span>
+<span class="cmt"># In 14% of windows, the container hit its quota and had to wait</span></pre>
+
+      <p>Throttling at 14% means at any moment, your container has a 14% chance of being suspended for tens of milliseconds. This shows up in p99 latency as huge tail spikes; the average barely moves.</p>
+
+      <h3>The two CPU controls</h3>
+      <p><strong><code>cpu.weight</code> (relative share).</strong> Proportional. If two containers have weights 200 and 100, they get CPU in a 2:1 ratio under contention. Doesn't cap; doesn't throttle. The right tool when you want fair sharing without hard limits.</p>
+      <p><strong><code>cpu.max</code> (hard limit, quota).</strong> Absolute cap. Throttles when exceeded. Necessary for predictable billing / multi-tenant isolation but introduces tail latency.</p>
+      <p>In Kubernetes terms: <code>resources.requests.cpu</code> sets <code>cpu.weight</code>, <code>resources.limits.cpu</code> sets <code>cpu.max</code>.</p>
+
+      <h3>The "no CPU limits" debate</h3>
+      <p>A controversial but increasingly common pattern: <strong>set requests but not limits</strong> for latency-sensitive workloads. Reasoning: limits cause throttling, which destroys tail latency; the node's total capacity already caps usage; pod priority and PDBs handle eviction when node is full; for latency-critical paths, throttle &gt; eviction &gt; OOM in pain order.</p>
+      <p>This works well in single-tenant or trusted-multi-tenant environments. Don't do it in untrusted multi-tenant clusters — a noisy neighbor with no limits will eat the node.</p>
+
+      <h3>CPU pinning &amp; NUMA</h3>
+      <p>For latency-critical workloads (HFT, low-latency inference, real-time audio), CPU pinning matters: pin a process to specific CPUs so the scheduler doesn't move it between cores, losing L1/L2 cache locality every time.</p>
+      <p>Kubernetes' <strong>CPU Manager</strong> with <code>static</code> policy assigns exclusive CPUs to Guaranteed-QoS pods. The <strong>Topology Manager</strong> coordinates this with NUMA awareness — keeps your CPUs, memory, and GPUs in the same NUMA zone.</p>
+      <pre data-label="kubelet for pinning"><span class="cmt"># /etc/kubernetes/kubelet-config.yaml</span>
+<span class="kw">cpuManagerPolicy</span>: static
+<span class="kw">topologyManagerPolicy</span>: single-numa-node
+<span class="kw">reservedSystemCPUs</span>: <span class="str">"0-3"</span>            <span class="cmt"># pin system to first 4 CPUs</span></pre>
+
+      <p>To engage: pod must be Guaranteed QoS (requests == limits) AND request integer CPU counts (e.g., <code>cpu: "8"</code> not <code>"7.5"</code>). The CPU Manager then gives the pod exclusive access to 8 specific cores; no other pod's threads run on them. (Cross-reference Issue 03 Case 03 — same machinery that fixes NUMA-related training stragglers.)</p>
+
+      <h3>CPU governor &amp; frequency scaling</h3>
+      <p>On bare-metal nodes, the kernel's CPU frequency governor can introduce surprising latency. The default <code>schedutil</code> ramps frequency up under load; for low-latency apps you want <code>performance</code> mode (always run at max frequency):</p>
+      <pre data-label="set governor on every CPU"><span class="cmt"># Set performance governor</span>
+<span class="kw">for</span> cpu <span class="kw">in</span> /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; <span class="kw">do</span>
+    echo performance &gt; <span class="fn">$cpu</span>
+<span class="kw">done</span>
+
+<span class="cmt"># Disable C-states for ultra-low latency (costs power)</span>
+<span class="kw">for</span> cpu <span class="kw">in</span> /sys/devices/system/cpu/cpu*/cpuidle/state*/disable; <span class="kw">do</span>
+    echo <span class="num">1</span> &gt; <span class="fn">$cpu</span>
+<span class="kw">done</span></pre>
+
+      <div class="callout">
+        <div class="callout-label">The diagnostic question</div>
+        <p>"Is my container being throttled?" should be the first question asked when investigating tail latency. <code>nr_throttled / nr_periods</code> &gt; 1% means the answer is yes. The fix is either more CPU quota or removing the limit; rarely is it the application code.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 8 -->
+<section class="chapter runtime-ch" id="ch8">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain runtime">RUNTIME</span>
+      Chapter <span class="num">VIII</span>
+    </div>
+    <h2 class="chapter-title">I/O · <em>volumes</em>, FS layers, storage drivers.</h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>The hierarchy</strong>
+      Container filesystem &lt; emptyDir &lt; hostPath &lt; PVC. Each has different performance characteristics; pick by access pattern, not by reflex.<br><br>
+      <strong>The overlooked control</strong>
+      io.max for I/O throttling. Most clusters don't set it; some workloads benefit a lot.
+    </aside>
+    <div class="prose">
+      <p class="lead">Container I/O has four distinct paths, each with its own performance profile. The container filesystem is the worst for performance; the right volume choice can be 100× faster for the right workload.</p>
+
+      <h3>The four I/O paths</h3>
+      <div class="cards-grid">
+        <div class="tech-card">
+          <div class="kind">slowest · ephemeral</div>
+          <div class="name">Overlay FS</div>
+          <div class="desc">The container's own filesystem, layered on overlayfs. Writes go to the upperdir. Copy-on-write triggers on first write. Slow for write-heavy workloads. Discarded when container exits.</div>
+          <div class="pill">writes COW</div>
+        </div>
+        <div class="tech-card">
+          <div class="kind">tmpfs · fastest writes</div>
+          <div class="name">emptyDir (memory)</div>
+          <div class="desc"><code>emptyDir: { medium: Memory }</code> — backed by tmpfs (RAM). Counts toward memory limit. For shared-memory IPC (Triton, PyTorch DataLoader), this is the answer.</div>
+          <div class="pill">RAM-backed</div>
+        </div>
+        <div class="tech-card">
+          <div class="kind">local disk</div>
+          <div class="name">emptyDir (default)</div>
+          <div class="desc">Default emptyDir uses the node's disk via the kubelet's volume directory. Fast on NVMe; slow on EBS gp2. Doesn't survive pod restart.</div>
+          <div class="pill">node-local</div>
+        </div>
+        <div class="tech-card">
+          <div class="kind">persistent</div>
+          <div class="name">PVC (CSI)</div>
+          <div class="desc">PersistentVolumeClaim with a CSI driver. Performance depends on the underlying storage class (NVMe, SSD, network FS). Survives pod restart and rescheduling.</div>
+          <div class="pill">durable</div>
+        </div>
+        <div class="tech-card">
+          <div class="kind">node-shared</div>
+          <div class="name">hostPath</div>
+          <div class="desc">Mount a host directory directly. Fast and shared between containers on the same node. Security risk: container can affect host files. Use only for system DaemonSets.</div>
+          <div class="pill">tightly-coupled</div>
+        </div>
+        <div class="tech-card">
+          <div class="kind">network · large data</div>
+          <div class="name">Object store (S3)</div>
+          <div class="desc">Not a volume; an external service. Best for read-only large datasets, model weights, training data. Use S3Fs or rclone for FUSE-mounting; native SDK reads for streaming.</div>
+          <div class="pill">read-mostly</div>
+        </div>
+      </div>
+
+      <h3>The container filesystem is slow — proof</h3>
+      <pre data-label="benchmark COW vs emptyDir"><span class="cmt"># Inside a container, write 1 GB to overlay FS</span>
+$ time dd if=/dev/zero of=/tmp/test bs=1M count=<span class="num">1024</span>
+<span class="cmt"># 1073741824 bytes (1.1 GB) in 4.2s = 256 MB/s  ← overlayfs COW</span>
+
+<span class="cmt"># Same on emptyDir mounted at /work</span>
+$ time dd if=/dev/zero of=/work/test bs=1M count=<span class="num">1024</span>
+<span class="cmt"># 1073741824 bytes (1.1 GB) in 1.1s = 980 MB/s  ← direct ext4</span>
+
+<span class="cmt"># Same on tmpfs emptyDir</span>
+$ time dd if=/dev/zero of=/dev/shm/test bs=1M count=<span class="num">1024</span>
+<span class="cmt"># 1073741824 bytes (1.1 GB) in 0.32s = 3.4 GB/s ← RAM</span></pre>
+
+      <p>3–10× difference for the same write workload. For any container that writes more than a few MB at a time (logs, scratch data, checkpoint files), mount an emptyDir and write there.</p>
+
+      <h3>Shared memory and /dev/shm</h3>
+      <p>Containers default to 64 MB of <code>/dev/shm</code>. PyTorch's DataLoader uses shared memory for multi-worker IPC; ML inference servers (Triton) use it for tensor passing. Default size causes mystery hangs:</p>
+      <pre data-label="bigger /dev/shm for ML workloads"><span class="kw">volumes</span>:
+  - <span class="fn">name</span>: dshm
+    <span class="fn">emptyDir</span>:
+      medium: Memory
+      sizeLimit: <span class="num">16</span>Gi              <span class="cmt"># much larger than default 64 MB</span>
+<span class="kw">volumeMounts</span>:
+  - <span class="fn">mountPath</span>: /dev/shm
+    <span class="fn">name</span>: dshm</pre>
+
+      <h3>Storage classes &amp; IOPS</h3>
+      <p>On AWS, GCP, Azure: storage class choice dictates IOPS, latency, and cost. The fastest options:</p>
+      <p><strong>AWS</strong>: <code>io2</code> (provisioned IOPS), <code>gp3</code> (baseline 3000 IOPS), instance-store NVMe for ephemeral. For LLM weights / training: instance-store or io2.</p>
+      <p><strong>GCP</strong>: <code>pd-extreme</code> for high IOPS; local SSD for ephemeral. <code>filestore</code> for shared.</p>
+      <p><strong>Azure</strong>: Premium SSD v2 (configurable IOPS); ultra disks for the highest tier.</p>
+
+      <div class="callout">
+        <div class="callout-label">The default volume pattern for ML</div>
+        <p>Model weights → PVC mounted read-only across replicas (or S3 with prefetch). Scratch space → emptyDir on local NVMe. Shared memory → emptyDir (medium: Memory) at /dev/shm with 16 GB+ size. Logs → stdout/stderr, harvested by Fluent Bit / Loki. Never write logs to the container filesystem.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 9 -->
+<section class="chapter runtime-ch" id="ch9">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain runtime">RUNTIME</span>
+      Chapter <span class="num">IX</span>
+    </div>
+    <h2 class="chapter-title">Network · <em>CNI</em>, NAT, MTU, eBPF.</h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>The hierarchy</strong>
+      Container → veth pair → bridge → eth0 → fabric. Every hop is a potential bottleneck.<br><br>
+      <strong>The modern answer</strong>
+      Cilium (eBPF) replaces iptables-based kube-proxy. Drops NAT overhead, gives observability for free.
+    </aside>
+    <div class="prose">
+      <p class="lead">Container networking is layered: each packet traverses a veth pair, a Linux bridge, an iptables (or eBPF) NAT chain, the host's network stack, and finally the wire. Every layer has a cost; for high-throughput services, those costs are measurable.</p>
+
+      <h3>The packet path, layer by layer</h3>
+      <pre data-label="packet flow from container to wire">[container app]
+       ↓
+[container netns]
+       ↓ veth peer
+[host bridge / linux interface]
+       ↓ iptables (kube-proxy) OR eBPF (Cilium)
+       ↓ NAT, mark, route
+[host eth0]
+       ↓
+[ToR switch] → [fabric] → [destination]</pre>
+
+      <p>Two big costs: <strong>iptables conntrack</strong> (every connection tracked in a kernel hash table; in services with millions of connections, this gets slow and lossy) and <strong>NAT</strong> (every packet rewritten; CPU cost grows with throughput).</p>
+
+      <h3>CNI choice matters</h3>
+      <div class="cards-grid">
+        <div class="tech-card">
+          <div class="kind">simple · default</div>
+          <div class="name">kube-proxy + iptables</div>
+          <div class="desc">Default in most clusters. Uses Linux iptables for service VIPs and NAT. Works fine up to ~5000 services / ~50000 pods. Beyond that, iptables rule count slows the kernel.</div>
+          <div class="pill">baseline</div>
+        </div>
+        <div class="tech-card">
+          <div class="kind">scale · IPVS</div>
+          <div class="name">kube-proxy + IPVS</div>
+          <div class="desc">Same kube-proxy, but uses IPVS (in-kernel L4 LB) instead of iptables. Hash table lookup instead of linear iptables walk. Scales to 10× more services.</div>
+          <div class="pill">10× scale</div>
+        </div>
+        <div class="tech-card">
+          <div class="kind">modern · eBPF</div>
+          <div class="name">Cilium</div>
+          <div class="desc">Replaces kube-proxy with eBPF programs. Drops iptables entirely. Connections via eBPF socket maps; service LB via XDP. ~20% throughput improvement plus deep observability (Hubble).</div>
+          <div class="pill">production winner</div>
+        </div>
+        <div class="tech-card">
+          <div class="kind">simple · routing-based</div>
+          <div class="name">Calico</div>
+          <div class="desc">Pure L3 routing (no overlay) when run in BGP mode. Each pod gets a real IP routed across the fabric. Excellent performance; requires fabric cooperation (BGP peering with ToRs).</div>
+          <div class="pill">no encapsulation</div>
+        </div>
+      </div>
+
+      <h3>MTU — the hidden 30% cost</h3>
+      <p>Most CNIs default to a 1500-byte MTU minus VXLAN/IPinIP overhead, leaving the container with an MTU of ~1450. For high-throughput connections, every packet sends 50 fewer bytes than it could, costing 3% throughput.</p>
+      <p>If your fabric supports <strong>jumbo frames</strong> (9000-byte MTU), configure the CNI to use it. For TCP-heavy intra-cluster traffic, this can give 30% throughput improvement by reducing packet overhead per byte. Verify with <code>ping -M do -s 8972</code> from one pod to another — if the ping works, the fabric supports it end-to-end.</p>
+
+      <h3>Service mesh — when it's worth it</h3>
+      <p>Service meshes (Istio, Linkerd) add sidecar proxies that intercept every connection. Benefits: mutual TLS, retries, traffic splitting, observability. Costs: 5–15% latency overhead per hop, more memory per pod, operational complexity.</p>
+      <p>The 2026 evolution: <strong>ambient mesh</strong> (Istio Ambient, Cilium Service Mesh) eliminates the sidecar. Network proxies run as DaemonSets, not per-pod. Same features, less overhead. This is replacing sidecar mesh for new deployments.</p>
+
+      <h3>Network metrics that matter</h3>
+      <pre data-label="key network metrics"><span class="cmt"># Per-pod RX/TX bytes — basic throughput</span>
+container_network_receive_bytes_total
+container_network_transmit_bytes_total
+
+<span class="cmt"># Packet drops — congestion or buffer too small</span>
+container_network_receive_packets_dropped_total
+container_network_transmit_packets_dropped_total
+
+<span class="cmt"># TCP retransmits — packet loss</span>
+node_netstat_TcpExt_TCPLostRetransmit
+<span class="cmt"># &gt; 0.1% of TCP segments = real problem</span>
+
+<span class="cmt"># Connection tracking — iptables capacity</span>
+node_nf_conntrack_entries        <span class="cmt"># used</span>
+node_nf_conntrack_entries_limit  <span class="cmt"># max (default 65536)</span>
+<span class="cmt"># If used / limit &gt; 80% sustained, conntrack table is filling up</span></pre>
+
+      <div class="callout">
+        <div class="callout-label">The Cilium-or-not decision</div>
+        <p>For new clusters, Cilium with eBPF is the right default. The throughput, observability, and policy story is significantly better than iptables. For existing clusters on kube-proxy + iptables: migrate when you start seeing iptables-related performance issues (conntrack table full, p99 latency spikes correlated with service deploys). Below ~3000 services, the default works fine.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 10 -->
+<section class="chapter gpu-ch" id="ch10">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain gpu">GPU</span>
+      Chapter <span class="num">X</span>
+    </div>
+    <h2 class="chapter-title">GPU · utilization that <em>actually means something.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>The lie</strong>
+      <code>nvidia-smi</code>'s "GPU utilization" lies. It says 100% when SMs are 5% busy if any kernel is running.<br><br>
+      <strong>The truth</strong>
+      SM activity, tensor core activity, HBM bandwidth — DCGM's profiling metrics. These are the ones that correlate with throughput.
+    </aside>
+    <div class="prose">
+      <p class="lead">"GPU utilization" is one of the most misleading metrics in the container ecosystem. <code>nvidia-smi</code>'s <code>DCGM_FI_DEV_GPU_UTIL</code> reports "% of time at least one kernel was running" — not "% of compute being used." A GPU running a tiny copy kernel reports 100%; one running 5% of its tensor cores reports the same. Cross-reference Issue 03 — this trap costs production teams real money.</p>
+
+      <h3>The DCGM metric hierarchy</h3>
+      <p>NVIDIA's Data Center GPU Manager exposes a hierarchy of metrics. The deeper you go, the more truthful the answer:</p>
+
+      <div class="diag">
+        <div class="diag-row head">
+          <div class="diag-cell">Metric</div>
+          <div class="diag-cell">What it measures</div>
+          <div class="diag-cell">When to use</div>
+        </div>
+        <div class="diag-row">
+          <div class="diag-cell">DCGM_FI_DEV_GPU_UTIL</div>
+          <div class="diag-cell">% of time at least one kernel was running. Reports 100% even for tiny kernels.</div>
+          <div class="diag-cell">Capacity allocation only ("is anyone using this GPU?"). Never as a throughput proxy.</div>
+        </div>
+        <div class="diag-row">
+          <div class="diag-cell">DCGM_FI_PROF_SM_ACTIVE</div>
+          <div class="diag-cell">% of cycles a Streaming Multiprocessor had at least one active warp.</div>
+          <div class="diag-cell">First real-truth metric. Better than GPU_UTIL but still doesn't show <em>how much</em> work the SMs are doing.</div>
+        </div>
+        <div class="diag-row">
+          <div class="diag-cell">DCGM_FI_PROF_SM_OCCUPANCY</div>
+          <div class="diag-cell">Ratio of active warps to maximum possible. Shows how saturated the SM scheduler is.</div>
+          <div class="diag-cell">Critical for understanding if you're SM-bound or memory-bound.</div>
+        </div>
+        <div class="diag-row">
+          <div class="diag-cell">DCGM_FI_PROF_PIPE_TENSOR_ACTIVE</div>
+          <div class="diag-cell">% of cycles the tensor cores were active. THE metric for ML workloads.</div>
+          <div class="diag-cell">Always check for LLM training and inference. Should be 30–60%+ during real work.</div>
+        </div>
+        <div class="diag-row">
+          <div class="diag-cell">DCGM_FI_PROF_DRAM_ACTIVE</div>
+          <div class="diag-cell">% of cycles the HBM was reading/writing. Memory-bandwidth proxy.</div>
+          <div class="diag-cell">High DRAM_ACTIVE + low TENSOR_ACTIVE = memory-bound (typical for decode in LLM serving).</div>
+        </div>
+        <div class="diag-row">
+          <div class="diag-cell">DCGM_FI_DEV_FB_USED</div>
+          <div class="diag-cell">Framebuffer (VRAM) used.</div>
+          <div class="diag-cell">Capacity planning. For inference: KV cache + model weights + activations.</div>
+        </div>
+      </div>
+
+      <h3>What "good utilization" looks like by workload</h3>
+      <p><strong>LLM training (forward + backward + optimizer)</strong>: SM_ACTIVE 80–95%, TENSOR_ACTIVE 30–55%, DRAM_ACTIVE 40–70%. High variance is fine if MFU is right.</p>
+      <p><strong>LLM inference, prefill phase</strong>: SM_ACTIVE 85–95%, TENSOR_ACTIVE 40–60%. Compute-bound, similar to training.</p>
+      <p><strong>LLM inference, decode phase</strong>: SM_ACTIVE 30–60%, TENSOR_ACTIVE 5–15%, DRAM_ACTIVE 70–90%. Memory-bound — this is normal. Don't try to "fix" low SM utilization here; it's inherent.</p>
+      <p><strong>Image generation (diffusion)</strong>: SM_ACTIVE 80–95%, TENSOR_ACTIVE 30–50%. Iterative; clean compute pattern.</p>
+
+      <h3>Multi-Instance GPU (MIG) and time-slicing</h3>
+      <p>For workloads that don't fully utilize a GPU, partitioning is the answer:</p>
+      <p><strong>MIG (Multi-Instance GPU)</strong>: H100/A100/B200 can be split into up to 7 isolated partitions. Each has dedicated SMs, dedicated HBM, dedicated cache. True isolation; some compute capacity lost to partitioning overhead. Use for: serving many small models that don't fully use a GPU each.</p>
+      <p><strong>Time-slicing</strong>: schedule multiple pods to the same GPU; the GPU context-switches between them. No isolation (one pod's bad behavior affects all); higher overall utilization. Use for: bursty workloads, dev/test environments.</p>
+
+      <div class="callout">
+        <div class="callout-label">The number that actually matters</div>
+        <p>If you can only watch one GPU metric in 2026, it's <strong>DCGM_FI_PROF_PIPE_TENSOR_ACTIVE</strong> for tensor-heavy workloads or <strong>DCGM_FI_PROF_DRAM_ACTIVE</strong> for memory-bound inference. <code>DCGM_FI_DEV_GPU_UTIL</code> is fine for "is this GPU idle?" capacity-planning queries; it tells you nothing about how well your work is using the chip. Cross-reference Issue 03 Chapter IV — this is the same set of metrics that drives training-throughput tuning.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 11 -->
+<section class="chapter obs-ch" id="ch11">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain obs">OBSERVABILITY</span>
+      Chapter <span class="num">XI</span>
+    </div>
+    <h2 class="chapter-title">Metrics · <em>Prometheus</em> &amp; DCGM.</h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>The model</strong>
+      Prometheus pulls metrics from your exporters at intervals. DCGM exports GPU metrics. cAdvisor (built into kubelet) exports container metrics.<br><br>
+      <strong>The minimum-viable stack</strong>
+      kube-prometheus-stack + DCGM exporter + your app's own /metrics endpoint.
+    </aside>
+    <div class="prose">
+      <p class="lead">Container metrics in 2026 are settled on Prometheus (pull-based, /metrics endpoints in Prometheus text format) and OpenMetrics (the OCI-standardized version). The "Prometheus stack" is what every monitoring system, free or paid, can ingest.</p>
+
+      <h3>The metric stack</h3>
+      <div class="stack">
+        <div class="stack-title">The five sources of container metrics</div>
+        <div class="stack-h">Layer by layer · what to instrument</div>
+        <div class="stack-layer">
+          <div class="stack-layer-name"><small>Layer 5</small>Application</div>
+          <div class="stack-layer-tools">Your own <b>/metrics</b> endpoint (Prometheus client library for your language). RED metrics: <b>R</b>equest rate, <b>E</b>rror rate, <b>D</b>uration. Service-specific: queue depth, tokens/sec, model load time.</div>
+        </div>
+        <div class="stack-layer">
+          <div class="stack-layer-name"><small>Layer 4</small>Container</div>
+          <div class="stack-layer-tools"><b>cAdvisor</b> (built into kubelet on /metrics/cadvisor). Per-container CPU, memory, network, FS metrics derived from cgroups. <code>container_cpu_*</code>, <code>container_memory_*</code>.</div>
+        </div>
+        <div class="stack-layer">
+          <div class="stack-layer-name"><small>Layer 3</small>Kubernetes objects</div>
+          <div class="stack-layer-tools"><b>kube-state-metrics</b>. Deployment status, pod phase, replica count, scheduling state. Not a node agent — talks to the API server. <code>kube_pod_status_*</code>, <code>kube_deployment_*</code>.</div>
+        </div>
+        <div class="stack-layer">
+          <div class="stack-layer-name"><small>Layer 2</small>Node</div>
+          <div class="stack-layer-tools"><b>node_exporter</b> (DaemonSet). Node-level OS metrics: load, disk, NIC, kernel. <code>node_cpu_seconds_total</code>, <code>node_filesystem_*</code>, <code>node_network_*</code>.</div>
+        </div>
+        <div class="stack-layer">
+          <div class="stack-layer-name"><small>Layer 1</small>GPU</div>
+          <div class="stack-layer-tools"><b>DCGM exporter</b> (DaemonSet, ports 9400). All GPU metrics from Chapter X. Installed automatically by the NVIDIA GPU Operator.</div>
+        </div>
+      </div>
+
+      <h3>The DCGM exporter setup</h3>
+      <pre data-label="DCGM exporter helm install"><span class="cmt"># Add NVIDIA helm repo</span>
+helm repo add gpu-helm-charts https://nvidia.github.io/dcgm-exporter/helm-charts
+helm repo update
+
+<span class="cmt"># Install — most clusters use GPU Operator which includes DCGM exporter</span>
+helm install dcgm-exporter gpu-helm-charts/dcgm-exporter \
+  --namespace gpu-system --create-namespace \
+  --set serviceMonitor.enabled=<span class="ok">true</span>
+
+<span class="cmt"># Verify metrics</span>
+kubectl port-forward -n gpu-system svc/dcgm-exporter <span class="num">9400</span>:<span class="num">9400</span> &amp;
+curl localhost:<span class="num">9400</span>/metrics | grep DCGM_FI_PROF
+<span class="cmt"># DCGM_FI_PROF_SM_ACTIVE{gpu="0",UUID="GPU-..."}        0.82</span>
+<span class="cmt"># DCGM_FI_PROF_PIPE_TENSOR_ACTIVE{gpu="0",UUID="GPU-..."} 0.43</span></pre>
+
+      <h3>Application instrumentation</h3>
+      <p>The application's own metrics are usually the most useful — they're what your SLO depends on. Three rules:</p>
+      <p><strong>1. RED everywhere.</strong> Rate, Errors, Duration for every meaningful unit of work (HTTP request, queue job, gRPC method, inference). Use Prometheus histograms for duration; the resulting bucket-based latency view is much better than averages.</p>
+      <p><strong>2. USE for resources.</strong> Utilization, Saturation, Errors for every queue, pool, cache. Connection pool: in-use, max, waits. Queue: depth, enqueue rate, dequeue rate.</p>
+      <p><strong>3. Domain-specific gauges.</strong> Things only your service knows: tokens generated/sec for an LLM, queue depth in a batcher, cache hit rate for a recommender. These tend to predict failures faster than RED.</p>
+
+      <pre data-label="LLM inference instrumentation example"><span class="kw">from</span> prometheus_client <span class="kw">import</span> Counter, Histogram, Gauge
+
+<span class="cmt"># RED</span>
+requests_total = Counter(<span class="str">"llm_requests_total"</span>, <span class="str">"Total requests"</span>, [<span class="str">"model"</span>, <span class="str">"status"</span>])
+request_duration = Histogram(<span class="str">"llm_request_duration_seconds"</span>,
+                              <span class="str">"E2E request time"</span>, [<span class="str">"model"</span>],
+                              buckets=(<span class="num">0.1</span>, <span class="num">0.5</span>, <span class="num">1</span>, <span class="num">2</span>, <span class="num">5</span>, <span class="num">10</span>, <span class="num">30</span>, <span class="num">60</span>))
+
+<span class="cmt"># LLM-specific (OTel GenAI semantic conventions)</span>
+ttft = Histogram(<span class="str">"gen_ai_server_time_to_first_token"</span>,
+                 <span class="str">"TTFT"</span>, [<span class="str">"model"</span>], buckets=(<span class="num">0.05</span>, <span class="num">0.1</span>, <span class="num">0.25</span>, <span class="num">0.5</span>, <span class="num">1</span>, <span class="num">2</span>, <span class="num">5</span>))
+tpot = Histogram(<span class="str">"gen_ai_server_time_per_output_token"</span>,
+                 <span class="str">"TPOT"</span>, [<span class="str">"model"</span>], buckets=(<span class="num">0.005</span>, <span class="num">0.01</span>, <span class="num">0.02</span>, <span class="num">0.05</span>, <span class="num">0.1</span>))
+tokens_in = Counter(<span class="str">"gen_ai_server_input_tokens"</span>, <span class="str">"Input tokens"</span>, [<span class="str">"model"</span>])
+tokens_out = Counter(<span class="str">"gen_ai_server_output_tokens"</span>, <span class="str">"Output tokens"</span>, [<span class="str">"model"</span>])
+
+<span class="cmt"># USE — batch &amp; KV cache state</span>
+batch_size = Gauge(<span class="str">"llm_running_batch_size"</span>, <span class="str">"Current batch size"</span>)
+kv_cache_used = Gauge(<span class="str">"llm_kv_cache_used_bytes"</span>, <span class="str">"KV cache bytes used"</span>)
+queue_depth = Gauge(<span class="str">"llm_queue_depth"</span>, <span class="str">"Pending requests"</span>)</pre>
+
+      <h3>Recording rules — pre-computed dashboards</h3>
+      <p>For dashboards that query 10k+ time series, Prometheus computation can dominate browser load time. <strong>Recording rules</strong> pre-compute frequently-used queries at scrape time:</p>
+      <pre data-label="prometheus recording rules"><span class="kw">groups</span>:
+- <span class="fn">name</span>: container-perf
+  <span class="fn">interval</span>: <span class="num">30</span>s
+  <span class="fn">rules</span>:
+  <span class="cmt"># Per-namespace CPU usage (sum across all pods)</span>
+  - <span class="fn">record</span>: namespace:container_cpu_usage_seconds:rate5m
+    <span class="fn">expr</span>: sum by (namespace) (rate(container_cpu_usage_seconds_total[5m]))
+
+  <span class="cmt"># GPU tensor activity aggregated by team (via namespace label)</span>
+  - <span class="fn">record</span>: namespace:gpu_tensor_active:avg
+    <span class="fn">expr</span>: avg by (namespace) (DCGM_FI_PROF_PIPE_TENSOR_ACTIVE)
+
+  <span class="cmt"># CPU throttling rate</span>
+  - <span class="fn">record</span>: pod:cpu_throttle_rate:5m
+    <span class="fn">expr</span>: rate(container_cpu_cfs_throttled_periods_total[5m]) /
+          rate(container_cpu_cfs_periods_total[5m])</pre>
+
+      <div class="callout obs">
+        <div class="callout-label">The minimum-viable observability stack</div>
+        <p><strong>kube-prometheus-stack</strong> (Prometheus + kube-state-metrics + node_exporter + Grafana) + <strong>DCGM exporter</strong> (via GPU Operator) + <strong>your app's /metrics</strong> with RED+USE+domain metrics. This covers 95% of monitoring needs. Add Loki for logs and Tempo/Jaeger for traces (next chapter) when you need them.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 12 -->
+<section class="chapter obs-ch" id="ch12">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain obs">OBSERVABILITY</span>
+      Chapter <span class="num">XII</span>
+    </div>
+    <h2 class="chapter-title">Tracing &amp; profiling · <em>OTel</em> + Pyroscope + eBPF.</h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>Three signals</strong>
+      Metrics tell you <em>what</em>. Traces tell you <em>where</em>. Profiles tell you <em>why</em>.<br><br>
+      <strong>The 2026 norm</strong>
+      OpenTelemetry for traces and metrics. Pyroscope for continuous profiling. eBPF (Cilium Hubble, Pixie) for kernel-level visibility.
+    </aside>
+    <div class="prose">
+      <p class="lead">Metrics tell you what happened (the rate of errors went up). Traces tell you where (this request spent 3 seconds in the database). Profiles tell you why (in that span, the database driver was busy in the connection pool waiting for a lock). The three signals are complementary; modern container observability uses all three.</p>
+
+      <h3>OpenTelemetry — the unified collection layer</h3>
+      <p>OpenTelemetry (OTel) is the CNCF's unified standard for emitting traces, metrics, and logs. The 2026 architecture has three pieces:</p>
+      <p><strong>OTel SDK / auto-instrumentation</strong>: in your application, captures spans, metrics, and logs in the OTLP wire format.</p>
+      <p><strong>OTel Collector (agent)</strong>: runs as a DaemonSet on each node. Receives OTLP from local applications, batches, enriches with K8s metadata, forwards.</p>
+      <p><strong>OTel Collector (gateway)</strong>: centralized cluster-level. Filters, samples, routes to multiple backends (Prometheus, Tempo, Loki, vendor systems). The fan-out point.</p>
+
+      <pre data-label="OTel Collector — DaemonSet config"><span class="kw">receivers</span>:
+  otlp:
+    protocols:
+      grpc: { endpoint: <span class="num">0.0</span>.<span class="num">0.0</span>:<span class="num">4317</span> }
+      http: { endpoint: <span class="num">0.0</span>.<span class="num">0.0</span>:<span class="num">4318</span> }
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: dcgm
+          static_configs: [{ targets: [<span class="str">"localhost:9400"</span>] }]
+
+<span class="kw">processors</span>:
+  batch: { timeout: <span class="num">10</span>s, send_batch_size: <span class="num">1024</span> }
+  k8sattributes:                         <span class="cmt"># enrich with pod/namespace/cluster</span>
+    auth_type: serviceAccount
+    extract:
+      metadata: [k8s.pod.name, k8s.namespace.name, k8s.node.name]
+  tail_sampling:                         <span class="cmt"># keep errors, sample 1% of OK</span>
+    policies:
+      - { name: errors, type: status_code, status_code: { status_codes: [ERROR] } }
+      - { name: slow, type: latency, latency: { threshold_ms: <span class="num">500</span> } }
+      - { name: probabilistic, type: probabilistic, probabilistic: { sampling_percentage: <span class="num">1</span> } }
+
+<span class="kw">exporters</span>:
+  otlp/tempo: { endpoint: tempo-gateway:<span class="num">4317</span> }
+  prometheusremotewrite: { endpoint: http://prometheus-gateway/api/v1/write }
+
+<span class="kw">service</span>:
+  pipelines:
+    traces: { receivers: [otlp], processors: [k8sattributes, tail_sampling, batch], exporters: [otlp/tempo] }
+    metrics: { receivers: [otlp, prometheus], processors: [k8sattributes, batch], exporters: [prometheusremotewrite] }</pre>
+
+      <h3>Tracing — what to trace, when</h3>
+      <p>Trace every request that crosses a service boundary, every meaningful internal operation. For an LLM inference pipeline:</p>
+      <pre data-label="LLM request trace spans"><span class="num">[</span> request_received <span class="num">]</span>                            <span class="cmt"># 0ms</span>
+   <span class="num">[</span> auth_check <span class="num">]</span>                              <span class="cmt"># 5ms</span>
+   <span class="num">[</span> rate_limit <span class="num">]</span>                              <span class="cmt"># 1ms</span>
+   <span class="num">[</span> retrieve_context (RAG) <span class="num">]</span>
+      <span class="num">[</span> embed_query <span class="num">]</span>                          <span class="cmt"># 12ms</span>
+      <span class="num">[</span> vector_search <span class="num">]</span>                        <span class="cmt"># 38ms</span>
+   <span class="num">[</span> queue_to_inference <span class="num">]</span>                      <span class="cmt"># 4ms wait in queue</span>
+   <span class="num">[</span> inference <span class="num">]</span>
+      <span class="num">[</span> prefill <span class="num">]</span>                              <span class="cmt"># 320ms</span>
+      <span class="num">[</span> decode (streamed) <span class="num">]</span>                    <span class="cmt"># 2840ms</span>
+   <span class="num">[</span> post_process <span class="num">]</span>                            <span class="cmt"># 8ms</span>
+   <span class="num">[</span> response_sent <span class="num">]</span>                           <span class="cmt"># total: 3.23s</span></pre>
+
+      <p>When the user reports "it was slow," a trace tells you immediately whether the time went into auth, retrieval, queue wait, prefill, or decode. <strong>Without traces, you guess.</strong></p>
+
+      <h3>Sampling — keep the budget tight</h3>
+      <p><strong>Head sampling</strong>: decide at trace start (typically 1–10% probability). Simple, deterministic per trace. Drawback: misses rare slow / error traces.</p>
+      <p><strong>Tail sampling</strong> (preferred for high-traffic services): the OTel collector buffers the full trace; after it completes, decides whether to keep based on rules (always keep errors, always keep slow, sample 1% of healthy fast). Costs more memory in the collector but keeps the interesting traces.</p>
+
+      <h3>Continuous profiling — Pyroscope</h3>
+      <p>Sampling-based profiling captures stack traces of every running thread, every few seconds. Aggregated over time, you get a flame graph showing exactly where CPU is spent.</p>
+      <p>2026 production standard: <strong>Grafana Pyroscope</strong>. Low overhead (~1% CPU). Continuous (not just during an incident). Can profile from agents in K8s with no code change for Go, Java, Python, Node.</p>
+      <pre data-label="install pyroscope + auto-instrument"><span class="cmt"># Pyroscope server</span>
+helm install pyroscope grafana/pyroscope -n monitoring
+
+<span class="cmt"># Python — wrap your entrypoint</span>
+RUN pip install pyroscope-io
+
+<span class="cmt"># In your code</span>
+<span class="kw">import</span> pyroscope
+pyroscope.configure(
+    application_name=<span class="str">"my-service"</span>,
+    server_address=<span class="str">"http://pyroscope.monitoring:4040"</span>,
+    tags={<span class="str">"region"</span>: <span class="str">"us-east-1"</span>, <span class="str">"version"</span>: <span class="str">"v1.2.3"</span>},
+)</pre>
+
+      <p>The output: flame graphs by service, by container, over time. When a service slows down, you see immediately which function changed — often even before the user reports the slowdown.</p>
+
+      <h3>eBPF — kernel-level observability</h3>
+      <p>eBPF lets you attach kernel-side probes that capture syscalls, network packets, file ops, scheduler events. Tools like <strong>Cilium Hubble</strong> (network) and <strong>Pixie</strong> (general L7 protocols) give visibility you can't get any other way.</p>
+      <p>The 2026 use cases:</p>
+      <ul style="margin: 16px 0 24px 32px; line-height: 1.8;">
+        <li><strong>CPU run-queue latency</strong> — measure threads waiting to be scheduled. Detects cgroup throttling that traditional metrics miss.</li>
+        <li><strong>I/O latency histograms</strong> — find the rare 200ms fsync stalls that ruin p99 but average to nothing.</li>
+        <li><strong>TCP retransmits per connection</strong> — narrow down which flows are seeing packet loss.</li>
+        <li><strong>Service-mesh-free L7 tracing</strong> — Pixie captures HTTP/gRPC calls at the kernel without code changes or sidecars.</li>
+      </ul>
+
+      <pre data-label="quick eBPF diagnosis"><span class="cmt"># BCC tools — install via apt or as a container</span>
+
+<span class="cmt"># Find slow block I/O</span>
+biolatency -m <span class="num">10</span>
+
+<span class="cmt"># Find off-CPU time (threads waiting)</span>
+offcputime -K -f <span class="num">30</span> &gt; offcpu.txt
+
+<span class="cmt"># Network — slow connect()s</span>
+tcpconnlat <span class="num">10</span>           <span class="cmt"># show connects taking &gt;10ms</span>
+
+<span class="cmt"># Run-queue latency (scheduling delays)</span>
+runqlat -P -m</pre>
+
+      <div class="callout obs">
+        <div class="callout-label">The four signals in 2026</div>
+        <p><strong>Metrics</strong> (Prometheus + DCGM) for "is something wrong right now." <strong>Logs</strong> (Loki) for "what was happening when it broke." <strong>Traces</strong> (Tempo + OTel) for "which span owned the slowness." <strong>Profiles</strong> (Pyroscope) for "which function in that span." Each fills a gap the others can't. Skipping any of them means longer incidents.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 13 -->
+<section class="chapter obs-ch" id="ch13">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain obs">OBSERVABILITY</span>
+      Chapter <span class="num">XIII</span>
+    </div>
+    <h2 class="chapter-title">Symptom → cause · <em>the diagnostic table.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>How to use it</strong>
+      Match the symptom in the left column; the middle column is the most likely root cause; the right column is the specific check.<br><br>
+      <strong>The rule</strong>
+      Verify with the suggested check before changing anything.
+    </aside>
+    <div class="prose">
+      <p class="lead">Most container performance investigations follow the same pattern: a symptom, a hypothesis, a check that confirms or refutes. Below: the symptoms most commonly seen and the fastest check for each.</p>
+
+      <div class="diag">
+        <div class="diag-row head">
+          <div class="diag-cell">Symptom</div>
+          <div class="diag-cell">Likely cause</div>
+          <div class="diag-cell">Fastest check</div>
+        </div>
+        <div class="diag-row">
+          <div class="diag-cell">Slow startup, high pull time</div>
+          <div class="diag-cell">Large image, single registry, no per-region mirror.</div>
+          <div class="diag-cell"><code>kubectl describe pod | grep Pulling</code>. Time from "Pulling" to "Pulled" &gt; 30s = problem.</div>
+        </div>
+        <div class="diag-row">
+          <div class="diag-cell">Pod OOMKilled with low RSS</div>
+          <div class="diag-cell">Page cache filling memory. App reads many files.</div>
+          <div class="diag-cell"><code>cat /sys/fs/cgroup/.../memory.stat | grep file</code>. Large "file" value = page cache.</div>
+        </div>
+        <div class="diag-row">
+          <div class="diag-cell">Tail latency spikes p99 &gt;&gt; p50</div>
+          <div class="diag-cell">CPU throttling. Container hits quota in some 100ms windows.</div>
+          <div class="diag-cell"><code>rate(container_cpu_cfs_throttled_periods[5m]) / rate(container_cpu_cfs_periods[5m])</code> &gt; 1%.</div>
+        </div>
+        <div class="diag-row">
+          <div class="diag-cell">"GPU shows 100%" but throughput is low</div>
+          <div class="diag-cell">DCGM_FI_DEV_GPU_UTIL lies. Real metric: tensor active.</div>
+          <div class="diag-cell"><code>DCGM_FI_PROF_PIPE_TENSOR_ACTIVE</code>. If &lt; 30% during compute, memory-bound or kernel-launch-bound.</div>
+        </div>
+        <div class="diag-row">
+          <div class="diag-cell">First inference is slow; subsequent fast</div>
+          <div class="diag-cell">Cold model load, JIT compilation, cuBLAS heuristics. Normal but worth a warmup.</div>
+          <div class="diag-cell">Add a startup warmup loop that runs a dummy inference before serving readiness=200.</div>
+        </div>
+        <div class="diag-row">
+          <div class="diag-cell">Pod stuck Pending, no scheduling</div>
+          <div class="diag-cell">No node with the resources, taints not tolerated, missing GPU device plugin.</div>
+          <div class="diag-cell"><code>kubectl describe pod | tail -20</code> — scheduler events explain.</div>
+        </div>
+        <div class="diag-row">
+          <div class="diag-cell">"It worked fine last week"</div>
+          <div class="diag-cell">A dep update changed memory usage, or traffic crossed a step-function (cache eviction, KV cache full).</div>
+          <div class="diag-cell">Diff metrics across the period. <code>container_memory_working_set_bytes</code> trend, request rate.</div>
+        </div>
+        <div class="diag-row">
+          <div class="diag-cell">Slow data loading; GPU idle waiting</div>
+          <div class="diag-cell">Dataloader workers blocked on I/O. shm too small. Storage class too slow.</div>
+          <div class="diag-cell">Profile dataloader; check <code>/dev/shm</code> size; benchmark FS read throughput.</div>
+        </div>
+        <div class="diag-row">
+          <div class="diag-cell">Throughput drops at high concurrency</div>
+          <div class="diag-cell">Connection pool exhausted; conntrack full; service-mesh sidecar saturated.</div>
+          <div class="diag-cell">Check pool metrics; <code>node_nf_conntrack_entries</code> vs limit; Envoy stats.</div>
+        </div>
+        <div class="diag-row">
+          <div class="diag-cell">Mysterious 200ms latency spikes</div>
+          <div class="diag-cell">CPU run-queue latency. Garbage collection. Block I/O fsync.</div>
+          <div class="diag-cell">eBPF: <code>runqlat -P -m</code> and <code>biolatency</code>. Or Pyroscope flame graph.</div>
+        </div>
+        <div class="diag-row">
+          <div class="diag-cell">Container restarts every ~5 minutes</div>
+          <div class="diag-cell">Liveness probe failing intermittently, killing healthy pods.</div>
+          <div class="diag-cell"><code>kubectl get events --sort-by=lastTimestamp</code>. Look for "Liveness probe failed."</div>
+        </div>
+        <div class="diag-row">
+          <div class="diag-cell">Network throughput plateaus far below NIC speed</div>
+          <div class="diag-cell">MTU mismatch, CNI overhead, kube-proxy iptables walking, single TCP flow per CPU.</div>
+          <div class="diag-cell"><code>iperf3</code> pod-to-pod. Compare to host-to-host. If pod is 50% of host, CNI is the bottleneck.</div>
+        </div>
+        <div class="diag-row">
+          <div class="diag-cell">Disk fills mysteriously fast</div>
+          <div class="diag-cell">Container log rotation off, an emptyDir not bounded, image cache not GC'd.</div>
+          <div class="diag-cell"><code>df</code> on the node; <code>du -h /var/lib/containerd/io.containerd.snapshotter.v1.overlayfs/</code></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 14 -->
+<section class="chapter obs-ch" id="ch14">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain obs">PICKER</span>
+      Chapter <span class="num">XIV</span>
+    </div>
+    <h2 class="chapter-title">The picker · <em>what to tune</em> first.</h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>Click through</strong>
+      Walk the tree from symptom to the specific tuning lever. Fix upstream cost before tuning the downstream layer.<br><br>
+      <strong>Calibration</strong>
+      Recommendations for early 2026; refresh when the kernel and cgroup story moves again.
+    </aside>
+    <div class="prose">
+      <p class="lead">A decision tree from "where is my performance pain" to "what specifically to change." Click through.</p>
+
+      <div class="picker">
+        <div class="picker-label">Interactive · Container Performance Picker</div>
+        <div class="picker-title" id="pickerTitle">Where is the pain?</div>
+        <div id="pickerContainer"></div>
+        <button class="picker-reset" id="pickerReset" style="display:none">↺ Reset</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 15 -->
+<section class="chapter obs-ch" id="ch15">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain obs">CHECKLIST</span>
+      Chapter <span class="num">XV</span>
+    </div>
+    <h2 class="chapter-title">The performance <em>checklist.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>Click each item</strong>
+      To mark complete. State is local-only.<br><br>
+      <strong>The rubric</strong>
+      A well-tuned container service should check most of these. A few unchecked is fine; many unchecked = real performance debt.
+    </aside>
+    <div class="prose">
+      <p class="lead">The merged performance checklist. Click each item to mark complete.</p>
+
+      <div class="checklist" id="checklist">
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Layer order: deps before code in Dockerfile</div><div class="check-desc">Touching a source file should not invalidate dep install. Test: <code>touch</code> a file, rebuild. Should take &lt; 10s.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Cache mounts for package managers</div><div class="check-desc"><code>RUN --mount=type=cache,target=...</code> for pip / apt / npm / cargo / go.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Registry-based remote cache in CI</div><div class="check-desc"><code>cache-to: type=registry,ref=...,mode=max</code>. Cold CI runner builds in &lt; 1 min.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Multi-stage build with distroless runtime</div><div class="check-desc">Final image &lt; 200 MB for web services. Build artifacts not shipped to runtime.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Registry mirror per region/cluster</div><div class="check-desc">Image pull &lt; 60s for any image, anywhere. Verify with <code>kubectl describe pod | grep Pull</code>.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Lazy pulling for images &gt; 1 GB</div><div class="check-desc">SOCI or eStargz snapshotter on GPU nodes. Cold start time independent of image size.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">cgroup v2 with MemoryQoS enabled</div><div class="check-desc"><code>memoryThrottlingFactor: 0.9</code>. Kernel 5.9+. Smooth degradation instead of OOM.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Memory limits set with 1.5–2× headroom over peak</div><div class="check-desc">Monitor <code>container_memory_working_set_bytes</code>. Limits should be peak × 1.5–2×.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">No CPU limits on latency-critical services</div><div class="check-desc">Or: limits set high enough that <code>nr_throttled / nr_periods</code> &lt; 1%.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">CPU pinning for low-latency workloads</div><div class="check-desc"><code>cpuManagerPolicy: static</code> + Guaranteed QoS + integer CPU requests.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Topology manager set to single-numa-node</div><div class="check-desc">Keeps CPUs, memory, GPUs in the same NUMA zone. Required for HFT-class latency.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">emptyDir for scratch writes; not container FS</div><div class="check-desc">Especially for ML: <code>/tmp</code>, model cache, dataloader spill. 3–10× faster than overlay.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">/dev/shm sized for ML workloads (16 GB+)</div><div class="check-desc"><code>emptyDir: { medium: Memory, sizeLimit: 16Gi }</code> for PyTorch DataLoader and Triton.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Cilium / IPVS instead of iptables kube-proxy</div><div class="check-desc">For clusters &gt; 1000 pods. eBPF L4 LB removes iptables bottleneck.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Jumbo frames where fabric supports it</div><div class="check-desc">MTU 9000. ~30% throughput improvement on intra-cluster TCP.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">DCGM exporter installed; tensor active monitored</div><div class="check-desc">Watch <code>DCGM_FI_PROF_PIPE_TENSOR_ACTIVE</code>, not <code>GPU_UTIL</code>. Real signal of GPU work.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">App emits Prometheus /metrics with RED+USE+domain</div><div class="check-desc">Request rate, error rate, duration. Plus saturation gauges. Plus domain-specific KPIs.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">OTel Collector (DaemonSet + Gateway) deployed</div><div class="check-desc">Traces flowing to Tempo / Jaeger. K8s metadata enrichment in agent.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Tail sampling configured (errors + slow + 1%)</div><div class="check-desc">Keep every error trace. Keep every &gt;500ms trace. Sample 1% of healthy.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Pyroscope continuous profiling running</div><div class="check-desc">1% CPU overhead. Flame graphs by service and time. Enables "which function got slower" diagnosis.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Recording rules for common dashboard queries</div><div class="check-desc">Pre-compute aggregated metrics so dashboards render in &lt; 1s instead of timing out.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Cold-start under 30s for autoscaling-critical services</div><div class="check-desc">From <code>kubectl apply</code> to readiness=200 in &lt; 30s. Otherwise autoscaler reactions are too slow.</div></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="colophon">
+  <div class="colophon-mark"><em>The Cluster</em> Quarterly</div>
+  <p>Field Manual · Volume I · Issue 06 · MMXXVI</p>
+</footer>
+
+<script>
+// ============ Cold start timeline ============
+const tlData = {
+  web: {
+    summary: '<strong>Small web service · 180 MB</strong> The app itself is faster than the pull. Cold start dominated by network. Lazy pulling: not worth it; image is small enough.',
+    segments: [
+      { type: 'pull', pct: 55, label: 'Pull 12s' },
+      { type: 'extract', pct: 15, label: 'Extract 3s' },
+      { type: 'create', pct: 3, label: '<1s' },
+      { type: 'start', pct: 15, label: 'Start 3s' },
+      { type: 'warmup', pct: 12, label: 'Warm 2s' }
+    ],
+    total: '~22 s'
+  },
+  cuda: {
+    summary: '<strong>CUDA inference · 8.4 GB</strong> The pull eats 60% of the budget. App also takes time (CUDA init, kernel JIT, first inference). Two big levers: lazy pull and warmup-on-startup.',
+    segments: [
+      { type: 'pull', pct: 60, label: 'Pull 90s' },
+      { type: 'extract', pct: 12, label: 'Extract 18s' },
+      { type: 'create', pct: 1, label: '<1s' },
+      { type: 'start', pct: 8, label: 'Start 12s' },
+      { type: 'warmup', pct: 19, label: 'Warm 28s' }
+    ],
+    total: '~2.5 min'
+  },
+  nim: {
+    summary: '<strong>NIM (Llama 70B) · 47 GB</strong> Pull dominates entirely. App-side: model load + TRT-LLM engine compile/load on first start. With no engine cache, "warmup" can be many minutes.',
+    segments: [
+      { type: 'pull', pct: 70, label: 'Pull 6 min' },
+      { type: 'extract', pct: 10, label: 'Extract 50s' },
+      { type: 'create', pct: 0.5, label: '<1s' },
+      { type: 'start', pct: 5, label: 'Start 25s' },
+      { type: 'warmup', pct: 14.5, label: 'Warm 80s' }
+    ],
+    total: '~9 min'
+  },
+  lazy: {
+    summary: '<strong>Same NIM · with lazy pull (SOCI)</strong> Pull becomes near-instant (only index + small bootstrap). Warmup grows slightly because some files fetch on first access — but total drops from 9 min to ~3 min. The biggest single optimization for large images.',
+    segments: [
+      { type: 'pull', pct: 8, label: 'Pull 15s' },
+      { type: 'extract', pct: 3, label: 'Extract 6s' },
+      { type: 'create', pct: 2, label: '<1s' },
+      { type: 'start', pct: 12, label: 'Start 25s' },
+      { type: 'warmup', pct: 75, label: 'Warm 130s (lazy fetches included)' }
+    ],
+    total: '~3 min'
+  }
+};
+
+const tlTabs = document.querySelectorAll('.timeline-tab');
+const tlBody = document.getElementById('tlBody');
+const tlSummary = document.getElementById('tlSummary');
+
+function showTl(key) {
+  tlTabs.forEach(t => t.classList.toggle('active', t.dataset.tl === key));
+  const d = tlData[key];
+  const bar = d.segments.map(s => `<div class="tl-seg ${s.type}" style="flex: ${s.pct}" title="${s.label}">${s.label}</div>`).join('');
+  tlBody.innerHTML = `
+    <div class="timeline-bar-wrap">
+      <div class="timeline-bar-label">Total cold start</div>
+      <div class="timeline-bar-meta">Time from kubectl apply to readiness=200 — <strong>${d.total}</strong></div>
+      <div class="timeline-bar">${bar}</div>
+      <div class="timeline-legend">
+        <div class="legend-item"><span class="legend-swatch" style="background:#c95437"></span> Pull (network)</div>
+        <div class="legend-item"><span class="legend-swatch" style="background:#d49a3a"></span> Extract (CPU/IO)</div>
+        <div class="legend-item"><span class="legend-swatch" style="background:#5d8a5d"></span> Create (kernel)</div>
+        <div class="legend-item"><span class="legend-swatch" style="background:#4a6a8a"></span> Start (app)</div>
+        <div class="legend-item"><span class="legend-swatch" style="background:#9d6b9e"></span> Warmup (app)</div>
+      </div>
+    </div>`;
+  tlSummary.innerHTML = d.summary;
+}
+tlTabs.forEach(t => t.addEventListener('click', () => showTl(t.dataset.tl)));
+showTl('web');
+
+// ============ Memory tabs ============
+const memData = {
+  max: {
+    title: 'memory.max — the hard limit',
+    body: [
+      'The cgroup\'s hard memory limit. If the cgroup\'s usage exceeds this, the kernel OOM-kills a process. No grace; no gradual reclaim.',
+      'Set by K8s from <code>resources.limits.memory</code>.',
+      'The cliff: a container at 100 MB under the limit is fine; at 1 KB over, it gets killed within milliseconds.'
+    ],
+    keys: [
+      { name: '--memory=512m', val: 'Docker flag' },
+      { name: 'limits.memory: 512Mi', val: 'K8s pod spec' },
+      { name: 'memory.max', val: 'cgroup v2 file' },
+      { name: 'on-exceed', val: 'OOM kill, no warning' }
+    ]
+  },
+  high: {
+    title: 'memory.high — the soft throttle threshold',
+    body: [
+      'When usage exceeds memory.high, the kernel slows allocations and triggers proactive reclaim. Doesn\'t kill; just makes the cgroup feel pressure.',
+      'Set by K8s MemoryQoS feature (v1.36 alpha) at <code>memoryThrottlingFactor × memory.max</code> (default 0.9).',
+      'Requires kernel 5.9+ — earlier kernels have a livelock bug where memory.high causes indefinite hangs.'
+    ],
+    keys: [
+      { name: 'memoryThrottlingFactor', val: '0.9 → high = 90% of max' },
+      { name: 'memory.high', val: 'cgroup v2 file' },
+      { name: 'on-exceed', val: 'Throttled allocations + reclaim' },
+      { name: 'kernel requirement', val: '5.9+ (livelock fix)' }
+    ]
+  },
+  low: {
+    title: 'memory.low — soft protection from reclaim',
+    body: [
+      'Memory below memory.low is preferentially preserved during system-wide reclaim. Other cgroups\' memory gets reclaimed first.',
+      'Set by K8s MemoryQoS (TieredReservation) for Burstable pods.',
+      'Useful when you want a service\'s page cache to survive even under node pressure.'
+    ],
+    keys: [
+      { name: 'memoryReservationPolicy', val: 'TieredReservation' },
+      { name: 'set on', val: 'Burstable QoS pods' },
+      { name: 'memory.low', val: 'cgroup v2 file' },
+      { name: 'on-pressure', val: 'Other cgroups reclaimed first' }
+    ]
+  },
+  min: {
+    title: 'memory.min — hard reservation',
+    body: [
+      'Memory below memory.min is never reclaimed under any circumstances. Strong protection.',
+      'Set for Guaranteed QoS pods (with TieredReservation policy).',
+      'cgroup v2 requires parent cgroups\' memory.min to be ≥ sum of children\'s. K8s maintains this invariant automatically.'
+    ],
+    keys: [
+      { name: 'requires', val: 'Guaranteed QoS pod' },
+      { name: 'set on', val: 'pod-level cgroup' },
+      { name: 'memory.min', val: 'cgroup v2 file' },
+      { name: 'on-pressure', val: 'Never reclaimed (hard protect)' }
+    ]
+  },
+  pressure: {
+    title: 'memory.pressure — Pressure Stall Information (PSI)',
+    body: [
+      'The OS\'s self-report of how much time tasks spent waiting for memory. Three windows: avg10, avg60, avg300 (seconds).',
+      '<code>some</code> = at least one task is stalled. <code>full</code> = all tasks in cgroup are stalled.',
+      'Watch <code>full avg10 &gt; 5%</code> — sustained means real degradation. <code>full avg10 &gt; 10%</code> = severe; the cgroup is constantly waiting on memory.'
+    ],
+    keys: [
+      { name: 'avg10', val: 'avg over last 10 seconds' },
+      { name: 'some.avg10', val: 'mild pressure if &gt; 1%' },
+      { name: 'full.avg10', val: 'severe if &gt; 5%' },
+      { name: 'use to', val: 'Auto-scale, alert, decide eviction' }
+    ]
+  }
+};
+
+const memTabs = document.querySelectorAll('.rp-tab');
+const memBody = document.getElementById('memBody');
+
+function showMem(key) {
+  memTabs.forEach(t => t.classList.toggle('active', t.dataset.mem === key));
+  const d = memData[key];
+  memBody.innerHTML = `
+    <h4>${d.title}</h4>
+    ${d.body.map(b => `<p>${b}</p>`).join('')}
+    ${d.keys.map(k => `<div class="rp-key"><div class="rp-key-name">${k.name}</div><div class="rp-key-val">${k.val}</div></div>`).join('')}`;
+}
+memTabs.forEach(t => t.addEventListener('click', () => showMem(t.dataset.mem)));
+showMem('max');
+
+// ============ Picker ============
+const pickerTree = {
+  start: {
+    q: 'Where is the pain?',
+    n: 'Q0',
+    choices: [
+      { label: 'Builds are slow (>3 min)', next: 'build' },
+      { label: 'Image is too large (>1 GB and growing)', next: 'image_size' },
+      { label: 'Pod startup is slow (>30s)', next: 'startup_q1' },
+      { label: 'Runtime: latency / throughput problems', next: 'runtime_q1' },
+      { label: 'GPU is underutilized', next: 'gpu_q1' },
+      { label: 'I can\'t tell what\'s wrong — need visibility', next: 'obs' }
+    ]
+  },
+  build: {
+    verdict: true,
+    title: '→ Fix build caching',
+    body: [
+      'Reorder layers: deps before code (Chapter II). Touch a source file; rebuild should take &lt; 10s.',
+      'Add cache mounts: <code>RUN --mount=type=cache,target=/root/.cache/pip ...</code>',
+      'Add registry-based remote cache to CI: <code>--cache-to type=registry,ref=...,mode=max</code>',
+      'Use docker buildx parallel multi-stage when stages are independent.',
+      'Verify: cold CI build &lt; 1 min; warm build &lt; 10s.'
+    ]
+  },
+  image_size: {
+    verdict: true,
+    title: '→ Shrink the image',
+    body: [
+      'Multi-stage build with distroless or scratch runtime. Final image &lt; 200 MB for non-GPU.',
+      'For CUDA: stay on <code>cuda:X.Y-cudnn-runtime-...</code> instead of <code>-devel-...</code>. ~3 GB difference.',
+      '<code>.dockerignore</code> ruthlessly — exclude .git, tests, node_modules, target/.',
+      'Use <code>docker history --no-trunc &lt;image&gt;</code> to find the layer that adds the most bytes.',
+      'For ML weights: don\'t bake them in. Mount as PVC or fetch on startup.'
+    ]
+  },
+  startup_q1: {
+    q: 'What\'s the dominant phase?',
+    n: 'Q1',
+    choices: [
+      { label: 'Image pull (kubectl describe shows long "Pulling")', next: 'startup_pull' },
+      { label: 'App startup (model load, JIT, lib imports)', next: 'startup_app' },
+      { label: 'Both are big', next: 'startup_both' }
+    ]
+  },
+  startup_pull: {
+    verdict: true,
+    title: '→ Speed up image distribution',
+    body: [
+      'Registry mirror per region/cluster — pull-through cache. First pod pulls from upstream; rest hit the local mirror.',
+      'For images > 1 GB: deploy SOCI (AWS-heavy fleets) or eStargz snapshotter. Cold start independent of image size.',
+      'Reduce image size first (above). Smaller image, faster pull, less complexity.',
+      'Verify: kubectl describe pod | grep Pulling — time from "Pulling" to "Pulled" should be &lt; 30s.'
+    ]
+  },
+  startup_app: {
+    verdict: true,
+    title: '→ Optimize application warmup',
+    body: [
+      'Profile startup time: stamp time at each phase (imports, model load, GPU transfer, first inference).',
+      'For ML: mount engine cache (TRT-LLM) as PVC. First start compiles; subsequent restarts use cache (30 min → 2 min).',
+      'Run warmup loop BEFORE setting readinessProbe to passing. Add fake inference during startup probe.',
+      'Set <code>startupProbe.failureThreshold: 180</code> with period 10s = 30 min for big models to load.',
+      'For Python: cache .pyc files in image (PYTHONDONTWRITEBYTECODE=0 at build time, then ON at runtime).'
+    ]
+  },
+  startup_both: {
+    verdict: true,
+    title: '→ Address pull + warmup together',
+    body: [
+      'Start with image distribution: registry mirror + lazy pulling. Solves the pull half.',
+      'For app startup: profile and add explicit warmup phase. Cache TRT-LLM engines on PVC.',
+      'For autoscaling: keep N warm replicas at minimum (HPA <code>minReplicas: 2-3</code>) so cold starts don\'t affect SLO.',
+      'Consider pre-pulling DaemonSet that warms node-local cache for "expected" images.'
+    ]
+  },
+  runtime_q1: {
+    q: 'What kind of runtime problem?',
+    n: 'Q1',
+    choices: [
+      { label: 'P99 latency spikes (tail latency)', next: 'rt_tail' },
+      { label: 'Container OOMKilled', next: 'rt_oom' },
+      { label: 'Throughput plateau (can\'t scale up)', next: 'rt_throughput' },
+      { label: 'Network: slow inter-pod or external calls', next: 'rt_net' }
+    ]
+  },
+  rt_tail: {
+    verdict: true,
+    title: '→ Fix the throttling and stalls',
+    body: [
+      'First suspect: CPU throttling. Check <code>rate(container_cpu_cfs_throttled_periods[5m]) / rate(container_cpu_cfs_periods[5m])</code> — if &gt; 1%, that\'s the cause.',
+      'Fix: raise CPU limit OR remove CPU limit (for latency-critical services in trusted clusters).',
+      'Second suspect: garbage collection or JIT pauses. Use Pyroscope continuous profiling.',
+      'Third suspect: I/O stalls (fsync, page cache flushes). eBPF: <code>biolatency</code> and <code>runqlat</code>.',
+      'Fourth suspect: lock contention. Profile with Pyroscope; look for time-on-mutex.'
+    ]
+  },
+  rt_oom: {
+    verdict: true,
+    title: '→ Memory tuning',
+    body: [
+      'Check the kill reason: <code>cat /sys/fs/cgroup/.../memory.events</code> — oom_kill counter.',
+      'Inspect composition: <code>memory.stat</code> — is it anon (app memory) or file (page cache)?',
+      'Anon-heavy: increase <code>limits.memory</code>. Set to peak × 1.5–2× from observed working set.',
+      'File-heavy (page cache): increase limit, or app should use O_DIRECT / madvise(MADV_DONTNEED) on cache-cold data.',
+      'Enable MemoryQoS (K8s 1.36+): <code>memoryThrottlingFactor: 0.9</code> for graceful degradation via memory.high.',
+      'Watch <code>container_memory_working_set_bytes</code> trend in Prometheus; alert on &gt; 80% of limit.'
+    ]
+  },
+  rt_throughput: {
+    verdict: true,
+    title: '→ Find the saturation point',
+    body: [
+      'Generate load with k6 or vegeta; sweep concurrency. Plot throughput vs concurrency.',
+      'If plateau before CPU/GPU saturation: likely a queue or pool exhaustion. Check connection pool, thread pool, semaphores.',
+      'If CPU saturates: check throttling (Chapter VII). If real cap, scale out — vertical limit reached.',
+      'If GPU is 100% GPU_UTIL but throughput plateaus: check <code>DCGM_FI_PROF_PIPE_TENSOR_ACTIVE</code>. Low = memory-bound; can\'t fix with more concurrency.',
+      'For multi-pod: check <code>node_nf_conntrack_entries</code> vs limit. If 80%+, conntrack is full.'
+    ]
+  },
+  rt_net: {
+    verdict: true,
+    title: '→ Network tuning',
+    body: [
+      'Baseline: <code>iperf3</code> pod-to-pod vs host-to-host. If pod &lt; 50% of host, CNI is overhead.',
+      'If iptables-based kube-proxy + many services: migrate to Cilium (eBPF) or IPVS-mode kube-proxy.',
+      'If fabric supports jumbo frames: set CNI MTU to 9000 (verify with <code>ping -M do -s 8972</code>).',
+      'Check conntrack: <code>cat /proc/sys/net/netfilter/nf_conntrack_count</code> vs <code>nf_conntrack_max</code>. Raise if 80%+.',
+      'For DNS-heavy services: increase ndots threshold or use NodeLocal DNSCache.',
+      'For service-mesh sidecar latency: consider ambient mesh (Istio Ambient, Cilium Service Mesh).'
+    ]
+  },
+  gpu_q1: {
+    q: 'What does the GPU metric say?',
+    n: 'Q1',
+    choices: [
+      { label: 'GPU_UTIL shows high but throughput is low', next: 'gpu_lie' },
+      { label: 'GPU_UTIL is low (< 50%)', next: 'gpu_idle' },
+      { label: 'I don\'t have DCGM metrics yet', next: 'gpu_setup' }
+    ]
+  },
+  gpu_lie: {
+    verdict: true,
+    title: '→ Look past GPU_UTIL',
+    body: [
+      'GPU_UTIL is "% of time at least one kernel was running" — it lies. Check tensor core activity instead.',
+      'Run <code>DCGM_FI_PROF_PIPE_TENSOR_ACTIVE</code>. If &lt; 30% during compute: you\'re memory-bound or kernel-launch-bound.',
+      'For LLM decode: low tensor active is EXPECTED. Decode is memory-bandwidth-bound. Tune batch size / use FP8 KV cache.',
+      'For training: low tensor active = profile the step. Likely a dataloader stall, an unfused kernel, or AllReduce blocking compute.',
+      'Cross-reference Issue 03 Chapter IV for the full performance triage.'
+    ]
+  },
+  gpu_idle: {
+    verdict: true,
+    title: '→ Increase load or share the GPU',
+    body: [
+      'If single workload: increase batch size, enable continuous batching, or check for upstream bottleneck (dataloader, network, queue).',
+      'If many small workloads: deploy MIG (H100/A100). Split one GPU into up to 7 partitions for isolated tenants.',
+      'Alternative: time-slicing via NVIDIA GPU Operator (<code>timeSlicing</code> config). Less isolation; higher overall utilization.',
+      'For dev/test: time-slicing is great. For production: MIG (true isolation, no noisy-neighbor risk).'
+    ]
+  },
+  gpu_setup: {
+    verdict: true,
+    title: '→ Install DCGM exporter first',
+    body: [
+      'Easiest path: NVIDIA GPU Operator (installs everything including DCGM exporter).',
+      'Or just: <code>helm install dcgm-exporter gpu-helm-charts/dcgm-exporter</code> with serviceMonitor enabled.',
+      'Verify: <code>curl localhost:9400/metrics | grep DCGM_FI_PROF</code>. You should see SM_ACTIVE, TENSOR_ACTIVE, DRAM_ACTIVE.',
+      'Add Grafana dashboard (NVIDIA publishes one). Now you can see real GPU work.'
+    ]
+  },
+  obs: {
+    verdict: true,
+    title: '→ Deploy the four signals',
+    body: [
+      '<strong>Metrics</strong>: kube-prometheus-stack + DCGM exporter + your app\'s /metrics (RED + USE + domain).',
+      '<strong>Logs</strong>: Loki or Elastic. Structured JSON. Don\'t index high-cardinality fields.',
+      '<strong>Traces</strong>: OTel Collector (DaemonSet + Gateway) + Tempo or Jaeger. Tail sampling: errors + slow + 1%.',
+      '<strong>Profiles</strong>: Pyroscope, agent-based, ~1% overhead. Continuous (not on-demand).',
+      'Add eBPF tools (BCC, bpftrace) for kernel-level investigation when normal metrics aren\'t enough.',
+      'Without these, every other tuning effort is guesswork.'
+    ]
+  }
+};
+
+let pickerCurrent = 'start';
+const pickerContainer = document.getElementById('pickerContainer');
+const pickerTitle = document.getElementById('pickerTitle');
+const pickerReset = document.getElementById('pickerReset');
+
+function renderPicker() {
+  const node = pickerTree[pickerCurrent];
+  pickerContainer.innerHTML = '';
+  if (node.verdict) {
+    pickerTitle.textContent = '→ Recommendation';
+    const div = document.createElement('div');
+    div.className = 'picker-verdict';
+    div.innerHTML = `<h4>${node.title}</h4>${node.body.map(b => `<p>${b}</p>`).join('')}`;
+    pickerContainer.appendChild(div);
+    pickerReset.style.display = 'inline-block';
+  } else {
+    pickerTitle.textContent = 'Pick a path';
+    const div = document.createElement('div');
+    div.className = 'picker-step';
+    div.innerHTML = `
+      <div class="picker-num">${node.n}</div>
+      <div class="picker-q">${node.q}</div>
+      <div class="picker-choices">
+        ${node.choices.map(c => `<div class="picker-choice" data-next="${c.next}">${c.label}<span class="picker-arrow">→</span></div>`).join('')}
+      </div>`;
+    pickerContainer.appendChild(div);
+    div.querySelectorAll('.picker-choice').forEach(c => {
+      c.addEventListener('click', () => { pickerCurrent = c.dataset.next; renderPicker(); });
+    });
+    pickerReset.style.display = pickerCurrent === 'start' ? 'none' : 'inline-block';
+  }
+}
+pickerReset.addEventListener('click', () => { pickerCurrent = 'start'; renderPicker(); });
+renderPicker();
+
+// ============ Checklist ============
+document.querySelectorAll('.check-item').forEach(el => {
+  el.addEventListener('click', () => {
+    el.classList.toggle('done');
+    const box = el.querySelector('.check-box');
+    box.textContent = el.classList.contains('done') ? '✓' : '';
+  });
+});
+</script>
+</body>
+</html>
