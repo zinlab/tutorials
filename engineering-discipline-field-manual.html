@@ -1,0 +1,2532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Engineering Discipline — Orchestration to Tests</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,600;9..144,800;9..144,900&family=JetBrains+Mono:wght@400;500;700&family=Inter+Tight:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink: #0a0a0a;
+  --paper: #f4f1ea;
+  --paper-dim: #ebe6db;
+  --rust: #b8401f;
+  --rust-dim: #8a3018;
+  --moss: #3d5a3d;
+  --gold: #c9a227;
+  --blue: #1e3a5f;
+  --plum: #6d4070;
+  --grid: rgba(10,10,10,0.06);
+  --rule: rgba(10,10,10,0.85);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: 'Inter Tight', sans-serif;
+  font-size: 16px;
+  line-height: 1.55;
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+.masthead {
+  border-bottom: 3px double var(--rule);
+  padding: 24px 48px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  backdrop-filter: blur(8px);
+  background: rgba(244,241,234,0.95);
+}
+.masthead-left, .masthead-right {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+}
+.masthead-center {
+  font-family: 'Fraunces', serif;
+  font-weight: 900;
+  font-size: 22px;
+  font-style: italic;
+}
+.hero {
+  padding: 80px 48px 60px;
+  border-bottom: 1px solid var(--rule);
+  position: relative;
+  overflow: hidden;
+}
+.hero::before {
+  content: '⟁';
+  position: absolute;
+  font-family: 'Fraunces', serif;
+  font-size: 520px;
+  color: var(--moss);
+  opacity: 0.07;
+  top: -100px;
+  right: 20px;
+  line-height: 1;
+  pointer-events: none;
+}
+.kicker {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.3em;
+  color: var(--moss);
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.kicker::before { content: ''; width: 40px; height: 1px; background: var(--moss); }
+.hero h1 {
+  font-family: 'Fraunces', serif;
+  font-weight: 300;
+  font-size: clamp(48px, 7vw, 96px);
+  line-height: 0.95;
+  letter-spacing: -0.03em;
+  margin-bottom: 24px;
+  max-width: 1100px;
+}
+.hero h1 em { font-style: italic; font-weight: 900; color: var(--moss); }
+.hero-deck {
+  font-family: 'Fraunces', serif;
+  font-size: 22px;
+  font-style: italic;
+  max-width: 760px;
+  opacity: 0.75;
+  border-left: 2px solid var(--moss);
+  padding-left: 20px;
+  margin-top: 32px;
+}
+.toc {
+  padding: 40px 48px;
+  border-bottom: 1px solid var(--rule);
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 48px;
+  background: var(--paper-dim);
+}
+.toc-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  padding-top: 4px;
+}
+.toc-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 8px 32px;
+  list-style: none;
+}
+.toc-list li {
+  border-bottom: 1px dotted var(--rule);
+  padding: 8px 0;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 14px;
+}
+.toc-list a {
+  color: var(--ink);
+  text-decoration: none;
+  flex: 1;
+  font-weight: 500;
+  transition: color 0.2s, transform 0.2s;
+}
+.toc-list a:hover { color: var(--moss); transform: translateX(4px); }
+.toc-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--moss);
+  font-weight: 700;
+}
+.toc-pill {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  padding: 1px 6px;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+}
+.toc-pill.orch { background: var(--moss); color: var(--paper); border-color: var(--moss); }
+.toc-pill.ci { background: var(--rust); color: var(--paper); border-color: var(--rust); }
+.toc-pill.test { background: var(--blue); color: var(--paper); border-color: var(--blue); }
+.toc-pill.py { background: var(--plum); color: var(--paper); border-color: var(--plum); }
+
+section.chapter {
+  padding: 80px 48px;
+  border-bottom: 1px solid var(--rule);
+}
+section.chapter:nth-of-type(even) { background: var(--paper-dim); }
+section.orch-ch { border-left: 6px solid var(--moss); }
+section.ci-ch { border-left: 6px solid var(--rust); }
+section.test-ch { border-left: 6px solid var(--blue); }
+section.py-ch { border-left: 6px solid var(--plum); }
+
+.chapter-head {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 48px;
+  margin-bottom: 56px;
+  align-items: end;
+}
+.chapter-meta {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  border-top: 2px solid var(--ink);
+  padding-top: 8px;
+}
+.chapter-meta .domain {
+  display: inline-block;
+  font-size: 9px;
+  padding: 3px 8px;
+  background: var(--ink);
+  color: var(--paper);
+  margin-bottom: 8px;
+  letter-spacing: 0.2em;
+}
+.chapter-meta .domain.orch { background: var(--moss); }
+.chapter-meta .domain.ci { background: var(--rust); }
+.chapter-meta .domain.test { background: var(--blue); }
+.chapter-meta .domain.py { background: var(--plum); }
+.chapter-meta .num {
+  font-size: 64px;
+  font-family: 'Fraunces', serif;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  line-height: 0.9;
+  color: var(--moss);
+  display: block;
+  margin-top: 8px;
+}
+.chapter-title {
+  font-family: 'Fraunces', serif;
+  font-weight: 400;
+  font-size: clamp(36px, 5vw, 64px);
+  line-height: 1;
+  letter-spacing: -0.025em;
+}
+.chapter-title em { font-style: italic; color: var(--moss); }
+.ci-ch .chapter-title em { color: var(--rust); }
+.test-ch .chapter-title em { color: var(--blue); }
+.py-ch .chapter-title em { color: var(--plum); }
+
+.chapter-body {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 48px;
+}
+.chapter-aside {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  opacity: 0.65;
+}
+.chapter-aside strong {
+  display: block;
+  color: var(--moss);
+  margin-bottom: 6px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+}
+.ci-ch .chapter-aside strong { color: var(--rust); }
+.test-ch .chapter-aside strong { color: var(--blue); }
+.py-ch .chapter-aside strong { color: var(--plum); }
+.prose p {
+  font-size: 17px;
+  margin-bottom: 20px;
+  max-width: 680px;
+}
+.prose p.lead {
+  font-family: 'Fraunces', serif;
+  font-size: 24px;
+  line-height: 1.4;
+  margin-bottom: 32px;
+  max-width: 720px;
+}
+.prose p.lead::first-letter {
+  font-family: 'Fraunces', serif;
+  font-size: 72px;
+  font-weight: 900;
+  float: left;
+  line-height: 0.85;
+  margin: 4px 12px 0 0;
+  color: var(--moss);
+}
+.ci-ch .prose p.lead::first-letter { color: var(--rust); }
+.test-ch .prose p.lead::first-letter { color: var(--blue); }
+.py-ch .prose p.lead::first-letter { color: var(--plum); }
+.prose h3 {
+  font-family: 'Fraunces', serif;
+  font-weight: 600;
+  font-size: 28px;
+  margin: 48px 0 16px;
+  letter-spacing: -0.01em;
+}
+.prose h3::before {
+  content: '§';
+  color: var(--moss);
+  margin-right: 12px;
+  font-weight: 400;
+}
+.ci-ch .prose h3::before { color: var(--rust); }
+.test-ch .prose h3::before { color: var(--blue); }
+.py-ch .prose h3::before { color: var(--plum); }
+code, .mono {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.9em;
+  background: rgba(61,90,61,0.1);
+  padding: 1px 6px;
+  border-radius: 2px;
+  color: var(--moss);
+}
+pre {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  background: var(--ink);
+  color: var(--paper);
+  padding: 24px 28px;
+  overflow-x: auto;
+  margin: 24px 0;
+  position: relative;
+  border-left: 4px solid var(--moss);
+}
+pre::before {
+  content: attr(data-label);
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--gold);
+  opacity: 0.7;
+}
+pre code { background: transparent; color: inherit; padding: 0; font-size: inherit; }
+.kw { color: #d59ad8; }
+.str { color: #b5d590; }
+.cmt { color: #6c6c6c; font-style: italic; }
+.num { color: #f5b85d; }
+.fn { color: #7dc9d9; }
+.err { color: #ff9580; }
+.ok { color: #b5d590; }
+
+.callout {
+  margin: 32px 0;
+  padding: 24px 28px;
+  border-left: 4px solid var(--moss);
+  background: rgba(61,90,61,0.07);
+}
+.callout.warn { border-color: var(--gold); background: rgba(201,162,39,0.08); }
+.callout.ci { border-color: var(--rust); background: rgba(184,64,31,0.06); }
+.callout.test { border-color: var(--blue); background: rgba(30,58,95,0.06); }
+.callout.py { border-color: var(--plum); background: rgba(109,64,112,0.07); }
+.callout-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  color: var(--moss);
+  margin-bottom: 8px;
+  font-weight: 700;
+}
+.callout.warn .callout-label { color: #8a6a10; }
+.callout.ci .callout-label { color: var(--rust); }
+.callout.test .callout-label { color: var(--blue); }
+.callout.py .callout-label { color: var(--plum); }
+.callout p { font-size: 15px; margin: 0; }
+
+/* Comparison */
+.cmp-table {
+  margin: 32px 0;
+  border-top: 2px solid var(--ink);
+  border-bottom: 2px solid var(--ink);
+}
+.cmp-row {
+  display: grid;
+  grid-template-columns: 180px 1fr 1fr 1fr;
+  border-bottom: 1px solid rgba(10,10,10,0.15);
+  padding: 14px 0;
+  gap: 20px;
+  align-items: start;
+}
+.cmp-row.head {
+  border-bottom: 2px solid var(--ink);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  padding: 12px 0;
+  color: var(--moss);
+}
+.cmp-axis {
+  font-family: 'Fraunces', serif;
+  font-size: 16px;
+  font-weight: 700;
+  font-style: italic;
+}
+.cmp-row p { font-size: 13px; line-height: 1.5; margin: 0; max-width: none; }
+
+/* Cards */
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 0;
+  border-top: 2px solid var(--ink);
+  border-left: 2px solid var(--ink);
+  margin: 32px 0;
+}
+.tech-card {
+  border-right: 2px solid var(--ink);
+  border-bottom: 2px solid var(--ink);
+  padding: 22px;
+  background: var(--paper);
+  min-height: 220px;
+  position: relative;
+}
+.tech-card .kind {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--moss);
+  margin-bottom: 8px;
+}
+.tech-card .name {
+  font-family: 'Fraunces', serif;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  margin-bottom: 10px;
+}
+.tech-card .desc { font-size: 13px; line-height: 1.5; margin-bottom: 12px; }
+.tech-card .pill {
+  position: absolute;
+  bottom: 12px;
+  right: 16px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  color: var(--ink);
+  opacity: 0.5;
+  letter-spacing: 0.15em;
+}
+
+/* Tabs panel */
+.panel {
+  background: var(--ink);
+  color: var(--paper);
+  padding: 32px;
+  margin: 32px 0;
+}
+.panel-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  color: var(--gold);
+  margin-bottom: 24px;
+}
+.panel-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.panel-tab {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  padding: 8px 14px;
+  background: transparent;
+  color: var(--paper);
+  border: 1px solid rgba(244,241,234,0.3);
+  cursor: pointer;
+  font-weight: 600;
+}
+.panel-tab.active { background: var(--gold); color: var(--ink); border-color: var(--gold); }
+.panel-body {
+  background: rgba(244,241,234,0.04);
+  padding: 24px;
+  border-left: 3px solid var(--gold);
+}
+.panel-body h4 {
+  font-family: 'Fraunces', serif;
+  font-size: 24px;
+  color: var(--gold);
+  margin-bottom: 6px;
+}
+.panel-body h4 small {
+  display: block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--paper);
+  opacity: 0.6;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  margin-top: 4px;
+}
+.panel-body p {
+  color: var(--paper);
+  opacity: 0.9;
+  font-size: 14px;
+  line-height: 1.6;
+  margin-bottom: 10px;
+}
+.panel-body pre {
+  margin: 12px 0;
+  background: rgba(10,10,10,0.5);
+  font-size: 12px;
+}
+
+/* Test pyramid */
+.pyramid {
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  padding: 28px;
+  margin: 32px 0;
+}
+.pyramid-h {
+  font-family: 'Fraunces', serif;
+  font-size: 26px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.pyramid-sub {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  color: var(--blue);
+  text-transform: uppercase;
+  margin-bottom: 24px;
+}
+.tier {
+  margin: 0 auto 4px;
+  padding: 18px 24px;
+  text-align: center;
+  border-left: 4px solid var(--ink);
+  background: var(--paper-dim);
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 2fr 1fr;
+  gap: 16px;
+  align-items: center;
+}
+.tier.t1 { max-width: 30%; border-left-color: var(--rust); }
+.tier.t2 { max-width: 50%; border-left-color: var(--gold); }
+.tier.t3 { max-width: 70%; border-left-color: var(--blue); }
+.tier.t4 { max-width: 90%; border-left-color: var(--moss); }
+.tier-name {
+  font-family: 'Fraunces', serif;
+  font-weight: 700;
+  font-style: italic;
+  font-size: 18px;
+  text-align: left;
+}
+.tier-desc { font-size: 13px; line-height: 1.4; text-align: left; }
+.tier-stats {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-align: right;
+  letter-spacing: 0.15em;
+}
+.tier-stats b { color: var(--rust); display: block; font-size: 14px; }
+
+/* Pipeline stages */
+.stages {
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  padding: 28px;
+  margin: 32px 0;
+}
+.stage {
+  margin-bottom: 12px;
+  padding: 14px 18px;
+  border-left: 4px solid var(--rust);
+  background: var(--paper-dim);
+  display: grid;
+  grid-template-columns: 60px 1fr;
+  gap: 16px;
+  align-items: start;
+}
+.stage:last-child { margin-bottom: 0; }
+.stage-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--rust);
+  font-weight: 700;
+}
+.stage-h {
+  font-family: 'Fraunces', serif;
+  font-size: 17px;
+  font-weight: 700;
+  margin-bottom: 4px;
+  font-style: italic;
+}
+.stage-desc { font-size: 13px; line-height: 1.5; }
+.stage-desc code { font-size: 0.9em; }
+.stage-time {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--moss);
+  margin-top: 6px;
+  letter-spacing: 0.1em;
+}
+
+/* Picker */
+.picker {
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  padding: 32px;
+  margin: 32px 0;
+}
+.picker-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  color: var(--moss);
+  margin-bottom: 8px;
+}
+.picker-title {
+  font-family: 'Fraunces', serif;
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: 24px;
+  letter-spacing: -0.01em;
+}
+.picker-step {
+  background: var(--ink);
+  color: var(--paper);
+  padding: 24px 28px;
+  margin-bottom: 16px;
+  border-left: 4px solid var(--gold);
+}
+.picker-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--gold);
+  letter-spacing: 0.2em;
+  margin-bottom: 6px;
+}
+.picker-q {
+  font-family: 'Fraunces', serif;
+  font-weight: 700;
+  font-size: 19px;
+  margin-bottom: 16px;
+  color: var(--gold);
+}
+.picker-choices { display: grid; gap: 8px; }
+.picker-choice {
+  background: rgba(244,241,234,0.08);
+  color: var(--paper);
+  border: 1px solid rgba(244,241,234,0.4);
+  padding: 12px 16px;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  transition: all 0.15s;
+}
+.picker-choice:hover { background: var(--gold); color: var(--ink); border-color: var(--gold); }
+.picker-arrow { font-family: 'JetBrains Mono', monospace; font-size: 11px; opacity: 0.6; }
+.picker-verdict {
+  background: var(--moss);
+  color: var(--paper);
+  padding: 24px 28px;
+  border-left: 4px solid var(--gold);
+}
+.picker-verdict h4 {
+  font-family: 'Fraunces', serif;
+  font-size: 22px;
+  margin-bottom: 12px;
+  color: var(--gold);
+}
+.picker-verdict p { font-size: 14px; line-height: 1.6; margin-bottom: 8px; }
+.picker-verdict code { background: rgba(0,0,0,0.4); color: var(--gold); }
+.picker-reset {
+  margin-top: 16px;
+  padding: 8px 16px;
+  background: var(--ink);
+  color: var(--paper);
+  border: 1px solid var(--ink);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  cursor: pointer;
+}
+.picker-reset:hover { background: var(--moss); border-color: var(--moss); }
+
+/* Checklist */
+.checklist {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+  margin: 32px 0;
+}
+.check-item {
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  padding: 18px 20px;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.2s;
+  display: flex;
+  gap: 14px;
+  align-items: start;
+}
+.check-item:hover { background: var(--paper-dim); }
+.check-item.done { background: var(--moss); color: var(--paper); border-color: var(--moss); }
+.check-box {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--ink);
+  flex-shrink: 0;
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 900;
+}
+.check-item.done .check-box {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: var(--ink);
+}
+.check-content { flex: 1; }
+.check-title {
+  font-family: 'Fraunces', serif;
+  font-weight: 700;
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+.check-desc { font-size: 12px; line-height: 1.5; opacity: 0.85; }
+
+/* Reconcile loop SVG */
+.loop-viz {
+  background: var(--ink);
+  color: var(--paper);
+  padding: 32px;
+  margin: 32px 0;
+  text-align: center;
+}
+.loop-h {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.25em;
+  color: var(--gold);
+  text-transform: uppercase;
+  margin-bottom: 20px;
+}
+.loop-svg { max-width: 720px; margin: 0 auto; }
+
+.colophon {
+  padding: 48px;
+  background: var(--ink);
+  color: var(--paper);
+  text-align: center;
+}
+.colophon-mark {
+  font-family: 'Fraunces', serif;
+  font-style: italic;
+  font-weight: 300;
+  font-size: 32px;
+  margin-bottom: 12px;
+}
+.colophon-mark em { color: var(--gold); font-weight: 700; }
+.colophon p {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  opacity: 0.6;
+}
+
+@media (max-width: 900px) {
+  .chapter-head, .chapter-body, .toc { grid-template-columns: 1fr; gap: 16px; }
+  .masthead { padding: 16px 20px; flex-wrap: wrap; gap: 8px; }
+  .hero, section.chapter { padding: 48px 20px; }
+  .cmp-row { grid-template-columns: 1fr; }
+  .tier { max-width: 100% !important; grid-template-columns: 1fr; text-align: left; }
+  .tier-stats, .tier-desc { text-align: left; }
+  .stage { grid-template-columns: 1fr; }
+  .hero::before { font-size: 240px; }
+}
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="masthead-left">Vol. I · Issue 08 · MMXXVI</div>
+  <div class="masthead-center">The Cluster Quarterly</div>
+  <div class="masthead-right">Engineering Discipline</div>
+</header>
+
+<section class="hero">
+  <div class="kicker">A Systematic Field Manual · Companion to Issues 01–07</div>
+  <h1>Engineering <em>discipline</em><br>— from <em>orchestration</em><br>to test <em>harnesses.</em></h1>
+  <p class="hero-deck">Issues 01–07 cover what runs in production: the cluster, the collectives, the algorithms, the containers. This issue covers <em>how</em> it gets there: the workflow engines that orchestrate jobs, the GitOps machinery that promotes them, the Helm charts and Operators that deploy them, the test harnesses that catch regressions, and the Python toolchain that ties it all together. The discipline that converts code into a production change without paging anyone at 3 AM.</p>
+</section>
+
+<nav class="toc">
+  <div class="toc-label">Contents</div>
+  <ol class="toc-list">
+    <li><span class="toc-num">I.</span> <a href="#ch1">The Engineering Loop · Code → Cluster</a> <span class="toc-pill orch">map</span></li>
+    <li><span class="toc-num">II.</span> <a href="#ch2">Workflow Engines · Argo, Kubeflow, Airflow</a> <span class="toc-pill orch">orch</span></li>
+    <li><span class="toc-num">III.</span> <a href="#ch3">CI/CD · GitHub Actions, GitLab, Buildkite</a> <span class="toc-pill ci">ci/cd</span></li>
+    <li><span class="toc-num">IV.</span> <a href="#ch4">GitOps · Argo CD &amp; Flux</a> <span class="toc-pill ci">ci/cd</span></li>
+    <li><span class="toc-num">V.</span> <a href="#ch5">Helm · Charts, Values, Releases</a> <span class="toc-pill ci">ci/cd</span></li>
+    <li><span class="toc-num">VI.</span> <a href="#ch6">Operators · CRDs &amp; the Reconcile Loop</a> <span class="toc-pill ci">ci/cd</span></li>
+    <li><span class="toc-num">VII.</span> <a href="#ch7">Helm vs Operator · The Decision</a> <span class="toc-pill ci">ci/cd</span></li>
+    <li><span class="toc-num">VIII.</span> <a href="#ch8">The Test Pyramid · Unit → E2E</a> <span class="toc-pill test">test</span></li>
+    <li><span class="toc-num">IX.</span> <a href="#ch9">Unit Testing · pytest, Fakes, Property Tests</a> <span class="toc-pill test">test</span></li>
+    <li><span class="toc-num">X.</span> <a href="#ch10">Integration Testing · testcontainers, envtest</a> <span class="toc-pill test">test</span></li>
+    <li><span class="toc-num">XI.</span> <a href="#ch11">E2E &amp; ML Eval Harnesses</a> <span class="toc-pill test">test</span></li>
+    <li><span class="toc-num">XII.</span> <a href="#ch12">Python Tooling · uv, Ruff, mypy</a> <span class="toc-pill py">python</span></li>
+    <li><span class="toc-num">XIII.</span> <a href="#ch13">Python Services · FastAPI, Pydantic, Async</a> <span class="toc-pill py">python</span></li>
+    <li><span class="toc-num">XIV.</span> <a href="#ch14">The Picker · Workflow by Workload</a> <span class="toc-pill py">picker</span></li>
+    <li><span class="toc-num">XV.</span> <a href="#ch15">Engineering Discipline Checklist</a> <span class="toc-pill py">check</span></li>
+  </ol>
+</nav>
+
+<!-- CHAPTER 1 -->
+<section class="chapter orch-ch" id="ch1">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain orch">MAP</span>
+      Chapter <span class="num">I</span>
+    </div>
+    <h2 class="chapter-title">The engineering loop · <em>code → cluster.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>The premise</strong>
+      Five surfaces of engineering discipline. Each one is independently necessary; together they form the loop that converts a Git commit into a production change without a human in the path.<br><br>
+      <strong>The rule</strong>
+      Automate the boring parts. Test the dangerous parts. Make the manual parts impossible.
+    </aside>
+    <div class="prose">
+      <p class="lead">There are five surfaces of engineering discipline that determine whether a team ships safely at scale: orchestration (how work runs), CI/CD (how it gets built and verified), GitOps and deployment (how it reaches the cluster), testing (how regressions get caught), and developer tooling (the IDE-to-CI loop that holds everything together). Each is independently necessary; all five must work for production velocity to be safe.</p>
+
+      <h3>The five surfaces, in order of feedback latency</h3>
+      <p><strong>Developer tooling</strong> (sub-second feedback). Linter as-you-type, type checker on save, format on save. The fastest feedback loop. If broken, every other surface gets worse because bad code reaches CI.</p>
+      <p><strong>Local tests</strong> (seconds). <code>uv run pytest</code> in the dev loop. Fast tests run on every save; slow tests run on demand. Should catch ~80% of regressions before push.</p>
+      <p><strong>CI/CD</strong> (minutes). Lint, type-check, unit tests, build image, integration tests, security scan, sign. Gates everything else. Should run in under 10 minutes for normal-sized services.</p>
+      <p><strong>GitOps deployment</strong> (minutes to hours). Argo CD or Flux reconciles a Git repo to cluster state. The cluster's state is whatever the repo says. Promotion is a PR.</p>
+      <p><strong>Orchestration runtime</strong> (hours to days). Argo Workflows, Kubeflow Pipelines, Airflow run the actual work — ML training, batch jobs, periodic ETL. Long-lived; observable; resumable.</p>
+
+      <h3>The order of operations</h3>
+      <p>The five surfaces aren't independent. They layer:</p>
+      <ol style="margin: 16px 0 24px 32px; line-height: 1.8;">
+        <li><strong>Developer tooling first.</strong> Without fast local feedback, every subsequent surface is slower.</li>
+        <li><strong>Tests second.</strong> Without tests, CI is just a build step. Without integration tests, deployments are guesses.</li>
+        <li><strong>CI/CD third.</strong> Once you have tests, CI gates them. Once you have artifacts, CI signs them.</li>
+        <li><strong>GitOps fourth.</strong> Once artifacts are signed and stored, GitOps moves them to clusters.</li>
+        <li><strong>Orchestration fifth.</strong> Once services are deployed, orchestrators run the actual work that consumes them.</li>
+      </ol>
+
+      <div class="callout">
+        <div class="callout-label">The four-second test</div>
+        <p>The single most useful question to ask about engineering discipline: <em>how fast does feedback reach the developer when they make a mistake?</em> If a typo takes 4 seconds (linter in editor): excellent. 40 seconds (local test): good. 4 minutes (CI): tolerable. 40 minutes (failed deploy): broken. 4 hours (incident in prod): broken. The remaining 14 chapters are the controls that keep your feedback latency in the low range.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 2 -->
+<section class="chapter orch-ch" id="ch2">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain orch">ORCH</span>
+      Chapter <span class="num">II</span>
+    </div>
+    <h2 class="chapter-title">Workflow engines · <em>Argo</em>, Kubeflow, Airflow.</h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>The three contenders</strong>
+      Argo Workflows (K8s-native, YAML DAGs), Kubeflow Pipelines (Python, ML-focused, K8s-native), Airflow (Python, broad ecosystem).<br><br>
+      <strong>The shift</strong>
+      Pure Airflow is fading for ML/training workloads. Argo or Kubeflow dominate where workloads are GPU-heavy and K8s-native.
+    </aside>
+    <div class="prose">
+      <p class="lead">Workflow engines orchestrate long-running, multi-step jobs: ML training, data pipelines, batch ETL, model evaluation, CI for non-trivial builds. The 2026 choice is between Argo Workflows (general-purpose, K8s-native), Kubeflow Pipelines (ML-focused, built on Argo), and Apache Airflow (Python-centric, broad ecosystem). Each has a clear best-fit profile.</p>
+
+      <div class="cmp-table">
+        <div class="cmp-row head">
+          <div>Axis</div>
+          <div>Argo Workflows</div>
+          <div>Kubeflow Pipelines</div>
+          <div>Apache Airflow</div>
+        </div>
+        <div class="cmp-row">
+          <div class="cmp-axis">Native runtime</div>
+          <p>K8s-native. Each step is a pod. Controller is a CRD.</p>
+          <p>K8s-native. Built on top of Argo Workflows under the hood; adds ML abstractions.</p>
+          <p>Worker-pool-based. Can run on K8s (KubernetesExecutor) but isn't K8s-native by design.</p>
+        </div>
+        <div class="cmp-row">
+          <div class="cmp-axis">Pipeline DSL</div>
+          <p>YAML. <code>Workflow</code> CRD with <code>templates</code>. Verbose but explicit.</p>
+          <p>Python SDK (KFP). Compiles to Argo YAML. Best of both worlds.</p>
+          <p>Python. <code>@dag</code> and <code>@task</code> decorators. Most developer-friendly.</p>
+        </div>
+        <div class="cmp-row">
+          <div class="cmp-axis">Scheduling model</div>
+          <p>Event-triggered or cron. K8s scheduler runs each step pod.</p>
+          <p>Same as Argo (it IS Argo). Plus on-demand pipeline runs from UI.</p>
+          <p>Static scheduler. Worker pools poll for tasks. Fixed concurrency.</p>
+        </div>
+        <div class="cmp-row">
+          <div class="cmp-axis">Parallelism ceiling</div>
+          <p>Bounded by K8s control plane (thousands of pods).</p>
+          <p>Same as Argo. Scales with cluster.</p>
+          <p>Bounded by worker pool size. Painful at high concurrency.</p>
+        </div>
+        <div class="cmp-row">
+          <div class="cmp-axis">ML features</div>
+          <p>None native. Pair with MLflow, ZenML, or build your own.</p>
+          <p>Built-in: KServe (serving), Katib (HPO), model registry, experiments.</p>
+          <p>Operators for SageMaker, Vertex, Databricks. ML via plugins, not native.</p>
+        </div>
+        <div class="cmp-row">
+          <div class="cmp-axis">Best for</div>
+          <p>General DAGs on K8s. CI on K8s. ETL on K8s. Custom multi-step automation.</p>
+          <p>End-to-end ML lifecycle on K8s. Training + serving + experimentation as one platform.</p>
+          <p>Data engineering teams. Existing Airflow shops. Workflows touching many SaaS systems.</p>
+        </div>
+      </div>
+
+      <h3>Argo Workflows — the K8s-native DAG engine</h3>
+      <p>Argo is the workhorse. Each step is a pod; the workflow controller is a CRD. Argo Workflows is built on top of Kubernetes, and each task is run as a separate Kubernetes pod. Many reputable organizations use Argo Workflows for ML, ETL, Data Processing, and CI/CD Pipelines. At scale, Argo's throughput is essentially bounded by your Kubernetes control plane, API-server quotas, and cluster autoscaling behavior rather than by an external worker pool.</p>
+
+      <pre data-label="Argo Workflow — fan-out training run"><span class="kw">apiVersion</span>: argoproj.io/v1alpha1
+<span class="kw">kind</span>: Workflow
+<span class="kw">metadata</span>:
+  <span class="fn">generateName</span>: train-sweep-
+<span class="kw">spec</span>:
+  <span class="fn">entrypoint</span>: sweep
+  <span class="fn">arguments</span>:
+    parameters:
+      - { name: lrs, value: <span class="str">"[0.001, 0.003, 0.0003]"</span> }
+  <span class="fn">templates</span>:
+    - <span class="fn">name</span>: sweep
+      steps:
+        - - <span class="fn">name</span>: prep
+            template: prep-data
+        - - <span class="fn">name</span>: train
+            template: train-one
+            arguments:
+              parameters: [{ name: lr, value: <span class="str">"{{item}}"</span> }]
+            withParam: <span class="str">"{{workflow.parameters.lrs}}"</span>     <span class="cmt"># fan-out</span>
+        - - <span class="fn">name</span>: pick-best
+            template: select-best
+            arguments:
+              artifacts: [{ name: results, from: <span class="str">"{{steps.train.outputs.artifacts}}"</span> }]
+
+    - <span class="fn">name</span>: train-one
+      inputs:
+        parameters: [{ name: lr }]
+      container:
+        image: ghcr.io/myorg/trainer:v1.2.3@sha256:abc...
+        command: [python, -m, trainer]
+        args: [<span class="str">"--lr={{inputs.parameters.lr}}"</span>]
+        resources:
+          limits: { nvidia.com/gpu: <span class="str">"8"</span>, memory: <span class="num">128</span>Gi }
+      outputs:
+        artifacts:
+          - { name: ckpt, path: /out/ckpt.pt }                  <span class="cmt"># auto-uploaded to S3</span></pre>
+
+      <h3>Kubeflow Pipelines — Argo with ML batteries</h3>
+      <p>Kubeflow is an end-to-end MLOps platform for Kubernetes, while Argo is the workflow engine for Kubernetes. KFP authors pipelines in Python; the compiler emits Argo YAML; the platform adds experiments, runs, comparisons, and integration with KServe (serving) and Katib (HPO).</p>
+
+      <pre data-label="KFP — Python-defined ML pipeline"><span class="kw">from</span> kfp <span class="kw">import</span> dsl
+<span class="kw">from</span> kfp.dsl <span class="kw">import</span> Input, Output, Dataset, Model
+
+<span class="cmt">@dsl.component(base_image=<span class="str">"ghcr.io/myorg/trainer:v1"</span>)</span>
+<span class="kw">def</span> <span class="fn">train</span>(data: Input[Dataset], lr: <span class="kw">float</span>, model: Output[Model]) -&gt; <span class="kw">None</span>:
+    <span class="kw">import</span> torch
+    <span class="cmt"># ... training logic ...</span>
+    torch.save(state, model.path)
+
+<span class="cmt">@dsl.pipeline(name=<span class="str">"sweep"</span>)</span>
+<span class="kw">def</span> <span class="fn">sweep</span>(lrs: <span class="kw">list</span> = [<span class="num">0.001</span>, <span class="num">0.003</span>, <span class="num">0.0003</span>]) -&gt; <span class="kw">None</span>:
+    data = prep_data()
+    <span class="kw">with</span> dsl.ParallelFor(lrs) <span class="kw">as</span> lr:
+        train(data=data.outputs[<span class="str">"data"</span>], lr=lr) \
+            .set_accelerator_type(<span class="str">"nvidia.com/gpu"</span>) \
+            .set_accelerator_limit(<span class="num">8</span>)
+
+<span class="cmt"># Compile to Argo YAML</span>
+<span class="kw">from</span> kfp <span class="kw">import</span> compiler
+compiler.Compiler().compile(sweep, <span class="str">"sweep.yaml"</span>)</pre>
+
+      <h3>Airflow — when not to use it for ML</h3>
+      <p>Airflow excels at data engineering: <code>@dag</code>/<code>@task</code> decorators, hundreds of integrations (Snowflake, BigQuery, Salesforce, SaaS APIs), strong scheduling UI, mature alerting. It struggles at the ML-on-K8s use case because Airflow relies on static scheduling and worker pools, which can limit massive parallelism.</p>
+      <p>The 2026 pattern is hybrid: Airflow for the data pipeline that feeds the training data; Argo/Kubeflow for the training itself; Airflow triggers Argo via the KubernetesPodOperator or a webhook. Use each where it's strong.</p>
+
+      <h3>The orchestration-engine decision</h3>
+      <p><strong>K8s-native, ML-heavy, GPU workloads:</strong> Argo Workflows or Kubeflow Pipelines. Kubeflow if you want the platform features (experiments, KServe, Katib). Argo if you want lighter weight and you build the ML abstractions yourself.</p>
+      <p><strong>Data engineering, many SaaS integrations:</strong> Airflow. The ecosystem of operators (S3, Snowflake, dbt, etc.) is unmatched.</p>
+      <p><strong>Mixed workload:</strong> Airflow for orchestration + Argo for GPU training (Airflow triggers Argo). Airflow knows about your data; Argo knows about your cluster.</p>
+      <p><strong>Greenfield, want to defer the orchestrator choice:</strong> ZenML or similar (ZenML uses pluggable orchestrators — it achieves the best of both worlds: Airflow's scheduling and Kubeflow's scalable execution. The benefit here is flexibility. If you start with Airflow and later want to move to Kubeflow, ZenML makes that easier. You swap out the orchestrator, and your pipeline code remains the same.).</p>
+
+      <div class="callout">
+        <div class="callout-label">The single most-useful Argo feature</div>
+        <p><code>withParam</code> for fan-out. One workflow definition, N parallel pods, results aggregated. The same machinery that lets you sweep hyperparameters lets you fan out evaluations, regression tests, or backfills. If you're writing for-loops in shell scripts to launch K8s jobs, you should be writing Argo workflows instead.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 3 -->
+<section class="chapter ci-ch" id="ch3">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain ci">CI/CD</span>
+      Chapter <span class="num">III</span>
+    </div>
+    <h2 class="chapter-title">CI/CD · GitHub Actions, GitLab, <em>Buildkite.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>The 2026 norm</strong>
+      Every commit runs a graph of jobs. The graph gates merge. The merge triggers a release. The release becomes a PR to the GitOps repo.<br><br>
+      <strong>The discipline</strong>
+      Fast lane (lint + unit) under 2 min. Full lane under 10 min. Nothing else is acceptable.
+    </aside>
+    <div class="prose">
+      <p class="lead">CI/CD is the bridge between code and cluster. The 2026 standard pattern: developer pushes a branch, CI runs lint + type-check + unit tests in parallel (under 2 minutes), then on PR merge runs build + integration tests + scan + sign + push (under 10 minutes), then the release job opens a PR against the GitOps repo bumping the image digest. Three platforms dominate.</p>
+
+      <div class="cards-grid">
+        <div class="tech-card">
+          <div class="kind">hosted · simple</div>
+          <div class="name">GitHub Actions</div>
+          <div class="desc">YAML workflows in <code>.github/workflows/</code>. Excellent for OSS and SaaS-hosted code. OIDC for cloud auth, native attestation features. Hosted runners free for OSS; self-hosted for GPU.</div>
+          <div class="pill">community default</div>
+        </div>
+        <div class="tech-card">
+          <div class="kind">hosted · integrated</div>
+          <div class="name">GitLab CI</div>
+          <div class="desc"><code>.gitlab-ci.yml</code> in the repo. Tight integration with GitLab issues, MRs, container registry, package registry. Strong fit for orgs already using GitLab.</div>
+          <div class="pill">all-in-one</div>
+        </div>
+        <div class="tech-card">
+          <div class="kind">self-hosted · scale</div>
+          <div class="name">Buildkite</div>
+          <div class="desc">Hybrid: hosted control plane, your runners. Pipeline-as-code via YAML or dynamic generation. Used at hyperscale where you need fleet control of build machines.</div>
+          <div class="pill">enterprise scale</div>
+        </div>
+        <div class="tech-card">
+          <div class="kind">cloud-native</div>
+          <div class="name">Tekton</div>
+          <div class="desc">CNCF graduated. Pipelines as K8s CRDs. Each step is a pod. Powers OpenShift Pipelines, Jenkins X. Heavyweight; mostly for orgs that want CI living inside their cluster.</div>
+          <div class="pill">K8s-native</div>
+        </div>
+      </div>
+
+      <h3>The pipeline shape</h3>
+      <div class="stages">
+        <div class="stage">
+          <div class="stage-num">01</div>
+          <div>
+            <div class="stage-h">Lint &amp; format check</div>
+            <div class="stage-desc"><code>uv run ruff check .</code>, <code>uv run ruff format --check .</code>. Fails on any style issue. <strong>Should be sub-second.</strong></div>
+            <div class="stage-time">~5s</div>
+          </div>
+        </div>
+        <div class="stage">
+          <div class="stage-num">02</div>
+          <div>
+            <div class="stage-h">Type check</div>
+            <div class="stage-desc"><code>uv run mypy --strict src/</code>. Strict mode by default for new code. <strong>Should be under 30s.</strong></div>
+            <div class="stage-time">~15s</div>
+          </div>
+        </div>
+        <div class="stage">
+          <div class="stage-num">03</div>
+          <div>
+            <div class="stage-h">Unit tests</div>
+            <div class="stage-desc"><code>uv run pytest tests/unit/ -n auto</code>. Parallelized. No network, no containers, no I/O outside tmpdirs. <strong>Under 60s for most repos.</strong></div>
+            <div class="stage-time">~30s</div>
+          </div>
+        </div>
+        <div class="stage">
+          <div class="stage-num">04</div>
+          <div>
+            <div class="stage-h">Build image</div>
+            <div class="stage-desc"><code>docker buildx build --push --provenance=mode=max --sbom</code>. Registry cache, multi-platform, attestations. <strong>30s warm; 3min cold.</strong></div>
+            <div class="stage-time">~60s</div>
+          </div>
+        </div>
+        <div class="stage">
+          <div class="stage-num">05</div>
+          <div>
+            <div class="stage-h">Integration tests</div>
+            <div class="stage-desc">testcontainers, KIND, or envtest. Tests run against the just-built image. <strong>2-5 min.</strong></div>
+            <div class="stage-time">~3min</div>
+          </div>
+        </div>
+        <div class="stage">
+          <div class="stage-num">06</div>
+          <div>
+            <div class="stage-h">Scan &amp; sign</div>
+            <div class="stage-desc">Trivy fails on fixable HIGH/CRITICAL. Cosign keyless sign. SLSA L2+ provenance. (Issue 07 Ch X.)</div>
+            <div class="stage-time">~30s</div>
+          </div>
+        </div>
+        <div class="stage">
+          <div class="stage-num">07</div>
+          <div>
+            <div class="stage-h">Open GitOps PR</div>
+            <div class="stage-desc">Release job opens a PR against the deployments repo bumping the image digest. Auto-merged after the GitOps PR's own CI passes.</div>
+            <div class="stage-time">~15s</div>
+          </div>
+        </div>
+      </div>
+
+      <h3>Job graph, not job list</h3>
+      <p>The naive CI is sequential: lint, then type, then test, then build. The right CI is a DAG with explicit dependencies. Lint and type-check have no dependencies; they run in parallel. Build and unit tests have no dependencies; they run in parallel. Integration tests need the built image and may need migrations to run first.</p>
+      <pre data-label="GitHub Actions — proper parallel graph"><span class="kw">jobs</span>:
+  lint:
+    runs-on: ubuntu-latest
+    steps: [{ uses: astral-sh/setup-uv@v3 }, { run: uv run ruff check . }]
+  typecheck:
+    runs-on: ubuntu-latest
+    steps: [{ uses: astral-sh/setup-uv@v3 }, { run: uv run mypy --strict src/ }]
+  unit:
+    runs-on: ubuntu-latest
+    steps: [{ uses: astral-sh/setup-uv@v3 }, { run: uv run pytest tests/unit -n auto }]
+  build:
+    runs-on: ubuntu-latest
+    steps: [{ uses: docker/build-push-action@v5, with: { push: <span class="ok">true</span>, provenance: <span class="str">"mode=max"</span> } }]
+  integration:
+    <span class="fn">needs</span>: [build]
+    runs-on: ubuntu-latest
+    steps: [{ run: ./scripts/integration-test.sh }]
+  release:
+    <span class="fn">needs</span>: [lint, typecheck, unit, integration]
+    <span class="fn">if</span>: github.ref == <span class="str">'refs/heads/main'</span>
+    runs-on: ubuntu-latest
+    steps: [{ run: ./scripts/open-gitops-pr.sh }]</pre>
+
+      <h3>The "fast lane" / "full lane" split</h3>
+      <p>Branch CI runs the fast lane: lint + type + unit. Under 2 minutes. Optimized for "did I break something obvious." Main-branch CI runs the full lane: everything including integration, scan, sign, release. Optimized for "is this safe to deploy."</p>
+      <p>This means: open a PR, get feedback in 2 minutes. Approve and merge, full release pipeline runs. The two latencies are budgeted differently and optimized differently.</p>
+
+      <h3>Self-hosted runners for GPU CI</h3>
+      <p>For ML services that need GPU in CI (smoke-test a kernel, profile a model load), hosted runners don't work. Self-hosted GitHub Actions runners on K8s (via Actions Runner Controller) or Buildkite agents on GPU nodes solve this. Each PR can spawn a runner with H100s on demand, runs the test, terminates.</p>
+
+      <div class="callout ci">
+        <div class="callout-label">The CI budget</div>
+        <p>Branch CI under 2 minutes. Main CI under 10 minutes. Anything slower and developers wait for CI before context-switching, productivity drops. The two levers: parallelism (every independent job in parallel) and caching (Issue 06 Chapter III). Six lines of CI config save your team weeks of cumulative wait time per year.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 4 -->
+<section class="chapter ci-ch" id="ch4">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain ci">CI/CD</span>
+      Chapter <span class="num">IV</span>
+    </div>
+    <h2 class="chapter-title">GitOps · <em>Argo CD</em> &amp; Flux.</h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>The principle</strong>
+      The cluster's state is whatever the Git repo says. The agent reconciles. Promotion is a PR.<br><br>
+      <strong>The two tools</strong>
+      Argo CD (UI-rich, app-centric). Flux (CLI-first, modular).
+    </aside>
+    <div class="prose">
+      <p class="lead">GitOps is the discipline of treating Git as the source of truth for cluster state. An agent inside the cluster watches a Git repo of YAML and reconciles cluster state to match. Promotion isn't <code>kubectl apply</code>; it's a Git commit. Rollback isn't a separate process; it's <code>git revert</code>.</p>
+
+      <h3>The two-repo pattern</h3>
+      <p>The mature pattern separates application source from deployment manifests:</p>
+      <pre data-label="two-repo gitops layout"><span class="cmt"># Repo A: myorg/myapp — application source</span>
+myapp/
+├── src/                <span class="cmt"># the application</span>
+├── tests/
+├── Dockerfile
+├── .github/workflows/release.yml
+└── pyproject.toml
+
+<span class="cmt"># Repo B: myorg/deployments — GitOps manifests</span>
+deployments/
+├── clusters/
+│   ├── dev/myapp/values.yaml          <span class="cmt"># digest: sha256:abc...</span>
+│   ├── staging/myapp/values.yaml      <span class="cmt"># digest: sha256:abc...</span>
+│   └── prod/myapp/values.yaml         <span class="cmt"># digest: sha256:def... (older)</span>
+└── apps/
+    └── myapp/                          <span class="cmt"># shared Helm chart or kustomization</span>
+        ├── Chart.yaml
+        └── templates/</pre>
+
+      <p>When the source repo's CI produces a new image, the release job opens a PR against the deployments repo bumping the digest in <code>clusters/dev/myapp/values.yaml</code>. The PR's own CI verifies the manifest is valid; it auto-merges. The cluster's agent sees the change and rolls out. Same digest promotes to staging via another PR (auto or manual); prod requires explicit approval.</p>
+
+      <h3>Argo CD vs Flux</h3>
+      <div class="cmp-table">
+        <div class="cmp-row head">
+          <div>Axis</div>
+          <div>Argo CD</div>
+          <div>Flux</div>
+          <div></div>
+        </div>
+        <div class="cmp-row">
+          <div class="cmp-axis">Model</div>
+          <p>Application-centric. The <code>Application</code> CRD points at a Git repo and a destination cluster. Reconciles.</p>
+          <p>Source/Kustomization-centric. <code>GitRepository</code> + <code>Kustomization</code> + <code>HelmRelease</code> CRDs, composable.</p>
+          <p></p>
+        </div>
+        <div class="cmp-row">
+          <div class="cmp-axis">UI</div>
+          <p>Rich web UI: app tree, sync status, manual sync, history, diff. Most teams' main interaction.</p>
+          <p>CLI-first. <code>flux</code> CLI for everything. Optional Weave GitOps UI as a separate install.</p>
+          <p></p>
+        </div>
+        <div class="cmp-row">
+          <div class="cmp-axis">Multi-cluster</div>
+          <p>Hub-and-spoke: one Argo CD controls many clusters. Centralized auth, RBAC, visibility.</p>
+          <p>Per-cluster install by default. Federated story via Flux fleet manager or multi-tenant patterns.</p>
+          <p></p>
+        </div>
+        <div class="cmp-row">
+          <div class="cmp-axis">Image automation</div>
+          <p>Argo CD Image Updater (separate component). Watches registry, updates manifests in Git.</p>
+          <p>Native Flux Image Automation Controller. First-class, mature.</p>
+          <p></p>
+        </div>
+        <div class="cmp-row">
+          <div class="cmp-axis">Best for</div>
+          <p>Teams that want a central pane of glass. Org-level visibility across many apps and clusters.</p>
+          <p>Teams that prefer Git/CLI-driven workflows. Single-cluster or per-cluster ops. Microservices-heavy.</p>
+          <p></p>
+        </div>
+      </div>
+
+      <h3>An Argo CD Application</h3>
+      <pre data-label="Argo CD Application — declarative deployment"><span class="kw">apiVersion</span>: argoproj.io/v1alpha1
+<span class="kw">kind</span>: Application
+<span class="kw">metadata</span>:
+  <span class="fn">name</span>: myapp-prod
+  <span class="fn">namespace</span>: argocd
+<span class="kw">spec</span>:
+  <span class="fn">project</span>: production
+  <span class="fn">source</span>:
+    repoURL: https://github.com/myorg/deployments
+    targetRevision: main                       <span class="cmt"># or a specific commit for pinning</span>
+    path: clusters/prod/myapp
+    helm:
+      valueFiles: [values.yaml]
+  <span class="fn">destination</span>:
+    server: https://prod-cluster.example.com
+    namespace: myapp
+  <span class="fn">syncPolicy</span>:
+    automated:
+      prune: <span class="ok">true</span>                              <span class="cmt"># delete resources removed from Git</span>
+      selfHeal: <span class="ok">true</span>                           <span class="cmt"># revert manual cluster changes</span>
+    syncOptions:
+      - CreateNamespace=<span class="ok">true</span>
+      - ServerSideApply=<span class="ok">true</span></pre>
+
+      <h3>Promotion patterns</h3>
+      <p><strong>Auto-promote dev.</strong> Every successful main-branch CI on the app repo opens a deployments-repo PR. Dev auto-merges. Developers see their change in dev within minutes.</p>
+      <p><strong>Time-bake staging.</strong> After dev runs successfully for N hours with no alerts, a bot opens a PR promoting to staging. Auto-merge if all health checks green.</p>
+      <p><strong>Manual prod.</strong> Staging-to-prod PRs are manual. Require explicit approval from CODEOWNERS. The PR includes a diff of what's changing and links to the new image's attestations.</p>
+      <p><strong>Progressive delivery.</strong> Combine with Argo Rollouts or Flagger: prod PRs trigger a canary that's automatically aborted if SLO metrics degrade. The PR doesn't just say "deploy"; it says "begin progressive rollout."</p>
+
+      <h3>Drift detection &amp; self-heal</h3>
+      <p>GitOps agents continuously reconcile. If someone <code>kubectl edit</code>s a deployment in prod, Argo CD detects the drift and reverts within minutes (if <code>selfHeal: true</code>). The Git repo is the source of truth; the cluster is the projection.</p>
+      <p>This is uncomfortable at first ("I just need to debug something quick") and indispensable later ("how did this deployment get edited and why did no one know?"). The right escape hatch is a <code>ConfigManagementPlugin</code> or a <code>SyncWindow</code> that pauses reconciliation in a controlled way, not <code>kubectl edit</code>.</p>
+
+      <div class="callout ci">
+        <div class="callout-label">The cluster-as-projection mindset</div>
+        <p>Once GitOps is in place, "what's deployed in prod" is answered by a Git commit hash, not a cluster query. Every change has a PR; every PR has a reviewer; every reviewer sees the diff. Rollback is <code>git revert</code>. Audit is <code>git log</code>. The cluster becomes a derived artifact, not a state machine humans poke at.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 5 -->
+<section class="chapter ci-ch" id="ch5">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain ci">CI/CD</span>
+      Chapter <span class="num">V</span>
+    </div>
+    <h2 class="chapter-title">Helm · <em>charts</em>, values, releases.</h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>What Helm is</strong>
+      A templating engine + package manager for Kubernetes. Chart = template + default values + dependencies. Release = chart + override values + namespace.<br><br>
+      <strong>What Helm is not</strong>
+      A lifecycle manager. Helm renders YAML; it doesn't know how your app should behave at runtime.
+    </aside>
+    <div class="prose">
+      <p class="lead">Helm packages a Kubernetes application as a "chart" — a directory of YAML templates plus a values file. <code>helm install</code> renders the templates with values and applies the result. <code>helm upgrade</code> diffs and applies changes. Charts are versioned, dependency-aware, and distributable via OCI registries.</p>
+
+      <h3>The chart anatomy</h3>
+      <pre data-label="standard Helm chart layout"><span class="cmt"># helm create myapp produces:</span>
+myapp/
+├── Chart.yaml              <span class="cmt"># metadata: name, version, appVersion, deps</span>
+├── values.yaml             <span class="cmt"># defaults (overridable)</span>
+├── values.schema.json      <span class="cmt"># JSON schema validating values</span>
+├── templates/
+│   ├── deployment.yaml     <span class="cmt"># templated Deployment</span>
+│   ├── service.yaml
+│   ├── ingress.yaml
+│   ├── hpa.yaml
+│   ├── _helpers.tpl        <span class="cmt"># reusable template snippets</span>
+│   └── NOTES.txt           <span class="cmt"># printed on install</span>
+└── charts/                 <span class="cmt"># bundled subcharts (if any)</span></pre>
+
+      <h3>Values schema — the often-skipped step</h3>
+      <p>A <code>values.schema.json</code> file alongside <code>values.yaml</code> validates user-provided values at install time. Missing or wrong-typed values fail before any rendering happens. This is the single most-underused Helm feature.</p>
+      <pre data-label="values.schema.json — fail before render"><span class="num">{</span>
+  <span class="str">"$schema"</span>: <span class="str">"http://json-schema.org/draft-07/schema#"</span>,
+  <span class="str">"type"</span>: <span class="str">"object"</span>,
+  <span class="str">"required"</span>: [<span class="str">"image"</span>, <span class="str">"resources"</span>],
+  <span class="str">"properties"</span>: <span class="num">{</span>
+    <span class="str">"image"</span>: <span class="num">{</span>
+      <span class="str">"type"</span>: <span class="str">"object"</span>,
+      <span class="str">"required"</span>: [<span class="str">"repository"</span>, <span class="str">"digest"</span>],
+      <span class="str">"properties"</span>: <span class="num">{</span>
+        <span class="str">"repository"</span>: { <span class="str">"type"</span>: <span class="str">"string"</span> },
+        <span class="str">"digest"</span>: <span class="num">{</span>
+          <span class="str">"type"</span>: <span class="str">"string"</span>,
+          <span class="str">"pattern"</span>: <span class="str">"^sha256:[a-f0-9]{64}$"</span>             <span class="cmt"># require digest, not tag</span>
+        <span class="num">}</span>
+      <span class="num">}</span>
+    <span class="num">}</span>,
+    <span class="str">"replicas"</span>: { <span class="str">"type"</span>: <span class="str">"integer"</span>, <span class="str">"minimum"</span>: <span class="num">1</span>, <span class="str">"maximum"</span>: <span class="num">100</span> }
+  <span class="num">}</span>
+<span class="num">}</span></pre>
+
+      <h3>A real-world template</h3>
+      <pre data-label="templates/deployment.yaml — production-grade"><span class="kw">apiVersion</span>: apps/v1
+<span class="kw">kind</span>: Deployment
+<span class="kw">metadata</span>:
+  <span class="fn">name</span>: <span class="num">{{</span> include <span class="str">"myapp.fullname"</span> . <span class="num">}}</span>
+  <span class="fn">labels</span>: <span class="num">{{</span>- include <span class="str">"myapp.labels"</span> . | nindent <span class="num">4</span> <span class="num">}}</span>
+<span class="kw">spec</span>:
+  <span class="fn">replicas</span>: <span class="num">{{</span> .Values.replicas <span class="num">}}</span>
+  <span class="fn">selector</span>:
+    matchLabels: <span class="num">{{</span>- include <span class="str">"myapp.selectorLabels"</span> . | nindent <span class="num">6</span> <span class="num">}}</span>
+  <span class="fn">template</span>:
+    metadata:
+      labels: <span class="num">{{</span>- include <span class="str">"myapp.selectorLabels"</span> . | nindent <span class="num">8</span> <span class="num">}}</span>
+      annotations:
+        <span class="cmt"># Force pod restart on ConfigMap change</span>
+        checksum/config: <span class="num">{{</span> include (print $.Template.BasePath <span class="str">"/configmap.yaml"</span>) . | sha256sum <span class="num">}}</span>
+    spec:
+      serviceAccountName: <span class="num">{{</span> include <span class="str">"myapp.serviceAccountName"</span> . <span class="num">}}</span>
+      securityContext:
+        runAsNonRoot: <span class="ok">true</span>
+        runAsUser: <span class="num">65532</span>
+        fsGroup: <span class="num">65532</span>
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - <span class="fn">name</span>: app
+          image: <span class="str">"{{ .Values.image.repository }}@{{ .Values.image.digest }}"</span>
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: <span class="err">false</span>
+            readOnlyRootFilesystem: <span class="ok">true</span>
+            capabilities: { drop: [ALL] }
+          ports: [{ containerPort: <span class="num">8080</span>, name: http }]
+          resources: <span class="num">{{</span>- toYaml .Values.resources | nindent <span class="num">12</span> <span class="num">}}</span>
+          startupProbe:
+            httpGet: { path: /healthz, port: http }
+            failureThreshold: <span class="num">30</span>
+            periodSeconds: <span class="num">10</span>
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            failureThreshold: <span class="num">3</span>
+            periodSeconds: <span class="num">10</span></pre>
+
+      <h3>Helm in GitOps</h3>
+      <p>The classic Helm CLI (<code>helm install</code>, <code>helm upgrade</code>) is imperative and stateful — it stores release state in K8s Secrets and you have to know to use it. The GitOps pattern is different: render and apply via Argo CD or Flux.</p>
+      <p>Argo CD's <code>Application</code> resource points at a Git repo containing a chart; Argo CD renders the chart with the values and applies the result. Flux's <code>HelmRelease</code> resource does the same. Both make releases declarative and Git-driven; neither uses <code>helm install</code> at runtime.</p>
+
+      <h3>Library charts and umbrellas</h3>
+      <p><strong>Library charts</strong> hold reusable template snippets (the <code>_helpers.tpl</code> contents). Many services in one org share the same labels, probes, securityContext patterns — put them in a library chart and import.</p>
+      <p><strong>Umbrella charts</strong> bundle multiple subcharts. <code>myorg-platform</code> as an umbrella chart with <code>prometheus</code>, <code>grafana</code>, <code>loki</code>, <code>tempo</code> as deps. One Helm install brings up the full observability stack.</p>
+
+      <div class="callout ci">
+        <div class="callout-label">The Helm value pattern</div>
+        <p>Three-layer values: chart defaults (<code>values.yaml</code>), per-env values (<code>values-prod.yaml</code>), per-instance overrides (<code>helm install --set ...</code>). The chart should be opinion-free; env values carry the opinion; instance overrides are escape hatches. Use values.schema.json to enforce structure. Pin <code>image.digest</code> in env values; reject tag-only images at install time.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 6 -->
+<section class="chapter ci-ch" id="ch6">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain ci">CI/CD</span>
+      Chapter <span class="num">VI</span>
+    </div>
+    <h2 class="chapter-title">Operators · <em>CRDs</em> &amp; the reconcile loop.</h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>The pattern</strong>
+      Define a custom resource. Write a controller that watches it. Reconcile the cluster state to match the resource's spec.<br><br>
+      <strong>The frameworks</strong>
+      Kubebuilder / Operator SDK (Go), Kopf (Python), Java Operator SDK, kube-rs (Rust).
+    </aside>
+    <div class="prose">
+      <p class="lead">An Operator extends Kubernetes with new types of resources and the code to manage them. Where Helm renders YAML, an Operator <em>runs forever</em> — it watches the cluster, detects drift, performs backups, rotates credentials, scales replicas based on domain logic. Operators follow Kubernetes principles, notably the control loop. The operator pattern aims to capture the key aim of a human operator who is managing a service or set of services.</p>
+
+      <h3>The two building blocks</h3>
+      <p>The Operator pattern, introduced by CoreOS, relies on two key Kubernetes concepts: Custom Resource Definitions (CRDs) define new types of Kubernetes resources (e.g., PostgresCluster or KafkaTopic). Controllers watch for changes to those custom resources and take action to reconcile the state.</p>
+      <p><strong>CRD</strong>: a schema definition. After applying a CRD, the K8s API server accepts and stores objects of that new kind. The schema is OpenAPI-validated; the API server rejects malformed requests just like for built-in types.</p>
+      <p><strong>Controller</strong>: a long-running Go (or Python/Rust/Java) program that watches the API server for changes to the CRD and reconciles cluster state. Watches are event-driven; reconcile loops are idempotent.</p>
+
+      <div class="loop-viz">
+        <div class="loop-h">The reconcile loop · watch → diff → act</div>
+        <svg class="loop-svg" viewBox="0 0 700 280" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#c9a227"/>
+            </marker>
+          </defs>
+          <!-- Center: controller -->
+          <circle cx="350" cy="140" r="60" fill="none" stroke="#c9a227" stroke-width="2"/>
+          <text x="350" y="135" text-anchor="middle" fill="#c9a227" font-family="Fraunces, serif" font-style="italic" font-size="20" font-weight="700">Controller</text>
+          <text x="350" y="158" text-anchor="middle" fill="#f4f1ea" font-family="JetBrains Mono, monospace" font-size="10" letter-spacing="0.1em">Reconcile()</text>
+          <!-- Top: API server -->
+          <rect x="270" y="20" width="160" height="50" fill="none" stroke="#7dc9d9" stroke-width="2"/>
+          <text x="350" y="42" text-anchor="middle" fill="#7dc9d9" font-family="Fraunces, serif" font-style="italic" font-size="16" font-weight="700">K8s API</text>
+          <text x="350" y="60" text-anchor="middle" fill="#f4f1ea" font-family="JetBrains Mono, monospace" font-size="10">desired state (spec)</text>
+          <!-- Bottom: cluster state -->
+          <rect x="270" y="210" width="160" height="50" fill="none" stroke="#b5d590" stroke-width="2"/>
+          <text x="350" y="232" text-anchor="middle" fill="#b5d590" font-family="Fraunces, serif" font-style="italic" font-size="16" font-weight="700">Cluster</text>
+          <text x="350" y="250" text-anchor="middle" fill="#f4f1ea" font-family="JetBrains Mono, monospace" font-size="10">actual state (status)</text>
+          <!-- Arrows -->
+          <path d="M 350 70 L 350 80" stroke="#c9a227" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+          <text x="365" y="78" fill="#f4f1ea" font-family="JetBrains Mono, monospace" font-size="9" opacity="0.7">watch</text>
+          <path d="M 350 200 L 350 210" stroke="#c9a227" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+          <text x="365" y="218" fill="#f4f1ea" font-family="JetBrains Mono, monospace" font-size="9" opacity="0.7">act</text>
+          <path d="M 350 210 Q 250 175 290 145" stroke="#c9a227" stroke-width="1.5" fill="none" marker-end="url(#arrow)" stroke-dasharray="3,3"/>
+          <text x="200" y="200" fill="#f4f1ea" font-family="JetBrains Mono, monospace" font-size="9" opacity="0.7">status</text>
+          <!-- Side: requeue note -->
+          <text x="500" y="135" fill="#f4f1ea" font-family="Fraunces, serif" font-style="italic" font-size="13" opacity="0.6">If diff ≠ 0:</text>
+          <text x="500" y="155" fill="#f4f1ea" font-family="JetBrains Mono, monospace" font-size="10" opacity="0.6">act &amp; requeue</text>
+          <text x="500" y="175" fill="#f4f1ea" font-family="Fraunces, serif" font-style="italic" font-size="13" opacity="0.6">If diff = 0:</text>
+          <text x="500" y="195" fill="#f4f1ea" font-family="JetBrains Mono, monospace" font-size="10" opacity="0.6">done</text>
+        </svg>
+      </div>
+
+      <h3>Reconcile, in code</h3>
+      <pre data-label="Go controller-runtime · reconcile signature"><span class="kw">func</span> (r *PostgresClusterReconciler) <span class="fn">Reconcile</span>(ctx context.Context, req ctrl.Request) (ctrl.Result, <span class="kw">error</span>) {
+    log := log.FromContext(ctx)
+
+    <span class="cmt">// 1. Fetch the custom resource</span>
+    <span class="kw">var</span> cluster databasev1.PostgresCluster
+    <span class="kw">if</span> err := r.Get(ctx, req.NamespacedName, &amp;cluster); err != <span class="kw">nil</span> {
+        <span class="kw">return</span> ctrl.Result{}, client.IgnoreNotFound(err)
+    }
+
+    <span class="cmt">// 2. Compute what cluster state SHOULD be</span>
+    desiredSts := buildStatefulSet(&amp;cluster)
+    desiredSvc := buildService(&amp;cluster)
+
+    <span class="cmt">// 3. Diff against actual state; create or update as needed</span>
+    <span class="kw">if</span> err := r.upsert(ctx, desiredSts); err != <span class="kw">nil</span> {
+        <span class="kw">return</span> ctrl.Result{}, err
+    }
+    <span class="kw">if</span> err := r.upsert(ctx, desiredSvc); err != <span class="kw">nil</span> {
+        <span class="kw">return</span> ctrl.Result{}, err
+    }
+
+    <span class="cmt">// 4. Update status subresource — what's actually happening</span>
+    cluster.Status.ReadyReplicas = countReadyPods(ctx, r, &amp;cluster)
+    cluster.Status.Conditions = computeConditions(&amp;cluster)
+    <span class="kw">if</span> err := r.Status().Update(ctx, &amp;cluster); err != <span class="kw">nil</span> {
+        <span class="kw">return</span> ctrl.Result{}, err
+    }
+
+    <span class="cmt">// 5. Requeue periodically to re-check (drift detection)</span>
+    <span class="kw">return</span> ctrl.Result{RequeueAfter: <span class="num">30</span> * time.Second}, <span class="kw">nil</span>
+}</pre>
+
+      <p>Three properties make this work: <strong>idempotency</strong> (Reconcile can run any number of times with the same result), <strong>level-triggered</strong> (act on current state, not on event history — if you missed an event, the next Reconcile still converges), and <strong>status separation</strong> (spec is desired, status is observed; never confuse them).</p>
+
+      <h3>Operator frameworks</h3>
+      <div class="cards-grid">
+        <div class="tech-card">
+          <div class="kind">Go · standard</div>
+          <div class="name">Kubebuilder</div>
+          <div class="desc">The k8s-sigs reference. Generates CRD scaffolding, controller skeleton, envtest setup. Output is plain Go using controller-runtime. The most common starting point.</div>
+          <div class="pill">k8s-sigs</div>
+        </div>
+        <div class="tech-card">
+          <div class="kind">Go · with extras</div>
+          <div class="name">Operator SDK</div>
+          <div class="desc">Operator SDK offers additional features on top of Kubebuilder: integration with Operator Lifecycle Manager (OLM), OperatorHub, scorecard for best-practices testing, and supports Ansible and Helm operator types.</div>
+          <div class="pill">RH-flavored</div>
+        </div>
+        <div class="tech-card">
+          <div class="kind">Python · lightweight</div>
+          <div class="name">Kopf</div>
+          <div class="desc">Python decorator-based framework. <code>@kopf.on.create</code>, <code>@kopf.on.update</code>. Great for ML platform teams who already work in Python. Less mature than Kubebuilder; fine for non-critical operators.</div>
+          <div class="pill">pythonic</div>
+        </div>
+        <div class="tech-card">
+          <div class="kind">Rust · performance</div>
+          <div class="name">kube-rs</div>
+          <div class="desc">Rust crate ecosystem for K8s controllers. Best when you need predictable latency, no GC pauses, or want to embed in a larger Rust service.</div>
+          <div class="pill">low-overhead</div>
+        </div>
+      </div>
+
+      <h3>The status subresource</h3>
+      <p>K8s differentiates between <code>spec</code> (user-written, desired state) and <code>status</code> (controller-written, observed state). They have separate API endpoints, separate RBAC. Always update status separately via <code>r.Status().Update()</code>; never via the main <code>r.Update()</code>. Two reasons: the API server is optimized for this split, and you avoid overwriting spec changes the user just made.</p>
+
+      <h3>Finalizers and lifecycle</h3>
+      <p>When the user deletes a custom resource, you may need to clean up external state (database snapshots, cloud resources, S3 buckets). Add a finalizer; reconcile checks for <code>DeletionTimestamp</code> and, if set, performs cleanup, then removes the finalizer. The object disappears only after the finalizer is removed.</p>
+
+      <div class="callout ci">
+        <div class="callout-label">The operator promise</div>
+        <p>An Operator codifies "how a human SRE manages this service" into a controller that runs forever, never sleeps, never forgets. The Prometheus Operator, the Strimzi Kafka Operator, the cert-manager controller, the External Secrets operator — these are how production K8s actually works. If your service has any non-trivial day-two operations (backups, failover, key rotation, scaling decisions), at some point you'll either write an operator or buy one. The discipline is recognizing which.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 7 -->
+<section class="chapter ci-ch" id="ch7">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain ci">CI/CD</span>
+      Chapter <span class="num">VII</span>
+    </div>
+    <h2 class="chapter-title">Helm vs Operator · the <em>decision.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>The framing</strong>
+      Helm handles day-one (install, upgrade). Operators handle day-two (backup, scale, repair). Most production stacks use both.<br><br>
+      <strong>The single test</strong>
+      Does the workload need ongoing operational logic? Helm if no; Operator if yes.
+    </aside>
+    <div class="prose">
+      <p class="lead">The Helm-vs-Operator question gets asked weekly in K8s shops and answered badly more often than not. The right framing is what each tool covers in the application's lifecycle. Helm typically handles day-one operations (deployment and upgrades). Helm is about installation and updates. Operators cover the entire lifecycle, including operations, self-healing, and domain-specific intelligence.</p>
+
+      <h3>The decision tree</h3>
+      <p><strong>Use Helm</strong> when: your application is stateless (use Helm — it handles templated deployment, version control, and environment configs without needing complex automation); you need package distribution and templating; the workload is simple enough that <code>kubectl apply</code> with some templating suffices; you want fast iteration without writing Go.</p>
+      <p><strong>Use an Operator</strong> when: your application is stateful or distributed (use an Operator — these workloads need lifecycle control: backups, replica sync, safe scaling, and failover); you need ongoing reconciliation (drift detection, automatic recovery); you have domain-specific logic that humans repeatedly perform; you're shipping a product others install.</p>
+      <p><strong>Use both</strong> when: you want the rendering and packaging of Helm AND the operational logic of an Operator. Helm and Operators aren't mutually exclusive. In fact, many teams use both, each handling different layers of the stack. A common pattern looks like this: Helm deploys stateless apps (e.g., APIs, web frontends, jobs). Operators manage infrastructure and services with lifecycle needs (e.g., databases, service meshes, certificate managers). This split keeps things clear: Helm handles the fast-moving app layer, while Operators manage the complex, stateful dependencies.</p>
+
+      <h3>The classic combos</h3>
+      <p><strong>Prometheus stack.</strong> Install the Prometheus Operator via a Helm chart (kube-prometheus-stack). The chart provides one-shot install of the operator + CRDs + default Prometheus/Alertmanager/Grafana. The operator then runs the ongoing reconciliation. Helm for day-one; Operator for day-two.</p>
+      <p><strong>Cert-manager.</strong> Install via Helm (the operator + CRDs). Use <code>Certificate</code> custom resources via your own Helm charts (or directly via app manifests) to request certificates. cert-manager-the-controller renews, reissues, rotates.</p>
+      <p><strong>ArgoCD-managed Helm.</strong> ArgoCD as the operator that renders and applies Helm charts. The chart is the package; ArgoCD is the lifecycle manager. Flux supports HelmRelease CRs, allowing teams to manage Helm charts declaratively via GitOps.</p>
+
+      <h3>The "I just want to deploy my app" case</h3>
+      <p>For 80% of services in a typical org — stateless APIs, web frontends, simple workers — Helm + GitOps is enough. Don't write an Operator. The two-week investment in writing an Operator for something Helm can handle is two weeks not spent on actual features.</p>
+      <p>The reverse trap: trying to express stateful logic in Helm templates. Helm has no runtime; templates are pure text rendering. If you find yourself writing Helm hooks for ordered upgrades, or YAML conditionals that branch on cluster state, you've outgrown Helm.</p>
+
+      <h3>When to ship an Operator</h3>
+      <p>If you're shipping software others run, the question becomes commercial. An Operator absorbs operational complexity into your code, not your users' runbooks. Users with an Operator can run your software with less expertise — they declare intent (<code>kind: MyAppCluster</code>) and the controller handles the rest.</p>
+      <p>This is why nearly every CNCF database (PostgreSQL via Crunchy/CloudNativePG, MongoDB Community, Apache Cassandra via K8ssandra, ClickHouse, Kafka via Strimzi, etc.) ships an operator. The bar for users is "kubectl apply"; the operator handles backups, scaling, failover, version upgrades.</p>
+
+      <div class="callout ci">
+        <div class="callout-label">The pragmatic order</div>
+        <p>Start with raw YAML. Outgrow it; switch to Helm. Outgrow that (need lifecycle ops); add an Operator that consumes your Helm-rendered configs. Don't skip levels. Every "we should write an Operator for this" should first ask "did Helm fail us here, or do we just dislike YAML?"</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 8 -->
+<section class="chapter test-ch" id="ch8">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain test">TEST</span>
+      Chapter <span class="num">VIII</span>
+    </div>
+    <h2 class="chapter-title">The test pyramid · <em>unit</em> → e2e.</h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>The pyramid</strong>
+      Many fast cheap tests; few slow expensive tests. The shape isn't arbitrary; it's an investment portfolio.<br><br>
+      <strong>The new tier</strong>
+      For ML: evaluation harnesses. Quality gates that test model behavior, not just code behavior.
+    </aside>
+    <div class="prose">
+      <p class="lead">The classic test pyramid says: lots of fast unit tests, fewer integration tests, fewer end-to-end tests. The shape is an investment portfolio — most of your testing time goes into the cheapest, fastest, most reliable tier, with progressively more expensive tiers on top for things only they can verify.</p>
+
+      <div class="pyramid">
+        <div class="pyramid-h">The four tiers of testing</div>
+        <div class="pyramid-sub">Sized by typical count · widening as you go down</div>
+        <div class="tier t1">
+          <div class="tier-name">E2E / Eval</div>
+          <div class="tier-desc">Real cluster, real models, real data. Smoke and regression. ML evals belong here.</div>
+          <div class="tier-stats"><b>~10s</b>per service<br>min - hours each</div>
+        </div>
+        <div class="tier t2">
+          <div class="tier-name">Integration</div>
+          <div class="tier-desc">Real containers via testcontainers. Real K8s via envtest or KIND. Database + app together.</div>
+          <div class="tier-stats"><b>~100s</b>per service<br>seconds each</div>
+        </div>
+        <div class="tier t3">
+          <div class="tier-name">Component</div>
+          <div class="tier-desc">Single module exercised end-to-end with in-memory fakes. FastAPI TestClient. Pytest async loops.</div>
+          <div class="tier-stats"><b>~1000s</b>per service<br>ms each</div>
+        </div>
+        <div class="tier t4">
+          <div class="tier-name">Unit</div>
+          <div class="tier-desc">Pure functions, single class. No I/O. Property-based for invariants. Coverage gate lives here.</div>
+          <div class="tier-stats"><b>~10000s</b>per service<br>sub-ms each</div>
+        </div>
+      </div>
+
+      <h3>What each tier is good at</h3>
+      <p><strong>Unit tests</strong> catch logic bugs at the function level. Sub-millisecond; thousands per service; coverage gates live here. The goal is fast feedback on whether a function does what it claims.</p>
+      <p><strong>Component tests</strong> verify that a module's contract holds — an API endpoint returns the right shape, a worker processes a job correctly, a parser handles malformed input. Use in-memory fakes; no real network or database. Hundreds per service.</p>
+      <p><strong>Integration tests</strong> verify that components talk to real dependencies correctly. Real Postgres via testcontainers. Real K8s API via envtest or KIND. The "we mocked X and it lied" bugs only show up here. Tens per service.</p>
+      <p><strong>E2E / eval tests</strong> verify that the whole system does what the user wants. For services: smoke test against a deployed staging environment. For ML: golden-set evaluations, regression tests on output quality, latency budgets. Few per service; slow; expensive to maintain.</p>
+
+      <h3>The anti-patterns</h3>
+      <p><strong>Inverted pyramid.</strong> Lots of E2E tests, few unit tests. Slow CI, flaky tests, low coverage of edge cases. Common in teams that started without test discipline.</p>
+      <p><strong>Hourglass.</strong> Lots of unit, lots of E2E, nothing in between. Misses the integration-bug class entirely. Symptom: "all tests pass but the deployment is broken."</p>
+      <p><strong>Cube.</strong> Equal numbers at every tier. Slow CI without commensurate coverage gain.</p>
+      <p><strong>Mock everything.</strong> Unit tests that mock so much they test only the mock framework. Symptom: refactoring breaks tests even when behavior is unchanged. The fix: smaller surface to mock, bigger contract to test.</p>
+
+      <h3>The ML-specific tier</h3>
+      <p>For ML systems, the E2E layer is split: <strong>integration E2E</strong> (does the inference server return well-formed responses?) and <strong>evaluation</strong> (does the model give correct/good answers?). The latter is its own discipline:</p>
+      <ul style="margin: 16px 0 24px 32px; line-height: 1.8;">
+        <li><strong>Golden-set regression.</strong> A frozen evaluation set with expected outputs (or output qualities). New model passes only if it doesn't regress on the golden set.</li>
+        <li><strong>LLM-as-judge.</strong> Use a stronger model to grade your model's outputs on a held-out prompt set. Score gates the release.</li>
+        <li><strong>Behavioral tests.</strong> Verify specific properties: refuses to answer X, follows instructions for Y, citation format matches Z. CheckList-style suites for NLP.</li>
+        <li><strong>Latency &amp; cost SLOs.</strong> TTFT, TPOT, tokens/sec/GPU all have numeric gates. Regression in throughput fails the release.</li>
+      </ul>
+
+      <div class="callout test">
+        <div class="callout-label">The pyramid as portfolio</div>
+        <p>Think of tests as an investment portfolio. You want most of your money in the highest-yield, lowest-risk asset (unit tests: fast, cheap, reliable). You want some in higher-risk assets for coverage that the safe asset can't provide (integration, E2E). You want very little in the speculative tier (manual exploratory testing, smoke tests). The shape isn't aesthetic; it's economics.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 9 -->
+<section class="chapter test-ch" id="ch9">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain test">TEST</span>
+      Chapter <span class="num">IX</span>
+    </div>
+    <h2 class="chapter-title">Unit testing · <em>pytest</em>, fakes, property tests.</h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>The framework</strong>
+      pytest. Has been the right answer for ten years; remains so.<br><br>
+      <strong>The two superpowers</strong>
+      Fixtures (composable setup) and parametrize (one test, many cases). Master these and you're 90% there.
+    </aside>
+    <div class="prose">
+      <p class="lead">pytest is the Python testing framework. It replaced unittest for new code circa 2018 and hasn't been seriously challenged since. The two reasons: fixtures (dependency-injection for tests, composable, scoped) and parametrize (one test definition expanded into many test cases).</p>
+
+      <h3>The minimum that should be in every repo</h3>
+      <pre data-label="tests/conftest.py — fixtures everyone shares"><span class="kw">import</span> pytest
+<span class="kw">from</span> pathlib <span class="kw">import</span> Path
+<span class="kw">from</span> myapp.config <span class="kw">import</span> Settings
+
+<span class="cmt">@pytest.fixture</span>
+<span class="kw">def</span> <span class="fn">settings</span>(tmp_path: Path) -&gt; Settings:
+    <span class="str">"""Per-test settings with isolated paths."""</span>
+    <span class="kw">return</span> Settings(
+        database_url=<span class="str">"sqlite:///:memory:"</span>,
+        data_dir=tmp_path,
+        debug=<span class="ok">True</span>,
+    )
+
+<span class="cmt">@pytest.fixture(scope=<span class="str">"session"</span>)</span>
+<span class="kw">def</span> <span class="fn">tokenizer</span>():
+    <span class="str">"""Expensive setup, shared across tests."""</span>
+    <span class="kw">from</span> transformers <span class="kw">import</span> AutoTokenizer
+    <span class="kw">return</span> AutoTokenizer.from_pretrained(<span class="str">"gpt2"</span>)</pre>
+
+      <h3>Parametrize — the table-driven test</h3>
+      <pre data-label="parametrize — one test, many cases"><span class="kw">import</span> pytest
+<span class="kw">from</span> myapp.parsing <span class="kw">import</span> parse_duration
+
+<span class="cmt">@pytest.mark.parametrize(<span class="str">"raw, expected_seconds"</span>, [</span>
+    (<span class="str">"30s"</span>, <span class="num">30</span>),
+    (<span class="str">"5m"</span>, <span class="num">300</span>),
+    (<span class="str">"1h"</span>, <span class="num">3600</span>),
+    (<span class="str">"2h30m"</span>, <span class="num">9000</span>),
+    pytest.param(<span class="str">"invalid"</span>, <span class="num">0</span>, marks=pytest.mark.xfail(strict=<span class="ok">True</span>)),
+])
+<span class="kw">def</span> <span class="fn">test_parse_duration</span>(raw: <span class="kw">str</span>, expected_seconds: <span class="kw">int</span>) -&gt; <span class="kw">None</span>:
+    <span class="kw">assert</span> parse_duration(raw) == expected_seconds</pre>
+
+      <h3>Fakes &gt; mocks for non-trivial cases</h3>
+      <p><code>unittest.mock</code> creates objects that have any method. They're easy to write but lie cheaply: tests pass even when the real interface changed underneath. <strong>Fakes</strong> are real implementations of an interface, simpler than the production one — an in-memory database that implements the same interface as your real database. Tests against fakes don't lie; refactors don't silently break tests.</p>
+      <pre data-label="fake repository — better than mock"><span class="kw">from</span> dataclasses <span class="kw">import</span> dataclass, field
+<span class="kw">from</span> typing <span class="kw">import</span> Protocol
+
+<span class="kw">class</span> <span class="fn">UserRepo</span>(Protocol):
+    <span class="kw">async def</span> <span class="fn">get</span>(self, user_id: <span class="kw">str</span>) -&gt; User | <span class="kw">None</span>: ...
+    <span class="kw">async def</span> <span class="fn">save</span>(self, user: User) -&gt; <span class="kw">None</span>: ...
+
+<span class="cmt"># Production: backed by Postgres</span>
+<span class="kw">class</span> <span class="fn">PostgresUserRepo</span>:
+    <span class="kw">async def</span> <span class="fn">get</span>(self, user_id: <span class="kw">str</span>) -&gt; User | <span class="kw">None</span>:
+        <span class="kw">return</span> <span class="kw">await</span> self.conn.fetchrow(...)
+    ...
+
+<span class="cmt"># Test: in-memory fake with same shape</span>
+<span class="cmt">@dataclass</span>
+<span class="kw">class</span> <span class="fn">FakeUserRepo</span>:
+    users: <span class="kw">dict</span>[<span class="kw">str</span>, User] = field(default_factory=<span class="kw">dict</span>)
+
+    <span class="kw">async def</span> <span class="fn">get</span>(self, user_id: <span class="kw">str</span>) -&gt; User | <span class="kw">None</span>:
+        <span class="kw">return</span> self.users.get(user_id)
+
+    <span class="kw">async def</span> <span class="fn">save</span>(self, user: User) -&gt; <span class="kw">None</span>:
+        self.users[user.id] = user
+
+<span class="cmt"># Both satisfy UserRepo; the test against the fake is fast AND honest</span></pre>
+
+      <h3>Property-based testing</h3>
+      <p>Some properties hold for ALL inputs, not just the ones you thought to write. Hypothesis generates random inputs and tries to falsify them.</p>
+      <pre data-label="hypothesis — property-based testing"><span class="kw">from</span> hypothesis <span class="kw">import</span> given, strategies <span class="kw">as</span> st
+<span class="kw">from</span> myapp.serialization <span class="kw">import</span> dumps, loads
+
+<span class="cmt"># Property: serialize then deserialize returns the same object</span>
+<span class="cmt">@given(st.dictionaries(keys=st.text(), values=st.integers()))</span>
+<span class="kw">def</span> <span class="fn">test_roundtrip</span>(d: <span class="kw">dict</span>[<span class="kw">str</span>, <span class="kw">int</span>]) -&gt; <span class="kw">None</span>:
+    <span class="kw">assert</span> loads(dumps(d)) == d
+
+<span class="cmt"># Hypothesis discovers edge cases you'd never write:</span>
+<span class="cmt">#   - empty dict</span>
+<span class="cmt">#   - keys with surrogate codepoints</span>
+<span class="cmt">#   - keys that are valid Unicode but break your JSON encoder</span>
+<span class="cmt">#   - integers near MAX_SAFE_INTEGER</span></pre>
+
+      <h3>Async tests</h3>
+      <pre data-label="pytest-asyncio — testing async code"><span class="cmt"># pyproject.toml</span>
+[tool.pytest.ini_options]
+asyncio_mode = <span class="str">"auto"</span>          <span class="cmt"># every test is async-aware; no @asyncio mark needed</span>
+
+<span class="cmt"># Then:</span>
+<span class="kw">async def</span> <span class="fn">test_concurrent_fetches</span>(client) -&gt; <span class="kw">None</span>:
+    results = <span class="kw">await</span> asyncio.gather(
+        client.fetch(<span class="str">"/a"</span>),
+        client.fetch(<span class="str">"/b"</span>),
+        client.fetch(<span class="str">"/c"</span>),
+    )
+    <span class="kw">assert</span> <span class="fn">len</span>(results) == <span class="num">3</span>
+    <span class="kw">assert</span> <span class="fn">all</span>(r.status_code == <span class="num">200</span> <span class="kw">for</span> r <span class="kw">in</span> results)</pre>
+
+      <h3>Coverage as a gate, not a goal</h3>
+      <p>Coverage % is a leading indicator at low values (under 60% means real gaps) and a noise metric at high values (95% vs 98% rarely matters). Set a floor (70-80% for new code) and stop optimizing for it. Use <code>pytest-cov</code> with <code>--cov-fail-under=80</code>.</p>
+      <p>Better than chasing percentages: <strong>mutation testing</strong> with <code>mutmut</code>. Modifies your code to introduce bugs; if your tests still pass, your tests are incomplete. The actual quality signal coverage tries to approximate.</p>
+
+      <div class="callout test">
+        <div class="callout-label">The minimum-viable pytest setup</div>
+        <p><code>pytest</code> + <code>pytest-cov</code> + <code>pytest-xdist</code> (parallel) + <code>pytest-asyncio</code> + <code>hypothesis</code>. Add <code>pytest-mock</code> if you must but prefer real fakes. Configure in <code>pyproject.toml</code> under <code>[tool.pytest.ini_options]</code>. Run with <code>uv run pytest -n auto --cov=src --cov-fail-under=80</code>. That's the whole minimum-viable harness.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 10 -->
+<section class="chapter test-ch" id="ch10">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain test">TEST</span>
+      Chapter <span class="num">X</span>
+    </div>
+    <h2 class="chapter-title">Integration testing · <em>testcontainers</em>, envtest.</h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>The premise</strong>
+      Test against real dependencies, not mocks. Containerize the dependency; tear down after.<br><br>
+      <strong>The K8s case</strong>
+      envtest spawns a real kube-apiserver + etcd locally. KIND spins up a full cluster in a container.
+    </aside>
+    <div class="prose">
+      <p class="lead">Integration tests verify that your code works with real dependencies. The 2026 standard is to spin up a real Postgres / Redis / Kafka / OPA / S3-compatible store as a container per test class, exercise the code, tear down. testcontainers makes this a 3-line addition to a pytest suite.</p>
+
+      <h3>testcontainers — real databases in tests</h3>
+      <pre data-label="testcontainers · real Postgres in pytest"><span class="kw">import</span> pytest
+<span class="kw">from</span> testcontainers.postgres <span class="kw">import</span> PostgresContainer
+<span class="kw">from</span> myapp.repository <span class="kw">import</span> UserRepository
+
+<span class="cmt">@pytest.fixture(scope=<span class="str">"session"</span>)</span>
+<span class="kw">def</span> <span class="fn">postgres</span>():
+    <span class="kw">with</span> PostgresContainer(<span class="str">"postgres:16-alpine"</span>) <span class="kw">as</span> pg:
+        <span class="kw">yield</span> pg.get_connection_url()
+
+<span class="cmt">@pytest.fixture</span>
+<span class="kw">async def</span> <span class="fn">repo</span>(postgres):
+    <span class="cmt"># Each test gets a clean schema; reuses the session-scoped container</span>
+    repo = <span class="kw">await</span> UserRepository.create(postgres)
+    <span class="kw">await</span> repo.run_migrations()
+    <span class="kw">yield</span> repo
+    <span class="kw">await</span> repo.truncate_all()
+
+<span class="kw">async def</span> <span class="fn">test_user_insert_and_fetch</span>(repo: UserRepository) -&gt; <span class="kw">None</span>:
+    user = User(id=<span class="str">"u1"</span>, email=<span class="str">"alice@example.com"</span>)
+    <span class="kw">await</span> repo.save(user)
+    fetched = <span class="kw">await</span> repo.get(<span class="str">"u1"</span>)
+    <span class="kw">assert</span> fetched == user</pre>
+
+      <p>The Postgres container starts once per test session (slow setup, ~3 seconds), shared by all tests. Each test gets a clean schema via the function-scoped fixture. ~30 ms per test after the first.</p>
+
+      <h3>Testing K8s controllers — envtest</h3>
+      <p>kubebuilder will create testing scaffolds for all API and controller it creates, named as _test.go. It uses gomega as testing framework, and uses controller-runtime/pkg/envtest as to bring up a testing environment. During testing of controller, it will bring up an actual kube-apiserver and etcd done by envtest, and doing the testing. No real K8s nodes; just the API surface. Fast (under 5 seconds to start) and faithful for testing CRD validation, reconciler behavior, and watch handling.</p>
+      <pre data-label="envtest — controller test in Go"><span class="kw">var</span> _ = Describe(<span class="str">"PostgresCluster controller"</span>, <span class="kw">func</span>() {
+    <span class="kw">var</span> testEnv *envtest.Environment
+
+    BeforeSuite(<span class="kw">func</span>() {
+        testEnv = &amp;envtest.Environment{
+            CRDDirectoryPaths: []<span class="kw">string</span>{filepath.Join(<span class="str">".."</span>, <span class="str">"config"</span>, <span class="str">"crd"</span>, <span class="str">"bases"</span>)},
+        }
+        cfg, err := testEnv.Start()
+        Expect(err).NotTo(HaveOccurred())
+        <span class="cmt">// register controllers, start manager...</span>
+    })
+
+    It(<span class="str">"creates a StatefulSet when a PostgresCluster is applied"</span>, <span class="kw">func</span>() {
+        cluster := &amp;databasev1.PostgresCluster{
+            ObjectMeta: metav1.ObjectMeta{Name: <span class="str">"test-pg"</span>, Namespace: <span class="str">"default"</span>},
+            Spec: databasev1.PostgresClusterSpec{Replicas: <span class="num">3</span>},
+        }
+        Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
+
+        Eventually(<span class="kw">func</span>() <span class="kw">int</span> {
+            sts := &amp;appsv1.StatefulSet{}
+            _ = k8sClient.Get(ctx, types.NamespacedName{Name: <span class="str">"test-pg"</span>, Namespace: <span class="str">"default"</span>}, sts)
+            <span class="kw">return</span> <span class="kw">int</span>(*sts.Spec.Replicas)
+        }, <span class="str">"10s"</span>).Should(Equal(<span class="num">3</span>))
+    })
+})</pre>
+
+      <h3>Full cluster — KIND</h3>
+      <p>For tests that need real workloads scheduled (pod startup time, init containers, network policy, CSI driver), envtest isn't enough — there are no kubelets. <strong>KIND</strong> (Kubernetes IN Docker) runs a real K8s cluster as a set of Docker containers.</p>
+      <pre data-label="KIND in CI — full-stack integration"><span class="cmt"># .github/workflows/integration.yml</span>
+- <span class="fn">uses</span>: helm/kind-action@v1
+  <span class="fn">with</span>:
+    cluster_name: integration
+    config: ./test/kind-config.yaml
+
+- <span class="fn">name</span>: Load image into KIND
+  <span class="fn">run</span>: kind load docker-image myapp:test --name integration
+
+- <span class="fn">name</span>: Install via Helm
+  <span class="fn">run</span>: |
+    helm install myapp ./chart \
+      --set image.repository=myapp \
+      --set image.tag=test \
+      --wait --timeout 5m
+
+- <span class="fn">name</span>: Run integration suite
+  <span class="fn">run</span>: uv run pytest tests/integration/ -v
+
+- <span class="fn">if</span>: failure()
+  <span class="fn">run</span>: kubectl get pods -A; kubectl logs -l app=myapp --tail=200</pre>
+
+      <h3>Contract testing</h3>
+      <p>For service-to-service interactions, integration tests would require deploying every consumer alongside the producer. <strong>Contract tests</strong> (Pact, Schemathesis) decouple this: the producer publishes a contract (OpenAPI / Pact spec); consumers test against the contract; producer tests its implementation matches the contract.</p>
+      <p>This is the right pattern for microservices where you don't want every service's CI to depend on every other service being deployable.</p>
+
+      <h3>The integration-test budget</h3>
+      <p>Integration tests are expensive. They're slow (seconds to minutes per test), flaky if not careful, and brittle when dependencies change. Budget rules:</p>
+      <ul style="margin: 16px 0 24px 32px; line-height: 1.8;">
+        <li>Total integration time under 5 minutes for branch CI; under 10 for main.</li>
+        <li>Each test must clean up after itself (truncate tables, delete namespaces).</li>
+        <li>Use session-scoped fixtures for expensive setup; function-scoped for state.</li>
+        <li>Retry only deterministic flakes (e.g., port-bind races); fail loud on test logic flakes.</li>
+        <li>If a test fails, dump the dependent service's logs and state automatically.</li>
+      </ul>
+
+      <div class="callout test">
+        <div class="callout-label">The "real dependency or fake" call</div>
+        <p>Real dependency when: the dependency has non-trivial behavior you're testing (query planner, lock semantics, network protocol quirks). Fake when: the dependency is a simple data store and you're testing your code, not its code (use a fake repository instead of testcontainers Postgres). The wrong calls: real dependency for trivial cases (slow CI), fake for complex cases (false confidence).</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 11 -->
+<section class="chapter test-ch" id="ch11">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain test">TEST</span>
+      Chapter <span class="num">XI</span>
+    </div>
+    <h2 class="chapter-title">E2E &amp; ML <em>eval harnesses.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>For services</strong>
+      A handful of smoke tests against deployed staging. The "is the deploy actually working" gate.<br><br>
+      <strong>For ML</strong>
+      Eval suites. Golden sets, behavioral tests, LLM-as-judge. Quality gates that resemble engineering gates.
+    </aside>
+    <div class="prose">
+      <p class="lead">E2E tests are few, slow, and irreplaceable. They verify the property no other tier can: <em>that the whole thing works in something resembling production</em>. For ML, this tier expands into evaluation harnesses — the gating mechanism that prevents quality regressions from shipping.</p>
+
+      <h3>Service E2E — smoke against staging</h3>
+      <p>The deploy-time pattern: after a release lands in staging, run a tiny suite of "the system is alive and behaving" tests. Real HTTP against the staging URL. Real auth. Real downstream services. Failure rolls back the deployment.</p>
+      <pre data-label="smoke against staging URL"><span class="kw">import</span> httpx
+<span class="kw">import</span> pytest
+
+<span class="cmt">@pytest.fixture(scope=<span class="str">"session"</span>)</span>
+<span class="kw">def</span> <span class="fn">client</span>():
+    <span class="kw">return</span> httpx.Client(
+        base_url=os.environ[<span class="str">"STAGING_URL"</span>],
+        headers={<span class="str">"Authorization"</span>: <span class="str">f"Bearer {os.environ['SMOKE_TOKEN']}"</span>},
+        timeout=<span class="num">30</span>,
+    )
+
+<span class="kw">def</span> <span class="fn">test_health</span>(client: httpx.Client) -&gt; <span class="kw">None</span>:
+    <span class="kw">assert</span> client.get(<span class="str">"/readyz"</span>).status_code == <span class="num">200</span>
+
+<span class="kw">def</span> <span class="fn">test_canonical_request</span>(client: httpx.Client) -&gt; <span class="kw">None</span>:
+    r = client.post(<span class="str">"/v1/predict"</span>, json={<span class="str">"input"</span>: <span class="str">"hello"</span>})
+    <span class="kw">assert</span> r.status_code == <span class="num">200</span>
+    <span class="kw">assert</span> <span class="str">"prediction"</span> <span class="kw">in</span> r.json()
+
+<span class="kw">def</span> <span class="fn">test_p99_latency</span>(client: httpx.Client) -&gt; <span class="kw">None</span>:
+    timings = []
+    <span class="kw">for</span> _ <span class="kw">in</span> <span class="fn">range</span>(<span class="num">100</span>):
+        t = time.perf_counter()
+        client.post(<span class="str">"/v1/predict"</span>, json={<span class="str">"input"</span>: <span class="str">"warmup"</span>})
+        timings.append(time.perf_counter() - t)
+    p99 = <span class="fn">sorted</span>(timings)[<span class="num">98</span>]
+    <span class="kw">assert</span> p99 &lt; <span class="num">1.0</span>, <span class="str">f"p99 latency regressed: {p99:.3f}s"</span></pre>
+
+      <h3>ML evaluation harnesses</h3>
+      <p>For an LLM, "does it work" is more like "is it good enough." The gate is a suite of metrics on representative inputs. Common harnesses:</p>
+      <div class="cards-grid">
+        <div class="tech-card">
+          <div class="kind">academic · standard benchmarks</div>
+          <div class="name">lm-evaluation-harness</div>
+          <div class="desc">EleutherAI's reference suite. MMLU, HellaSwag, ARC, GSM8K, BBH, IFEval. <code>lm_eval --model hf --tasks mmlu</code>. Public benchmarks; useful for "did we regress on commodity capabilities."</div>
+          <div class="pill">community standard</div>
+        </div>
+        <div class="tech-card">
+          <div class="kind">product-specific · own data</div>
+          <div class="name">Golden-set regression</div>
+          <div class="desc">A frozen evaluation set in your repo. Known inputs, known expected outputs (or output qualities). Same inputs evaluated on every release; gates merge if accuracy / quality drops.</div>
+          <div class="pill">your eval, your gate</div>
+        </div>
+        <div class="tech-card">
+          <div class="kind">behavioral · CheckList</div>
+          <div class="name">Capability tests</div>
+          <div class="desc">Tests specific behaviors: refuses when asked X, produces JSON when asked, follows multi-step instructions, cites correctly. Per-capability; granular failures.</div>
+          <div class="pill">domain coverage</div>
+        </div>
+        <div class="tech-card">
+          <div class="kind">scale · LLM-as-judge</div>
+          <div class="name">Pairwise grading</div>
+          <div class="desc">A stronger model judges your model's outputs vs a baseline on a held-out set. Useful at scale where human eval is too expensive; calibrate the judge first.</div>
+          <div class="pill">cheap quality signal</div>
+        </div>
+      </div>
+
+      <h3>Putting eval into CI</h3>
+      <pre data-label="eval as a CI gate"><span class="cmt"># .github/workflows/eval.yml</span>
+<span class="kw">name</span>: model-eval
+<span class="kw">on</span>:
+  pull_request:
+    paths:
+      - <span class="str">'models/**'</span>
+      - <span class="str">'evals/**'</span>
+<span class="kw">jobs</span>:
+  golden-set:
+    <span class="fn">runs-on</span>: [self-hosted, gpu, h100]
+    steps:
+      - <span class="fn">uses</span>: actions/checkout@v4
+      - <span class="fn">name</span>: Pull base model
+        <span class="fn">run</span>: huggingface-cli download <span class="fn">${{</span> vars.BASE_MODEL <span class="fn">}}</span>
+      - <span class="fn">name</span>: Apply finetune from this PR
+        <span class="fn">run</span>: ./scripts/apply-finetune.sh
+      - <span class="fn">name</span>: Run eval suite
+        <span class="fn">run</span>: |
+          uv run python -m evals.run \
+            --golden-set evals/golden/v3.jsonl \
+            --output results.json
+      - <span class="fn">name</span>: Compare against baseline
+        <span class="fn">run</span>: |
+          uv run python -m evals.compare \
+            --baseline evals/baselines/prod.json \
+            --candidate results.json \
+            --fail-on-regression-pct <span class="num">2.0</span>             <span class="cmt"># 2% drop fails the PR</span>
+      - <span class="fn">if</span>: failure()
+        <span class="fn">uses</span>: actions/upload-artifact@v4
+        <span class="fn">with</span>: { name: eval-results, path: results.json }</pre>
+
+      <h3>Eval-as-code discipline</h3>
+      <p>Treat your eval suite like your application code:</p>
+      <ul style="margin: 16px 0 24px 32px; line-height: 1.8;">
+        <li><strong>Versioned.</strong> Golden sets are committed to the repo with their date and provenance. v3 of the golden set is a different artifact than v2.</li>
+        <li><strong>Reviewed.</strong> PRs that change the eval set get extra scrutiny — you don't want a PR to silently weaken the gate.</li>
+        <li><strong>Reproducible.</strong> Same seed, same model, same data → same scores. Otherwise you can't tell signal from noise.</li>
+        <li><strong>Triaged.</strong> A regression on the eval suite is not a "rerun and hope"; it's a Jira ticket with a root cause.</li>
+      </ul>
+
+      <div class="callout test">
+        <div class="callout-label">The eval discipline</div>
+        <p>For ML services, the eval suite IS the regression suite. A model release without an eval gate is a deploy with no test coverage. Build the harness early; budget for it like you budget for unit tests. Three months in, the time you spend on evals will pay back twentyfold the first time a "small refactor" silently degrades quality on a benchmark you weren't watching.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 12 -->
+<section class="chapter py-ch" id="ch12">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain py">PYTHON</span>
+      Chapter <span class="num">XII</span>
+    </div>
+    <h2 class="chapter-title">Python tooling · <em>uv</em>, Ruff, mypy.</h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>The 2026 default stack</strong>
+      uv for environments and dependencies. Ruff for lint+format. mypy or ty for types.<br><br>
+      <strong>Why this matters</strong>
+      The old stack (pip + venv + black + isort + flake8 + pylint) is 10 tools and 10 configs. The new stack is 3 tools sharing one config.
+    </aside>
+    <div class="prose">
+      <p class="lead">Python's developer toolchain went through a phase change in 2024-2026. The old stack — pip + venv + pyenv + pip-tools + black + isort + flake8 + pylint + bandit + mypy — has been collapsed into three tools that share one config file. For most new projects, the cleanest default stack is: uv for Python installation, environments, dependency management, locking, and command running. Ruff for linting and formatting. Ty for type checking. The migration is a weekend project; the payoff is permanent.</p>
+
+      <div class="panel">
+        <div class="panel-title">Interactive · The three-tool stack</div>
+        <div class="panel-tabs" id="toolTabs">
+          <button class="panel-tab active" data-tool="uv">uv</button>
+          <button class="panel-tab" data-tool="ruff">Ruff</button>
+          <button class="panel-tab" data-tool="mypy">mypy / ty</button>
+          <button class="panel-tab" data-tool="config">pyproject.toml</button>
+        </div>
+        <div class="panel-body" id="toolBody"></div>
+      </div>
+
+      <h3>Project layout — src layout, always</h3>
+      <pre data-label="canonical Python project layout 2026"><span class="cmt"># Created by: uv init myapp</span>
+myapp/
+├── .python-version            <span class="cmt"># pinned Python version</span>
+├── pyproject.toml             <span class="cmt"># everything: deps, ruff, mypy, pytest</span>
+├── uv.lock                    <span class="cmt"># committed lockfile</span>
+├── README.md
+├── Dockerfile
+├── src/
+│   └── myapp/                 <span class="cmt"># src layout — required for proper isolation</span>
+│       ├── __init__.py
+│       ├── main.py
+│       ├── config.py
+│       └── api/
+│           └── routes.py
+├── tests/
+│   ├── conftest.py
+│   ├── unit/
+│   ├── integration/
+│   └── e2e/
+└── .github/
+    └── workflows/
+        ├── ci.yml
+        └── release.yml</pre>
+
+      <p><strong>Why src layout?</strong> With src, the package isn't importable from the project root. Tests must use the installed package, exactly as users would. Catches "works in repo, fails when packaged" bugs. The flat layout (just <code>myapp/</code> at the root) shadows the installed package and hides packaging bugs.</p>
+
+      <h3>The uv workspace for monorepos</h3>
+      <p>If you have multiple services or libraries that share dependencies, uv workspaces are the answer. If you're running a monorepo with multiple services, uv's workspace feature keeps everything coordinated with a single lockfile.</p>
+      <pre data-label="uv workspace — monorepo layout"><span class="cmt"># Root pyproject.toml</span>
+[tool.uv.workspace]
+members = [<span class="str">"packages/*"</span>, <span class="str">"services/*"</span>]
+
+[tool.uv]
+dev-dependencies = [
+    <span class="str">"mypy&gt;=1.13"</span>,
+    <span class="str">"ruff&gt;=0.8"</span>,
+    <span class="str">"pre-commit&gt;=3.0"</span>,
+    <span class="str">"pytest&gt;=8.0"</span>,
+]
+
+<span class="cmt"># Shared tooling config — same rules across the monorepo</span>
+[tool.ruff]
+target-version = <span class="str">"py312"</span>
+line-length = <span class="num">100</span>
+
+[tool.mypy]
+python_version = <span class="str">"3.12"</span>
+strict = <span class="ok">true</span>
+
+<span class="cmt"># Filesystem:</span>
+myorg/
+├── pyproject.toml          <span class="cmt"># workspace root</span>
+├── uv.lock                 <span class="cmt"># single lockfile for all packages</span>
+├── packages/
+│   ├── core/              <span class="cmt"># shared library</span>
+│   └── pyproject.toml
+└── services/
+    ├── api/                <span class="cmt"># depends on core</span>
+    │   └── pyproject.toml
+    └── worker/
+        └── pyproject.toml</pre>
+
+      <h3>Pre-commit — automate the discipline</h3>
+      <pre data-label=".pre-commit-config.yaml"><span class="kw">repos</span>:
+  - <span class="fn">repo</span>: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.0
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+  - <span class="fn">repo</span>: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.13.0
+    hooks:
+      - id: mypy
+        args: [--strict]
+        additional_dependencies: [pydantic, types-pyyaml]
+  - <span class="fn">repo</span>: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+        args: [<span class="str">'--maxkb=500'</span>]</pre>
+
+      <p>Install with <code>uv run pre-commit install</code>. Now every commit runs Ruff (fix and format) and mypy. If any check fails, the commit is blocked. Discipline at the keystroke level, not the CI level.</p>
+
+      <h3>CI integration — three lines</h3>
+      <pre data-label="GitHub Actions · the full Python CI"><span class="kw">jobs</span>:
+  test:
+    <span class="fn">runs-on</span>: ubuntu-latest
+    <span class="fn">steps</span>:
+      - <span class="fn">uses</span>: actions/checkout@v4
+      - <span class="fn">uses</span>: astral-sh/setup-uv@v3
+      - <span class="fn">run</span>: uv sync --frozen           <span class="cmt"># install exactly what's in uv.lock</span>
+      - <span class="fn">run</span>: uv run ruff check .
+      - <span class="fn">run</span>: uv run ruff format --check .
+      - <span class="fn">run</span>: uv run mypy --strict src/
+      - <span class="fn">run</span>: uv run pytest -n auto --cov=src --cov-fail-under=<span class="num">80</span></pre>
+
+      <p>Five lines after checkout and setup; covers lint, format-check, type-check, and tests with coverage. The whole Python quality bar in one job. This setup takes about 10 minutes and saves hours of debugging. Fast tooling, automatic enforcement, minimal configuration.</p>
+
+      <div class="callout py">
+        <div class="callout-label">The migration math</div>
+        <p>Migrating from pip+venv+black+isort+flake8 to uv+ruff is roughly 15-30 minutes per repo. Two thirds of that is browsing Ruff rules to decide which to keep. The payoff: 10-100x faster installs, milliseconds-instead-of-seconds linting, one config file instead of five, no more "did you activate the venv" conversations. The hardest part is the social one — convincing the team to stop using their muscle memory.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 13 -->
+<section class="chapter py-ch" id="ch13">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain py">PYTHON</span>
+      Chapter <span class="num">XIII</span>
+    </div>
+    <h2 class="chapter-title">Python services · <em>FastAPI</em>, Pydantic, async.</h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>The default stack</strong>
+      FastAPI for HTTP. Pydantic for data. Async by default. Structlog for logs. OpenTelemetry for traces.<br><br>
+      <strong>The principle</strong>
+      Type-safe at the boundaries; async at the request handlers; observable everywhere.
+    </aside>
+    <div class="prose">
+      <p class="lead">For Python services in 2026, the boring choice is the right choice: FastAPI for HTTP, Pydantic for input/output validation, async I/O at the request handler, OpenTelemetry for tracing, structlog for logs. Each piece is mature, well-typed, and integrates with the others without surprises.</p>
+
+      <h3>The minimum-viable FastAPI service</h3>
+      <pre data-label="a production-shaped FastAPI app"><span class="kw">from</span> contextlib <span class="kw">import</span> asynccontextmanager
+<span class="kw">from</span> fastapi <span class="kw">import</span> FastAPI, Depends, HTTPException
+<span class="kw">from</span> pydantic <span class="kw">import</span> BaseModel, Field
+<span class="kw">import</span> structlog
+
+log = structlog.get_logger()
+
+<span class="cmt"># --- request/response models ---</span>
+<span class="kw">class</span> <span class="fn">PredictRequest</span>(BaseModel):
+    text: <span class="kw">str</span> = Field(..., min_length=<span class="num">1</span>, max_length=<span class="num">8192</span>)
+    temperature: <span class="kw">float</span> = Field(<span class="num">0.7</span>, ge=<span class="num">0.0</span>, le=<span class="num">2.0</span>)
+    max_tokens: <span class="kw">int</span> = Field(<span class="num">512</span>, ge=<span class="num">1</span>, le=<span class="num">4096</span>)
+
+<span class="kw">class</span> <span class="fn">PredictResponse</span>(BaseModel):
+    output: <span class="kw">str</span>
+    tokens_used: <span class="kw">int</span>
+    model_version: <span class="kw">str</span>
+
+<span class="cmt"># --- lifespan: startup &amp; shutdown ---</span>
+<span class="cmt">@asynccontextmanager</span>
+<span class="kw">async def</span> <span class="fn">lifespan</span>(app: FastAPI):
+    app.state.model = <span class="kw">await</span> load_model()
+    log.info(<span class="str">"model.loaded"</span>, version=app.state.model.version)
+    <span class="kw">yield</span>
+    <span class="kw">await</span> app.state.model.close()
+
+app = FastAPI(lifespan=lifespan, title=<span class="str">"prediction-api"</span>)
+
+<span class="cmt"># --- health endpoints ---</span>
+<span class="cmt">@app.get(<span class="str">"/healthz"</span>)</span>
+<span class="kw">async def</span> <span class="fn">healthz</span>() -&gt; <span class="kw">dict</span>[<span class="kw">str</span>, <span class="kw">str</span>]:
+    <span class="kw">return</span> {<span class="str">"status"</span>: <span class="str">"ok"</span>}
+
+<span class="cmt">@app.get(<span class="str">"/readyz"</span>)</span>
+<span class="kw">async def</span> <span class="fn">readyz</span>(app: FastAPI = Depends()) -&gt; <span class="kw">dict</span>[<span class="kw">str</span>, <span class="kw">str</span>]:
+    <span class="kw">if</span> <span class="kw">not</span> app.state.model.is_ready():
+        <span class="kw">raise</span> HTTPException(status_code=<span class="num">503</span>)
+    <span class="kw">return</span> {<span class="str">"status"</span>: <span class="str">"ready"</span>}
+
+<span class="cmt"># --- the actual endpoint ---</span>
+<span class="cmt">@app.post(<span class="str">"/v1/predict"</span>, response_model=PredictResponse)</span>
+<span class="kw">async def</span> <span class="fn">predict</span>(req: PredictRequest) -&gt; PredictResponse:
+    <span class="kw">try</span>:
+        result = <span class="kw">await</span> app.state.model.generate(
+            text=req.text,
+            temperature=req.temperature,
+            max_tokens=req.max_tokens,
+        )
+    <span class="kw">except</span> ModelOverloadedError <span class="kw">as</span> e:
+        log.warning(<span class="str">"model.overloaded"</span>, queue_depth=e.queue_depth)
+        <span class="kw">raise</span> HTTPException(status_code=<span class="num">503</span>, detail=<span class="str">"overloaded"</span>) <span class="kw">from</span> e
+
+    <span class="kw">return</span> PredictResponse(
+        output=result.text,
+        tokens_used=result.tokens,
+        model_version=app.state.model.version,
+    )</pre>
+
+      <h3>Why Pydantic v2</h3>
+      <p>Pydantic v2 (released 2023, the standard now) does input validation in Rust under the hood. 5-50x faster than v1. Same API ergonomics. The defaults match what services actually want: strict types, JSON schema generation, validators, computed fields. If you're still on v1, migrate — the speedup alone is worth a week.</p>
+
+      <h3>Async, properly</h3>
+      <p>Async Python is misunderstood. The simple version:</p>
+      <p><strong>Use async</strong> for I/O-bound work where you'd otherwise block: HTTP calls, database queries, file reads. The event loop handles many concurrent in-flight operations.</p>
+      <p><strong>Don't use async</strong> for CPU-bound work. The event loop only runs one thing at a time per process. Use <code>asyncio.to_thread()</code> or a process pool for CPU work.</p>
+      <p><strong>Don't mix sync and async</strong>. <code>requests.get()</code> in an async handler blocks the event loop. Use <code>httpx.AsyncClient</code>. <code>psycopg2</code> blocks; use <code>asyncpg</code> or <code>psycopg</code> v3 async. <code>boto3</code> blocks; use <code>aioboto3</code>.</p>
+
+      <h3>Observability — what every service must emit</h3>
+      <pre data-label="structlog + opentelemetry instrumentation"><span class="cmt"># Structured logging — JSON output, K8s metadata picked up by Loki</span>
+<span class="kw">import</span> structlog
+structlog.configure(
+    processors=[
+        structlog.contextvars.merge_contextvars,
+        structlog.processors.add_log_level,
+        structlog.processors.TimeStamper(fmt=<span class="str">"iso"</span>),
+        structlog.processors.JSONRenderer(),
+    ],
+)
+
+<span class="cmt"># OpenTelemetry — traces auto-emitted from FastAPI &amp; httpx</span>
+<span class="kw">from</span> opentelemetry.instrumentation.fastapi <span class="kw">import</span> FastAPIInstrumentor
+<span class="kw">from</span> opentelemetry.instrumentation.httpx <span class="kw">import</span> HTTPXClientInstrumentor
+
+FastAPIInstrumentor.instrument_app(app)
+HTTPXClientInstrumentor().instrument()
+
+<span class="cmt"># Prometheus metrics — /metrics endpoint, scraped by Prometheus</span>
+<span class="kw">from</span> prometheus_fastapi_instrumentator <span class="kw">import</span> Instrumentator
+Instrumentator().instrument(app).expose(app, endpoint=<span class="str">"/metrics"</span>)
+
+<span class="cmt"># Result: every request emits a structured log + a trace span + metrics</span>
+<span class="cmt"># Total cost: ~3% latency overhead; visibility worth orders of magnitude more</span></pre>
+
+      <h3>The deploy-readable application</h3>
+      <p>Three things every Python service must do that beginners often forget:</p>
+      <p><strong>Run as the same user the image was built for.</strong> <code>USER 65532</code> in Dockerfile; <code>runAsNonRoot: true</code> in podSpec. Cross-reference Issue 07.</p>
+      <p><strong>Handle SIGTERM properly.</strong> K8s sends SIGTERM, waits <code>terminationGracePeriodSeconds</code> (default 30), then SIGKILL. Your service must finish in-flight requests, close DB pools, and exit cleanly. uvicorn does this; gunicorn does too. Make sure your shutdown handlers are wired.</p>
+      <p><strong>Expose <code>/healthz</code>, <code>/readyz</code>, and <code>/metrics</code>.</strong> Three separate endpoints. healthz = process alive. readyz = ready to serve traffic. metrics = Prometheus scrape target.</p>
+
+      <div class="callout py">
+        <div class="callout-label">The boring stack works</div>
+        <p>FastAPI + Pydantic + httpx + asyncpg + structlog + OpenTelemetry is the right stack for ~90% of Python services in 2026. It's boring; it's well-typed; it integrates without surprises; documentation is excellent; the entire ecosystem is async-first. Pick this and spend your design energy on the actual business logic, not on plumbing.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 14 -->
+<section class="chapter py-ch" id="ch14">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain py">PICKER</span>
+      Chapter <span class="num">XIV</span>
+    </div>
+    <h2 class="chapter-title">The picker · <em>workflow by workload.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>Click through</strong>
+      From the work you're doing to the specific tools and patterns that fit. Skip the parts you're already on; adopt the parts you're not.<br><br>
+      <strong>Calibration</strong>
+      Recommendations for mid-2026.
+    </aside>
+    <div class="prose">
+      <p class="lead">A decision tree from "what kind of engineering work" to a complete tooling and process recommendation. Click through.</p>
+
+      <div class="picker">
+        <div class="picker-label">Interactive · Engineering Strategy Picker</div>
+        <div class="picker-title" id="pickerTitle">What kind of work?</div>
+        <div id="pickerContainer"></div>
+        <button class="picker-reset" id="pickerReset" style="display:none">↺ Reset</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 15 -->
+<section class="chapter py-ch" id="ch15">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain py">CHECKLIST</span>
+      Chapter <span class="num">XV</span>
+    </div>
+    <h2 class="chapter-title">Engineering discipline <em>checklist.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>Click each item</strong>
+      To mark complete. State is local.<br><br>
+      <strong>The rubric</strong>
+      A mature engineering practice checks most of these. Many unchecked = engineering debt that will catch up at the worst time.
+    </aside>
+    <div class="prose">
+      <p class="lead">The merged engineering-discipline checklist. Click each item to mark complete.</p>
+
+      <div class="checklist" id="checklist">
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">pyproject.toml is the single config file</div><div class="check-desc">uv, ruff, mypy, pytest all configured under <code>[tool.*]</code> sections. No setup.py, setup.cfg, requirements.txt at the root.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">uv.lock committed and verified in CI</div><div class="check-desc"><code>uv sync --frozen</code> in CI; failures if lockfile is stale. Reproducible installs.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">src/ layout, not flat package layout</div><div class="check-desc">Tests use the installed package, not the source. Catches packaging bugs at test time.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Pre-commit hooks installed for every contributor</div><div class="check-desc">Ruff check + format + mypy run on every <code>git commit</code>. CI confirms nothing slipped through.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">mypy strict mode on new code</div><div class="check-desc"><code>strict = true</code> in pyproject.toml. Legacy code grandfathered; new code held to the bar.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Branch CI under 2 minutes; main CI under 10</div><div class="check-desc">Parallel job graph, registry-cached builds, fast tests in the branch lane.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Test pyramid shaped right: many unit, few E2E</div><div class="check-desc">Unit thousands, integration hundreds, E2E tens. Not inverted, not hourglass.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Coverage gate at 70-80% (not 95%)</div><div class="check-desc">High enough to catch real gaps. Low enough not to encourage gaming the metric.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Integration tests via testcontainers, not mocks</div><div class="check-desc">Real Postgres / Redis / Kafka in tests. Per-class containers; per-test schema reset.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Property-based tests for invariants</div><div class="check-desc">Hypothesis for serialization roundtrips, parser/formatter pairs, idempotency claims.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Smoke tests against deployed staging in CI</div><div class="check-desc">Real HTTP requests; verifies the deploy actually works. Roll back on failure.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">ML eval suite gating model releases</div><div class="check-desc">Golden-set regression test fails the release on quality drop &gt; threshold.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">GitOps for all deployments</div><div class="check-desc">Argo CD or Flux. Cluster state ← Git repo. No <code>kubectl apply</code> from human hands in prod.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Two-repo split: app source &amp; deployment manifests</div><div class="check-desc">Release in app repo opens a PR against deployments repo. Same digest end-to-end.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Helm charts use values.schema.json</div><div class="check-desc">Required fields, digest format checked at install time. No more silent typos.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Operators only for true day-two needs</div><div class="check-desc">Helm for stateless apps; Operators for stateful systems (databases, brokers) and platform-level reconciliation.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Argo Workflows or Kubeflow for ML/batch DAGs</div><div class="check-desc">Don't run multi-step ML jobs as shell scripts. Workflow engines give you retries, parallelism, artifact tracking, observability.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Self-hosted GPU runners for ML CI</div><div class="check-desc">Eval gates run on real GPUs in CI. Actions Runner Controller or Buildkite agents on GPU nodes.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Services emit /healthz, /readyz, /metrics</div><div class="check-desc">Three endpoints, three purposes. Probes configured in pod spec; Prometheus scrapes metrics.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">FastAPI + Pydantic + async I/O for new services</div><div class="check-desc">The boring stack works. asyncpg / httpx / aioboto3 — no sync libraries in async handlers.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Structured JSON logs + OpenTelemetry traces</div><div class="check-desc">structlog for logs, OTel auto-instrumentation for traces, Prometheus for metrics. The four signals (Issue 06 Ch XII) all present.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Promotion is a PR, not a manual deploy</div><div class="check-desc">Dev auto-promotes from main CI. Staging auto-promotes after time bake. Prod requires explicit approval. Every prod change has a Git commit and a reviewer.</div></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="colophon">
+  <div class="colophon-mark"><em>The Cluster</em> Quarterly</div>
+  <p>Field Manual · Volume I · Issue 08 · MMXXVI</p>
+</footer>
+
+<script>
+// ============ Tool tabs ============
+const toolData = {
+  uv: {
+    h: 'uv', sub: 'package manager + environment + Python installer',
+    body: [
+      '<p>Single binary written in Rust. Replaces pip, venv, virtualenv, pip-tools, pyenv. 10-100x faster than pip for installs. Created by Astral, the same team behind Ruff.</p>',
+      '<p>Manages Python itself (<code>uv python install 3.12</code>), virtual environments (<code>uv venv</code>), dependencies (<code>uv add fastapi</code>), and lockfiles (<code>uv.lock</code>). <code>uv run pytest</code> automatically syncs the environment and runs in it — no <code>source .venv/bin/activate</code> dance.</p>',
+      '<pre data-label="uv daily commands"># Initialize a new project\nuv init my-project\n\n# Add a dependency (updates pyproject.toml + uv.lock + .venv)\nuv add fastapi pydantic httpx\n\n# Add a dev-only dependency\nuv add --group dev pytest ruff mypy\n\n# Run something in the project venv\nuv run pytest\n\n# In CI: install exactly what is locked, fail if lockfile is stale\nuv sync --frozen\n\n# Run a tool without installing it (ephemeral)\nuvx ruff check .</pre>'
+    ]
+  },
+  ruff: {
+    h: 'Ruff', sub: 'linter + formatter (replaces black, isort, flake8, pylint)',
+    body: [
+      '<p>All-in-one linter and formatter written in Rust. Replaces black, isort, flake8, pylint, bandit, and about a dozen other tools. Runs in milliseconds on any codebase.</p>',
+      '<p>The formatter is black-compatible. The linter has hundreds of rules; pick the ones that match your style. Default rules catch the common bugs (unused imports, missing __all__, mutable default arguments, comparison to None with ==).</p>',
+      '<pre data-label="ruff config in pyproject.toml">[tool.ruff]\ntarget-version = "py312"\nline-length = 100\n\n[tool.ruff.lint]\nselect = [\n    "E",    # pycodestyle errors\n    "F",    # pyflakes (unused, undefined)\n    "I",    # isort (import order)\n    "B",    # flake8-bugbear (likely bugs)\n    "UP",   # pyupgrade (modern syntax)\n    "SIM",  # flake8-simplify\n    "RUF",  # ruff-specific rules\n]\nignore = ["E501"]  # line length handled by formatter\n\n[tool.ruff.format]\nquote-style = "double"\nindent-style = "space"</pre>'
+    ]
+  },
+  mypy: {
+    h: 'mypy / ty', sub: 'static type checker',
+    body: [
+      '<p><strong>mypy</strong> is the reference implementation, mature, broadly compatible with libraries via stubs. <strong>pyright</strong> (Microsoft) is faster and stricter; powers Pylance in VS Code. <strong>ty</strong> is Astral\'s newer entrant, designed for speed and editor integration.</p>',
+      '<p>Run in <code>--strict</code> mode for new code. Strict enables all the type-checking flags that catch real bugs: no implicit Any, no implicit Optional, no untyped function defs, strict equality, warn unused configs.</p>',
+      '<pre data-label="mypy in strict mode">[tool.mypy]\npython_version = "3.12"\nstrict = true\n\n# Per-module overrides for legacy code being grandfathered\n[[tool.mypy.overrides]]\nmodule = "myapp.legacy.*"\nignore_errors = true\n\n# Allow untyped third-party libraries without stubs\n[[tool.mypy.overrides]]\nmodule = ["some_untyped_lib.*"]\nignore_missing_imports = true\n\n# What strict enables:\n# --warn-redundant-casts\n# --warn-unused-ignores\n# --disallow-untyped-defs\n# --no-implicit-optional\n# --strict-equality\n# --strict-concatenate</pre>'
+    ]
+  },
+  config: {
+    h: 'pyproject.toml', sub: 'one config, all tools',
+    body: [
+      '<p>The unified config file. Project metadata under <code>[project]</code>. Tool config under <code>[tool.uv]</code>, <code>[tool.ruff]</code>, <code>[tool.mypy]</code>, <code>[tool.pytest.ini_options]</code>. One file, all tools, version-controlled together.</p>',
+      '<pre data-label="full pyproject.toml example">[project]\nname = "myapp"\nversion = "0.1.0"\nrequires-python = ">=3.12"\ndependencies = [\n    "fastapi>=0.110",\n    "pydantic>=2.5",\n    "httpx>=0.27",\n    "structlog>=24.1",\n]\n\n[tool.uv]\ndev-dependencies = [\n    "pytest>=8.0",\n    "pytest-cov>=4.1",\n    "pytest-asyncio>=0.23",\n    "pytest-xdist>=3.5",\n    "hypothesis>=6.92",\n    "ruff>=0.8",\n    "mypy>=1.13",\n    "testcontainers>=4.0",\n]\n\n[tool.ruff]\ntarget-version = "py312"\nline-length = 100\n\n[tool.ruff.lint]\nselect = ["E", "F", "I", "B", "UP", "SIM", "RUF"]\n\n[tool.mypy]\npython_version = "3.12"\nstrict = true\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\nasyncio_mode = "auto"\naddopts = "-v --cov=src --cov-fail-under=80"</pre>'
+    ]
+  }
+};
+const toolTabs = document.querySelectorAll('.panel-tab');
+const toolBody = document.getElementById('toolBody');
+function showTool(key) {
+  toolTabs.forEach(t => t.classList.toggle('active', t.dataset.tool === key));
+  const d = toolData[key];
+  toolBody.innerHTML = `<h4>${d.h}<small>${d.sub}</small></h4>${d.body.join('')}`;
+}
+toolTabs.forEach(t => t.addEventListener('click', () => showTool(t.dataset.tool)));
+showTool('uv');
+
+// ============ Picker ============
+const pickerTree = {
+  start: {
+    q: 'What kind of work are you doing?', n: 'Q0',
+    choices: [
+      { label: 'Starting a new Python service from scratch', next: 'new_py' },
+      { label: 'Adding tests to an under-tested codebase', next: 'test_debt' },
+      { label: 'Setting up CI/CD for an existing repo', next: 'ci' },
+      { label: 'Deploying services to many K8s clusters', next: 'gitops' },
+      { label: 'Orchestrating ML training / batch pipelines', next: 'orch' },
+      { label: 'Building a stateful K8s system (DB, queue, etc.)', next: 'operator' }
+    ]
+  },
+  new_py: {
+    verdict: true, title: '→ New Python service · the 2026 default',
+    body: [
+      '<strong>Tooling</strong>: <code>uv init</code> the project; <code>uv add fastapi pydantic httpx structlog</code>; <code>uv add --group dev pytest ruff mypy</code>.',
+      '<strong>Layout</strong>: src/ layout from day one. <code>tests/unit/</code>, <code>tests/integration/</code>. Single <code>pyproject.toml</code>.',
+      '<strong>Quality</strong>: pre-commit hooks for ruff + mypy. mypy <code>strict = true</code> from the start (much harder to retrofit later).',
+      '<strong>Service</strong>: FastAPI + Pydantic + async I/O. <code>/healthz</code>, <code>/readyz</code>, <code>/metrics</code> from day one.',
+      '<strong>Observability</strong>: structlog + OpenTelemetry auto-instrumentation + prometheus-fastapi-instrumentator. Three lines of setup.',
+      '<strong>CI</strong>: GitHub Actions or equivalent. Five-line job: setup-uv → sync → ruff → mypy → pytest with coverage gate.'
+    ]
+  },
+  test_debt: {
+    verdict: true, title: '→ Climbing out of test debt',
+    body: [
+      '<strong>Start at the top of the pyramid</strong>: write 5-10 smoke tests against the deployed system. Real HTTP, real DB. These catch the "system is broken" class.',
+      '<strong>Then work down</strong>: add integration tests via testcontainers for the highest-risk endpoints/workflows. Use real dependencies.',
+      '<strong>Then unit tests for new code</strong>: enforce 80% coverage on changed files via codecov or coverage-comment-action. Don\'t retrofit unit tests for legacy code en masse — too expensive, low ROI.',
+      '<strong>Mutation testing</strong> (mutmut) on the critical paths once you have unit tests. Tells you whether the tests actually check anything.',
+      '<strong>Add eval gates if ML</strong>: golden set with N-percent regression threshold. Block merges that drop quality.'
+    ]
+  },
+  ci: {
+    verdict: true, title: '→ CI/CD that actually saves time',
+    body: [
+      '<strong>Parallel job graph</strong>: lint, typecheck, unit tests, build all in parallel. Sequential only where there are real dependencies (integration tests need built image).',
+      '<strong>Branch vs main lanes</strong>: Branch CI runs the fast lane (under 2 min). Main CI runs the full lane (under 10 min) plus release steps.',
+      '<strong>Cache aggressively</strong>: uv cache, BuildKit registry cache, model weights cache for ML. Cross-reference Issue 06 Ch III.',
+      '<strong>Build once, promote by digest</strong>: never rebuild for staging vs prod. Release job opens a PR against your GitOps repo bumping the digest. Cross-reference Issue 07 Ch XIII.',
+      '<strong>Sign &amp; attest</strong>: cosign keyless, SBOM, SLSA L2+. Admission control verifies at deploy. Cross-reference Issue 07 Ch X-XI.',
+      '<strong>Self-hosted GPU runners</strong> if you need GPU in CI: Actions Runner Controller on K8s, or Buildkite agents on GPU nodes.'
+    ]
+  },
+  gitops: {
+    verdict: true, title: '→ GitOps for multi-cluster',
+    body: [
+      '<strong>Tool choice</strong>: Argo CD if you want a UI and hub-and-spoke (one control plane, many clusters). Flux if you prefer CLI/GitOps-pure and per-cluster ops.',
+      '<strong>Two-repo pattern</strong>: app-source repo (code + Dockerfile + CI) and deployments repo (Helm charts + values per env). Release in app repo → PR to deployments repo.',
+      '<strong>Helm or Kustomize</strong>: Helm for packaged apps with parameterization. Kustomize for simple overlays. Both work with Argo CD/Flux.',
+      '<strong>Promotion flow</strong>: dev auto-promotes; staging time-bakes; prod requires manual approval. Each promotion is a PR with a digest bump.',
+      '<strong>Drift &amp; self-heal</strong>: <code>selfHeal: true</code> reverts manual <code>kubectl edit</code>s. Painful at first; indispensable later.',
+      '<strong>Progressive delivery</strong>: Argo Rollouts or Flagger for canary; SLO metrics gate the rollout; auto-rollback on SLI degradation.'
+    ]
+  },
+  orch: {
+    verdict: true, title: '→ ML/batch orchestration',
+    body: [
+      '<strong>Engine choice</strong>: Argo Workflows for general DAGs on K8s. Kubeflow Pipelines if you want ML platform features (experiments, KServe serving, Katib HPO). Airflow only if your team is deeply embedded in the Airflow ecosystem and needs many SaaS integrations.',
+      '<strong>Authoring</strong>: KFP for Python-defined pipelines that compile to Argo YAML. Pure Argo YAML when you want declarative simplicity and don\'t need ML-specific abstractions.',
+      '<strong>Patterns</strong>: <code>withParam</code> fan-out for hyperparameter sweeps. Step artifacts to S3 (auto-uploaded). Conditional execution for adaptive pipelines.',
+      '<strong>Resources</strong>: each step pod requests its own GPUs. Use the GPU Operator + MIG/time-slicing for multi-tenant clusters. Cross-reference Issue 06 Ch X.',
+      '<strong>Observability</strong>: Argo controller metrics + workflow status + per-step latencies. Tie traces from steps to the workflow. Cross-reference Issue 06 Ch XI-XII.'
+    ]
+  },
+  operator: {
+    verdict: true, title: '→ Building an Operator',
+    body: [
+      '<strong>Don\'t write one unless you need one</strong>: stateless apps go in Helm. Operators are for systems with ongoing operational logic (backup, repair, scale, failover).',
+      '<strong>Framework</strong>: Kubebuilder (Go, default). Operator SDK (Go + OLM integration). Kopf (Python, for ML platform teams already in Python). kube-rs (Rust, for performance-sensitive cases).',
+      '<strong>Design</strong>: CRDs with proper OpenAPI schema. Spec is desired; status is observed; never confuse them. Status subresource always.',
+      '<strong>Reconcile properties</strong>: idempotent, level-triggered, requeues on transient errors, updates status atomically. The reconcile is your control loop; treat it as such.',
+      '<strong>Finalizers</strong> for external state cleanup. <code>OwnerReferences</code> for owned subresources so GC works.',
+      '<strong>Testing</strong>: envtest for controller logic (fast, no real nodes). KIND for end-to-end scenarios. Ginkgo + Gomega is the Kubebuilder default; pytest + kr8s works for Kopf operators.',
+      '<strong>Shipping</strong>: Helm chart to install the operator + CRDs. Users <code>helm install</code> the operator, then create <code>kind: MyResource</code> objects. Same pattern as Prometheus Operator, cert-manager, etc.'
+    ]
+  }
+};
+let pickerCurrent = 'start';
+const pickerContainer = document.getElementById('pickerContainer');
+const pickerTitle = document.getElementById('pickerTitle');
+const pickerReset = document.getElementById('pickerReset');
+function renderPicker() {
+  const node = pickerTree[pickerCurrent];
+  pickerContainer.innerHTML = '';
+  if (node.verdict) {
+    pickerTitle.textContent = '→ Recommendation';
+    const div = document.createElement('div');
+    div.className = 'picker-verdict';
+    div.innerHTML = `<h4>${node.title}</h4>${node.body.map(b => `<p>${b}</p>`).join('')}`;
+    pickerContainer.appendChild(div);
+    pickerReset.style.display = 'inline-block';
+  } else {
+    pickerTitle.textContent = 'Pick a path';
+    const div = document.createElement('div');
+    div.className = 'picker-step';
+    div.innerHTML = `
+      <div class="picker-num">${node.n}</div>
+      <div class="picker-q">${node.q}</div>
+      <div class="picker-choices">
+        ${node.choices.map(c => `<div class="picker-choice" data-next="${c.next}">${c.label}<span class="picker-arrow">→</span></div>`).join('')}
+      </div>`;
+    pickerContainer.appendChild(div);
+    div.querySelectorAll('.picker-choice').forEach(c => {
+      c.addEventListener('click', () => { pickerCurrent = c.dataset.next; renderPicker(); });
+    });
+    pickerReset.style.display = pickerCurrent === 'start' ? 'none' : 'inline-block';
+  }
+}
+pickerReset.addEventListener('click', () => { pickerCurrent = 'start'; renderPicker(); });
+renderPicker();
+
+// ============ Checklist ============
+document.querySelectorAll('.check-item').forEach(el => {
+  el.addEventListener('click', () => {
+    el.classList.toggle('done');
+    const box = el.querySelector('.check-box');
+    box.textContent = el.classList.contains('done') ? '✓' : '';
+  });
+});
+</script>
+</body>
+</html>
