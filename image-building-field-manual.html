@@ -1,0 +1,2734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Image Building — Base to Registry</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,600;9..144,800;9..144,900&family=JetBrains+Mono:wght@400;500;700&family=Inter+Tight:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink: #0a0a0a;
+  --paper: #f4f1ea;
+  --paper-dim: #ebe6db;
+  --rust: #b8401f;
+  --rust-dim: #8a3018;
+  --moss: #3d5a3d;
+  --gold: #c9a227;
+  --blue: #1e3a5f;
+  --plum: #6d4070;
+  --grid: rgba(10,10,10,0.06);
+  --rule: rgba(10,10,10,0.85);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: 'Inter Tight', sans-serif;
+  font-size: 16px;
+  line-height: 1.55;
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+.masthead {
+  border-bottom: 3px double var(--rule);
+  padding: 24px 48px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  backdrop-filter: blur(8px);
+  background: rgba(244,241,234,0.95);
+}
+.masthead-left, .masthead-right {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+}
+.masthead-center {
+  font-family: 'Fraunces', serif;
+  font-weight: 900;
+  font-size: 22px;
+  font-style: italic;
+}
+.hero {
+  padding: 80px 48px 60px;
+  border-bottom: 1px solid var(--rule);
+  position: relative;
+  overflow: hidden;
+}
+.hero::before {
+  content: '⬢';
+  position: absolute;
+  font-family: 'Fraunces', serif;
+  font-size: 480px;
+  color: var(--blue);
+  opacity: 0.06;
+  top: -60px;
+  right: 20px;
+  line-height: 1;
+  pointer-events: none;
+}
+.kicker {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.3em;
+  color: var(--blue);
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.kicker::before {
+  content: '';
+  width: 40px;
+  height: 1px;
+  background: var(--blue);
+}
+.hero h1 {
+  font-family: 'Fraunces', serif;
+  font-weight: 300;
+  font-size: clamp(48px, 7vw, 96px);
+  line-height: 0.95;
+  letter-spacing: -0.03em;
+  margin-bottom: 24px;
+  max-width: 1100px;
+}
+.hero h1 em { font-style: italic; font-weight: 900; color: var(--blue); }
+.hero-deck {
+  font-family: 'Fraunces', serif;
+  font-size: 22px;
+  font-style: italic;
+  max-width: 760px;
+  opacity: 0.75;
+  border-left: 2px solid var(--blue);
+  padding-left: 20px;
+  margin-top: 32px;
+}
+.toc {
+  padding: 40px 48px;
+  border-bottom: 1px solid var(--rule);
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 48px;
+  background: var(--paper-dim);
+}
+.toc-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  padding-top: 4px;
+}
+.toc-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 8px 32px;
+  list-style: none;
+}
+.toc-list li {
+  border-bottom: 1px dotted var(--rule);
+  padding: 8px 0;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 14px;
+}
+.toc-list a {
+  color: var(--ink);
+  text-decoration: none;
+  flex: 1;
+  font-weight: 500;
+  transition: color 0.2s, transform 0.2s;
+}
+.toc-list a:hover { color: var(--blue); transform: translateX(4px); }
+.toc-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--blue);
+  font-weight: 700;
+}
+.toc-pill {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  padding: 1px 6px;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+}
+.toc-pill.base { background: var(--blue); color: var(--paper); border-color: var(--blue); }
+.toc-pill.build { background: var(--rust); color: var(--paper); border-color: var(--rust); }
+.toc-pill.supply { background: var(--moss); color: var(--paper); border-color: var(--moss); }
+.toc-pill.dist { background: var(--plum); color: var(--paper); border-color: var(--plum); }
+
+section.chapter {
+  padding: 80px 48px;
+  border-bottom: 1px solid var(--rule);
+}
+section.chapter:nth-of-type(even) { background: var(--paper-dim); }
+section.base-ch { border-left: 6px solid var(--blue); }
+section.build-ch { border-left: 6px solid var(--rust); }
+section.supply-ch { border-left: 6px solid var(--moss); }
+section.dist-ch { border-left: 6px solid var(--plum); }
+
+.chapter-head {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 48px;
+  margin-bottom: 56px;
+  align-items: end;
+}
+.chapter-meta {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  border-top: 2px solid var(--ink);
+  padding-top: 8px;
+}
+.chapter-meta .domain {
+  display: inline-block;
+  font-size: 9px;
+  padding: 3px 8px;
+  background: var(--ink);
+  color: var(--paper);
+  margin-bottom: 8px;
+  letter-spacing: 0.2em;
+}
+.chapter-meta .domain.base { background: var(--blue); }
+.chapter-meta .domain.build { background: var(--rust); }
+.chapter-meta .domain.supply { background: var(--moss); }
+.chapter-meta .domain.dist { background: var(--plum); }
+.chapter-meta .num {
+  font-size: 64px;
+  font-family: 'Fraunces', serif;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  line-height: 0.9;
+  color: var(--blue);
+  display: block;
+  margin-top: 8px;
+}
+.chapter-title {
+  font-family: 'Fraunces', serif;
+  font-weight: 400;
+  font-size: clamp(36px, 5vw, 64px);
+  line-height: 1;
+  letter-spacing: -0.025em;
+}
+.chapter-title em { font-style: italic; color: var(--blue); }
+.build-ch .chapter-title em { color: var(--rust); }
+.supply-ch .chapter-title em { color: var(--moss); }
+.dist-ch .chapter-title em { color: var(--plum); }
+
+.chapter-body {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 48px;
+}
+.chapter-aside {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  opacity: 0.65;
+}
+.chapter-aside strong {
+  display: block;
+  color: var(--blue);
+  margin-bottom: 6px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+}
+.build-ch .chapter-aside strong { color: var(--rust); }
+.supply-ch .chapter-aside strong { color: var(--moss); }
+.dist-ch .chapter-aside strong { color: var(--plum); }
+.prose p {
+  font-size: 17px;
+  margin-bottom: 20px;
+  max-width: 680px;
+}
+.prose p.lead {
+  font-family: 'Fraunces', serif;
+  font-size: 24px;
+  line-height: 1.4;
+  margin-bottom: 32px;
+  max-width: 720px;
+}
+.prose p.lead::first-letter {
+  font-family: 'Fraunces', serif;
+  font-size: 72px;
+  font-weight: 900;
+  float: left;
+  line-height: 0.85;
+  margin: 4px 12px 0 0;
+  color: var(--blue);
+}
+.build-ch .prose p.lead::first-letter { color: var(--rust); }
+.supply-ch .prose p.lead::first-letter { color: var(--moss); }
+.dist-ch .prose p.lead::first-letter { color: var(--plum); }
+.prose h3 {
+  font-family: 'Fraunces', serif;
+  font-weight: 600;
+  font-size: 28px;
+  margin: 48px 0 16px;
+  letter-spacing: -0.01em;
+}
+.prose h3::before {
+  content: '§';
+  color: var(--blue);
+  margin-right: 12px;
+  font-weight: 400;
+}
+.build-ch .prose h3::before { color: var(--rust); }
+.supply-ch .prose h3::before { color: var(--moss); }
+.dist-ch .prose h3::before { color: var(--plum); }
+code, .mono {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.9em;
+  background: rgba(30,58,95,0.08);
+  padding: 1px 6px;
+  border-radius: 2px;
+  color: var(--blue);
+}
+pre {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  background: var(--ink);
+  color: var(--paper);
+  padding: 24px 28px;
+  overflow-x: auto;
+  margin: 24px 0;
+  position: relative;
+  border-left: 4px solid var(--blue);
+}
+pre::before {
+  content: attr(data-label);
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--gold);
+  opacity: 0.7;
+}
+pre code { background: transparent; color: inherit; padding: 0; font-size: inherit; }
+.kw { color: #d59ad8; }
+.str { color: #b5d590; }
+.cmt { color: #6c6c6c; font-style: italic; }
+.num { color: #f5b85d; }
+.fn { color: #7dc9d9; }
+.err { color: #ff9580; }
+.ok { color: #b5d590; }
+
+.callout {
+  margin: 32px 0;
+  padding: 24px 28px;
+  border-left: 4px solid var(--blue);
+  background: rgba(30,58,95,0.06);
+}
+.callout.warn { border-color: var(--gold); background: rgba(201,162,39,0.08); }
+.callout.tip { border-color: var(--moss); background: rgba(61,90,61,0.06); }
+.callout.build { border-color: var(--rust); background: rgba(184,64,31,0.06); }
+.callout.supply { border-color: var(--moss); background: rgba(61,90,61,0.08); }
+.callout.dist { border-color: var(--plum); background: rgba(109,64,112,0.08); }
+.callout-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  color: var(--blue);
+  margin-bottom: 8px;
+  font-weight: 700;
+}
+.callout.warn .callout-label { color: #8a6a10; }
+.callout.tip .callout-label { color: var(--moss); }
+.callout.build .callout-label { color: var(--rust); }
+.callout.supply .callout-label { color: var(--moss); }
+.callout.dist .callout-label { color: var(--plum); }
+.callout p { font-size: 15px; margin: 0; }
+
+/* Base image comparison */
+.bases {
+  background: var(--ink);
+  color: var(--paper);
+  padding: 32px;
+  margin: 32px 0;
+}
+.bases-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  color: var(--gold);
+  margin-bottom: 16px;
+}
+.bases-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+.base-tab {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  padding: 8px 14px;
+  background: transparent;
+  color: var(--paper);
+  border: 1px solid rgba(244,241,234,0.3);
+  cursor: pointer;
+  font-weight: 600;
+}
+.base-tab.active { background: var(--gold); color: var(--ink); border-color: var(--gold); }
+.base-body {
+  background: rgba(244,241,234,0.04);
+  padding: 24px;
+  border-left: 3px solid var(--gold);
+}
+.base-h {
+  font-family: 'Fraunces', serif;
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--gold);
+  margin-bottom: 4px;
+  letter-spacing: -0.01em;
+}
+.base-h small {
+  display: block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--paper);
+  opacity: 0.7;
+  margin-top: 4px;
+}
+.base-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin: 20px 0;
+}
+.base-stat {
+  padding: 10px;
+  background: rgba(244,241,234,0.05);
+  border-left: 2px solid var(--gold);
+}
+.base-stat-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  color: var(--gold);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+.base-stat-val {
+  font-family: 'Fraunces', serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--paper);
+}
+.base-desc {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--paper);
+  opacity: 0.9;
+  margin-bottom: 12px;
+}
+.base-pros-cons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+.base-pc {
+  padding: 12px 14px;
+  background: rgba(244,241,234,0.04);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.base-pc .label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+  font-weight: 700;
+}
+.base-pc.pros .label { color: #9fd49f; }
+.base-pc.cons .label { color: #d49a9a; }
+
+/* CVE delta panel */
+.cve-panel {
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  padding: 28px;
+  margin: 32px 0;
+}
+.cve-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  color: var(--rust);
+  margin-bottom: 8px;
+}
+.cve-h {
+  font-family: 'Fraunces', serif;
+  font-size: 26px;
+  font-weight: 700;
+  margin-bottom: 20px;
+  letter-spacing: -0.01em;
+}
+.cve-rows {
+  display: grid;
+  gap: 8px;
+}
+.cve-row {
+  display: grid;
+  grid-template-columns: 220px 1fr 60px;
+  gap: 16px;
+  padding: 12px 16px;
+  border-left: 3px solid var(--ink);
+  background: var(--paper-dim);
+  align-items: center;
+}
+.cve-row.zero { border-left-color: var(--moss); }
+.cve-row.low { border-left-color: var(--gold); }
+.cve-row.high { border-left-color: var(--rust); }
+.cve-name {
+  font-family: 'Fraunces', serif;
+  font-size: 16px;
+  font-weight: 700;
+  font-style: italic;
+}
+.cve-bar-wrap {
+  background: rgba(10,10,10,0.06);
+  height: 12px;
+  position: relative;
+}
+.cve-bar {
+  height: 100%;
+}
+.cve-bar.zero { background: var(--moss); }
+.cve-bar.low { background: var(--gold); }
+.cve-bar.high { background: var(--rust); }
+.cve-count {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: right;
+}
+
+/* Layer diagram */
+.layer-viz {
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  padding: 28px;
+  margin: 32px 0;
+}
+.layer-viz-h {
+  font-family: 'Fraunces', serif;
+  font-size: 26px;
+  font-weight: 700;
+  margin-bottom: 4px;
+  letter-spacing: -0.01em;
+}
+.layer-viz-sub {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  color: var(--rust);
+  text-transform: uppercase;
+  margin-bottom: 20px;
+}
+.layers {
+  display: grid;
+  gap: 4px;
+}
+.layer {
+  display: grid;
+  grid-template-columns: 60px 1fr 100px 120px;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--paper-dim);
+  align-items: center;
+  border-left: 4px solid var(--ink);
+}
+.layer.code { border-left-color: var(--rust); }
+.layer.dep { border-left-color: var(--gold); }
+.layer.os { border-left-color: var(--blue); }
+.layer.base { border-left-color: var(--moss); }
+.layer-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--rust);
+  font-weight: 700;
+}
+.layer-desc {
+  font-size: 13px;
+}
+.layer-desc b {
+  font-family: 'Fraunces', serif;
+  font-style: italic;
+  display: block;
+  font-size: 15px;
+  font-weight: 700;
+}
+.layer-size {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  text-align: right;
+  color: var(--blue);
+  font-weight: 700;
+}
+.layer-cache {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-align: right;
+  letter-spacing: 0.1em;
+  color: var(--moss);
+}
+.layer-cache.bad { color: var(--rust); }
+
+/* Multi-stage flow */
+.stages {
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  padding: 28px;
+  margin: 32px 0;
+}
+.stage {
+  margin-bottom: 16px;
+  padding: 16px 20px;
+  border-left: 4px solid var(--rust);
+  background: var(--paper-dim);
+}
+.stage:last-child { margin-bottom: 0; }
+.stage.final { border-left-color: var(--moss); }
+.stage-h {
+  font-family: 'Fraunces', serif;
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.stage-h small {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--rust);
+  font-weight: 400;
+  display: block;
+  margin-bottom: 4px;
+}
+.stage.final .stage-h small { color: var(--moss); }
+.stage-desc { font-size: 13px; line-height: 1.5; }
+
+/* Pipeline */
+.pipeline {
+  background: var(--ink);
+  color: var(--paper);
+  padding: 32px;
+  margin: 32px 0;
+  overflow: hidden;
+}
+.pipeline-h {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  color: var(--gold);
+  margin-bottom: 24px;
+}
+.pipeline-flow {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+.pipe-step {
+  padding: 16px 12px;
+  background: rgba(244,241,234,0.04);
+  border-top: 3px solid var(--gold);
+  position: relative;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-height: 110px;
+}
+.pipe-step:hover { background: rgba(201,162,39,0.15); transform: translateY(-2px); }
+.pipe-step.active { background: rgba(201,162,39,0.2); }
+.pipe-step-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--gold);
+  letter-spacing: 0.2em;
+  margin-bottom: 4px;
+}
+.pipe-step-name {
+  font-family: 'Fraunces', serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--paper);
+  line-height: 1.1;
+  margin-bottom: 6px;
+}
+.pipe-step-tool {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  color: var(--paper);
+  opacity: 0.65;
+  letter-spacing: 0.1em;
+}
+.pipe-detail {
+  margin-top: 16px;
+  padding: 20px;
+  background: rgba(244,241,234,0.06);
+  border-left: 3px solid var(--gold);
+  min-height: 80px;
+}
+.pipe-detail h4 {
+  font-family: 'Fraunces', serif;
+  font-size: 18px;
+  color: var(--gold);
+  margin-bottom: 8px;
+}
+.pipe-detail p {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--paper);
+  opacity: 0.9;
+}
+
+/* Registry topology */
+.topo {
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  padding: 28px;
+  margin: 32px 0;
+}
+.topo-h {
+  font-family: 'Fraunces', serif;
+  font-size: 24px;
+  font-weight: 700;
+  margin-bottom: 20px;
+}
+.topo-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+}
+.topo-tier {
+  padding: 16px;
+  background: var(--paper-dim);
+  border-top: 3px solid var(--plum);
+}
+.topo-tier h4 {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--plum);
+  margin-bottom: 6px;
+}
+.topo-tier-name {
+  font-family: 'Fraunces', serif;
+  font-size: 18px;
+  font-weight: 700;
+  font-style: italic;
+  margin-bottom: 10px;
+}
+.topo-tier ul {
+  list-style: none;
+  padding: 0;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.topo-tier li {
+  padding: 4px 0;
+  border-bottom: 1px dashed rgba(10,10,10,0.1);
+}
+.topo-tier li:before {
+  content: '→';
+  margin-right: 6px;
+  color: var(--plum);
+}
+.topo-tier li:last-child { border-bottom: none; }
+
+/* Comparison */
+.cmp-table {
+  margin: 32px 0;
+  border-top: 2px solid var(--ink);
+  border-bottom: 2px solid var(--ink);
+}
+.cmp-row {
+  display: grid;
+  grid-template-columns: 180px 1fr 1fr 1fr;
+  border-bottom: 1px solid rgba(10,10,10,0.15);
+  padding: 14px 0;
+  gap: 20px;
+  align-items: start;
+}
+.cmp-row.head {
+  border-bottom: 2px solid var(--ink);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  padding: 12px 0;
+  color: var(--rust);
+}
+.cmp-axis {
+  font-family: 'Fraunces', serif;
+  font-size: 16px;
+  font-weight: 700;
+  font-style: italic;
+}
+.cmp-row p { font-size: 13px; line-height: 1.5; margin: 0; max-width: none; }
+
+/* Cards */
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 0;
+  border-top: 2px solid var(--ink);
+  border-left: 2px solid var(--ink);
+  margin: 32px 0;
+}
+.tech-card {
+  border-right: 2px solid var(--ink);
+  border-bottom: 2px solid var(--ink);
+  padding: 22px;
+  background: var(--paper);
+  min-height: 220px;
+  position: relative;
+}
+.tech-card .kind {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--blue);
+  margin-bottom: 8px;
+}
+.tech-card .name {
+  font-family: 'Fraunces', serif;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  margin-bottom: 10px;
+}
+.tech-card .desc { font-size: 13px; line-height: 1.5; margin-bottom: 12px; }
+.tech-card .pill {
+  position: absolute;
+  bottom: 12px;
+  right: 16px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  color: var(--ink);
+  opacity: 0.5;
+  letter-spacing: 0.15em;
+}
+
+/* Picker */
+.picker {
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  padding: 32px;
+  margin: 32px 0;
+}
+.picker-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  color: var(--blue);
+  margin-bottom: 8px;
+}
+.picker-title {
+  font-family: 'Fraunces', serif;
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: 24px;
+  letter-spacing: -0.01em;
+}
+.picker-step {
+  background: var(--ink);
+  color: var(--paper);
+  padding: 24px 28px;
+  margin-bottom: 16px;
+  border-left: 4px solid var(--gold);
+}
+.picker-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--gold);
+  letter-spacing: 0.2em;
+  margin-bottom: 6px;
+}
+.picker-q {
+  font-family: 'Fraunces', serif;
+  font-weight: 700;
+  font-size: 19px;
+  margin-bottom: 16px;
+  color: var(--gold);
+}
+.picker-choices { display: grid; gap: 8px; }
+.picker-choice {
+  background: rgba(244,241,234,0.08);
+  color: var(--paper);
+  border: 1px solid rgba(244,241,234,0.4);
+  padding: 12px 16px;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  transition: all 0.15s;
+}
+.picker-choice:hover { background: var(--gold); color: var(--ink); border-color: var(--gold); }
+.picker-arrow { font-family: 'JetBrains Mono', monospace; font-size: 11px; opacity: 0.6; }
+.picker-verdict {
+  background: var(--moss);
+  color: var(--paper);
+  padding: 24px 28px;
+  border-left: 4px solid var(--gold);
+}
+.picker-verdict h4 {
+  font-family: 'Fraunces', serif;
+  font-size: 22px;
+  margin-bottom: 12px;
+  color: var(--gold);
+}
+.picker-verdict p { font-size: 14px; line-height: 1.6; margin-bottom: 8px; }
+.picker-verdict code { background: rgba(0,0,0,0.4); color: var(--gold); }
+.picker-reset {
+  margin-top: 16px;
+  padding: 8px 16px;
+  background: var(--ink);
+  color: var(--paper);
+  border: 1px solid var(--ink);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  cursor: pointer;
+}
+.picker-reset:hover { background: var(--blue); border-color: var(--blue); }
+
+/* Checklist */
+.checklist {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+  margin: 32px 0;
+}
+.check-item {
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  padding: 18px 20px;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.2s;
+  display: flex;
+  gap: 14px;
+  align-items: start;
+}
+.check-item:hover { background: var(--paper-dim); }
+.check-item.done { background: var(--moss); color: var(--paper); border-color: var(--moss); }
+.check-box {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--ink);
+  flex-shrink: 0;
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 900;
+}
+.check-item.done .check-box {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: var(--ink);
+}
+.check-content { flex: 1; }
+.check-title {
+  font-family: 'Fraunces', serif;
+  font-weight: 700;
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+.check-desc { font-size: 12px; line-height: 1.5; opacity: 0.85; }
+
+.colophon {
+  padding: 48px;
+  background: var(--ink);
+  color: var(--paper);
+  text-align: center;
+}
+.colophon-mark {
+  font-family: 'Fraunces', serif;
+  font-style: italic;
+  font-weight: 300;
+  font-size: 32px;
+  margin-bottom: 12px;
+}
+.colophon-mark em { color: var(--gold); font-weight: 700; }
+.colophon p {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  opacity: 0.6;
+}
+
+@media (max-width: 900px) {
+  .chapter-head, .chapter-body, .toc { grid-template-columns: 1fr; gap: 16px; }
+  .masthead { padding: 16px 20px; flex-wrap: wrap; gap: 8px; }
+  .hero, section.chapter { padding: 48px 20px; }
+  .cmp-row, .layer, .topo-grid { grid-template-columns: 1fr; }
+  .base-stats { grid-template-columns: repeat(2, 1fr); }
+  .base-pros-cons { grid-template-columns: 1fr; }
+  .pipeline-flow { grid-template-columns: repeat(2, 1fr); }
+  .cve-row { grid-template-columns: 1fr; }
+  .hero::before { font-size: 240px; }
+}
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="masthead-left">Vol. I · Issue 07 · MMXXVI</div>
+  <div class="masthead-center">The Cluster Quarterly</div>
+  <div class="masthead-right">Image Building</div>
+</header>
+
+<section class="hero">
+  <div class="kicker">A Systematic Field Manual · Companion to Issues 01–06</div>
+  <h1>The <em>image</em> — from<br><em>base</em> to <em>registry,</em><br>signed and verified.</h1>
+  <p class="hero-deck">Image building has shifted from "compile a Dockerfile" to "compose an artifact with provenance, signatures, and an SBOM, distributed through a topology of registries that survives the loss of any one of them." This issue walks the modern stack: base image strategy, Dockerfile design, BuildKit and the OCI underneath, vulnerability management, supply-chain attestation, and the registry topology that makes it all reach production.</p>
+</section>
+
+<nav class="toc">
+  <div class="toc-label">Contents</div>
+  <ol class="toc-list">
+    <li><span class="toc-num">I.</span> <a href="#ch1">The OCI Image Model · What's Actually in an Image</a> <span class="toc-pill base">base</span></li>
+    <li><span class="toc-num">II.</span> <a href="#ch2">Base Image Strategy · scratch → distroless → Wolfi</a> <span class="toc-pill base">base</span></li>
+    <li><span class="toc-num">III.</span> <a href="#ch3">Pinning &amp; the Base-Image Update Cadence</a> <span class="toc-pill base">base</span></li>
+    <li><span class="toc-num">IV.</span> <a href="#ch4">Layer Layout · The Cache Topology</a> <span class="toc-pill build">build</span></li>
+    <li><span class="toc-num">V.</span> <a href="#ch5">Multi-Stage Builds · Build vs Runtime</a> <span class="toc-pill build">build</span></li>
+    <li><span class="toc-num">VI.</span> <a href="#ch6">BuildKit · Beyond the Dockerfile</a> <span class="toc-pill build">build</span></li>
+    <li><span class="toc-num">VII.</span> <a href="#ch7">Dependency Management · Lockfiles &amp; Hashes</a> <span class="toc-pill build">build</span></li>
+    <li><span class="toc-num">VIII.</span> <a href="#ch8">Vulnerability Management · Scan, Triage, Patch</a> <span class="toc-pill supply">supply</span></li>
+    <li><span class="toc-num">IX.</span> <a href="#ch9">SBOM &amp; Attestations · The Provenance Layer</a> <span class="toc-pill supply">supply</span></li>
+    <li><span class="toc-num">X.</span> <a href="#ch10">Signing · Cosign, Sigstore, Keyless</a> <span class="toc-pill supply">supply</span></li>
+    <li><span class="toc-num">XI.</span> <a href="#ch11">SLSA · Build Integrity Levels</a> <span class="toc-pill supply">supply</span></li>
+    <li><span class="toc-num">XII.</span> <a href="#ch12">Registry Topology · Hub, Mirror, Cache</a> <span class="toc-pill dist">dist</span></li>
+    <li><span class="toc-num">XIII.</span> <a href="#ch13">The Build Pipeline · End to End</a> <span class="toc-pill dist">dist</span></li>
+    <li><span class="toc-num">XIV.</span> <a href="#ch14">The Picker · Strategy by Workload</a> <span class="toc-pill dist">dist</span></li>
+    <li><span class="toc-num">XV.</span> <a href="#ch15">Image Building Checklist</a> <span class="toc-pill dist">dist</span></li>
+  </ol>
+</nav>
+
+<!-- CHAPTER 1 -->
+<section class="chapter base-ch" id="ch1">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain base">FOUNDATION</span>
+      Chapter <span class="num">I</span>
+    </div>
+    <h2 class="chapter-title">The OCI image model · <em>what's actually in an image.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>The premise</strong>
+      Before you optimize an image, understand what it actually is. The OCI Image Specification is short and the entire ecosystem builds on it.<br><br>
+      <strong>Three documents</strong>
+      Manifest, config, layers. Plus an index for multi-arch.
+    </aside>
+    <div class="prose">
+      <p class="lead">A container image is not a file. It's a collection of tarballs (layers) plus two small JSON documents that describe how to use them. The Open Container Initiative codified this in the OCI Image Specification, which is the lingua franca that every container runtime, registry, and build tool now speaks.</p>
+
+      <h3>The three documents (four for multi-arch)</h3>
+      <p><strong>Layers.</strong> Each layer is a tarball — usually gzip or zstd compressed — of filesystem changes. Add a file, you get a layer with that file. Delete a file, you get a layer with a "whiteout" marker. Modify a file, the whole file is copied into a new layer. Layers are content-addressed by sha256 of their compressed bytes.</p>
+      <p><strong>Config.</strong> JSON describing what the image <em>is</em>: architecture, OS, environment variables, working directory, exposed ports, entrypoint, command, labels, history. The config is itself content-addressed; its digest is what people mean when they say "the image ID."</p>
+      <p><strong>Manifest.</strong> JSON pointing at the config and the layers, by digest. The manifest <em>is</em> the image identity — when you sign or verify an image, you're signing its manifest digest.</p>
+      <p><strong>Image index (manifest list).</strong> JSON pointing at multiple manifests, one per platform. <code>myapp:v1</code> as a tag points at an index; the index says "for linux/amd64 use manifest A, for linux/arm64 use manifest B."</p>
+
+      <pre data-label="walking an image with crane"><span class="cmt"># Pull the manifest (or index)</span>
+$ crane manifest gcr.io/distroless/static:nonroot
+{
+  <span class="str">"schemaVersion"</span>: <span class="num">2</span>,
+  <span class="str">"mediaType"</span>: <span class="str">"application/vnd.oci.image.index.v1+json"</span>,
+  <span class="str">"manifests"</span>: [
+    { <span class="str">"digest"</span>: <span class="str">"sha256:a1b2..."</span>, <span class="str">"platform"</span>: { <span class="str">"architecture"</span>: <span class="str">"amd64"</span>, ... } },
+    { <span class="str">"digest"</span>: <span class="str">"sha256:c3d4..."</span>, <span class="str">"platform"</span>: { <span class="str">"architecture"</span>: <span class="str">"arm64"</span>, ... } }
+  ]
+}
+
+<span class="cmt"># Resolve to a specific manifest</span>
+$ crane manifest <span class="kw">--platform</span> linux/amd64 gcr.io/distroless/static:nonroot
+{
+  <span class="str">"schemaVersion"</span>: <span class="num">2</span>,
+  <span class="str">"mediaType"</span>: <span class="str">"application/vnd.oci.image.manifest.v1+json"</span>,
+  <span class="str">"config"</span>: { <span class="str">"digest"</span>: <span class="str">"sha256:..."</span>, <span class="str">"size"</span>: <span class="num">1827</span> },
+  <span class="str">"layers"</span>: [
+    { <span class="str">"digest"</span>: <span class="str">"sha256:..."</span>, <span class="str">"size"</span>: <span class="num">115724</span> }
+  ]
+}
+
+<span class="cmt"># Examine the config</span>
+$ crane config gcr.io/distroless/static:nonroot | jq .config
+{ <span class="str">"User"</span>: <span class="str">"65532:65532"</span>, <span class="str">"Entrypoint"</span>: [...], ... }</pre>
+
+      <h3>Why "image digest" beats "image tag"</h3>
+      <p>A tag is a label that can move; a digest is the cryptographic identity of the bytes. <code>myapp:latest</code> can point to a different image tomorrow without anyone noticing. <code>myapp@sha256:a1b2c3d4...</code> will always be the same bytes — and if a registry ever returns different bytes for that digest, your runtime detects it and refuses to run.</p>
+      <p>The implication: <strong>pin by digest in production, not by tag.</strong> In CI, build and push by tag; promote to staging and prod by digest. The artifact reviewed in CI is byte-for-byte the artifact running in production.</p>
+
+      <h3>Media types and OCI artifacts</h3>
+      <p>The image manifest declares a <code>mediaType</code> — historically Docker-specific (<code>application/vnd.docker.distribution.manifest.v2+json</code>), now standardized as OCI (<code>application/vnd.oci.image.manifest.v1+json</code>). Most modern tools emit OCI by default.</p>
+      <p>The interesting extension: <strong>OCI artifacts</strong>. Since the manifest is just a pointer to blobs by media type, you can store anything in a registry that follows the OCI Distribution spec — Helm charts, SBOMs, signatures, Terraform modules, AI model weights, even arbitrary tarballs. <code>oras push</code> is the standard tool. Registries become a universal artifact hub, not just an image hub.</p>
+
+      <div class="callout">
+        <div class="callout-label">The single most-useful inspection command</div>
+        <p><code>crane manifest IMAGE</code>, <code>crane config IMAGE</code>, <code>crane export IMAGE - | tar -t | less</code>. Together these answer "what is in this image" without pulling and running it. Add <code>dive</code> for a visual layer-by-layer view; <code>syft IMAGE -o table</code> for the SBOM. These four tools are what separates "I built an image" from "I understand the image I built."</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 2 -->
+<section class="chapter base-ch" id="ch2">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain base">BASE</span>
+      Chapter <span class="num">II</span>
+    </div>
+    <h2 class="chapter-title">Base image strategy · <em>scratch → distroless → Wolfi.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>The shift</strong>
+      In 2026, the question isn't "Alpine or Ubuntu" — it's "scratch, distroless, or a maintained distroless distribution like Wolfi or Chiseled Ubuntu."<br><br>
+      <strong>The tradeoff</strong>
+      Smaller and more locked-down = harder to debug, less ecosystem support. Pick by application type.
+    </aside>
+    <div class="prose">
+      <p class="lead">Base image choice is the single biggest determinant of an image's security posture, attack surface, and CVE exposure. The shift over the last three years has been from full distributions (Debian, Ubuntu, Alpine) toward minimal-by-construction alternatives that ship with no shell, no package manager, and continuous rebuilds against the latest patched packages.</p>
+
+      <div class="bases">
+        <div class="bases-title">Interactive · The seven base-image options</div>
+        <div class="bases-tabs" id="baseTabs">
+          <button class="base-tab active" data-base="scratch">scratch</button>
+          <button class="base-tab" data-base="distroless-static">distroless/static</button>
+          <button class="base-tab" data-base="distroless-base">distroless/base</button>
+          <button class="base-tab" data-base="alpine">Alpine</button>
+          <button class="base-tab" data-base="wolfi">Wolfi / Chainguard</button>
+          <button class="base-tab" data-base="chiseled">Chiseled Ubuntu</button>
+          <button class="base-tab" data-base="ubi">RHEL UBI</button>
+        </div>
+        <div class="base-body" id="baseBody"></div>
+      </div>
+
+      <h3>The decision tree</h3>
+      <p><strong>Pure static binary (Go, Rust statically linked):</strong> <code>scratch</code> or <code>gcr.io/distroless/static</code>. Difference: <code>static</code> includes ca-certs, tzdata, /etc/passwd entries. Use <code>static</code> 90% of the time; <code>scratch</code> when you've explicitly handled those yourself.</p>
+      <p><strong>glibc-linked binary, needs libc:</strong> <code>gcr.io/distroless/base</code> or <code>cgr.dev/chainguard/glibc-dynamic</code>. Wolfi-based images get rolling updates; Google distroless gets less frequent updates.</p>
+      <p><strong>Interpreted language (Python, Node, Java, Ruby):</strong> distroless language images (<code>gcr.io/distroless/python3</code>, <code>node</code>, <code>java</code>) or Chainguard's equivalent. Avoid <code>FROM python:3.X-slim</code> for production — too many extras.</p>
+      <p><strong>Greenfield, want continuous CVE patching:</strong> Wolfi (Chainguard). Wolfi uses a rolling release model built for container environments from the ground up; CVEs are patched as they are disclosed rather than on a versioned release cycle.</p>
+      <p><strong>Enterprise compliance (FedRAMP, FIPS):</strong> Red Hat UBI or Iron Bank. Pay for the support.</p>
+      <p><strong>Ecosystem fit with existing tooling:</strong> Chiseled Ubuntu (Microsoft .NET defaults to this). Ubuntu compatibility, distroless attack surface.</p>
+
+      <h3>The "Alpine is not distroless" caveat</h3>
+      <p>Alpine ships with a shell (busybox sh), a package manager (apk), and a working filesystem. It's small (~5 MB compressed), but Alpine is not distroless — it ships with a shell and the apk package manager. Alpine's musl libc also causes subtle compatibility issues for some glibc-dependent code (DNS resolution differences, threading edge cases, performance regressions on some libraries). For production runtime: prefer a true distroless or scratch. For build stages or dev environments where you need apk and a shell: Alpine is great.</p>
+
+      <h3>The Wolfi argument</h3>
+      <p>Wolfi was created by Chainguard specifically as a container-native distribution. Three things make it different from Alpine:</p>
+      <p>One — <strong>glibc</strong>, not musl. No mysterious compatibility breaks. glibc compatibility makes Wolfi suitable for applications that cannot tolerate musl libc quirks.</p>
+      <p>Two — <strong>rolling releases, daily rebuilds</strong>. Chainguard rebuilds images continuously, generates SBOMs natively using Sigstore and Cosign for cryptographic signing, and publishes SLSA Level 3 build attestations per image digest. The near-zero CVE count that Chainguard images maintain comes from continuous rebuilds rather than a one-time hardening pass.</p>
+      <p>Three — <strong>built with apko/melange</strong>, declarative tools that produce build-time SBOMs natively. Wolfi provides a high-quality, build-time SBOM as standard for all packages.</p>
+      <p>Limitation: Wolfi focuses on latest package versions; non-latest versions are retained for 12 months and then 6 months by default. No LTS concept — you ride the rolling train. For most cloud-native workloads, that's the right tradeoff.</p>
+
+      <div class="callout">
+        <div class="callout-label">The 2026 default recommendation</div>
+        <p>For new services: Wolfi or distroless. For Go/Rust statically compiled: <code>scratch</code> or <code>distroless/static</code>. For Python/Node/Java: the language-specific distroless or Chainguard image. Use Alpine only as a build stage, not as a runtime base. Use the full distros (Ubuntu, Debian) only when a specific dependency requires it and you've documented why. The vulnerability differential between a distroless runtime and a full distribution runtime is typically <strong>15–50 CVEs to zero</strong>, even for the same exact application code.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 3 -->
+<section class="chapter base-ch" id="ch3">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain base">BASE</span>
+      Chapter <span class="num">III</span>
+    </div>
+    <h2 class="chapter-title">Pinning &amp; the <em>update cadence.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>The dual pressure</strong>
+      You want reproducible builds (pin everything) AND timely security patches (update often). These pull in opposite directions; tooling resolves the tension.<br><br>
+      <strong>The resolution</strong>
+      Pin by digest. Update by automation. Verify by tests.
+    </aside>
+    <div class="prose">
+      <p class="lead">A Dockerfile that starts with <code>FROM python:3.12-slim</code> is non-reproducible: the same Dockerfile builds different bytes today than it did yesterday, because the base tag's underlying digest has shifted. A Dockerfile that pins <code>FROM python:3.12-slim@sha256:a1b2c3...</code> is reproducible — but goes stale and accrues CVEs. The discipline is doing both: pin always, and update via automation that re-pins.</p>
+
+      <h3>The four pinning levels</h3>
+      <p><strong>1. Pin by major version.</strong> <code>FROM python:3</code>. Worst — any 3.x change rebuilds you. Don't.</p>
+      <p><strong>2. Pin by full version.</strong> <code>FROM python:3.12.7-slim-bookworm</code>. Better — same Python version. But the tag still moves: the slim-bookworm variant gets rebuilt with new system packages every few weeks.</p>
+      <p><strong>3. Pin by digest.</strong> <code>FROM python:3.12.7-slim-bookworm@sha256:f9d...</code>. Reproducible. The same bytes today, tomorrow, next year. This is the production discipline.</p>
+      <p><strong>4. Pin by signed digest.</strong> Same plus admission controller verifies the digest's signature at deploy time. Covered in Chapter X.</p>
+
+      <h3>The automation layer</h3>
+      <p>Pinned digests rot. CVEs are disclosed weekly; the base image you pinned six months ago is now full of unpatched issues. Three patterns to handle this:</p>
+      <p><strong>Renovate / Dependabot for Docker.</strong> Configure to open PRs when a pinned base digest has a newer version. Renovate's <code>docker</code> manager natively pins-and-updates: opens PRs like "Update python:3.12 from <code>@sha256:a1b...</code> to <code>@sha256:b2c...</code>", with the changelog and a CVE diff in the description.</p>
+      <pre data-label="renovate.json — auto-pin and update digests"><span class="num">{</span>
+  <span class="str">"$schema"</span>: <span class="str">"https://docs.renovatebot.com/renovate-schema.json"</span>,
+  <span class="str">"extends"</span>: [<span class="str">"config:recommended"</span>],
+  <span class="str">"docker"</span>: {
+    <span class="str">"pinDigests"</span>: <span class="ok">true</span>            <span class="cmt"># Renovate pins by digest automatically</span>
+  },
+  <span class="str">"packageRules"</span>: [
+    {
+      <span class="str">"matchManagers"</span>: [<span class="str">"dockerfile"</span>],
+      <span class="str">"matchUpdateTypes"</span>: [<span class="str">"digest"</span>],
+      <span class="str">"automerge"</span>: <span class="ok">true</span>,             <span class="cmt"># auto-merge digest updates after CI</span>
+      <span class="str">"schedule"</span>: [<span class="str">"before 9am every weekday"</span>]
+    }
+  ]
+<span class="num">}</span></pre>
+
+      <p><strong>Continuous rebuild against base.</strong> Chainguard's pattern: every Chainguard image is rebuilt nightly against the latest patched Wolfi packages. When a CVE is disclosed upstream, the affected package is patched and the image is rebuilt, typically within hours. You consume the image and inherit the freshness. If you build derivative images, configure your CI to rebuild them on a schedule (e.g., daily) so they pick up base updates without code changes.</p>
+      <p><strong>SLAs by criticality.</strong> Critical CVEs (active exploit, severity 9+): patch in 24 hours. High: 7 days. Medium: 30 days. Low: best effort or "accept the risk" with documentation. Apply these to the image rebuild cadence, not just to application code.</p>
+
+      <h3>Reproducibility — and when it matters</h3>
+      <p>Two runs of the same Dockerfile should produce byte-identical images. Three sources of nondeterminism block this:</p>
+      <p>Timestamps. Files written during build get their <code>mtime</code>. Fix: <code>SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)</code> and BuildKit's <code>--output type=oci,rewrite-timestamp=true</code>.</p>
+      <p>Network calls. <code>apt-get update</code> downloads whatever happens to be on the mirror today. Fix: lock files (<code>requirements.txt</code> with hashes, <code>package-lock.json</code>, <code>go.sum</code>) and pinned package versions. For apt, freeze the Debian snapshot URL.</p>
+      <p>Filesystem walk order. <code>COPY . .</code> processes files in the order the filesystem returns them. Fix: BuildKit normalizes this. If building outside BuildKit, sort explicitly.</p>
+      <p>Reproducibility matters most for: compliance (SLSA Level 3+, FIPS), supply-chain forensics ("rebuild this same image to verify no tampering"), and reproducible-research scenarios. For most teams, "deterministic enough" — pinned bases + lock files — is sufficient.</p>
+
+      <div class="callout">
+        <div class="callout-label">The pinning discipline in one sentence</div>
+        <p><em>Pin every base image by digest, automate the unpinning-and-re-pinning, and let your CI tell you when something broke.</em> Manual base-image bumps are the #1 reason production images carry CVEs from 18 months ago.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 4 -->
+<section class="chapter build-ch" id="ch4">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain build">BUILD</span>
+      Chapter <span class="num">IV</span>
+    </div>
+    <h2 class="chapter-title">Layer layout · the <em>cache topology.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>The mental model</strong>
+      Every Dockerfile line creates a layer. Every layer that changes invalidates every layer below it. Order the lines by how often they change.<br><br>
+      <strong>The empirical test</strong>
+      Touch an app source file, rebuild. If it takes more than 10s, your layer order is wrong.
+    </aside>
+    <div class="prose">
+      <p class="lead">A Dockerfile produces a sequence of layers, ordered from stable to volatile. Get the ordering right and a code change rebuilds in seconds; get it wrong and a code change invalidates the system-package install, eating minutes of CPU.</p>
+
+      <div class="layer-viz">
+        <div class="layer-viz-h">A well-ordered Python application image</div>
+        <div class="layer-viz-sub">Layers shown bottom-up; rebuild speed depends on what you change</div>
+        <div class="layers">
+          <div class="layer base">
+            <div class="layer-num">L1</div>
+            <div class="layer-desc"><b>FROM cgr.dev/chainguard/python@sha256:…</b>Base distroless Python image</div>
+            <div class="layer-size">~28 MB</div>
+            <div class="layer-cache">changes ~monthly</div>
+          </div>
+          <div class="layer os">
+            <div class="layer-num">L2</div>
+            <div class="layer-desc"><b>COPY ca-bundle</b>Org-specific certs / system config</div>
+            <div class="layer-size">~2 KB</div>
+            <div class="layer-cache">changes ~yearly</div>
+          </div>
+          <div class="layer dep">
+            <div class="layer-num">L3</div>
+            <div class="layer-desc"><b>COPY requirements.txt; pip install</b>Python dependencies — cache-mounted</div>
+            <div class="layer-size">~120 MB</div>
+            <div class="layer-cache">changes ~weekly</div>
+          </div>
+          <div class="layer code">
+            <div class="layer-num">L4</div>
+            <div class="layer-desc"><b>COPY src/</b>Application code</div>
+            <div class="layer-size">~3 MB</div>
+            <div class="layer-cache">changes per commit</div>
+          </div>
+          <div class="layer code">
+            <div class="layer-num">L5</div>
+            <div class="layer-desc"><b>USER nonroot; ENTRYPOINT</b>Final config (metadata only)</div>
+            <div class="layer-size">0 KB</div>
+            <div class="layer-cache">changes rarely</div>
+          </div>
+        </div>
+      </div>
+
+      <h3>The five rules of layer ordering</h3>
+      <p><strong>1. Stable first, volatile last.</strong> Base → system packages → language deps → app code. App code changes every commit; deps weekly; system rarely. Reverse this and every commit invalidates dep install.</p>
+      <p><strong>2. Split <code>COPY</code> for dependency files.</strong> Don't <code>COPY . .</code> before <code>pip install</code>. Copy <code>requirements.txt</code> alone, install, then copy the rest. The dep install layer must be invalidated only when its inputs change.</p>
+      <p><strong>3. One <code>RUN</code> per logical action.</strong> Too many <code>RUN</code>s = layer count overhead. Too few = poor cache granularity. The right balance: install all system deps in one RUN, install all language deps in another, build the app in a third.</p>
+      <p><strong>4. <code>COPY</code> only what's needed.</strong> A typical mistake: <code>COPY . /app</code> after <code>WORKDIR /app</code> drags in <code>.git</code>, <code>node_modules</code>, <code>tests/</code>. Use <code>.dockerignore</code> ruthlessly.</p>
+      <p><strong>5. Never <code>RUN apt-get update</code> in isolation.</strong> Couple it with the install in the same RUN: <code>RUN apt-get update &amp;&amp; apt-get install -y --no-install-recommends ... &amp;&amp; rm -rf /var/lib/apt/lists/*</code>. Otherwise the update layer caches, the install gets stale package versions.</p>
+
+      <h3>The .dockerignore that should exist in every repo</h3>
+      <pre data-label=".dockerignore — minimal sensible default">.git
+.github
+.gitignore
+.dockerignore
+Dockerfile*
+README.md
+LICENSE
+docs/
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+target/
+dist/
+build/
+.idea/
+.vscode/
+*.log
+tmp/
+test/
+tests/
+*_test.go
+.env
+.env.local
+secrets/</pre>
+
+      <h3>BuildKit's cache key, exactly</h3>
+      <p>For every Dockerfile instruction, BuildKit computes a cache key from: (a) the base image digest (so changing FROM invalidates everything), (b) the previous step's cache key (transitive — any earlier change invalidates this), (c) the exact instruction text including whitespace, (d) for <code>COPY</code>, the hashes of the source files.</p>
+      <p>Implications: even reordering identical <code>RUN</code> commands invalidates the cache. Changing whitespace in a comment invalidates the cache. Adding a trailing newline to <code>requirements.txt</code> invalidates pip install. The cache is exact and unforgiving.</p>
+
+      <h3>Cache mounts — work the layer cache can't do</h3>
+      <p>Layer cache skips a whole step. <strong>Cache mounts</strong> let the step run but keep its scratch directory across builds. Critical for package managers:</p>
+      <pre data-label="cache mounts for every common toolchain"><span class="cmt"># syntax=docker/dockerfile:1.7
+# Python</span>
+<span class="kw">RUN</span> --mount=type=cache,target=/root/.cache/pip \
+    pip install -r requirements.txt
+
+<span class="cmt"># Node</span>
+<span class="kw">RUN</span> --mount=type=cache,target=/root/.npm \
+    npm ci --prefer-offline
+
+<span class="cmt"># Go (module + build caches)</span>
+<span class="kw">RUN</span> --mount=type=cache,target=/root/.cache/go-build \
+    --mount=type=cache,target=/go/pkg/mod \
+    go build -o /app ./cmd/myapp
+
+<span class="cmt"># Rust</span>
+<span class="kw">RUN</span> --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/build/target \
+    cargo build --release
+
+<span class="cmt"># Apt — note the docker-clean removal</span>
+<span class="kw">RUN</span> --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    rm -f /etc/apt/apt.conf.d/docker-clean <span class="kw">&amp;&amp;</span> \
+    apt-get update <span class="kw">&amp;&amp;</span> apt-get install -y --no-install-recommends ...</pre>
+
+      <div class="callout build">
+        <div class="callout-label">The CI dividend</div>
+        <p>A team building 100 PRs per day on a 6-minute image saves 10 engineer-hours per day by getting to a 60-second image. The fix is usually a five-line reordering plus three cache-mount lines. Cross-reference Issue 06 Chapters II–III for the deeper performance discussion.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 5 -->
+<section class="chapter build-ch" id="ch5">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain build">BUILD</span>
+      Chapter <span class="num">V</span>
+    </div>
+    <h2 class="chapter-title">Multi-stage builds · <em>build vs runtime.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>The principle</strong>
+      The build environment and the runtime environment are different. The runtime should ship neither the compiler nor the tests.<br><br>
+      <strong>The shape</strong>
+      Stage 1 (build): tooling-heavy. Stage 2 (runtime): minimal. Copy the artifact from 1 → 2.
+    </aside>
+    <div class="prose">
+      <p class="lead">Multi-stage builds are how you ship a distroless runtime while still using full toolchains during build. Stage 1 has the compiler, package manager, headers, debug tools. Stage 2 has only the compiled binary and what it actually needs to run. The two are connected by <code>COPY --from=&lt;stage&gt;</code>.</p>
+
+      <div class="stages">
+        <div class="stage">
+          <div class="stage-h"><small>Stage 1 · build</small>Builder image</div>
+          <div class="stage-desc">Full toolchain: <code>golang:1.22-alpine</code>, <code>gcr.io/distroless/python3-debian12:debug</code>, <code>cgr.dev/chainguard/wolfi-base</code> with <code>apk add gcc make</code>. Heavy (hundreds of MB to several GB). Discarded at end of build.</div>
+        </div>
+        <div class="stage">
+          <div class="stage-h"><small>Stage 2 · test (optional)</small>Test image</div>
+          <div class="stage-desc">If you want hermetic tests inside the container, run them in their own stage. Same base as build; ENTRYPOINT runs the test suite. Fails the build on failure.</div>
+        </div>
+        <div class="stage final">
+          <div class="stage-h"><small>Stage 3 · runtime</small>Final image</div>
+          <div class="stage-desc">Minimal: <code>scratch</code>, <code>gcr.io/distroless/static</code>, <code>cgr.dev/chainguard/static</code>. Contains only the binary and what it links to. No shell, no package manager. This is the image that ships.</div>
+        </div>
+      </div>
+
+      <h3>The canonical Go multi-stage</h3>
+      <pre data-label="Go service: 1.2 GB build → 8 MB final"><span class="cmt"># syntax=docker/dockerfile:1.7
+
+# ===== Stage 1: build =====</span>
+<span class="kw">FROM</span> golang:<span class="num">1.22</span>-alpine<span class="num">3.20</span>@sha256:abc... <span class="kw">AS</span> build
+<span class="kw">WORKDIR</span> /src
+<span class="kw">COPY</span> go.mod go.sum .
+<span class="kw">RUN</span> --mount=type=cache,target=/go/pkg/mod \
+    go mod download
+<span class="kw">COPY</span> . .
+<span class="kw">RUN</span> --mount=type=cache,target=/root/.cache/go-build \
+    --mount=type=cache,target=/go/pkg/mod \
+    CGO_ENABLED=<span class="num">0</span> GOOS=linux \
+    go build -trimpath -ldflags=<span class="str">"-s -w"</span> -o /out/app ./cmd/app
+
+<span class="cmt"># ===== Stage 2: runtime =====</span>
+<span class="kw">FROM</span> gcr.io/distroless/static-debian12:nonroot@sha256:def...
+<span class="kw">COPY</span> --from=build --chown=nonroot:nonroot /out/app /app
+<span class="kw">USER</span> <span class="num">65532</span>:<span class="num">65532</span>
+<span class="kw">EXPOSE</span> <span class="num">8080</span>
+<span class="kw">ENTRYPOINT</span> [<span class="str">"/app"</span>]</pre>
+
+      <p>Notes: <code>CGO_ENABLED=0</code> produces a static binary that runs from <code>scratch</code> or <code>distroless/static</code>. <code>-trimpath</code> removes build paths from the binary (helps reproducibility). <code>-ldflags="-s -w"</code> strips debug info, shrinking the binary further.</p>
+
+      <h3>The canonical Python multi-stage</h3>
+      <pre data-label="Python service: build deps + distroless runtime"><span class="cmt"># syntax=docker/dockerfile:1.7
+
+# ===== Stage 1: build wheels =====</span>
+<span class="kw">FROM</span> cgr.dev/chainguard/python:<span class="num">3.12</span>-dev@sha256:abc... <span class="kw">AS</span> build
+<span class="kw">WORKDIR</span> /build
+<span class="kw">RUN</span> python -m venv /venv
+<span class="kw">ENV</span> PATH=<span class="str">"/venv/bin:</span><span class="fn">$PATH</span><span class="str">"</span>
+<span class="kw">COPY</span> requirements.txt .
+<span class="kw">RUN</span> --mount=type=cache,target=/root/.cache/pip \
+    pip install --no-deps -r requirements.txt
+<span class="kw">COPY</span> . .
+<span class="kw">RUN</span> pip install --no-deps .
+
+<span class="cmt"># ===== Stage 2: runtime =====</span>
+<span class="kw">FROM</span> cgr.dev/chainguard/python:<span class="num">3.12</span>@sha256:def...
+<span class="kw">COPY</span> --from=build /venv /venv
+<span class="kw">ENV</span> PATH=<span class="str">"/venv/bin:</span><span class="fn">$PATH</span><span class="str">"</span>
+<span class="kw">USER</span> <span class="num">65532</span>
+<span class="kw">ENTRYPOINT</span> [<span class="str">"/venv/bin/python"</span>, <span class="str">"-m"</span>, <span class="str">"myapp"</span>]</pre>
+
+      <p>Note the <code>-dev</code> variant for the build stage (has pip, build tools, headers) and the non-<code>-dev</code> variant for runtime (minimal). The <code>/venv</code> directory captures everything pip installed; copying it across stages is cleaner than re-installing.</p>
+
+      <h3>Variants worth knowing</h3>
+      <p><strong>Single-stage with no compiler.</strong> If your CI builds the binary outside Docker (typical for Go monorepos), the Dockerfile is just <code>FROM scratch; COPY ./bin/app /app; ENTRYPOINT ["/app"]</code>. Fastest builds; tightest images.</p>
+      <p><strong>Distroless base image with <code>--target</code>.</strong> BuildKit supports <code>docker build --target build .</code> to stop at a named stage. Useful for "give me an image with all the build tools for interactive debugging."</p>
+      <p><strong>Build stage shared across services.</strong> If many services build similarly, define the build stage in a base image (push to your registry), and each service's Dockerfile starts with that. Reduces duplication.</p>
+      <p><strong>Parallel stages.</strong> BuildKit runs independent stages concurrently. If stage A doesn't depend on stage B, both run in parallel. Restructure to maximize this.</p>
+
+      <div class="callout build">
+        <div class="callout-label">The mental shift</div>
+        <p>Before multi-stage: "the Dockerfile is one long script." After: "the Dockerfile is a small build system." Stages map to pipeline phases (resolve deps → compile → test → package). Get used to thinking of <code>FROM</code> as defining a stage, not just a base.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 6 -->
+<section class="chapter build-ch" id="ch6">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain build">BUILD</span>
+      Chapter <span class="num">VI</span>
+    </div>
+    <h2 class="chapter-title">BuildKit · <em>beyond</em> the Dockerfile.</h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>The modern builder</strong>
+      BuildKit replaced the legacy Docker build engine. Parallel stages, cache mounts, secret mounts, multi-arch via emulation or native nodes, SBOM/provenance attestations, and frontends beyond Dockerfile.<br><br>
+      <strong>The default in 2026</strong>
+      Always-on. <code>docker buildx</code> is the CLI; the daemon is BuildKit.
+    </aside>
+    <div class="prose">
+      <p class="lead">BuildKit is the engine; <code>docker buildx</code> is the CLI. The legacy Docker build (linear, no parallel stages, no cache mounts, no attestations) is deprecated. Anything substantial in 2026 uses BuildKit features that are simply unavailable in the legacy builder.</p>
+
+      <h3>What BuildKit adds over the legacy builder</h3>
+      <p><strong>Parallel stage execution.</strong> If <code>build-ui</code> and <code>build-api</code> are independent stages, BuildKit runs them concurrently. Total time = max(stages) + final, not sum.</p>
+      <p><strong>Cache mounts.</strong> <code>--mount=type=cache,target=...</code> — covered in Chapter IV.</p>
+      <p><strong>Secret mounts.</strong> <code>--mount=type=secret,id=npm,target=/root/.npmrc</code>. Secret is available during the RUN; never enters a layer. Replaces the old anti-pattern of <code>ENV NPM_TOKEN=...</code> which leaks into image history.</p>
+      <p><strong>SSH agent forwarding.</strong> <code>--mount=type=ssh</code>. For private git dependencies during build. The SSH socket forwards into the build; the key itself never enters the build context.</p>
+      <p><strong>Multi-platform builds.</strong> <code>docker buildx build --platform linux/amd64,linux/arm64</code> produces an image index covering both arches in one command. QEMU emulation or native builder nodes.</p>
+      <p><strong>Attestations.</strong> <code>--sbom=true --provenance=mode=max</code> attaches SBOM and SLSA provenance to the image as referrers. Chapters IX–XI.</p>
+      <p><strong>Pluggable frontends.</strong> The "Dockerfile" is one frontend; others exist (Buildpacks, Earthly, custom). Specified by <code># syntax=...</code> directive.</p>
+
+      <h3>Buildx drivers</h3>
+      <p><code>docker buildx</code> can talk to multiple BuildKit instances called <em>drivers</em>:</p>
+      <div class="cards-grid">
+        <div class="tech-card">
+          <div class="kind">default · simple</div>
+          <div class="name">docker</div>
+          <div class="desc">Built into Docker Engine. Limited features — no multi-platform, no cache export. Fine for local dev.</div>
+          <div class="pill">limited</div>
+        </div>
+        <div class="tech-card">
+          <div class="kind">recommended · local</div>
+          <div class="name">docker-container</div>
+          <div class="desc">Runs BuildKit in a container. Full BuildKit feature set. Set up with <code>docker buildx create --driver docker-container --use</code>.</div>
+          <div class="pill">local default</div>
+        </div>
+        <div class="tech-card">
+          <div class="kind">scale · k8s</div>
+          <div class="name">kubernetes</div>
+          <div class="desc">BuildKit as a K8s Deployment. Multiple builder pods. Used by CI at scale. Shared cache via PVC.</div>
+          <div class="pill">shared CI builders</div>
+        </div>
+        <div class="tech-card">
+          <div class="kind">remote · arch</div>
+          <div class="name">remote</div>
+          <div class="desc">Talks to a BuildKit daemon over the network. Use for remote/native arch builders (e.g., real arm64 hardware for ARM builds).</div>
+          <div class="pill">cross-arch native</div>
+        </div>
+      </div>
+
+      <h3>Multi-platform — emulation vs native</h3>
+      <p>Cross-arch builds have two implementations:</p>
+      <p><strong>QEMU emulation.</strong> One amd64 builder emulates arm64 (or vice versa). Easy setup: <code>docker run --privileged --rm tonistiigi/binfmt --install all</code>. Slow: 10–30× slower than native for compute-heavy builds. Fine for static Go binaries; painful for large C++ compiles.</p>
+      <p><strong>Cross-compilation.</strong> The amd64 builder compiles arm64 binaries directly using a cross-compiler. Fast (no emulation). Works for Go, Rust, and statically-linked C with appropriate flags. Doesn't work for languages or dependencies that require running tooling on the target architecture.</p>
+      <p><strong>Native builder nodes.</strong> Register both real amd64 and real arm64 machines as buildx nodes; buildx routes platform-specific work to the native node. Fastest. Requires real arm64 hardware (AWS Graviton, etc.).</p>
+      <pre data-label="multi-platform with native nodes"><span class="cmt"># Set up the builder with two nodes</span>
+docker buildx create --name multiarch --use \
+    --driver docker-container <span class="cmt"># local amd64</span>
+docker buildx create --append --name multiarch \
+    --driver remote --node arm64-node tcp://arm64-host:<span class="num">1234</span>
+
+<span class="cmt"># Build for both — each node handles its native arch</span>
+docker buildx build \
+    --platform linux/amd64,linux/arm64 \
+    --tag myorg/myapp:v1.2.3 --push .</pre>
+
+      <h3>Frontends — Dockerfile is one option</h3>
+      <p>The <code># syntax=docker/dockerfile:1.7</code> directive selects a Dockerfile frontend version. Other frontends exist:</p>
+      <p><strong>Buildpacks</strong> (Cloud Native Buildpacks). Infer the language and dependencies from source; produce an image without a Dockerfile. <code>pack build myapp</code>. Used by Heroku, Google Cloud Run.</p>
+      <p><strong>Earthly</strong>. <code>Earthfile</code> syntax — Dockerfile-like but with explicit dependency graphs and parallelism. Good for monorepos.</p>
+      <p><strong>apko + melange</strong> (Chainguard). Declarative YAML; no Dockerfile. <code>apko build alpine.yaml ...</code>. The tools that build Chainguard images. Best for "build me a distroless image that contains exactly these apks." apko lets you bundle a collection of APKs into an OCI image using a declarative YAML manifest. melange lets you build apks using declarative YAML pipelines.</p>
+
+      <pre data-label="apko — a Dockerfile-free image"><span class="cmt"># app.yaml</span>
+contents:
+  repositories:
+    - https://packages.wolfi.dev/os
+  packages:
+    - ca-certificates-bundle
+    - tzdata
+    - my-app                            <span class="cmt"># your app packaged as a wolfi apk</span>
+entrypoint:
+  command: /usr/bin/my-app
+accounts:
+  users:
+    - username: nonroot
+      uid: <span class="num">65532</span>
+  run-as: <span class="num">65532</span>
+archs: [amd64, arm64]
+
+<span class="cmt"># Build it</span>
+apko build app.yaml myorg/myapp:v1 myorg-myapp-v1.tar
+docker load &lt; myorg-myapp-v1.tar</pre>
+
+      <div class="callout build">
+        <div class="callout-label">The 2026 default BuildKit invocation</div>
+        <p><code>docker buildx build --platform linux/amd64,linux/arm64 --provenance=mode=max --sbom=true --cache-to type=registry,ref=...,mode=max --cache-from type=registry,ref=... --push -t myorg/myapp:$TAG .</code> — multi-arch, attestations, registry cache, push. Six flags that produce a production-grade image. Adopt the pattern in CI once; it pays off for every service forever.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 7 -->
+<section class="chapter build-ch" id="ch7">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain build">BUILD</span>
+      Chapter <span class="num">VII</span>
+    </div>
+    <h2 class="chapter-title">Dependency management · <em>lockfiles &amp; hashes.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>The premise</strong>
+      "I declared X" is not the same as "I installed X version Y from source Z verified by hash H." Lockfiles bridge the gap.<br><br>
+      <strong>The new threat</strong>
+      Supply-chain attacks via dependency substitution. Hashes are now the minimum bar.
+    </aside>
+    <div class="prose">
+      <p class="lead">Application dependencies are now the most likely vector for compromise — not the base image, not your own code. Lockfiles and hash verification turned what was "best practice" five years ago into table stakes after a series of high-profile incidents.</p>
+
+      <h3>The dependency hierarchy</h3>
+      <p>Three levels of pinning, each tighter than the last:</p>
+      <p><strong>Version range.</strong> <code>requests = "^2.28"</code> (allows 2.28.x, possibly 2.29). The default in most ecosystems. Convenient; non-reproducible; vulnerable to a new patch shipping a backdoor.</p>
+      <p><strong>Exact version.</strong> <code>requests==2.28.2</code>. Reproducible across runs. But: a malicious 2.28.2 could be uploaded to a private mirror; if the public package is yanked and re-uploaded with different content, you're vulnerable.</p>
+      <p><strong>Version + hash.</strong> <code>requests==2.28.2 --hash=sha256:62...</code>. Fully reproducible AND tamper-evident. The package manager verifies the downloaded bytes match the hash before installing.</p>
+
+      <h3>Lockfile generators by language</h3>
+      <pre data-label="generate lockfiles with hashes — every language"><span class="cmt"># Python — pip-tools (pip-compile) generates requirements.txt with hashes</span>
+pip-compile --generate-hashes --output-file requirements.txt requirements.in
+<span class="cmt"># Or use Poetry / PDM / uv — they all support hashes natively</span>
+
+<span class="cmt"># Node — npm ci uses package-lock.json which includes integrity hashes</span>
+npm ci   <span class="cmt"># installs exact versions from lock, verifies integrity hash</span>
+
+<span class="cmt"># Go — go.sum already records hashes for all transitive deps</span>
+go mod tidy
+<span class="cmt"># go build automatically verifies go.sum on every build</span>
+
+<span class="cmt"># Rust — Cargo.lock records exact versions + checksums</span>
+cargo build   <span class="cmt"># verifies checksums from Cargo.lock</span>
+
+<span class="cmt"># Java — Gradle/Maven via dependency-verification</span>
+./gradlew --write-verification-metadata sha256
+<span class="cmt"># Produces gradle/verification-metadata.xml</span></pre>
+
+      <h3>The hashed install in the Dockerfile</h3>
+      <pre data-label="enforce hash verification in build"><span class="cmt"># Python — pip refuses to install anything not matching the hash</span>
+<span class="kw">COPY</span> requirements.txt .
+<span class="kw">RUN</span> --mount=type=cache,target=/root/.cache/pip \
+    pip install --require-hashes -r requirements.txt
+
+<span class="cmt"># Node — npm ci fails if package-lock.json doesn't match installed</span>
+<span class="kw">COPY</span> package.json package-lock.json .
+<span class="kw">RUN</span> --mount=type=cache,target=/root/.npm \
+    npm ci --omit=dev --ignore-scripts
+
+<span class="cmt"># Go — go build verifies go.sum automatically</span>
+<span class="kw">COPY</span> go.mod go.sum .
+<span class="kw">RUN</span> --mount=type=cache,target=/go/pkg/mod \
+    go mod download -x
+
+<span class="cmt"># --ignore-scripts is important — many npm supply-chain attacks</span>
+<span class="cmt"># run code in postinstall hooks. Disable unless you actively need them.</span></pre>
+
+      <h3>Private mirrors and proxies</h3>
+      <p>For high-stakes environments: route all dependency fetches through a private mirror that you control. Three benefits:</p>
+      <p>One — <strong>cache</strong>. Public package registries (npm, PyPI, Maven Central) get slow, rate-limit, or go down. A local mirror is always available.</p>
+      <p>Two — <strong>vetting</strong>. The mirror can block packages your security team hasn't reviewed, or quarantine packages until vulnerability scans complete.</p>
+      <p>Three — <strong>audit</strong>. You can prove which packages your builds consumed and when. Critical for compliance and incident response.</p>
+      <p>Common implementations: <strong>Sonatype Nexus</strong>, <strong>JFrog Artifactory</strong>, <strong>Cloudsmith</strong>, <strong>GitHub Packages</strong> proxy mode, <strong>AWS CodeArtifact</strong>, <strong>Verdaccio</strong> (npm specific). Configure your build's package manager to use the mirror as upstream; never let prod builds reach the public internet.</p>
+
+      <h3>The "axios" lesson</h3>
+      <p>In March 2026, axios was compromised via a supply-chain attack. Teams pinning by version range pulled the malicious release; teams pinning by hash and validating against a mirror did not. The pattern repeats: a dependency goes through a maintainer transition, the new maintainer ships a malicious version, the world's CI pipelines auto-install it.</p>
+      <p>Three controls, in order of effort:</p>
+      <p>(1) Lockfile with hashes — every build verifies bytes. Cheap.</p>
+      <p>(2) Private mirror with vetting — the malicious package never reaches your builds. Moderate effort.</p>
+      <p>(3) Reproducible-build verification — independent rebuild matches your CI output. Expensive; only for the highest-stakes environments.</p>
+
+      <div class="callout build">
+        <div class="callout-label">The hash-or-die principle</div>
+        <p>Every production image's build should fail closed when dependencies don't match their pinned hashes. <code>pip install --require-hashes</code>. <code>npm ci</code> not <code>npm install</code>. <code>go.sum</code> verified automatically. <code>Cargo.lock</code> in version control. Five lines of CI policy that prevent a category of attack that has cost the industry billions.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 8 -->
+<section class="chapter supply-ch" id="ch8">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain supply">SUPPLY</span>
+      Chapter <span class="num">VIII</span>
+    </div>
+    <h2 class="chapter-title">Vulnerability management · <em>scan, triage, patch.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>The CVE inversion</strong>
+      A 5-year-old Alpine image has dozens of CVEs. A daily-rebuilt Wolfi image has zero. The base image you choose determines the CVE floor.<br><br>
+      <strong>The discipline</strong>
+      Scan in CI, alert in registry, patch by rebuild.
+    </aside>
+    <div class="prose">
+      <p class="lead">Container vulnerability management is the discipline of finding the CVEs in your images and acting on them. The 2026 maturity bar: scan on every build, fail CI on new critical/high CVEs, scan continuously in the registry, and patch by rebuilding rather than running upgrade scripts inside containers.</p>
+
+      <div class="cve-panel">
+        <div class="cve-title">Realistic CVE counts · same Go app, different bases</div>
+        <div class="cve-h">Where do the CVEs actually come from?</div>
+        <div class="cve-rows">
+          <div class="cve-row high">
+            <div class="cve-name">debian:bookworm</div>
+            <div class="cve-bar-wrap"><div class="cve-bar high" style="width: 100%"></div></div>
+            <div class="cve-count">~120</div>
+          </div>
+          <div class="cve-row high">
+            <div class="cve-name">ubuntu:24.04</div>
+            <div class="cve-bar-wrap"><div class="cve-bar high" style="width: 85%"></div></div>
+            <div class="cve-count">~95</div>
+          </div>
+          <div class="cve-row low">
+            <div class="cve-name">alpine:3.20</div>
+            <div class="cve-bar-wrap"><div class="cve-bar low" style="width: 22%"></div></div>
+            <div class="cve-count">~10</div>
+          </div>
+          <div class="cve-row low">
+            <div class="cve-name">distroless/static</div>
+            <div class="cve-bar-wrap"><div class="cve-bar low" style="width: 8%"></div></div>
+            <div class="cve-count">~3</div>
+          </div>
+          <div class="cve-row zero">
+            <div class="cve-name">chainguard/static</div>
+            <div class="cve-bar-wrap"><div class="cve-bar zero" style="width: 2%"></div></div>
+            <div class="cve-count">0</div>
+          </div>
+          <div class="cve-row zero">
+            <div class="cve-name">scratch</div>
+            <div class="cve-bar-wrap"><div class="cve-bar zero" style="width: 1%"></div></div>
+            <div class="cve-count">0</div>
+          </div>
+        </div>
+      </div>
+
+      <p>Same Go binary. Same application code. The CVE count is determined almost entirely by the base image. This is why distroless and Wolfi matter — they aren't just "smaller"; they have nothing left to be vulnerable.</p>
+
+      <h3>The scanner ecosystem</h3>
+      <div class="cards-grid">
+        <div class="tech-card">
+          <div class="kind">CLI · open-source</div>
+          <div class="name">Trivy</div>
+          <div class="desc">Aqua Security's scanner. Fast, comprehensive, free. <code>trivy image myorg/myapp:v1</code>. Covers OS packages, language libraries, IaC, secrets. The community default.</div>
+          <div class="pill">community default</div>
+        </div>
+        <div class="tech-card">
+          <div class="kind">CLI · open-source</div>
+          <div class="name">Grype</div>
+          <div class="desc">Anchore's scanner. Pairs with syft for SBOM-based scanning. <code>grype myorg/myapp:v1</code>. Strong for "scan an SBOM" workflows.</div>
+          <div class="pill">SBOM-driven</div>
+        </div>
+        <div class="tech-card">
+          <div class="kind">registry · built-in</div>
+          <div class="name">Harbor scanner</div>
+          <div class="desc">Harbor invokes Trivy/Clair/Anchore as a registry-side scanner. Auto-scans on push; rescans on a schedule. Blocks pulls of high-CVE images via policy.</div>
+          <div class="pill">registry-integrated</div>
+        </div>
+        <div class="tech-card">
+          <div class="kind">enterprise</div>
+          <div class="name">Snyk / Wiz / Prisma</div>
+          <div class="desc">Commercial. SaaS-delivered. Add policy management, ticketing integration, fix recommendations, runtime correlation. For organizations with dedicated security teams.</div>
+          <div class="pill">enterprise SaaS</div>
+        </div>
+      </div>
+
+      <h3>CI integration</h3>
+      <pre data-label="trivy in CI — fail on HIGH/CRITICAL CVEs"><span class="cmt"># GitHub Actions step</span>
+- <span class="fn">name</span>: Build image
+  <span class="fn">run</span>: docker buildx build -t myorg/myapp:<span class="fn">${{</span> github.sha <span class="fn">}}</span> --push .
+
+- <span class="fn">name</span>: Scan image for vulnerabilities
+  <span class="fn">uses</span>: aquasecurity/trivy-action@<span class="num">0.18</span>.<span class="num">0</span>
+  <span class="fn">with</span>:
+    image-ref: myorg/myapp:<span class="fn">${{</span> github.sha <span class="fn">}}</span>
+    format: sarif
+    output: trivy-results.sarif
+    severity: CRITICAL,HIGH
+    exit-code: <span class="str">'1'</span>                       <span class="cmt"># fail the build</span>
+    ignore-unfixed: <span class="ok">true</span>                <span class="cmt"># skip CVEs with no fix yet</span>
+
+- <span class="fn">name</span>: Upload SARIF to GitHub Security
+  <span class="fn">uses</span>: github/codeql-action/upload-sarif@v3
+  <span class="fn">with</span>:
+    sarif_file: trivy-results.sarif</pre>
+
+      <p>The <code>ignore-unfixed</code> flag is key. CVEs that have no fix yet aren't actionable; failing the build on them just causes alert fatigue and people disabling scans. Fail on fixable CVEs; record the rest in a tracking system.</p>
+
+      <h3>The triage flow</h3>
+      <p>For each CVE in your image, ask in order:</p>
+      <p><strong>1. Is the vulnerable package even reachable?</strong> The CVE is in <code>libxml2</code> but your service doesn't parse XML. Mark "not applicable" (formally, a VEX statement — see Chapter IX). Doesn't reduce risk on paper but separates real exposure from theatre.</p>
+      <p><strong>2. Is there a fixed version available?</strong> If yes: bump and rebuild. Done in minutes for most language deps.</p>
+      <p><strong>3. Is the base image at fault?</strong> Rebuild against a fresher base; many CVEs evaporate. If you're on Wolfi or Chainguard, this is automatic via nightly rebuild.</p>
+      <p><strong>4. Can the application be reconfigured to avoid the vulnerability?</strong> CVE in TLS 1.0 handling; disable TLS 1.0. CVE in a legacy parser; disable the parser.</p>
+      <p><strong>5. If none of the above: document and accept.</strong> Sometimes the right answer is "we accept this risk for X reason, here's the compensating control." Write it down. Review quarterly.</p>
+
+      <h3>Continuous registry scanning</h3>
+      <p>CI scans catch CVEs at push time. But a CVE disclosed tomorrow affects images already in your registry. Registries with built-in scanners (Harbor, Quay, ECR, ACR, Artifactory) periodically rescan stored images and alert when a newly-disclosed CVE matches an image you've already pushed.</p>
+      <p>The right alert rule: "image is being actively pulled AND has a new HIGH/CRITICAL CVE." Don't alert on every CVE in every dormant image — that's a quarterly cleanup task, not an interrupt.</p>
+
+      <div class="callout supply">
+        <div class="callout-label">The pragmatic policy</div>
+        <p>Fail CI on new fixable HIGH/CRITICAL CVEs. Alert on registry CVEs in actively-pulled images. Auto-rebuild nightly to pick up base updates. Triage unfixed CVEs via VEX so they don't fill the dashboard. The hardest part isn't the tooling — it's <em>not</em> failing builds on unfixed CVEs that no human can act on.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 9 -->
+<section class="chapter supply-ch" id="ch9">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain supply">SUPPLY</span>
+      Chapter <span class="num">IX</span>
+    </div>
+    <h2 class="chapter-title">SBOM &amp; attestations · the <em>provenance layer.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>SBOM</strong>
+      The parts list. Every package and every version that went into this image. Like the ingredient label on food.<br><br>
+      <strong>Attestation</strong>
+      Signed metadata about the image: who built it, how, when, from what source.
+    </aside>
+    <div class="prose">
+      <p class="lead">SBOMs answer "what's in the image"; attestations answer "where did it come from and how was it built." Together they make container images analyzable as software artifacts, not just opaque tarballs. Both became regulated assets after the 2021 US Executive Order 14028 and the corresponding European NIS2 directive.</p>
+
+      <h3>SBOM formats</h3>
+      <p><strong>SPDX</strong>: ISO standard, sponsored by the Linux Foundation. JSON, YAML, RDF, or tag-value formats. Government and compliance default.</p>
+      <p><strong>CycloneDX</strong>: OWASP project. JSON or XML. Vulnerability-management focused; ships with built-in VEX support. Vendor and tooling default.</p>
+      <p>Most tools generate either or both. The differences are mostly schema; the information overlaps heavily.</p>
+
+      <h3>Generating SBOMs</h3>
+      <pre data-label="three ways to get an SBOM"><span class="cmt"># 1. BuildKit at build time — the easy path</span>
+docker buildx build \
+    --sbom=true \                       <span class="cmt"># attaches SPDX SBOM as attestation</span>
+    --provenance=mode=max \             <span class="cmt"># attaches SLSA provenance</span>
+    -t myorg/myapp:v1 --push .
+
+<span class="cmt"># 2. Syft — scan a built image, get SBOM</span>
+syft myorg/myapp:v1 -o spdx-json &gt; sbom.spdx.json
+syft myorg/myapp:v1 -o cyclonedx-json &gt; sbom.cdx.json
+syft myorg/myapp:v1 -o table              <span class="cmt"># human-readable</span>
+
+<span class="cmt"># 3. apko/melange — SBOM is a build artifact, not a scan</span>
+<span class="cmt"># apko emits SBOM natively as part of every build,</span>
+<span class="cmt"># cryptographically tied to the image bytes</span></pre>
+
+      <p>The third option matters because of <em>what</em> the SBOM means. A scanned SBOM (option 2) is one tool's best guess about what's in the image. A build-time SBOM (option 1 or 3) is the build system's authoritative record of what it put in. Build-time SBOMs are more accurate; scan-time SBOMs are universal (work on any image, including ones you didn't build).</p>
+
+      <h3>Attestations and the referrers API</h3>
+      <p>An attestation is signed metadata attached to an image. Defined by the in-toto specification: a predicate (the claim) plus a subject (what it's about) plus signature.</p>
+      <p>Critical attestations for container images:</p>
+      <p><strong>SBOM attestation</strong>: predicate type <code>https://spdx.dev/Document</code> or <code>https://cyclonedx.org/bom</code>. The SBOM, signed by the builder.</p>
+      <p><strong>SLSA provenance</strong>: predicate type <code>https://slsa.dev/provenance/v1</code>. The build environment, source repository, commit, build command. Chapter XI.</p>
+      <p><strong>VEX (Vulnerability Exploitability eXchange)</strong>: predicate type <code>https://openvex.dev/ns</code>. Statements about which CVEs in the SBOM are actually exploitable in this product.</p>
+      <p>Storage: the <strong>OCI 1.1 referrers API</strong> stores these as separate OCI artifacts that reference the image by digest. Stores signatures and attestations using OCI 1.1 referrers mode to avoid tag pollution and work cleanly with immutable tags. No more dangling <code>:sha256-...sig</code> tags polluting the registry.</p>
+
+      <h3>VEX — the missing piece</h3>
+      <p>A scanned image might show 50 CVEs. Of those, maybe 5 are actually exploitable in your use of the affected libraries. VEX is how you formally declare the other 45 "not affected" with reasoning, and have that statement signed and verified the same way the SBOM is.</p>
+      <pre data-label="VEX statement — declare not affected"><span class="num">{</span>
+  <span class="str">"@context"</span>: <span class="str">"https://openvex.dev/ns/v0.2.0"</span>,
+  <span class="str">"@id"</span>: <span class="str">"https://example.com/vex/2026-001"</span>,
+  <span class="str">"author"</span>: <span class="str">"Security Team &lt;security@example.com&gt;"</span>,
+  <span class="str">"timestamp"</span>: <span class="str">"2026-05-12T10:00:00Z"</span>,
+  <span class="str">"statements"</span>: [{
+    <span class="str">"vulnerability"</span>: { <span class="str">"name"</span>: <span class="str">"CVE-2025-12345"</span> },
+    <span class="str">"products"</span>: [{
+      <span class="str">"@id"</span>: <span class="str">"pkg:oci/myapp?repository_url=myorg.io"</span>,
+      <span class="str">"hashes"</span>: { <span class="str">"sha-256"</span>: <span class="str">"abc123..."</span> }
+    }],
+    <span class="str">"status"</span>: <span class="str">"not_affected"</span>,
+    <span class="str">"justification"</span>: <span class="str">"vulnerable_code_not_in_execute_path"</span>,
+    <span class="str">"impact_statement"</span>: <span class="str">"The function in libxml2 is only called by feature X, which is disabled at build."</span>
+  }]
+<span class="num">}</span></pre>
+
+      <p>Attached to the image as a signed attestation, this is how you stop drowning in CVE noise. The scanner reports 50; the VEX says 45 don't apply; the dashboard shows 5 actionable.</p>
+
+      <h3>Inspecting attestations</h3>
+      <pre data-label="see what's attached to an image"><span class="cmt"># List all referrers (attestations) on an image</span>
+$ oras discover myorg/myapp:v1
+Discovered 5 artifact referrers:
+Type                                            Digest
+application/vnd.cncf.openvex+json               sha256:aa...
+application/vnd.cyclonedx+json                  sha256:bb...
+application/vnd.dev.cosign.simplesigning.v1+json sha256:cc...
+application/vnd.in-toto+json (slsa-provenance)  sha256:dd...
+application/vnd.in-toto+json (spdx-sbom)        sha256:ee...
+
+<span class="cmt"># Pull a specific attestation</span>
+$ cosign download attestation \
+    --predicate-type=https://slsa.dev/provenance/v1 \
+    myorg/myapp:v1 | jq -r .payload | base64 -d | jq .predicate</pre>
+
+      <div class="callout supply">
+        <div class="callout-label">The new minimum-viable supply chain</div>
+        <p>For every production image: SBOM (CycloneDX or SPDX) attached as a signed attestation. SLSA provenance attached as a signed attestation. VEX statements for non-applicable CVEs. Stored via OCI 1.1 referrers. Verifiable at deploy time by cosign or gh attestation verify. Four artifacts that turn an opaque tarball into an auditable software product.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 10 -->
+<section class="chapter supply-ch" id="ch10">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain supply">SUPPLY</span>
+      Chapter <span class="num">X</span>
+    </div>
+    <h2 class="chapter-title">Signing · <em>cosign</em>, sigstore, keyless.</h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>The shift</strong>
+      Long-lived signing keys → short-lived OIDC-issued certificates. No key management. Identity-based verification.<br><br>
+      <strong>The verification</strong>
+      The signature proves <em>who built it</em>, not just that the bytes haven't changed.
+    </aside>
+    <div class="prose">
+      <p class="lead">Image signing answers two questions: did these exact bytes come out of a trusted build, and who or what was the trusted build. The 2026 standard is <strong>Sigstore</strong> (cosign + Fulcio + Rekor) — keyless signing using short-lived OIDC certificates, with the signing event recorded in a public transparency log.</p>
+
+      <h3>How keyless signing works</h3>
+      <p>The classic approach: generate an RSA or ECDSA keypair, store the private key in HSM/Vault, sign images with it. Problems: key management is hard, the private key is a permanent compromise risk, rotation is painful.</p>
+      <p>The keyless approach (Sigstore Fulcio):</p>
+      <ol style="margin: 16px 0 24px 32px; line-height: 1.8;">
+        <li>CI gets an OIDC token from GitHub Actions / GitLab CI / Buildkite identifying the workflow.</li>
+        <li>The OIDC token is sent to Fulcio (Sigstore's CA).</li>
+        <li>Fulcio issues a short-lived (10 minute) X.509 certificate where the subject is the CI workflow identity (e.g., <code>https://github.com/myorg/myrepo/.github/workflows/build.yml@refs/heads/main</code>).</li>
+        <li>cosign signs the image's manifest digest with the certificate.</li>
+        <li>The signing event is recorded in <strong>Rekor</strong>, the public transparency log.</li>
+        <li>The certificate expires; the private key never persisted to disk; the verifiable record is the Rekor entry plus the certificate.</li>
+      </ol>
+      <p>Verification reverses this: cosign retrieves the certificate, verifies the OIDC identity matches what you expect, checks Rekor that the signing happened. cosign assumes we're using the Sigstore public good instance.</p>
+
+      <h3>Sign and verify, in practice</h3>
+      <pre data-label="cosign — sign in CI, verify at admission"><span class="cmt"># In CI (GitHub Actions) — sign by digest</span>
+- <span class="fn">name</span>: Sign the image
+  <span class="fn">env</span>:
+    DIGEST: <span class="fn">${{</span> steps.build.outputs.digest <span class="fn">}}</span>
+  <span class="fn">run</span>: |
+    cosign sign --yes \
+      --identity-token=<span class="fn">${{</span> steps.idtoken.outputs.token <span class="fn">}}</span> \
+      ghcr.io/myorg/myapp@<span class="fn">${DIGEST}</span>
+
+<span class="cmt"># Anywhere — verify before pull/run</span>
+$ cosign verify \
+    --certificate-identity-regexp=<span class="str">"^https://github.com/myorg/.+/\.github/workflows/build\.ya?ml@.+$"</span> \
+    --certificate-oidc-issuer=https://token.actions.githubusercontent.com \
+    ghcr.io/myorg/myapp@sha256:abc...
+
+Verification for ghcr.io/myorg/myapp@sha256:abc... --
+The cosign claims were validated
+Existence of the claims in the transparency log was verified offline
+The code-signing certificate was verified using trusted certificate authority</pre>
+
+      <p>The verification command names the expected identity. Anyone trying to substitute a different image fails the identity check; anyone trying to substitute a signature from a different workflow fails too.</p>
+
+      <h3>Admission control — block unsigned images at the cluster</h3>
+      <p>Signing in CI is half the story. The other half is refusing to run unsigned images in production. Two common implementations:</p>
+      <p><strong>Kyverno</strong>: K8s policy engine. <code>verifyImages</code> rule checks signatures at admission. If verification fails, the pod isn't created.</p>
+      <p><strong>Sigstore Policy Controller</strong>: purpose-built for cosign verification. Lightweight; one job to do.</p>
+      <pre data-label="Kyverno verifyImages policy"><span class="kw">apiVersion</span>: kyverno.io/v1
+<span class="kw">kind</span>: ClusterPolicy
+<span class="kw">metadata</span>:
+  <span class="fn">name</span>: verify-images
+<span class="kw">spec</span>:
+  <span class="fn">validationFailureAction</span>: Enforce            <span class="cmt"># block, don't just warn</span>
+  <span class="fn">rules</span>:
+    - <span class="fn">name</span>: check-myorg-signed
+      match:
+        any:
+          - resources:
+              kinds: [<span class="str">"Pod"</span>]
+      verifyImages:
+        - imageReferences: [<span class="str">"ghcr.io/myorg/*"</span>]
+          attestors:
+            - entries:
+                - keyless:
+                    issuer: https://token.actions.githubusercontent.com
+                    subject: <span class="str">"https://github.com/myorg/*"</span>
+                    rekor:
+                      url: https://rekor.sigstore.dev</pre>
+
+      <h3>What signing does NOT prove</h3>
+      <p>Signing proves "this CI workflow produced this image." It does <em>not</em> prove:</p>
+      <p>That the workflow itself is uncompromised. If the CI configuration is malicious, signing legitimizes whatever it builds.</p>
+      <p>That the source code is what you think. The workflow could be checking out a different branch, applying patches, or building from a fork.</p>
+      <p>That the image is free of vulnerabilities. Signing is identity, not safety.</p>
+      <p>That the SBOM is accurate. The same workflow could lie in its SBOM and sign the lie.</p>
+      <p>The mitigations: <strong>SLSA provenance</strong> (Chapter XI) ties the signature back to the source commit; <strong>VEX</strong> (Chapter IX) qualifies the SBOM; <strong>vulnerability scanning</strong> (Chapter VIII) provides the orthogonal safety check.</p>
+
+      <div class="callout supply">
+        <div class="callout-label">The keyless adoption order</div>
+        <p>Start by signing all production images in CI with cosign keyless. Stay there for a few months — get used to the signing identity, verify it works through promotion. Then add Kyverno verification at admission. Then add SLSA provenance generation (the next chapter). Each step takes a sprint; combined they raise your supply-chain posture from "we hope the registry isn't compromised" to "we cryptographically verify every byte that enters our cluster."</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 11 -->
+<section class="chapter supply-ch" id="ch11">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain supply">SUPPLY</span>
+      Chapter <span class="num">XI</span>
+    </div>
+    <h2 class="chapter-title">SLSA · <em>build integrity</em> levels.</h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>What SLSA is</strong>
+      Supply-chain Levels for Software Artifacts. A graduated set of requirements for what your build process can prove about itself.<br><br>
+      <strong>The bar</strong>
+      Level 1 is "we generate provenance." Level 3 is "the provenance is non-forgeable even if the build is compromised."
+    </aside>
+    <div class="prose">
+      <p class="lead">SLSA is the graduated framework for build-pipeline integrity. Each level adds requirements that make it harder for an attacker who compromises some part of the pipeline to forge the provenance. By Level 3, even a fully compromised build job cannot fake the attestation.</p>
+
+      <h3>The four levels</h3>
+      <div class="cards-grid">
+        <div class="tech-card">
+          <div class="kind">level 0</div>
+          <div class="name">No provenance</div>
+          <div class="desc">No claims about how the artifact was built. Every Docker Hub image with no attestations starts here.</div>
+          <div class="pill">starting point</div>
+        </div>
+        <div class="tech-card">
+          <div class="kind">level 1</div>
+          <div class="name">Provenance exists</div>
+          <div class="desc">Build produces machine-readable provenance: source repo, commit, builder, inputs. Need not be tamper-evident.</div>
+          <div class="pill">documentation</div>
+        </div>
+        <div class="tech-card">
+          <div class="kind">level 2</div>
+          <div class="name">Authenticated provenance</div>
+          <div class="desc">Provenance is signed. Hosted CI service (GitHub Actions, GitLab, Buildkite). Distrusts the user, trusts the platform.</div>
+          <div class="pill">most teams here</div>
+        </div>
+        <div class="tech-card">
+          <div class="kind">level 3</div>
+          <div class="name">Non-forgeable provenance</div>
+          <div class="desc">Build runs on isolated infrastructure; provenance generated outside the build job. Compromised build can't fake its own attestation.</div>
+          <div class="pill">production target</div>
+        </div>
+      </div>
+
+      <h3>What SLSA provenance contains</h3>
+      <pre data-label="SLSA provenance — predicate fields"><span class="num">{</span>
+  <span class="str">"_type"</span>: <span class="str">"https://in-toto.io/Statement/v1"</span>,
+  <span class="str">"subject"</span>: [{                              <span class="cmt"># what artifact this is about</span>
+    <span class="str">"name"</span>: <span class="str">"ghcr.io/myorg/myapp"</span>,
+    <span class="str">"digest"</span>: { <span class="str">"sha256"</span>: <span class="str">"abc123..."</span> }
+  }],
+  <span class="str">"predicateType"</span>: <span class="str">"https://slsa.dev/provenance/v1"</span>,
+  <span class="str">"predicate"</span>: <span class="num">{</span>
+    <span class="str">"buildDefinition"</span>: <span class="num">{</span>
+      <span class="str">"buildType"</span>: <span class="str">"https://github.com/slsa-framework/slsa-github-generator"</span>,
+      <span class="str">"externalParameters"</span>: <span class="num">{</span>
+        <span class="str">"workflow"</span>: <span class="num">{</span>
+          <span class="str">"ref"</span>: <span class="str">"refs/heads/main"</span>,
+          <span class="str">"repository"</span>: <span class="str">"https://github.com/myorg/myrepo"</span>,
+          <span class="str">"path"</span>: <span class="str">".github/workflows/release.yml"</span>
+        <span class="num">}</span>
+      <span class="num">}</span>,
+      <span class="str">"internalParameters"</span>: <span class="num">{</span>
+        <span class="str">"github"</span>: <span class="num">{</span>
+          <span class="str">"event_name"</span>: <span class="str">"push"</span>,
+          <span class="str">"run_id"</span>: <span class="str">"7234567890"</span>
+        <span class="num">}</span>
+      <span class="num">}</span>
+    <span class="num">}</span>,
+    <span class="str">"runDetails"</span>: <span class="num">{</span>
+      <span class="str">"builder"</span>: <span class="num">{</span>
+        <span class="str">"id"</span>: <span class="str">"https://github.com/slsa-framework/slsa-github-generator/.github/workflows/builder_docker-based_slsa3.yml@refs/tags/v2.0.0"</span>
+      <span class="num">}</span>,
+      <span class="str">"metadata"</span>: <span class="num">{</span>
+        <span class="str">"invocationId"</span>: <span class="str">"https://github.com/myorg/myrepo/actions/runs/7234567890/attempts/1"</span>,
+        <span class="str">"startedOn"</span>: <span class="str">"2026-05-12T08:01:23Z"</span>,
+        <span class="str">"finishedOn"</span>: <span class="str">"2026-05-12T08:09:47Z"</span>
+      <span class="num">}</span>
+    <span class="num">}</span>
+  <span class="num">}</span>
+<span class="num">}</span></pre>
+
+      <p>Anyone with the provenance can answer: which source commit, which workflow file, which CI run, which workflow version. Combined with the cosign signature, they can verify it's authentic.</p>
+
+      <h3>The Level 3 architecture</h3>
+      <p>The naive approach: build the image AND generate the provenance in the same CI job. Problem: if the build is compromised (malicious code in a build script), it can also forge a provenance that says everything's fine.</p>
+      <p>The SLSA Level 3 pattern: Job 1 (build &amp; push) uses BuildKit to compile and push the image, with native provenance disabled. Job 2 (SLSA L3 provenance) runs in a completely isolated job using slsa-framework/slsa-github-generator. It receives only the final image digest, independently verifies the source repository, commit, and workflow via GitHub APIs, and generates a non-forgeable SLSA Level 3 attestation. Even if Job 1 is fully compromised, this provenance cannot be faked.</p>
+      <pre data-label="SLSA Level 3 — isolated provenance job"><span class="cmt"># .github/workflows/release.yml</span>
+<span class="kw">jobs</span>:
+  build:                                    <span class="cmt"># Job 1: build + push image</span>
+    <span class="fn">runs-on</span>: ubuntu-latest
+    <span class="fn">outputs</span>:
+      digest: <span class="fn">${{</span> steps.push.outputs.digest <span class="fn">}}</span>
+    steps:
+      - <span class="fn">uses</span>: actions/checkout@v4
+      - <span class="fn">id</span>: push
+        <span class="fn">run</span>: |
+          DIGEST=$(docker buildx build --push ... --metadata-file md.json \
+                   | jq -r '.containerimage.digest')
+          echo <span class="str">"digest=</span><span class="fn">$DIGEST</span><span class="str">"</span> &gt;&gt; <span class="fn">$GITHUB_OUTPUT</span>
+
+  provenance:                               <span class="cmt"># Job 2: separate, non-forgeable provenance</span>
+    <span class="fn">needs</span>: [build]
+    <span class="fn">permissions</span>:
+      actions: read
+      id-token: write
+      packages: write
+    <span class="fn">uses</span>: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.0.0
+    with:
+      image: ghcr.io/myorg/myapp
+      digest: <span class="fn">${{</span> needs.build.outputs.digest <span class="fn">}}</span></pre>
+
+      <h3>Verifying SLSA at admission</h3>
+      <p>The same Kyverno/Sigstore Policy Controller setup from Chapter X can verify SLSA provenance. The policy:</p>
+      <pre data-label="Kyverno — require SLSA provenance"><span class="kw">verifyImages</span>:
+  - <span class="fn">imageReferences</span>: [<span class="str">"ghcr.io/myorg/*"</span>]
+    <span class="fn">attestations</span>:
+      - <span class="fn">predicateType</span>: https://slsa.dev/provenance/v1
+        attestors:
+          - entries:
+              - keyless:
+                  subject: <span class="str">"^https://github.com/slsa-framework/slsa-github-generator/.+$"</span>
+                  issuer: https://token.actions.githubusercontent.com
+        conditions:
+          - all:
+              - key: <span class="str">"{{ buildDefinition.externalParameters.workflow.repository }}"</span>
+                operator: Equals
+                value: <span class="str">"https://github.com/myorg/myrepo"</span>
+              - key: <span class="str">"{{ buildDefinition.externalParameters.workflow.ref }}"</span>
+                operator: Equals
+                value: <span class="str">"refs/heads/main"</span></pre>
+
+      <p>The admission controller refuses any image whose provenance says it was built from a fork, a feature branch, or a different repo. Combined with branch-protection rules (only certain people can merge to <code>main</code>), this is a strong supply-chain perimeter.</p>
+
+      <div class="callout supply">
+        <div class="callout-label">The SLSA progression</div>
+        <p>Most production teams should be at Level 2 today (BuildKit's <code>--provenance=mode=max</code> running in hosted CI). The jump to Level 3 — separating the provenance job from the build job — costs a sprint of work and a small CI runtime increase, and produces meaningfully stronger guarantees. For high-stakes services (financial, healthcare, critical infrastructure), L3 is the bar; for everything else, L2 + cosign signing is a strong baseline.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 12 -->
+<section class="chapter dist-ch" id="ch12">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain dist">DISTRIBUTION</span>
+      Chapter <span class="num">XII</span>
+    </div>
+    <h2 class="chapter-title">Registry topology · <em>hub</em>, mirror, cache.</h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>One registry doesn't scale</strong>
+      Past a few clusters in a few regions, a single registry becomes the bottleneck and the SPoF. Production topology is hierarchical.<br><br>
+      <strong>Three roles</strong>
+      Hub (source of truth), mirrors (replicas in regions), pull-through caches (on-demand cache of upstream).
+    </aside>
+    <div class="prose">
+      <p class="lead">A registry topology serves three purposes: minimize image-pull latency at the edge, isolate clusters from registry outages, and reduce egress cost from cloud providers. Below ~200 nodes a single registry is fine. Above that, you need a topology — and there are three established patterns.</p>
+
+      <div class="topo">
+        <div class="topo-h">The three-tier registry topology</div>
+        <div class="topo-grid">
+          <div class="topo-tier">
+            <h4>Tier 1</h4>
+            <div class="topo-tier-name">Internal hub</div>
+            <ul>
+              <li>Source of truth for your org</li>
+              <li>CI pushes here</li>
+              <li>Signing &amp; SBOM happen here</li>
+              <li>Scanning &amp; admission policies</li>
+              <li>Backed by object storage (S3)</li>
+              <li>Single region; replicated for HA</li>
+            </ul>
+          </div>
+          <div class="topo-tier">
+            <h4>Tier 2</h4>
+            <div class="topo-tier-name">Regional mirrors</div>
+            <ul>
+              <li>Active replication from hub</li>
+              <li>One per region/cloud</li>
+              <li>Same content as hub</li>
+              <li>Local-region latency for pulls</li>
+              <li>Survive hub outage</li>
+              <li>Harbor, Zot, ECR replication</li>
+            </ul>
+          </div>
+          <div class="topo-tier">
+            <h4>Tier 3</h4>
+            <div class="topo-tier-name">Cluster pull-through caches</div>
+            <ul>
+              <li>On-demand cache per cluster</li>
+              <li>Pulls from regional mirror</li>
+              <li>Survives mirror outage briefly</li>
+              <li>~10× faster pod startup</li>
+              <li>Sub-second image resolution</li>
+              <li>Zot, Spegel, ociregistry</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <h3>The hub — choosing the platform</h3>
+      <div class="cards-grid">
+        <div class="tech-card">
+          <div class="kind">cloud · managed</div>
+          <div class="name">AWS ECR / GCP AR / Azure ACR</div>
+          <div class="desc">Fully managed; auto-replication across regions; integrates with cloud IAM. Best when staying in one cloud. Per-GB storage + egress costs.</div>
+          <div class="pill">cloud-native</div>
+        </div>
+        <div class="tech-card">
+          <div class="kind">self-hosted · enterprise</div>
+          <div class="name">Harbor</div>
+          <div class="desc">CNCF graduated. The reference open-source registry. Vulnerability scanning, RBAC, signing, replication policies, OCI artifact support. Heavy but full-featured.</div>
+          <div class="pill">CNCF graduated</div>
+        </div>
+        <div class="tech-card">
+          <div class="kind">self-hosted · lightweight</div>
+          <div class="name">Zot</div>
+          <div class="desc">CNCF Sandbox. Pure OCI Distribution; no Docker schema baggage. Single binary; embedded scanning; sync from upstream. Best for new deployments.</div>
+          <div class="pill">OCI-native</div>
+        </div>
+        <div class="tech-card">
+          <div class="kind">commercial · multi-format</div>
+          <div class="name">JFrog Artifactory</div>
+          <div class="desc">Container registry + npm, Maven, PyPI, Helm, Go modules in one. Most useful when you want one artifact repo for everything, not just containers.</div>
+          <div class="pill">universal repo</div>
+        </div>
+      </div>
+
+      <h3>Replication from hub to regional mirrors</h3>
+      <p>Harbor replicates with a pull-or-push policy you define: "everything matching <code>prod/*</code>, replicate to <code>eu-west-1.myregistry.com</code> on push, retain forever." Configure your OCI registry such as Harbor or Zot to replicate repositories across zones or regions, keeping images, charts, configurations and attachments in sync. When CI pushes to the hub, the replicate runs; within seconds or minutes (depending on size), the mirror has the image.</p>
+      <p>Zot supports periodic-polling and on-demand mirroring: As with git, wherein every clone is a full repository, you can configure your local zot instance to be a fully mirrored OCI registry. For this mode, configure zot for synchronization by periodic polling, not on-demand. Zot copies and caches a full copy of every image on the upstream registry.</p>
+      <p>The key invariant: <strong>the manifest digest is identical at hub and mirror</strong>. Same signatures, same attestations, same SBOM. Mirrors are read-only replicas; you never push to a mirror, you push to the hub.</p>
+
+      <h3>The pull-through cache pattern</h3>
+      <p>Even regional mirrors are too far for a node pulling a 5 GB image. The third tier — <strong>cluster-local pull-through cache</strong> — sits inside your cluster and caches what's been pulled. For a pull-through cache mirrored registry, configure zot for on-demand synchronization. When an image is first requested from the local zot registry, the image is downloaded from the upstream registry and cached in local storage. Subsequent requests for the same image are served from zot's cache.</p>
+      <p>Three implementations worth knowing:</p>
+      <p><strong>Zot in pull-through mode</strong>: simplest. Configure each cluster's containerd to point at the cache; the cache pulls from upstream on first miss. Cached images stick around; LRU eviction.</p>
+      <p><strong>Spegel</strong> (CNCF Sandbox): peer-to-peer image distribution. Every node serves the layers it has to neighbors. No central cache — the cluster itself is the cache. Massively reduces upstream bandwidth.</p>
+      <p><strong>ociregistry</strong>: pull-only, pull-through, caching OCI distribution server providing caching pull-through capability to multiple upstream registries (internal, air-gapped, or public).</p>
+
+      <h3>Containerd config for pull-through</h3>
+      <pre data-label="point containerd at the local cache"><span class="cmt"># /etc/containerd/certs.d/_default/hosts.toml</span>
+server = <span class="str">"https://registry.example.com"</span>
+
+[host.<span class="str">"http://cache.cluster-local:5000"</span>]
+  capabilities = [<span class="str">"pull"</span>, <span class="str">"resolve"</span>]
+  override_path = <span class="ok">true</span>
+  skip_verify = <span class="ok">true</span>             <span class="cmt"># cache is internal; OK to skip TLS</span></pre>
+
+      <p>Every <code>docker pull registry.example.com/foo</code> on a node now goes through the in-cluster cache. The cache pulls from the real registry once, serves to every subsequent puller within milliseconds. For a 1000-node cluster, the upstream registry sees one pull instead of a thousand.</p>
+
+      <h3>Air-gapped patterns</h3>
+      <p>For air-gapped environments (no internet from the cluster), the pull-through cache becomes a full mirror:</p>
+      <p>One — <strong>periodic sync</strong>. A pump moves images from the connected hub to the air-gapped mirror via approved transport (physical media, one-way diodes, scheduled VPN windows).</p>
+      <p>Two — <strong>tarball transport</strong>. <code>crane export</code> or <code>skopeo copy --dest-tls-verify=false docker://... oci-archive:bundle.tar</code> packages images for offline transport.</p>
+      <p>Three — <strong>policy at the gate</strong>. Air-gapped environments often need strict provenance verification — only signed images from approved sources cross the air gap.</p>
+
+      <div class="callout dist">
+        <div class="callout-label">The topology heuristic</div>
+        <p>Below 200 nodes / one region: single registry is fine. 200–2000 nodes / multiple regions: add regional mirrors. 2000+ nodes / latency-sensitive: add cluster-local pull-through caches or Spegel. Cross-reference Issue 06 Chapter V — the same scale breakpoints govern when to deploy lazy pulling.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 13 -->
+<section class="chapter dist-ch" id="ch13">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain dist">PIPELINE</span>
+      Chapter <span class="num">XIII</span>
+    </div>
+    <h2 class="chapter-title">The build pipeline · <em>end to end.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>Eight stages</strong>
+      Checkout → lint → build → test → scan → sign &amp; attest → push by digest → promote.<br><br>
+      <strong>The discipline</strong>
+      Each stage gates the next. Failures block. Build once; promote by digest forever after.
+    </aside>
+    <div class="prose">
+      <p class="lead">The production image build pipeline is now a sequence of about eight stages, each producing artifacts the next consumes. Click each step for the detail.</p>
+
+      <div class="pipeline">
+        <div class="pipeline-h">Interactive · The eight-stage build pipeline</div>
+        <div class="pipeline-flow" id="pipeFlow">
+          <div class="pipe-step active" data-step="checkout">
+            <div class="pipe-step-num">01</div>
+            <div class="pipe-step-name">Checkout &amp; lint</div>
+            <div class="pipe-step-tool">git, hadolint</div>
+          </div>
+          <div class="pipe-step" data-step="build">
+            <div class="pipe-step-num">02</div>
+            <div class="pipe-step-name">Build &amp; cache</div>
+            <div class="pipe-step-tool">buildx</div>
+          </div>
+          <div class="pipe-step" data-step="test">
+            <div class="pipe-step-num">03</div>
+            <div class="pipe-step-name">Test in-container</div>
+            <div class="pipe-step-tool">--target test</div>
+          </div>
+          <div class="pipe-step" data-step="scan">
+            <div class="pipe-step-num">04</div>
+            <div class="pipe-step-name">Scan</div>
+            <div class="pipe-step-tool">trivy, grype</div>
+          </div>
+          <div class="pipe-step" data-step="sbom">
+            <div class="pipe-step-num">05</div>
+            <div class="pipe-step-name">SBOM &amp; sign</div>
+            <div class="pipe-step-tool">syft, cosign</div>
+          </div>
+          <div class="pipe-step" data-step="provenance">
+            <div class="pipe-step-num">06</div>
+            <div class="pipe-step-name">SLSA L3 provenance</div>
+            <div class="pipe-step-tool">slsa-generator</div>
+          </div>
+          <div class="pipe-step" data-step="promote">
+            <div class="pipe-step-num">07</div>
+            <div class="pipe-step-name">Promote by digest</div>
+            <div class="pipe-step-tool">crane, argo</div>
+          </div>
+        </div>
+        <div class="pipe-detail" id="pipeDetail"></div>
+      </div>
+
+      <h3>The full GitHub Actions workflow</h3>
+      <pre data-label="release.yml — complete production pipeline"><span class="kw">name</span>: build-and-release
+<span class="kw">on</span>:
+  push:
+    tags: [<span class="str">'v*'</span>]
+<span class="kw">permissions</span>:
+  contents: read
+  packages: write
+  id-token: write                         <span class="cmt"># OIDC for cosign + SLSA</span>
+  attestations: write
+
+<span class="kw">jobs</span>:
+  build:
+    <span class="fn">runs-on</span>: ubuntu-latest
+    <span class="fn">outputs</span>:
+      digest: <span class="fn">${{</span> steps.push.outputs.digest <span class="fn">}}</span>
+      image: <span class="fn">${{</span> steps.meta.outputs.tags <span class="fn">}}</span>
+    steps:
+      - <span class="fn">uses</span>: actions/checkout@v4
+
+      - <span class="fn">name</span>: Lint Dockerfile
+        <span class="fn">uses</span>: hadolint/hadolint-action@v3.1.0
+        <span class="fn">with</span>:
+          dockerfile: Dockerfile
+          failure-threshold: error
+
+      - <span class="fn">uses</span>: docker/setup-buildx-action@v3
+
+      - <span class="fn">uses</span>: docker/login-action@v3
+        <span class="fn">with</span>:
+          registry: ghcr.io
+          username: <span class="fn">${{</span> github.actor <span class="fn">}}</span>
+          password: <span class="fn">${{</span> secrets.GITHUB_TOKEN <span class="fn">}}</span>
+
+      - <span class="fn">id</span>: meta
+        <span class="fn">uses</span>: docker/metadata-action@v5
+        <span class="fn">with</span>:
+          images: ghcr.io/<span class="fn">${{</span> github.repository <span class="fn">}}</span>
+          tags: |
+            type=semver,pattern=<span class="num">{{</span>version<span class="num">}}</span>
+            type=sha,prefix=sha-
+
+      - <span class="fn">id</span>: push
+        <span class="fn">uses</span>: docker/build-push-action@v5
+        <span class="fn">with</span>:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: <span class="ok">true</span>
+          tags: <span class="fn">${{</span> steps.meta.outputs.tags <span class="fn">}}</span>
+          labels: <span class="fn">${{</span> steps.meta.outputs.labels <span class="fn">}}</span>
+          provenance: mode=max
+          sbom: <span class="ok">true</span>
+          cache-from: type=registry,ref=ghcr.io/<span class="fn">${{</span> github.repository <span class="fn">}}</span>:buildcache
+          cache-to: type=registry,ref=ghcr.io/<span class="fn">${{</span> github.repository <span class="fn">}}</span>:buildcache,mode=max
+
+      - <span class="fn">name</span>: Scan image
+        <span class="fn">uses</span>: aquasecurity/trivy-action@<span class="num">0.18</span>.<span class="num">0</span>
+        <span class="fn">with</span>:
+          image-ref: ghcr.io/<span class="fn">${{</span> github.repository <span class="fn">}}</span>@<span class="fn">${{</span> steps.push.outputs.digest <span class="fn">}}</span>
+          severity: CRITICAL,HIGH
+          exit-code: <span class="str">'1'</span>
+          ignore-unfixed: <span class="ok">true</span>
+
+      - <span class="fn">uses</span>: sigstore/cosign-installer@v3
+      - <span class="fn">name</span>: Sign image (keyless)
+        <span class="fn">run</span>: |
+          cosign sign --yes \
+            ghcr.io/<span class="fn">${{</span> github.repository <span class="fn">}}</span>@<span class="fn">${{</span> steps.push.outputs.digest <span class="fn">}}</span>
+
+  provenance:                              <span class="cmt"># Isolated SLSA L3 job</span>
+    <span class="fn">needs</span>: [build]
+    <span class="fn">permissions</span>:
+      actions: read
+      id-token: write
+      packages: write
+    <span class="fn">uses</span>: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.0.0
+    with:
+      image: ghcr.io/<span class="fn">${{</span> github.repository <span class="fn">}}</span>
+      digest: <span class="fn">${{</span> needs.build.outputs.digest <span class="fn">}}</span>
+      registry-username: <span class="fn">${{</span> github.actor <span class="fn">}}</span>
+    secrets:
+      registry-password: <span class="fn">${{</span> secrets.GITHUB_TOKEN <span class="fn">}}</span></pre>
+
+      <h3>Build once, promote by digest</h3>
+      <p>The single most-important promotion principle: <strong>never rebuild for staging or production.</strong> The image bytes that passed CI are the bytes that run in prod. Promotion is just a tag move (or a Git commit, in GitOps).</p>
+      <pre data-label="promote by digest — never rebuild"><span class="cmt"># BAD: rebuild for staging</span>
+docker build -t myorg/myapp:staging-v1.2.3 .
+docker build -t myorg/myapp:prod-v1.2.3 .       <span class="cmt"># different bytes!</span>
+
+<span class="cmt"># GOOD: promote by digest</span>
+DIGEST=$(crane digest ghcr.io/myorg/myapp:v1.2.3)
+crane tag ghcr.io/myorg/myapp@<span class="fn">$DIGEST</span> staging-v1.2.3
+crane tag ghcr.io/myorg/myapp@<span class="fn">$DIGEST</span> prod-v1.2.3
+<span class="cmt"># All three tags point at the same bytes</span></pre>
+
+      <h3>GitOps promotion</h3>
+      <p>The 2026 norm: ArgoCD or Flux watches a Git repo; the repo contains Kubernetes manifests referencing images by digest. Promotion is a Git commit changing the digest reference.</p>
+      <pre data-label="GitOps promotion as a commit"><span class="cmt"># manifests/prod/myapp/values.yaml — before</span>
+image:
+  repository: ghcr.io/myorg/myapp
+  digest: sha256:abc123...
+
+<span class="cmt"># PR: bump prod to the staging digest, after tests pass</span>
+image:
+  repository: ghcr.io/myorg/myapp
+  digest: sha256:def456...</pre>
+
+      <p>The PR is reviewed; admission control verifies the signature at deploy; ArgoCD reconciles. Every change to production has a Git commit, a code review, a signature verification.</p>
+
+      <div class="callout dist">
+        <div class="callout-label">The eight stages, one principle</div>
+        <p>Every stage produces an artifact the next consumes. Lint produces a clean Dockerfile. Build produces an image. Test produces a passing result tied to a digest. Scan produces a passing CVE check tied to a digest. SBOM produces a parts list. Sign produces a signature. Provenance produces an attestation. Promote moves the digest forward. Every artifact references the same digest. Same digest, end to end.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 14 -->
+<section class="chapter dist-ch" id="ch14">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain dist">PICKER</span>
+      Chapter <span class="num">XIV</span>
+    </div>
+    <h2 class="chapter-title">The picker · <em>strategy by workload.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>Click through</strong>
+      From workload type to specific recommendations: base, signing posture, registry, scan policy.<br><br>
+      <strong>Calibration</strong>
+      Recommendations for mid-2026; refresh annually as the supply-chain landscape moves.
+    </aside>
+    <div class="prose">
+      <p class="lead">A decision tree from "what are you building" to a complete image-building strategy. Click through.</p>
+
+      <div class="picker">
+        <div class="picker-label">Interactive · Image Strategy Picker</div>
+        <div class="picker-title" id="pickerTitle">What are you building?</div>
+        <div id="pickerContainer"></div>
+        <button class="picker-reset" id="pickerReset" style="display:none">↺ Reset</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 15 -->
+<section class="chapter dist-ch" id="ch15">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain dist">CHECKLIST</span>
+      Chapter <span class="num">XV</span>
+    </div>
+    <h2 class="chapter-title">The image-building <em>checklist.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>Click each item</strong>
+      To mark complete. State is local.<br><br>
+      <strong>The rubric</strong>
+      A mature image-building practice checks most of these. A few unchecked is fine; many unchecked = real supply-chain debt.
+    </aside>
+    <div class="prose">
+      <p class="lead">The merged image-building checklist. Click each item to mark complete.</p>
+
+      <div class="checklist" id="checklist">
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Base image pinned by digest, not tag</div><div class="check-desc"><code>FROM image:tag@sha256:...</code> in every Dockerfile. Reproducible bytes.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Renovate/Dependabot updates base digests automatically</div><div class="check-desc">Weekly PRs with CVE diff. Pinning + automation, not pinning alone.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Runtime base is distroless or scratch</div><div class="check-desc">No shell, no package manager in production runtime images. Chainguard / distroless / Chiseled.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Multi-stage build with separate build &amp; runtime stages</div><div class="check-desc">Builder has tooling; runtime has only the artifact. <code>COPY --from=build</code>.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Container runs as non-root</div><div class="check-desc"><code>USER 65532</code> before <code>ENTRYPOINT</code>. Pod spec also sets <code>runAsNonRoot: true</code>.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Layer order: stable first, volatile last</div><div class="check-desc">Base → system pkgs → language deps → app code. Touch a source file, rebuild &lt; 10s.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">.dockerignore excludes .git, tests, build artifacts, secrets</div><div class="check-desc">Every byte in build context is hashed and sent. Exclude ruthlessly.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Cache mounts for package managers</div><div class="check-desc"><code>--mount=type=cache,target=...</code> for pip, npm, go, cargo, apt.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Secret mounts, never ENV-vars or COPY for credentials</div><div class="check-desc"><code>--mount=type=secret,...</code>. Secrets never enter a layer or image history.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Dependencies pinned with hashes</div><div class="check-desc"><code>pip install --require-hashes</code>, <code>npm ci</code>, go.sum, Cargo.lock. Hash-or-die.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Private mirror for language packages</div><div class="check-desc">Nexus / Artifactory / Cloudsmith / CodeArtifact. Production builds never hit public mirrors directly.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">BuildKit/buildx with multi-platform support</div><div class="check-desc"><code>--platform linux/amd64,linux/arm64</code> single command. One image index.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">SBOM generated at build time</div><div class="check-desc"><code>--sbom=true</code> or apko native. SPDX or CycloneDX. Attached as referrer.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Image signed with cosign keyless</div><div class="check-desc">Short-lived OIDC cert; signing event in Rekor. No long-lived keys.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">SLSA Level 2+ provenance attached</div><div class="check-desc"><code>--provenance=mode=max</code> for L2. Separate generator job for L3.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Vulnerability scan in CI; fail on fixable HIGH/CRITICAL</div><div class="check-desc">Trivy/Grype with <code>ignore-unfixed</code>. SARIF uploaded to GitHub Security.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">VEX statements for non-applicable CVEs</div><div class="check-desc">OpenVEX format. Reduces dashboard noise; makes triage tractable.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Continuous registry scanning enabled</div><div class="check-desc">Harbor/Quay/ECR rescans on schedule. Alerts on new CVEs in actively-pulled images.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Internal registry with regional replication</div><div class="check-desc">Harbor or Zot as hub; mirrors per region. Same digests everywhere.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Cluster-local pull-through cache</div><div class="check-desc">For clusters &gt; 200 nodes. Zot pull-through, Spegel, or ociregistry.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Admission control verifies signatures &amp; provenance</div><div class="check-desc">Kyverno or Sigstore Policy Controller. Unsigned images can't run.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Build once, promote by digest forever</div><div class="check-desc">Never rebuild for staging/prod. Tags move; digests don't. GitOps PRs bump digest.</div></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="colophon">
+  <div class="colophon-mark"><em>The Cluster</em> Quarterly</div>
+  <p>Field Manual · Volume I · Issue 07 · MMXXVI</p>
+</footer>
+
+<script>
+// ============ Base image tabs ============
+const baseData = {
+  scratch: {
+    h: 'scratch', sub: 'The empty image',
+    stats: [['Size','0 B'],['CVEs','0'],['Shell','no'],['glibc','no']],
+    desc: 'The literal empty base. Nothing in it — no libc, no shell, no /etc, nothing. Only useful as a target for statically-compiled binaries (Go with CGO_ENABLED=0, Rust with musl target). The lowest possible attack surface.',
+    pros: 'Zero CVEs forever. Smallest possible images (just your binary). No room for an attacker to do anything except call your binary.',
+    cons: 'No ca-certs (TLS fails). No /etc/passwd (user lookups fail). No timezone data. You ship these yourself or use distroless/static instead.'
+  },
+  'distroless-static': {
+    h: 'gcr.io/distroless/static', sub: 'Google distroless · static binary base',
+    stats: [['Size','~2 MB'],['CVEs','~3'],['Shell','no'],['glibc','no']],
+    desc: 'Google\'s distroless base for static binaries. scratch plus ca-certificates, /etc/passwd with nonroot user, tzdata, and a copy of /etc/services. Built with Bazel on Debian.',
+    pros: 'Drop-in for most Go/Rust services that need TLS or user lookups. Maintained by Google. Has nonroot variants (USER 65532).',
+    cons: 'Updates lag behind upstream Debian by weeks. Build process is Bazel-heavy; harder to derive from than apko-based images.'
+  },
+  'distroless-base': {
+    h: 'gcr.io/distroless/base', sub: 'Google distroless · glibc dynamic base',
+    stats: [['Size','~22 MB'],['CVEs','~5'],['Shell','no'],['glibc','yes']],
+    desc: 'distroless/static plus glibc, openssl, libssl. For dynamically-linked binaries that need libc. Common with Python, Java, Node distroless variants.',
+    pros: 'Distroless behavior with glibc support. Works for languages that depend on libc. Same maintenance model as distroless/static.',
+    cons: 'Bigger than distroless/static. Carries glibc and openssl CVE exposure. Same lag behind upstream Debian.'
+  },
+  alpine: {
+    h: 'Alpine Linux', sub: 'Lightweight but NOT distroless',
+    stats: [['Size','~5 MB'],['CVEs','~10'],['Shell','yes (busybox)'],['glibc','musl']],
+    desc: 'Alpine is the classic minimal-but-not-distroless base. Ships with busybox sh, apk package manager, openssl. Tiny but has a usable filesystem inside.',
+    pros: 'Tiny. Great for build stages where you want a shell and apk. Familiar to most developers. apk is fast and reliable.',
+    cons: 'NOT distroless: has shell + package manager (attack surface). musl libc causes subtle issues (DNS, threading, perf) for some glibc-dependent apps. Not the right runtime base for production hardening.'
+  },
+  wolfi: {
+    h: 'Wolfi / Chainguard', sub: 'Container-native rolling distribution',
+    stats: [['Size','~3-20 MB'],['CVEs','~0'],['Shell','varies'],['glibc','yes']],
+    desc: 'Wolfi is a Linux undistro built by Chainguard specifically for containers. glibc-based. Built with apko + melange. Continuous nightly rebuild. Chainguard Containers (cgr.dev) wrap Wolfi as ready-to-use images.',
+    pros: 'Near-zero CVE count via daily rebuilds. Native SBOM + SLSA provenance per build. glibc compatibility. Both distroless and -dev variants (latter for build stages, debugging).',
+    cons: 'Rolling release — no LTS. Latest-versions-only philosophy means you ride the train. Free tier is good; production support is paid. Younger ecosystem than Debian/Alpine.'
+  },
+  chiseled: {
+    h: 'Chiseled Ubuntu', sub: 'Stripped Ubuntu with chisel',
+    stats: [['Size','~5-30 MB'],['CVEs','~0-3'],['Shell','no'],['glibc','yes']],
+    desc: 'Canonical\'s answer to distroless: take Ubuntu and use the "chisel" tool to cut out exactly the slices needed. .NET defaults to this. Ubuntu compatibility, distroless attack surface.',
+    pros: 'Ubuntu ecosystem familiarity. Long-term support roadmap. Used by Microsoft for .NET defaults — well-tested at scale. glibc.',
+    cons: 'Less common than distroless/Wolfi in the broader community. Chisel tool less ubiquitous. Slower update cadence than Wolfi rolling.'
+  },
+  ubi: {
+    h: 'Red Hat UBI', sub: 'Universal Base Image · RHEL ecosystem',
+    stats: [['Size','~70-240 MB'],['CVEs','~10-30'],['Shell','yes'],['glibc','yes']],
+    desc: 'Red Hat\'s freely-distributable RHEL-derived base. Three variants: standard (full RHEL minus subscription-only bits), minimal (smaller), micro (no package manager). Required for FIPS, FedRAMP, many federal contracts.',
+    pros: 'RHEL compatibility with no subscription. Enterprise support via subscription. Compliance-friendly (Iron Bank, FedRAMP). Strong update cadence via Red Hat security team.',
+    cons: 'Larger than distroless options. Carries RHEL CVE load. Best for compliance-driven workloads, not size-driven ones.'
+  }
+};
+const baseTabs = document.querySelectorAll('.base-tab');
+const baseBody = document.getElementById('baseBody');
+function showBase(key) {
+  baseTabs.forEach(t => t.classList.toggle('active', t.dataset.base === key));
+  const d = baseData[key];
+  baseBody.innerHTML = `
+    <div class="base-h">${d.h}<small>${d.sub}</small></div>
+    <div class="base-stats">
+      ${d.stats.map(s => `<div class="base-stat"><div class="base-stat-label">${s[0]}</div><div class="base-stat-val">${s[1]}</div></div>`).join('')}
+    </div>
+    <p class="base-desc">${d.desc}</p>
+    <div class="base-pros-cons">
+      <div class="base-pc pros"><div class="label">Strengths</div>${d.pros}</div>
+      <div class="base-pc cons"><div class="label">Limitations</div>${d.cons}</div>
+    </div>`;
+}
+baseTabs.forEach(t => t.addEventListener('click', () => showBase(t.dataset.base)));
+showBase('scratch');
+
+// ============ Pipeline detail ============
+const pipeData = {
+  checkout: {
+    h: '01 · Checkout & Lint',
+    body: 'Pull source from git. Run hadolint on the Dockerfile (catches anti-patterns: <code>ADD</code> for tarballs, missing <code>--no-install-recommends</code>, lack of <code>HEALTHCHECK</code>, etc.). Run shellcheck on entrypoint scripts. Run helm lint on charts. Cheap; fails fast. ~10 seconds.'
+  },
+  build: {
+    h: '02 · Build & Cache',
+    body: 'docker buildx build with multi-platform (amd64+arm64), registry cache (mode=max), cache mounts for package managers, secret mounts for private deps. Output: image manifest in registry, addressable by digest. ~30s warm, ~3 min cold.'
+  },
+  test: {
+    h: '03 · Test in-container',
+    body: 'Run tests INSIDE the built container, not in the CI environment. Catches missing system deps in the final image ("works on my machine"). Use <code>--target test</code> if you have a dedicated test stage in the Dockerfile. ~1-5 min depending on suite.'
+  },
+  scan: {
+    h: '04 · Scan',
+    body: 'Trivy or Grype against the image. Block on fixable HIGH/CRITICAL CVEs. Upload SARIF to GitHub Security or your DAST/SAST dashboard. Also scan the Dockerfile itself for misconfigs (no USER, no HEALTHCHECK, etc.). ~30s-2 min.'
+  },
+  sbom: {
+    h: '05 · SBOM & Sign',
+    body: 'BuildKit native (<code>--sbom=true</code>) or Syft scan. Generate CycloneDX or SPDX. Cosign sign the image keyless via OIDC. The signing event hits Rekor; the cert is short-lived. SBOM is attached as OCI 1.1 referrer. ~15-30s.'
+  },
+  provenance: {
+    h: '06 · SLSA L3 Provenance',
+    body: 'Separate, isolated job. Receives only the image digest. Independently verifies repo/commit/workflow via GitHub APIs. Generates non-forgeable in-toto SLSA Level 3 attestation. Attached as referrer. ~1-2 min.'
+  },
+  promote: {
+    h: '07 · Promote by digest',
+    body: 'CI never promotes. GitOps does: a PR changes the digest reference in the prod manifests repo. ArgoCD/Flux reconciles. Admission control verifies the cosign signature and SLSA provenance before accepting the new pod. Same digest, end to end.'
+  }
+};
+const pipeSteps = document.querySelectorAll('.pipe-step');
+const pipeDetail = document.getElementById('pipeDetail');
+function showPipe(key) {
+  pipeSteps.forEach(s => s.classList.toggle('active', s.dataset.step === key));
+  const d = pipeData[key];
+  pipeDetail.innerHTML = `<h4>${d.h}</h4><p>${d.body}</p>`;
+}
+pipeSteps.forEach(s => s.addEventListener('click', () => showPipe(s.dataset.step)));
+showPipe('checkout');
+
+// ============ Picker ============
+const pickerTree = {
+  start: {
+    q: 'What kind of workload?', n: 'Q0',
+    choices: [
+      { label: 'Stateless web service / API (Go, Rust, etc.)', next: 'web' },
+      { label: 'Interpreted language service (Python, Node, Java)', next: 'interp' },
+      { label: 'ML training or batch workload', next: 'mltrain' },
+      { label: 'ML inference / model serving', next: 'mlinf' },
+      { label: 'Internal CLI tool / cron job', next: 'cli' },
+      { label: 'Compliance-sensitive (FedRAMP, FIPS, etc.)', next: 'compliance' }
+    ]
+  },
+  web: {
+    verdict: true, title: '→ Statically-compiled web service',
+    body: [
+      '<strong>Base</strong>: <code>FROM scratch</code> or <code>gcr.io/distroless/static@sha256:...</code> for runtime. Builder: <code>golang:1.22-alpine</code> or <code>cgr.dev/chainguard/go:latest-dev</code>.',
+      '<strong>Build</strong>: Multi-stage. <code>CGO_ENABLED=0</code> for fully static binary. <code>-trimpath -ldflags="-s -w"</code> for reproducible, small output.',
+      '<strong>Image size</strong>: 5–15 MB target. If yours is bigger, something is wrong.',
+      '<strong>Supply chain</strong>: BuildKit attestations (SBOM + provenance), cosign keyless sign, Trivy scan, SLSA L2 minimum.',
+      '<strong>Registry</strong>: Internal hub (Harbor/Zot/ECR). For multi-region: replicate to each. For high-pod-count clusters: add Spegel or Zot pull-through.'
+    ]
+  },
+  interp: {
+    verdict: true, title: '→ Python/Node/Java service',
+    body: [
+      '<strong>Base</strong>: <code>cgr.dev/chainguard/python:3.12@sha256:...</code> or <code>gcr.dev/distroless/python3-debian12:nonroot</code> for runtime. Builder: <code>-dev</code> variant.',
+      '<strong>Build</strong>: Multi-stage. Build virtualenv in stage 1, copy to runtime stage. Pin deps with hashes (<code>--require-hashes</code> for pip, <code>npm ci</code> for Node, dependency-verification for Gradle).',
+      '<strong>Dep management</strong>: Hash-locked lockfile in source. Private mirror (Nexus/Artifactory/CodeArtifact) for production builds.',
+      '<strong>Image size</strong>: 50–200 MB depending on deps. Optimize by removing test files, .pyc bytecode, dev deps.',
+      '<strong>Supply chain</strong>: Same as static services — SBOM, sign, scan, attest. Note <code>--ignore-scripts</code> for npm to avoid postinstall attacks.'
+    ]
+  },
+  mltrain: {
+    verdict: true, title: '→ ML training workload',
+    body: [
+      '<strong>Base</strong>: NVIDIA NGC PyTorch (<code>nvcr.io/nvidia/pytorch:24.X-py3</code>) or NeMo for the runtime. These are large (~20 GB) but pre-tuned with NCCL, Apex, transformer_engine.',
+      '<strong>Build</strong>: Layer your code on top of NGC. Cache layers carefully — NGC base is huge.',
+      '<strong>Image size</strong>: 15–30 GB. Don\'t fight this — use lazy pulling (Issue 06 Ch V) or pre-pull DaemonSets.',
+      '<strong>Supply chain</strong>: NGC images are signed by NVIDIA — verify their signatures. Add your own SBOM and signature over the derived image.',
+      '<strong>Registry</strong>: Mirror NGC into your internal registry to avoid auth/rate-limit issues at scale. Replicate to each training region.'
+    ]
+  },
+  mlinf: {
+    verdict: true, title: '→ ML inference / model serving',
+    body: [
+      '<strong>Two approaches</strong>: (a) NVIDIA NIM containers for production model serving — already optimized, signed by NVIDIA, vLLM/TRT-LLM inside. (b) Custom vLLM/SGLang containers on Chainguard-pytorch base for experimentation.',
+      '<strong>For NIM</strong>: Mount NIM_CACHE_PATH as PVC so compiled engine survives restarts. Don\'t bake models into the image.',
+      '<strong>For custom</strong>: <code>cgr.dev/chainguard/pytorch:latest</code> or NGC TensorRT-LLM base. Add vLLM via pip with hashes.',
+      '<strong>Image size</strong>: 8–15 GB for inference images. Lazy pulling and engine caches matter — see Issue 06 Ch IV.',
+      '<strong>Supply chain</strong>: Sign everything. For NIM derivatives, attest the NIM version + your config. For custom, full SLSA L2+.'
+    ]
+  },
+  cli: {
+    verdict: true, title: '→ Internal CLI / cron / utility',
+    body: [
+      '<strong>Base</strong>: <code>scratch</code> or <code>distroless/static</code> for statically-compiled; <code>cgr.dev/chainguard/wolfi-base</code> if you need apk during build but a shell-free runtime.',
+      '<strong>Image size</strong>: Should be tiny. If your cron job image is 500 MB, you\'re shipping the wrong stuff.',
+      '<strong>Supply chain</strong>: Even internal images need signing (admission control should reject unsigned). SBOM + scan is cheap.',
+      '<strong>Don\'t skip</strong>: USER nonroot, readOnlyRootFilesystem, capabilities drop ALL. Internal != trusted-by-default.'
+    ]
+  },
+  compliance: {
+    verdict: true, title: '→ Compliance-sensitive workload',
+    body: [
+      '<strong>Base</strong>: Red Hat UBI (FedRAMP, FIPS), Iron Bank (DoD), or Chainguard FIPS variants. Pick the lineage your compliance program already accepts.',
+      '<strong>Provenance</strong>: SLSA Level 3 — separate provenance job, isolated builder. Don\'t accept anything less.',
+      '<strong>Signing</strong>: cosign keyless OR a hardware-backed long-lived key in HSM if your auditors require it. Document the choice.',
+      '<strong>Registry</strong>: Internal hub only. No public-internet pulls during build (private mirror). Tight RBAC; audit every push.',
+      '<strong>Reproducibility</strong>: Yes, for these workloads it matters. <code>SOURCE_DATE_EPOCH</code>, lock files everywhere, byte-identical builds verifiable.',
+      '<strong>VEX</strong>: Mandatory. Document why every unfixed CVE is acceptable; auditors will look.'
+    ]
+  }
+};
+let pickerCurrent = 'start';
+const pickerContainer = document.getElementById('pickerContainer');
+const pickerTitle = document.getElementById('pickerTitle');
+const pickerReset = document.getElementById('pickerReset');
+function renderPicker() {
+  const node = pickerTree[pickerCurrent];
+  pickerContainer.innerHTML = '';
+  if (node.verdict) {
+    pickerTitle.textContent = '→ Recommendation';
+    const div = document.createElement('div');
+    div.className = 'picker-verdict';
+    div.innerHTML = `<h4>${node.title}</h4>${node.body.map(b => `<p>${b}</p>`).join('')}`;
+    pickerContainer.appendChild(div);
+    pickerReset.style.display = 'inline-block';
+  } else {
+    pickerTitle.textContent = 'Pick a path';
+    const div = document.createElement('div');
+    div.className = 'picker-step';
+    div.innerHTML = `
+      <div class="picker-num">${node.n}</div>
+      <div class="picker-q">${node.q}</div>
+      <div class="picker-choices">
+        ${node.choices.map(c => `<div class="picker-choice" data-next="${c.next}">${c.label}<span class="picker-arrow">→</span></div>`).join('')}
+      </div>`;
+    pickerContainer.appendChild(div);
+    div.querySelectorAll('.picker-choice').forEach(c => {
+      c.addEventListener('click', () => { pickerCurrent = c.dataset.next; renderPicker(); });
+    });
+    pickerReset.style.display = pickerCurrent === 'start' ? 'none' : 'inline-block';
+  }
+}
+pickerReset.addEventListener('click', () => { pickerCurrent = 'start'; renderPicker(); });
+renderPicker();
+
+// ============ Checklist ============
+document.querySelectorAll('.check-item').forEach(el => {
+  el.addEventListener('click', () => {
+    el.classList.toggle('done');
+    const box = el.querySelector('.check-box');
+    box.textContent = el.classList.contains('done') ? '✓' : '';
+  });
+});
+</script>
+</body>
+</html>
