@@ -1,0 +1,2622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Containers — Build, Harden, Serve at Scale</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,600;9..144,800;9..144,900&family=JetBrains+Mono:wght@400;500;700&family=Inter+Tight:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink: #0a0a0a;
+  --paper: #f4f1ea;
+  --paper-dim: #ebe6db;
+  --rust: #b8401f;
+  --rust-dim: #8a3018;
+  --moss: #3d5a3d;
+  --gold: #c9a227;
+  --blue: #1e3a5f;
+  --plum: #6d4070;
+  --grid: rgba(10,10,10,0.06);
+  --rule: rgba(10,10,10,0.85);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: 'Inter Tight', sans-serif;
+  font-size: 16px;
+  line-height: 1.55;
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.masthead {
+  border-bottom: 3px double var(--rule);
+  padding: 24px 48px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  backdrop-filter: blur(8px);
+  background: rgba(244,241,234,0.95);
+}
+
+.masthead-left, .masthead-right {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+}
+
+.masthead-center {
+  font-family: 'Fraunces', serif;
+  font-weight: 900;
+  font-size: 22px;
+  font-style: italic;
+}
+
+.hero {
+  padding: 80px 48px 60px;
+  border-bottom: 1px solid var(--rule);
+  position: relative;
+  overflow: hidden;
+}
+
+.hero::before {
+  content: '◫';
+  position: absolute;
+  font-family: 'Fraunces', serif;
+  font-weight: 900;
+  font-size: 540px;
+  color: var(--rust);
+  opacity: 0.06;
+  top: -110px;
+  right: -40px;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.kicker {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.3em;
+  color: var(--rust);
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.kicker::before {
+  content: '';
+  width: 40px;
+  height: 1px;
+  background: var(--rust);
+}
+
+.hero h1 {
+  font-family: 'Fraunces', serif;
+  font-weight: 300;
+  font-size: clamp(48px, 7vw, 96px);
+  line-height: 0.95;
+  letter-spacing: -0.03em;
+  margin-bottom: 24px;
+  max-width: 1100px;
+}
+
+.hero h1 em { font-style: italic; font-weight: 900; color: var(--rust); }
+
+.hero-deck {
+  font-family: 'Fraunces', serif;
+  font-size: 22px;
+  font-style: italic;
+  max-width: 760px;
+  opacity: 0.75;
+  border-left: 2px solid var(--rust);
+  padding-left: 20px;
+  margin-top: 32px;
+}
+
+.toc {
+  padding: 40px 48px;
+  border-bottom: 1px solid var(--rule);
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 48px;
+  background: var(--paper-dim);
+}
+
+.toc-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  padding-top: 4px;
+}
+
+.toc-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 8px 32px;
+  list-style: none;
+}
+
+.toc-list li {
+  border-bottom: 1px dotted var(--rule);
+  padding: 8px 0;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.toc-list a {
+  color: var(--ink);
+  text-decoration: none;
+  flex: 1;
+  font-weight: 500;
+  transition: color 0.2s, transform 0.2s;
+}
+
+.toc-list a:hover { color: var(--rust); transform: translateX(4px); }
+
+.toc-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--rust);
+  font-weight: 700;
+}
+
+.toc-pill {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  padding: 1px 6px;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+}
+
+.toc-pill.build { background: var(--blue); color: var(--paper); border-color: var(--blue); }
+.toc-pill.harden { background: var(--rust); color: var(--paper); border-color: var(--rust); }
+.toc-pill.gpu { background: var(--moss); color: var(--paper); border-color: var(--moss); }
+.toc-pill.deploy { background: var(--plum); color: var(--paper); border-color: var(--plum); }
+
+section.chapter {
+  padding: 80px 48px;
+  border-bottom: 1px solid var(--rule);
+}
+
+section.chapter:nth-of-type(even) { background: var(--paper-dim); }
+section.build-ch { border-left: 6px solid var(--blue); }
+section.harden-ch { border-left: 6px solid var(--rust); }
+section.gpu-ch { border-left: 6px solid var(--moss); }
+section.deploy-ch { border-left: 6px solid var(--plum); }
+
+.chapter-head {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 48px;
+  margin-bottom: 56px;
+  align-items: end;
+}
+
+.chapter-meta {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  border-top: 2px solid var(--ink);
+  padding-top: 8px;
+}
+
+.chapter-meta .domain {
+  display: inline-block;
+  font-size: 9px;
+  padding: 3px 8px;
+  background: var(--ink);
+  color: var(--paper);
+  margin-bottom: 8px;
+  letter-spacing: 0.2em;
+}
+
+.chapter-meta .domain.build { background: var(--blue); }
+.chapter-meta .domain.harden { background: var(--rust); }
+.chapter-meta .domain.gpu { background: var(--moss); }
+.chapter-meta .domain.deploy { background: var(--plum); }
+
+.chapter-meta .num {
+  font-size: 64px;
+  font-family: 'Fraunces', serif;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  line-height: 0.9;
+  color: var(--rust);
+  display: block;
+  margin-top: 8px;
+}
+
+.chapter-title {
+  font-family: 'Fraunces', serif;
+  font-weight: 400;
+  font-size: clamp(36px, 5vw, 64px);
+  line-height: 1;
+  letter-spacing: -0.025em;
+}
+
+.chapter-title em { font-style: italic; color: var(--rust); }
+.build-ch .chapter-title em { color: var(--blue); }
+.gpu-ch .chapter-title em { color: var(--moss); }
+.deploy-ch .chapter-title em { color: var(--plum); }
+
+.chapter-body {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 48px;
+}
+
+.chapter-aside {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  opacity: 0.65;
+}
+
+.chapter-aside strong {
+  display: block;
+  color: var(--rust);
+  margin-bottom: 6px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+}
+
+.build-ch .chapter-aside strong { color: var(--blue); }
+.gpu-ch .chapter-aside strong { color: var(--moss); }
+.deploy-ch .chapter-aside strong { color: var(--plum); }
+
+.prose p {
+  font-size: 17px;
+  margin-bottom: 20px;
+  max-width: 680px;
+}
+
+.prose p.lead {
+  font-family: 'Fraunces', serif;
+  font-size: 24px;
+  line-height: 1.4;
+  margin-bottom: 32px;
+  max-width: 720px;
+}
+
+.prose p.lead::first-letter {
+  font-family: 'Fraunces', serif;
+  font-size: 72px;
+  font-weight: 900;
+  float: left;
+  line-height: 0.85;
+  margin: 4px 12px 0 0;
+  color: var(--rust);
+}
+
+.build-ch .prose p.lead::first-letter { color: var(--blue); }
+.gpu-ch .prose p.lead::first-letter { color: var(--moss); }
+.deploy-ch .prose p.lead::first-letter { color: var(--plum); }
+
+.prose h3 {
+  font-family: 'Fraunces', serif;
+  font-weight: 600;
+  font-size: 28px;
+  margin: 48px 0 16px;
+  letter-spacing: -0.01em;
+}
+
+.prose h3::before {
+  content: '§';
+  color: var(--rust);
+  margin-right: 12px;
+  font-weight: 400;
+}
+
+.build-ch .prose h3::before { color: var(--blue); }
+.gpu-ch .prose h3::before { color: var(--moss); }
+.deploy-ch .prose h3::before { color: var(--plum); }
+
+code, .mono {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.9em;
+  background: rgba(184,64,31,0.08);
+  padding: 1px 6px;
+  border-radius: 2px;
+  color: var(--rust-dim);
+}
+
+pre {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  background: var(--ink);
+  color: var(--paper);
+  padding: 24px 28px;
+  overflow-x: auto;
+  margin: 24px 0;
+  position: relative;
+  border-left: 4px solid var(--rust);
+}
+
+pre::before {
+  content: attr(data-label);
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--gold);
+  opacity: 0.7;
+}
+
+pre code { background: transparent; color: inherit; padding: 0; font-size: inherit; }
+
+.kw { color: #d59ad8; }
+.str { color: #b5d590; }
+.cmt { color: #6c6c6c; font-style: italic; }
+.num { color: #f5b85d; }
+.fn { color: #7dc9d9; }
+.err { color: #ff9580; }
+.ok { color: #b5d590; }
+
+.callout {
+  margin: 32px 0;
+  padding: 24px 28px;
+  border-left: 4px solid var(--rust);
+  background: rgba(184,64,31,0.06);
+}
+
+.callout.warn { border-color: var(--gold); background: rgba(201,162,39,0.08); }
+.callout.tip { border-color: var(--moss); background: rgba(61,90,61,0.06); }
+.callout.build { border-color: var(--blue); background: rgba(30,58,95,0.06); }
+.callout.deploy { border-color: var(--plum); background: rgba(109,64,112,0.08); }
+
+.callout-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  color: var(--rust);
+  margin-bottom: 8px;
+  font-weight: 700;
+}
+
+.callout.warn .callout-label { color: #8a6a10; }
+.callout.tip .callout-label { color: var(--moss); }
+.callout.build .callout-label { color: var(--blue); }
+.callout.deploy .callout-label { color: var(--plum); }
+.callout p { font-size: 15px; margin: 0; }
+
+/* Image-layer visualization */
+.layers {
+  background: var(--ink);
+  color: var(--paper);
+  padding: 32px;
+  margin: 32px 0;
+}
+
+.layers-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  color: var(--gold);
+  margin-bottom: 24px;
+}
+
+.layers-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.layers-tab {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  padding: 8px 14px;
+  background: transparent;
+  color: var(--paper);
+  border: 1px solid rgba(244,241,234,0.3);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.layers-tab.active { background: var(--gold); color: var(--ink); border-color: var(--gold); }
+
+.layers-stack {
+  border-left: 2px solid var(--gold);
+  padding: 0 0 0 16px;
+}
+
+.layer-item {
+  background: rgba(244,241,234,0.04);
+  padding: 14px 18px;
+  margin-bottom: 6px;
+  display: grid;
+  grid-template-columns: 220px 80px 1fr;
+  gap: 16px;
+  align-items: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  transition: background 0.2s;
+}
+
+.layer-item:hover { background: rgba(244,241,234,0.08); }
+
+.layer-name { color: var(--gold); font-weight: 700; }
+.layer-size { color: #f5b85d; text-align: right; }
+.layer-desc { opacity: 0.8; font-family: 'Inter Tight', sans-serif; font-size: 13px; }
+
+.layer-summary {
+  margin-top: 16px;
+  padding: 16px 20px;
+  background: rgba(201,162,39,0.1);
+  border-left: 3px solid var(--gold);
+  font-family: 'Fraunces', serif;
+  font-style: italic;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.layer-summary strong {
+  font-family: 'JetBrains Mono', monospace;
+  font-style: normal;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  color: var(--gold);
+  text-transform: uppercase;
+  display: block;
+  margin-bottom: 4px;
+}
+
+/* Dockerfile comparison */
+.dfcompare {
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  padding: 32px;
+  margin: 32px 0;
+}
+
+.dfcompare-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  color: var(--rust);
+  margin-bottom: 8px;
+}
+
+.dfcompare-title {
+  font-family: 'Fraunces', serif;
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: 24px;
+  letter-spacing: -0.01em;
+}
+
+.dfcompare-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.dfcompare-col {
+  background: var(--ink);
+  color: var(--paper);
+  padding: 0;
+  border-radius: 0;
+  overflow: hidden;
+}
+
+.dfcompare-col.bad { border-top: 4px solid var(--rust); }
+.dfcompare-col.good { border-top: 4px solid var(--moss); }
+
+.dfcompare-head {
+  padding: 12px 20px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.dfcompare-col.bad .dfcompare-head { background: var(--rust-dim); color: var(--paper); }
+.dfcompare-col.good .dfcompare-head { background: var(--moss); color: var(--paper); }
+
+.dfcompare-col pre {
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  font-size: 12px;
+  background: var(--ink);
+}
+
+.dfcompare-col pre::before { display: none; }
+
+.dfcompare-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.dfstat {
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  padding: 14px 18px;
+  text-align: center;
+}
+
+.dfstat-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.dfstat-bad { color: var(--rust); }
+.dfstat-good { color: var(--moss); }
+
+.dfstat-value {
+  font-family: 'Fraunces', serif;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+/* Pipeline visualizer */
+.pipeline {
+  background: var(--ink);
+  color: var(--paper);
+  padding: 32px;
+  margin: 32px 0;
+}
+
+.pipeline-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  color: var(--gold);
+  margin-bottom: 24px;
+}
+
+.pipeline-row {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.pipe-step {
+  background: rgba(244,241,234,0.05);
+  border-left: 3px solid var(--gold);
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+}
+
+.pipe-step:hover, .pipe-step.active {
+  background: rgba(244,241,234,0.1);
+  transform: translateY(-2px);
+}
+
+.pipe-step.active { border-left-color: var(--rust); }
+
+.pipe-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  color: var(--gold);
+  margin-bottom: 4px;
+}
+
+.pipe-name {
+  font-family: 'Fraunces', serif;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.pipe-tool {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  margin-top: 4px;
+  opacity: 0.7;
+}
+
+.pipe-detail {
+  margin-top: 16px;
+  background: rgba(244,241,234,0.04);
+  border-left: 3px solid var(--gold);
+  padding: 20px 24px;
+}
+
+.pipe-detail h4 {
+  font-family: 'Fraunces', serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--gold);
+  margin-bottom: 10px;
+}
+
+.pipe-detail p {
+  font-size: 14px;
+  line-height: 1.6;
+  margin-bottom: 10px;
+  color: var(--paper);
+  opacity: 0.9;
+}
+
+/* Cards */
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 0;
+  border-top: 2px solid var(--ink);
+  border-left: 2px solid var(--ink);
+  margin: 32px 0;
+}
+
+.tech-card {
+  border-right: 2px solid var(--ink);
+  border-bottom: 2px solid var(--ink);
+  padding: 22px;
+  background: var(--paper);
+  min-height: 220px;
+  position: relative;
+}
+
+.tech-card .kind {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--rust);
+  margin-bottom: 8px;
+}
+
+.tech-card .name {
+  font-family: 'Fraunces', serif;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  margin-bottom: 10px;
+}
+
+.tech-card .desc { font-size: 13px; line-height: 1.5; margin-bottom: 12px; }
+
+.tech-card .pill {
+  position: absolute;
+  bottom: 12px;
+  right: 16px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  color: var(--ink);
+  opacity: 0.5;
+  letter-spacing: 0.15em;
+}
+
+/* Comparison table */
+.cmp-table {
+  margin: 32px 0;
+  border-top: 2px solid var(--ink);
+  border-bottom: 2px solid var(--ink);
+}
+
+.cmp-row {
+  display: grid;
+  grid-template-columns: 200px 1fr 1fr;
+  border-bottom: 1px solid rgba(10,10,10,0.15);
+  padding: 14px 0;
+  gap: 24px;
+  align-items: start;
+}
+
+.cmp-row.head {
+  border-bottom: 2px solid var(--ink);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  padding: 12px 0;
+  color: var(--rust);
+}
+
+.cmp-axis {
+  font-family: 'Fraunces', serif;
+  font-size: 16px;
+  font-weight: 700;
+  font-style: italic;
+}
+
+.cmp-row p {
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
+  max-width: none;
+}
+
+/* Decision tree */
+.picker {
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  padding: 32px;
+  margin: 32px 0;
+}
+
+.picker-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  color: var(--rust);
+  margin-bottom: 8px;
+}
+
+.picker-title {
+  font-family: 'Fraunces', serif;
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: 24px;
+  letter-spacing: -0.01em;
+}
+
+.picker-step {
+  background: var(--ink);
+  color: var(--paper);
+  padding: 24px 28px;
+  margin-bottom: 16px;
+  border-left: 4px solid var(--gold);
+}
+
+.picker-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--gold);
+  letter-spacing: 0.2em;
+  margin-bottom: 6px;
+}
+
+.picker-q {
+  font-family: 'Fraunces', serif;
+  font-weight: 700;
+  font-size: 19px;
+  margin-bottom: 16px;
+  color: var(--gold);
+}
+
+.picker-choices { display: grid; gap: 8px; }
+
+.picker-choice {
+  background: rgba(244,241,234,0.08);
+  color: var(--paper);
+  border: 1px solid rgba(244,241,234,0.4);
+  padding: 12px 16px;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  transition: all 0.15s;
+}
+
+.picker-choice:hover {
+  background: var(--gold);
+  color: var(--ink);
+  border-color: var(--gold);
+}
+
+.picker-arrow {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  opacity: 0.6;
+}
+
+.picker-verdict {
+  background: var(--moss);
+  color: var(--paper);
+  padding: 24px 28px;
+  border-left: 4px solid var(--gold);
+}
+
+.picker-verdict h4 {
+  font-family: 'Fraunces', serif;
+  font-size: 22px;
+  margin-bottom: 12px;
+  color: var(--gold);
+}
+
+.picker-verdict p {
+  font-size: 14px;
+  line-height: 1.6;
+  margin-bottom: 8px;
+}
+
+.picker-verdict code {
+  background: rgba(0,0,0,0.4);
+  color: var(--gold);
+}
+
+.picker-reset {
+  margin-top: 16px;
+  padding: 8px 16px;
+  background: var(--ink);
+  color: var(--paper);
+  border: 1px solid var(--ink);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  cursor: pointer;
+}
+
+.picker-reset:hover { background: var(--rust); border-color: var(--rust); }
+
+/* Architecture diagram */
+.arch {
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  padding: 32px;
+  margin: 32px 0;
+}
+
+.arch-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  color: var(--rust);
+  margin-bottom: 8px;
+}
+
+.arch-title {
+  font-family: 'Fraunces', serif;
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: 24px;
+  letter-spacing: -0.01em;
+}
+
+.arch-svg-wrap {
+  background: var(--paper-dim);
+  padding: 24px;
+  border: 1px dashed var(--rule);
+}
+
+/* Checklist */
+.checklist {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+  margin: 32px 0;
+}
+
+.check-item {
+  background: var(--paper);
+  border: 1px solid var(--ink);
+  padding: 18px 20px;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.2s;
+  display: flex;
+  gap: 14px;
+  align-items: start;
+}
+
+.check-item:hover { background: var(--paper-dim); }
+.check-item.done { background: var(--moss); color: var(--paper); border-color: var(--moss); }
+
+.check-box {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--ink);
+  flex-shrink: 0;
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.check-item.done .check-box {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: var(--ink);
+}
+
+.check-content { flex: 1; }
+
+.check-title {
+  font-family: 'Fraunces', serif;
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 4px;
+}
+
+.check-desc { font-size: 12px; line-height: 1.5; opacity: 0.85; }
+
+.colophon {
+  padding: 48px;
+  background: var(--ink);
+  color: var(--paper);
+  text-align: center;
+}
+
+.colophon-mark {
+  font-family: 'Fraunces', serif;
+  font-style: italic;
+  font-weight: 300;
+  font-size: 32px;
+  margin-bottom: 12px;
+}
+
+.colophon-mark em { color: var(--gold); font-weight: 700; }
+
+.colophon p {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  opacity: 0.6;
+}
+
+@media (max-width: 900px) {
+  .chapter-head, .chapter-body, .toc { grid-template-columns: 1fr; gap: 16px; }
+  .masthead { padding: 16px 20px; flex-wrap: wrap; gap: 8px; }
+  .hero, section.chapter { padding: 48px 20px; }
+  .dfcompare-grid { grid-template-columns: 1fr; }
+  .dfcompare-stats { grid-template-columns: 1fr; }
+  .pipeline-row { grid-template-columns: repeat(2, 1fr); }
+  .layer-item { grid-template-columns: 1fr; }
+  .cmp-row { grid-template-columns: 1fr; }
+  .hero::before { font-size: 280px; }
+}
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="masthead-left">Vol. I · Issue 05 · MMXXVI</div>
+  <div class="masthead-center">The Cluster Quarterly</div>
+  <div class="masthead-right">Containers · Build &amp; Serve</div>
+</header>
+
+<section class="hero">
+  <div class="kicker">A Systematic Field Manual · Companion to Issues 01–04</div>
+  <h1>Containers · how to <em>build</em><br>them, <em>harden</em> them, &amp;<br>ship them at <em>scale.</em></h1>
+  <p class="hero-deck">The container is the unit of deployment for everything modern, from web services to multi-node disaggregated LLM inference. This manual is the practitioner's guide: reproducible builds, hardened images, CUDA-tuned GPU containers, and the NIM-and-Dynamo serving architectures that ride on top.</p>
+</section>
+
+<nav class="toc">
+  <div class="toc-label">Contents</div>
+  <ol class="toc-list">
+    <li><span class="toc-num">I.</span> <a href="#ch1">The Anatomy of a Container Image</a> <span class="toc-pill build">build</span></li>
+    <li><span class="toc-num">II.</span> <a href="#ch2">Designing the Dockerfile</a> <span class="toc-pill build">build</span></li>
+    <li><span class="toc-num">III.</span> <a href="#ch3">Reproducible &amp; Multi-Arch Builds</a> <span class="toc-pill build">build</span></li>
+    <li><span class="toc-num">IV.</span> <a href="#ch4">Hardening the Image</a> <span class="toc-pill harden">harden</span></li>
+    <li><span class="toc-num">V.</span> <a href="#ch5">Supply Chain · SBOM, Sign, Verify</a> <span class="toc-pill harden">harden</span></li>
+    <li><span class="toc-num">VI.</span> <a href="#ch6">CUDA &amp; GPU Containers</a> <span class="toc-pill gpu">gpu</span></li>
+    <li><span class="toc-num">VII.</span> <a href="#ch7">NVIDIA NIM · The Microservice</a> <span class="toc-pill gpu">gpu</span></li>
+    <li><span class="toc-num">VIII.</span> <a href="#ch8">The CI/CD Build Pipeline</a> <span class="toc-pill build">build</span></li>
+    <li><span class="toc-num">IX.</span> <a href="#ch9">Runtime · Probes, Resources, Signals</a> <span class="toc-pill deploy">deploy</span></li>
+    <li><span class="toc-num">X.</span> <a href="#ch10">Disaggregated Inference at Scale</a> <span class="toc-pill deploy">deploy</span></li>
+    <li><span class="toc-num">XI.</span> <a href="#ch11">Scaling to Thousands of CPUs/GPUs</a> <span class="toc-pill deploy">deploy</span></li>
+    <li><span class="toc-num">XII.</span> <a href="#ch12">The Picker · What to Build, Pull, or Buy</a> <span class="toc-pill deploy">deploy</span></li>
+    <li><span class="toc-num">XIII.</span> <a href="#ch13">The Production Checklist</a> <span class="toc-pill harden">harden</span></li>
+  </ol>
+</nav>
+
+<!-- CHAPTER 1 -->
+<section class="chapter build-ch" id="ch1">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain build">BUILD</span>
+      Chapter <span class="num">I</span>
+    </div>
+    <h2 class="chapter-title">The anatomy of a <em>container image.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>The premise</strong>
+      A container image is not a VM. It's a sandwich of read-only filesystem layers plus a small JSON config. Everything else follows from that.<br><br>
+      <strong>Mental model</strong>
+      Each Dockerfile line creates a layer. Every byte in any layer ships forever, even if a later layer deletes it.
+    </aside>
+    <div class="prose">
+      <p class="lead">A container image is a stack of read-only filesystem layers (each compressed as a tarball) plus a JSON config that lists those layers, sets entrypoint/env/labels, and declares architecture. When a container runs, the runtime stacks the layers, adds a writable top layer, and starts your process inside a set of Linux kernel namespaces. That's it. Everything else is convention.</p>
+
+      <div class="layers">
+        <div class="layers-title">Interactive · Image layer anatomy</div>
+        <div class="layers-tabs" id="layerTabs">
+          <button class="layers-tab active" data-img="bad">A bad image (3.2 GB)</button>
+          <button class="layers-tab" data-img="good">A good image (180 MB)</button>
+          <button class="layers-tab" data-img="cuda">A CUDA inference image (8.4 GB)</button>
+          <button class="layers-tab" data-img="nim">A NIM container (47 GB)</button>
+        </div>
+        <div class="layers-stack" id="layerStack"></div>
+        <div class="layer-summary" id="layerSummary"></div>
+      </div>
+
+      <h3>Why layers matter</h3>
+      <p><strong>Layers cache.</strong> Builders re-use unchanged layers on the next build. Order Dockerfile instructions from least-frequently-changing to most-frequently-changing and your typical build drops from minutes to seconds.</p>
+      <p><strong>Layers ship.</strong> Every layer is content-addressed by its sha256 hash. If two images share a base, pulling the second image only downloads the diff. Cluster-wide, this saves enormous bandwidth and disk.</p>
+      <p><strong>Layers leak.</strong> Anything written in a layer is forever. <code>RUN curl secret &amp;&amp; rm secret</code> still ships the secret — the file existed at one layer's commit. Use <code>--mount=type=secret</code> instead.</p>
+      <p><strong>Layers are immutable.</strong> Image identity is the manifest hash. Two builds producing the same byte-content layers are the same image. This is what makes reproducible builds possible (Chapter III).</p>
+
+      <h3>The manifest, the config, the index</h3>
+      <p>Three JSON documents stitch an image together:</p>
+      <p><strong>Image config.</strong> Architecture, OS, layer digests, environment variables, entrypoint, working directory, user, labels. ~2KB.</p>
+      <p><strong>Manifest.</strong> Points to the config and the layer blobs by hash. The "image" in a registry is, technically, this manifest. ~1KB.</p>
+      <p><strong>Image index (a.k.a. manifest list).</strong> For multi-arch images: points to per-platform manifests (linux/amd64, linux/arm64, etc.). The registry returns the right manifest based on what the pulling client asks for.</p>
+
+      <div class="callout build">
+        <div class="callout-label">The one fact that explains 80% of container behavior</div>
+        <p>Image hashes are not just identifiers — they are the cache key, the deduplication key, the security verification key, and the cross-registry portability key. Anything that changes the byte content of any layer changes the hash, which changes everything downstream. Reproducible builds (Chapter III) and image signing (Chapter V) both ride on this invariant.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 2 -->
+<section class="chapter build-ch" id="ch2">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain build">BUILD</span>
+      Chapter <span class="num">II</span>
+    </div>
+    <h2 class="chapter-title">Designing the <em>Dockerfile.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>The discipline</strong>
+      Multi-stage builds. Pinned digests. Cache mounts. Distroless runtime. Non-root user. These five conventions together produce a 5–20× size reduction and matching security improvement vs. naive Dockerfiles.<br><br>
+      <strong>The single biggest improvement</strong>
+      Multi-stage builds: separate the toolchain image from the runtime image.
+    </aside>
+    <div class="prose">
+      <p class="lead">A Dockerfile encodes a build plan. The art is making it cache-friendly, reproducible, small, and safe — all at once. Below: the bad way and the good way, side by side.</p>
+
+      <div class="dfcompare">
+        <div class="dfcompare-label">Comparison · same Python service, two Dockerfiles</div>
+        <div class="dfcompare-title">A 17× size reduction in 18 lines of refactor.</div>
+        <div class="dfcompare-grid">
+          <div class="dfcompare-col bad">
+            <div class="dfcompare-head">✗ Naive / common</div>
+            <pre><span class="kw">FROM</span> python:<span class="num">3.12</span>
+<span class="kw">WORKDIR</span> /app
+<span class="kw">COPY</span> . .
+<span class="kw">RUN</span> apt-get update <span class="kw">&amp;&amp;</span> apt-get install -y curl gcc
+<span class="kw">RUN</span> pip install -r requirements.txt
+<span class="kw">RUN</span> apt-get remove -y gcc <span class="kw">&amp;&amp;</span> apt-get autoremove -y
+<span class="kw">EXPOSE</span> <span class="num">8000</span>
+<span class="kw">CMD</span> [<span class="str">"python"</span>, <span class="str">"app.py"</span>]</pre>
+          </div>
+          <div class="dfcompare-col good">
+            <div class="dfcompare-head">✓ Production-grade</div>
+            <pre><span class="cmt"># syntax=docker/dockerfile:1.7</span>
+<span class="cmt"># ─── BUILD STAGE ──────────────────────</span>
+<span class="kw">FROM</span> python:<span class="num">3.12</span>-slim@sha256:abc... <span class="kw">AS</span> build
+<span class="kw">WORKDIR</span> /app
+<span class="kw">RUN</span> --mount=type=cache,target=/root/.cache/pip \
+    --mount=type=bind,source=requirements.txt,target=/tmp/r.txt \
+    pip install --prefix=/install -r /tmp/r.txt
+
+<span class="cmt"># ─── RUNTIME STAGE ────────────────────</span>
+<span class="kw">FROM</span> gcr.io/distroless/python3-debian12:nonroot
+<span class="kw">COPY</span> --from=build /install /usr/local
+<span class="kw">COPY</span> --chown=nonroot:nonroot app.py /app/
+<span class="kw">WORKDIR</span> /app
+<span class="kw">USER</span> nonroot
+<span class="kw">EXPOSE</span> <span class="num">8000</span>
+<span class="kw">ENTRYPOINT</span> [<span class="str">"python"</span>, <span class="str">"app.py"</span>]</pre>
+          </div>
+        </div>
+        <div class="dfcompare-stats">
+          <div class="dfstat">
+            <div class="dfstat-label dfstat-bad">Naive</div>
+            <div class="dfstat-value dfstat-bad">1,247 MB</div>
+          </div>
+          <div class="dfstat">
+            <div class="dfstat-label dfstat-good">Production</div>
+            <div class="dfstat-value dfstat-good">73 MB</div>
+          </div>
+        </div>
+      </div>
+
+      <h3>The seven Dockerfile rules</h3>
+      <p><strong>1. Multi-stage.</strong> The build stage has the compiler, the package manager, the dev libraries. The runtime stage has only what's needed to run the binary. Copy the artifacts between stages with <code>COPY --from=build</code>.</p>
+      <p><strong>2. Pin base images by digest, not tag.</strong> <code>FROM python:3.12-slim@sha256:abc...</code> guarantees byte-identical input. <code>FROM python:3.12-slim</code> resolves to whatever the registry returns today, which is a moving target.</p>
+      <p><strong>3. Order layers by change frequency.</strong> Base image → system packages → language deps → app code. Code changes every commit; deps change weekly; base changes monthly. Right order = max cache hit.</p>
+      <p><strong>4. Use cache mounts for package managers.</strong> <code>RUN --mount=type=cache,target=/root/.cache/pip pip install ...</code> persists pip's cache across builds without baking it into the image. Same trick works for apt, npm, go, cargo.</p>
+      <p><strong>5. Distroless or scratch for runtime.</strong> Distroless images (<code>gcr.io/distroless/...</code>) contain only your app's dependencies — no shell, no package manager, no curl, no anything an attacker could use. The <code>nonroot</code> variants drop privileges by default.</p>
+      <p><strong>6. Run as a non-root user.</strong> Always. Set <code>USER nonroot</code> (or a specific UID like <code>USER 65532</code>) before <code>ENTRYPOINT</code>. Combined with read-only root filesystem at runtime, this defeats most container-escape exploits.</p>
+      <p><strong>7. Use BuildKit secret mounts.</strong> <code>RUN --mount=type=secret,id=npm,target=/root/.npmrc npm ci</code> mounts the secret only during that <code>RUN</code> step; the secret is never written to any layer.</p>
+
+      <h3>Common pitfalls</h3>
+      <pre data-label="anti-patterns to recognize"><span class="cmt"># ✗ Leaks secrets into layer history forever</span>
+<span class="kw">ENV</span> NPM_TOKEN=secret_token_here
+<span class="kw">RUN</span> npm install
+
+<span class="cmt"># ✗ Invalidates cache on every code change, even for deps</span>
+<span class="kw">COPY</span> . .
+<span class="kw">RUN</span> pip install -r requirements.txt
+
+<span class="cmt"># ✗ apt-get install in one layer, cleanup in another → cleanup doesn't help</span>
+<span class="kw">RUN</span> apt-get install -y build-essential
+<span class="kw">RUN</span> apt-get remove -y build-essential  <span class="cmt"># too late, prev layer keeps files</span>
+
+<span class="cmt"># ✗ Latest tag — non-reproducible, breaks the moment upstream changes</span>
+<span class="kw">FROM</span> ubuntu:latest
+
+<span class="cmt"># ✗ ADD when COPY would do — ADD has surprises (auto-extract, URL fetch)</span>
+<span class="kw">ADD</span> https://example.com/file.tar.gz /tmp/</pre>
+
+      <div class="callout build">
+        <div class="callout-label">The order-of-operations heuristic</div>
+        <p>A good Dockerfile reads like a sentence: "from a pinned base, install least-changing things first, then deps, then code, then run as a non-root user." When you can't quote that summary back from looking at a Dockerfile, it has structural problems.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 3 -->
+<section class="chapter build-ch" id="ch3">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain build">BUILD</span>
+      Chapter <span class="num">III</span>
+    </div>
+    <h2 class="chapter-title">Reproducible &amp; <em>multi-arch</em> builds.</h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>The goal</strong>
+      Build the same Dockerfile twice, anywhere, and get byte-identical images. And build for amd64 + arm64 from a single CI job.<br><br>
+      <strong>The trick</strong>
+      SOURCE_DATE_EPOCH for timestamps, buildx for multi-platform, native nodes per arch when possible.
+    </aside>
+    <div class="prose">
+      <p class="lead">Reproducible builds mean two different runs of the same Dockerfile produce byte-identical image layers. Multi-arch means one image works on both amd64 and arm64 by shipping a manifest list with both variants. Both are now standard practice in 2026.</p>
+
+      <h3>Reproducible builds, the three sources of non-determinism</h3>
+      <p><strong>1. Timestamps.</strong> Every file written during the build gets the current time. Use <code>SOURCE_DATE_EPOCH</code> to override:</p>
+      <pre data-label="reproducible build"><span class="cmt"># Set to a fixed Unix timestamp (e.g., commit time)</span>
+<span class="kw">export</span> SOURCE_DATE_EPOCH=<span class="fn">$(</span>git log -<span class="num">1</span> --pretty=%ct<span class="fn">)</span>
+
+docker buildx build \
+  --build-arg SOURCE_DATE_EPOCH=<span class="fn">$SOURCE_DATE_EPOCH</span> \
+  --output type=oci,dest=image.tar,rewrite-timestamp=<span class="ok">true</span> \
+  --provenance=<span class="ok">false</span> \                <span class="cmt"># reproducibility needs no provenance</span>
+  -t myapp:repro .
+
+<span class="cmt"># Verify byte-identical</span>
+sha256sum image.tar
+<span class="cmt"># → same hash on every machine, every run</span></pre>
+
+      <p><strong>2. Network calls.</strong> Anything that fetches from a URL during build (apt-get, pip install from index, curl) can change. Mitigations: lock files (requirements.txt with hashes, Pipfile.lock, package-lock.json), pin every direct dependency, prefer offline caches.</p>
+      <p><strong>3. File order.</strong> Some package managers write files in directory-walk order, which varies by filesystem. <code>find ... -print | sort | tar ...</code> patterns fix this.</p>
+
+      <h3>Multi-arch with buildx</h3>
+      <p>Buildx + BuildKit + QEMU is the standard. One command produces a manifest list that points to per-arch images:</p>
+      <pre data-label="multi-arch build &amp; push"><span class="cmt"># One-time setup</span>
+docker buildx create --name multiarch \
+  --driver docker-container \
+  --bootstrap --use
+
+<span class="cmt"># Verify QEMU emulators are registered</span>
+docker run --rm --privileged tonistiigi/binfmt --install all
+
+<span class="cmt"># Build for multiple architectures, push as manifest list</span>
+docker buildx build \
+  --platform linux/amd64,linux/arm64 \
+  --tag myorg/myapp:<span class="num">v1.2.3</span> \
+  --tag myorg/myapp:latest \
+  --push \
+  --cache-to type=registry,ref=myorg/myapp:cache,mode=max \
+  --cache-from type=registry,ref=myorg/myapp:cache \
+  --sbom=<span class="ok">true</span> \
+  --provenance=mode=max \
+  .
+
+<span class="cmt"># Inspect the manifest list</span>
+docker buildx imagetools inspect myorg/myapp:v1.2.3</pre>
+
+      <h3>QEMU emulation vs. native builders — when to switch</h3>
+      <p>QEMU emulation works but is slow — sometimes 10–30× slower than native — especially for compute-heavy builds like compiling C/C++ or building CUDA kernels. Two ways out:</p>
+      <p><strong>1. Cross-compilation.</strong> The compiler runs on amd64 but emits arm64 code. <code>BUILDPLATFORM</code> and <code>TARGETPLATFORM</code> args let your Dockerfile branch on this. Works well for Go, Rust; harder for Python or Java with native deps.</p>
+      <pre data-label="cross-compile Dockerfile"><span class="cmt"># syntax=docker/dockerfile:1.7</span>
+<span class="kw">FROM</span> --platform=<span class="fn">$BUILDPLATFORM</span> golang:<span class="num">1.22</span>-alpine <span class="kw">AS</span> build
+<span class="kw">ARG</span> TARGETOS TARGETARCH
+<span class="kw">WORKDIR</span> /src
+<span class="kw">COPY</span> . .
+<span class="kw">RUN</span> GOOS=<span class="fn">$TARGETOS</span> GOARCH=<span class="fn">$TARGETARCH</span> CGO_ENABLED=<span class="num">0</span> \
+    go build -ldflags=<span class="str">"-s -w -buildid="</span> -trimpath -o /app .
+
+<span class="kw">FROM</span> --platform=<span class="fn">$TARGETPLATFORM</span> gcr.io/distroless/static-debian12:nonroot
+<span class="kw">COPY</span> --from=build /app /app
+<span class="kw">ENTRYPOINT</span> [<span class="str">"/app"</span>]</pre>
+
+      <p><strong>2. Native builder nodes per architecture.</strong> Register an arm64 builder (a real arm64 machine — an AWS Graviton instance, a Mac, a Raspberry Pi cluster) and let buildx route per-platform builds to native nodes. Result: full-speed builds with no emulation overhead.</p>
+      <pre data-label="native multi-node builder"><span class="cmt"># Create builder, add native arm64 node</span>
+docker buildx create --name native --node amd64-node \
+  --driver docker-container ssh://build-amd64
+docker buildx create --append --name native --node arm64-node \
+  --driver docker-container --platform linux/arm64 ssh://build-arm64
+docker buildx use native
+
+<span class="cmt"># buildx automatically routes per-platform work</span>
+docker buildx build --platform linux/amd64,linux/arm64 ...</pre>
+
+      <div class="callout build">
+        <div class="callout-label">When reproducibility matters most</div>
+        <p>Two situations make reproducibility non-negotiable. <strong>Compliance</strong> (SLSA, FIPS, government deployments) — you need to prove the artifact comes from the source. <strong>Security forensics</strong> — when a CVE drops you want to know if you're affected, which means re-building from the same source must yield the same image. For other situations, "deterministic enough" — pinned bases + lock files — is usually fine.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 4 -->
+<section class="chapter harden-ch" id="ch4">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain harden">HARDEN</span>
+      Chapter <span class="num">IV</span>
+    </div>
+    <h2 class="chapter-title">Hardening the <em>image.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>The model</strong>
+      Defense in depth. Assume the application code has a bug. Make sure that bug cannot become root on the node.<br><br>
+      <strong>The single highest-leverage change</strong>
+      Run as non-root with a read-only root filesystem. Defeats ~80% of escape exploits.
+    </aside>
+    <div class="prose">
+      <p class="lead">Hardening is layered: a small image with no shell, a non-root user, a read-only filesystem, dropped capabilities, a tight seccomp profile, and signature verification before the container ever runs. Each layer alone is partial; together they're robust.</p>
+
+      <h3>Image-time hardening</h3>
+      <p><strong>Minimal base.</strong> Distroless (<code>gcr.io/distroless/static-debian12</code>, ~2MB) or scratch (~0 bytes) for static binaries. Alpine (~5MB) for dynamic ones — but watch for musl libc vs glibc subtleties. Wolfi/Chainguard images for the "distroless-plus-package-management" middle ground.</p>
+      <p><strong>No shell.</strong> Distroless images have no shell. An attacker who lands a code execution can't easily pivot — there's nothing to exec into. (You also lose the ability to <code>kubectl exec</code> for debugging; the trade is usually worth it. Use ephemeral debug containers in K8s when needed.)</p>
+      <p><strong>Non-root user.</strong> <code>USER 65532:65532</code> before <code>ENTRYPOINT</code>. Most distroless images ship a <code>:nonroot</code> variant that does this for you.</p>
+      <p><strong>No setuid binaries.</strong> Scan for them: <code>find / -perm -4000 -type f 2>/dev/null</code>. Remove or chmod them.</p>
+      <p><strong>Drop write permission on app files.</strong> The app shouldn't be able to modify its own binary at runtime.</p>
+
+      <h3>Runtime hardening (the pod / container spec)</h3>
+      <pre data-label="hardened k8s securityContext"><span class="kw">securityContext</span>:
+  <span class="fn">runAsNonRoot</span>: <span class="ok">true</span>
+  <span class="fn">runAsUser</span>: <span class="num">65532</span>
+  <span class="fn">runAsGroup</span>: <span class="num">65532</span>
+  <span class="fn">readOnlyRootFilesystem</span>: <span class="ok">true</span>      <span class="cmt"># mount /tmp via emptyDir if needed</span>
+  <span class="fn">allowPrivilegeEscalation</span>: <span class="err">false</span>
+  <span class="fn">capabilities</span>:
+    <span class="fn">drop</span>: [<span class="str">"ALL"</span>]                     <span class="cmt"># drop ALL capabilities</span>
+    <span class="fn">add</span>: []                              <span class="cmt"># add only what's needed</span>
+  <span class="fn">seccompProfile</span>:
+    <span class="fn">type</span>: RuntimeDefault                <span class="cmt"># or Localhost with custom profile</span>
+
+<span class="cmt"># And at pod level</span>
+<span class="kw">spec</span>:
+  <span class="fn">automountServiceAccountToken</span>: <span class="err">false</span>  <span class="cmt"># if pod doesn't need K8s API</span>
+  <span class="fn">securityContext</span>:
+    <span class="fn">fsGroup</span>: <span class="num">65532</span>
+    <span class="fn">seccompProfile</span>: { type: RuntimeDefault }</pre>
+
+      <p><strong>readOnlyRootFilesystem.</strong> The biggest single hardening win. Combined with <code>emptyDir</code> volumes for paths that actually need writes (typically <code>/tmp</code>, <code>/var/run</code>), this means most exploits — which need to write tools to disk — fail.</p>
+      <p><strong>Drop capabilities.</strong> Default container capabilities include things like <code>NET_BIND_SERVICE</code>, <code>SETUID</code>, <code>CHOWN</code> that most apps don't need. Drop all and add only what's required.</p>
+      <p><strong>seccomp.</strong> Restricts which Linux syscalls the container can make. <code>RuntimeDefault</code> blocks dangerous ones (kernel exploits, container escapes) and is good for 95% of workloads. A custom Localhost profile lets you tighten further.</p>
+      <p><strong>Pod Security Standards (PSS).</strong> Set <code>restricted</code> on every namespace that doesn't have a specific need otherwise. K8s enforces it cluster-wide via the built-in Pod Security admission plugin.</p>
+
+      <h3>Vulnerability scanning</h3>
+      <p>Three categories of issues to catch:</p>
+      <p><strong>OS packages with CVEs.</strong> Trivy, Grype, Clair scan the image's apt/apk database against known-vulnerability lists. Run in CI; block on high/critical.</p>
+      <p><strong>Application dependencies.</strong> Same scanners can detect Python/Node/Go packages with CVEs. Pair with <code>npm audit</code> / <code>pip-audit</code> / <code>govulncheck</code>.</p>
+      <p><strong>Image misconfiguration.</strong> Trivy and others check for "runs as root," "no health check," "uses ADD with URL," and similar policy violations.</p>
+
+      <pre data-label="trivy in CI"><span class="cmt"># Scan and fail build on HIGH or CRITICAL CVEs</span>
+trivy image \
+  --severity HIGH,CRITICAL \
+  --exit-code <span class="num">1</span> \
+  --ignore-unfixed \
+  --format sarif --output trivy.sarif \
+  myorg/myapp:<span class="fn">$TAG</span>
+
+<span class="cmt"># Also scan the Dockerfile for misconfigs</span>
+trivy config --severity HIGH,CRITICAL Dockerfile</pre>
+
+      <div class="callout warn">
+        <div class="callout-label">The principal anti-pattern</div>
+        <p>Adding tools to the production image "in case someone needs to debug." curl, netcat, bash, vim, the cluster's view of /etc/passwd — every one of these is a pivot tool for an attacker. Use <strong>ephemeral debug containers</strong> (kubectl debug) when you need a shell; never bake them into the production image.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 5 -->
+<section class="chapter harden-ch" id="ch5">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain harden">HARDEN</span>
+      Chapter <span class="num">V</span>
+    </div>
+    <h2 class="chapter-title">Supply chain · <em>SBOM</em>, sign, verify.</h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>The threat</strong>
+      Supply-chain attacks (compromised base image, typo-squatted dep, malicious commit) bypass code review. The defense is cryptographic provenance.<br><br>
+      <strong>SLSA</strong>
+      Supply-chain Levels for Software Artifacts. A 0–4 maturity model for build provenance.
+    </aside>
+    <div class="prose">
+      <p class="lead">Supply-chain security in 2026 has three pillars: <strong>SBOMs</strong> tell you what's in your image; <strong>signatures</strong> tell you who built it and that it hasn't been tampered with; <strong>provenance attestations</strong> tell you exactly how it was built. All three attach to the image in the registry and are verifiable in CI/CD and at deploy time.</p>
+
+      <h3>SBOM (Software Bill of Materials)</h3>
+      <p>An SBOM is a structured list of every package, library, and file in your image — OS packages from the base, language deps from your install steps, and your application's own files. Two standards dominate: <strong>SPDX</strong> (Linux Foundation) and <strong>CycloneDX</strong> (OWASP). Both work; CycloneDX is more popular for containers.</p>
+      <pre data-label="generate SBOM with BuildKit"><span class="cmt"># Inline in the build — BuildKit calls syft scanner</span>
+docker buildx build \
+  --sbom=<span class="ok">true</span> \                          <span class="cmt"># attach SBOM as in-toto attestation</span>
+  --provenance=mode=max \                <span class="cmt"># attach full SLSA provenance</span>
+  -t myorg/myapp:<span class="fn">$TAG</span> --push .
+
+<span class="cmt"># Or after-the-fact with Syft</span>
+syft myorg/myapp:<span class="fn">$TAG</span> \
+  -o cyclonedx-json=app.cdx.json \
+  -o spdx-json=app.spdx.json
+
+<span class="cmt"># Inspect what's in there</span>
+docker buildx imagetools inspect myorg/myapp:<span class="fn">$TAG</span> \
+  --format <span class="str">"{{json .SBOM}}"</span> | jq .</pre>
+
+      <h3>Sign with cosign</h3>
+      <p>Cosign (Sigstore) is the dominant container-signing tool in 2026. It signs images, attaches signatures as registry artifacts, and integrates with Fulcio (a free CA that issues short-lived certs via OIDC, e.g., GitHub Actions identity) so you don't even need to manage long-lived keys.</p>
+      <pre data-label="sign image, attach SBOM, verify"><span class="cmt"># Keyless signing (preferred for CI) — uses OIDC identity from GitHub Actions</span>
+cosign sign \
+  --identity-token <span class="fn">$ACTIONS_ID_TOKEN_REQUEST_TOKEN</span> \
+  myorg/myapp:<span class="fn">$TAG</span>
+
+<span class="cmt"># Attach the SBOM as an attestation</span>
+cosign attest --predicate app.cdx.json \
+  --type cyclonedx \
+  myorg/myapp:<span class="fn">$TAG</span>
+
+<span class="cmt"># At deploy time / pull time — verify the signature</span>
+cosign verify \
+  --certificate-identity-regexp=<span class="str">"^https://github.com/myorg/myrepo/"</span> \
+  --certificate-oidc-issuer=https://token.actions.githubusercontent.com \
+  myorg/myapp:<span class="fn">$TAG</span>
+
+<span class="cmt"># Verify the SBOM attestation</span>
+cosign verify-attestation \
+  --certificate-identity-regexp=<span class="str">"^https://github.com/myorg/"</span> \
+  --certificate-oidc-issuer=https://token.actions.githubusercontent.com \
+  --type cyclonedx \
+  myorg/myapp:<span class="fn">$TAG</span></pre>
+
+      <h3>SLSA provenance</h3>
+      <p>Provenance is the build's autobiography: which CI ran it, which Git commit, which Dockerfile, which builder, what materials were consumed. BuildKit's <code>--provenance=mode=max</code> embeds a SLSA-format attestation in the image. SLSA defines levels 1–4 of provenance rigor; most teams target Level 3 (signed provenance from a hardened, isolated builder).</p>
+
+      <h3>Admission enforcement</h3>
+      <p>Generating signatures isn't enough — you need K8s to refuse to run unsigned images. Three deployable options:</p>
+      <p><strong>Kyverno</strong> — policy engine; <code>verifyImages</code> rule checks cosign signatures at admission. Most flexible.</p>
+      <p><strong>OPA / Gatekeeper</strong> — generic policy; you write the cosign check yourself.</p>
+      <p><strong>Sigstore Policy Controller</strong> — purpose-built for cosign verification. Simplest.</p>
+      <pre data-label="kyverno verifyImages rule"><span class="kw">apiVersion</span>: kyverno.io/v1
+<span class="kw">kind</span>: ClusterPolicy
+<span class="kw">metadata</span>:
+  <span class="fn">name</span>: require-signed-images
+<span class="kw">spec</span>:
+  <span class="fn">validationFailureAction</span>: Enforce
+  <span class="fn">rules</span>:
+    - <span class="fn">name</span>: check-image-signatures
+      <span class="fn">match</span>:
+        any:
+          - resources:
+              kinds: [Pod]
+      <span class="fn">verifyImages</span>:
+        - imageReferences: [<span class="str">"myorg/*"</span>]
+          attestors:
+            - entries:
+                - keyless:
+                    issuer: https://token.actions.githubusercontent.com
+                    subject: <span class="str">"https://github.com/myorg/*"</span></pre>
+
+      <div class="callout">
+        <div class="callout-label">The minimum-viable supply chain</div>
+        <p>If you do nothing else: <strong>(1) pin base images by digest, (2) generate SBOMs with <code>--sbom=true</code> in CI, (3) sign with cosign using keyless GitHub OIDC, (4) verify at admission with Kyverno</strong>. Four steps; each costs minutes once set up; together they meet SLSA Level 3.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 6 -->
+<section class="chapter gpu-ch" id="ch6">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain gpu">GPU</span>
+      Chapter <span class="num">VI</span>
+    </div>
+    <h2 class="chapter-title">CUDA &amp; <em>GPU</em> containers.</h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>The three layers</strong>
+      Driver on host. CUDA + cuDNN in image. App on top. Mismatch any pair and the container fails to start or crashes at first kernel launch.<br><br>
+      <strong>NVIDIA's stack</strong>
+      Container Toolkit on the host; CUDA base images for the build; NGC for vetted ML containers.
+    </aside>
+    <div class="prose">
+      <p class="lead">GPU containers are the same as CPU containers except for one critical difference: the host's NVIDIA driver must be compatible with the container's CUDA version. The NVIDIA Container Toolkit handles the runtime plumbing — mounts the driver, libraries, and device files into the container — but you, the image builder, choose the CUDA version and architecture compute capabilities.</p>
+
+      <h3>The three layers</h3>
+      <p><strong>Host: NVIDIA driver.</strong> Installed on the bare-metal node. Version matters: a CUDA 12.x runtime needs at least driver 545.x. The driver is forward-compatible — a newer driver can run older CUDA — but never the other way around.</p>
+      <p><strong>Host: Container Toolkit.</strong> The <code>nvidia-container-runtime</code> hook that detects <code>nvidia.com/gpu</code> requests, mounts <code>/dev/nvidia*</code> device files, and injects driver libraries (libcuda.so) into the container. Installed by the NVIDIA GPU Operator (covered in Issue 01).</p>
+      <p><strong>Container: CUDA toolkit + cuDNN + your app.</strong> The image you build. CUDA libraries are baked in; the driver is injected at runtime.</p>
+
+      <h3>The CUDA base image hierarchy</h3>
+      <pre data-label="NVIDIA's image taxonomy"><span class="cmt"># From smallest to largest</span>
+nvcr.io/nvidia/cuda:<span class="num">12.6</span>.<span class="num">0</span>-base-ubuntu22.04        <span class="cmt"># ~190MB — runtime only, no toolkit</span>
+nvcr.io/nvidia/cuda:<span class="num">12.6</span>.<span class="num">0</span>-runtime-ubuntu22.04     <span class="cmt"># ~2GB — cuBLAS, NCCL, cuDNN runtimes</span>
+nvcr.io/nvidia/cuda:<span class="num">12.6</span>.<span class="num">0</span>-devel-ubuntu22.04       <span class="cmt"># ~5GB — nvcc, headers, all libs</span>
+nvcr.io/nvidia/cuda:<span class="num">12.6</span>.<span class="num">0</span>-cudnn-runtime-ubuntu22.04
+nvcr.io/nvidia/cuda:<span class="num">12.6</span>.<span class="num">0</span>-cudnn-devel-ubuntu22.04
+
+<span class="cmt"># For applications (no PyTorch/TF):</span>
+<span class="cmt">#   build stage: -devel    runtime stage: -runtime</span>
+<span class="cmt"># For training/inference:</span>
+<span class="cmt">#   prefer NGC PyTorch / TensorFlow containers (pre-tuned)</span>
+nvcr.io/nvidia/pytorch:<span class="num">24.10</span>-py3                  <span class="cmt"># ~9GB — PyTorch + TRT + Apex + ...</span>
+nvcr.io/nvidia/tritonserver:<span class="num">24.10</span>-py3            <span class="cmt"># Triton Inference Server</span>
+nvcr.io/nvidia/tensorrt:<span class="num">24.10</span>-py3                 <span class="cmt"># TensorRT-LLM build base</span></pre>
+
+      <h3>The canonical CUDA Dockerfile</h3>
+      <pre data-label="multi-stage CUDA build"><span class="cmt"># syntax=docker/dockerfile:1.7
+
+# ─── BUILD STAGE (devel image; large but only used at build) ────</span>
+<span class="kw">FROM</span> nvcr.io/nvidia/cuda:<span class="num">12.6</span>.<span class="num">0</span>-cudnn-devel-ubuntu22.04@sha256:... <span class="kw">AS</span> build
+<span class="kw">WORKDIR</span> /work
+
+<span class="cmt"># Install Python toolchain (cache mounted)</span>
+<span class="kw">RUN</span> --mount=type=cache,target=/var/cache/apt \
+    --mount=type=cache,target=/var/lib/apt \
+    apt-get update <span class="kw">&amp;&amp;</span> apt-get install -y --no-install-recommends \
+      python3.11 python3-pip git
+
+<span class="cmt"># Build wheels (e.g., custom kernels) with target compute capabilities</span>
+<span class="kw">ENV</span> TORCH_CUDA_ARCH_LIST=<span class="str">"8.0;8.6;8.9;9.0;10.0"</span>     <span class="cmt"># A100, RTX30, H100, B200</span>
+<span class="kw">COPY</span> . .
+<span class="kw">RUN</span> --mount=type=cache,target=/root/.cache/pip \
+    pip wheel --wheel-dir=/wheels -r requirements.txt
+<span class="kw">RUN</span> python3 setup.py bdist_wheel -d /wheels
+
+<span class="cmt"># ─── RUNTIME STAGE (smaller runtime image) ──────────────────</span>
+<span class="kw">FROM</span> nvcr.io/nvidia/cuda:<span class="num">12.6</span>.<span class="num">0</span>-cudnn-runtime-ubuntu22.04@sha256:...
+<span class="kw">RUN</span> --mount=type=cache,target=/var/cache/apt \
+    apt-get update <span class="kw">&amp;&amp;</span> apt-get install -y --no-install-recommends \
+      python3.11 <span class="kw">&amp;&amp;</span> rm -rf /var/lib/apt/lists/*
+
+<span class="kw">COPY</span> --from=build /wheels /wheels
+<span class="kw">RUN</span> pip install --no-index --find-links=/wheels myapp <span class="kw">&amp;&amp;</span> rm -rf /wheels
+
+<span class="cmt"># Drop privileges (non-root user)</span>
+<span class="kw">RUN</span> useradd -u <span class="num">10001</span> -r -s /sbin/nologin app
+<span class="kw">USER</span> app
+
+<span class="cmt"># Required env vars for the NVIDIA Container Toolkit</span>
+<span class="kw">ENV</span> NVIDIA_VISIBLE_DEVICES=all
+<span class="kw">ENV</span> NVIDIA_DRIVER_CAPABILITIES=compute,utility
+
+<span class="kw">ENTRYPOINT</span> [<span class="str">"python3"</span>, <span class="str">"-m"</span>, <span class="str">"myapp.serve"</span>]</pre>
+
+      <h3>Compute capability targeting</h3>
+      <p><code>TORCH_CUDA_ARCH_LIST</code> (and equivalents like <code>CUDA_ARCHITECTURES</code> in CMake) controls which GPU generations your custom kernels are compiled for. Each compute capability adds binary size; including all of them is fine for distributable containers. The list as of 2026:</p>
+      <div class="cards-grid">
+        <div class="tech-card">
+          <div class="kind">CC 7.0 · Volta</div>
+          <div class="name">V100</div>
+          <div class="desc">Legacy hardware. Drop unless you specifically support older clusters.</div>
+          <div class="pill">2017</div>
+        </div>
+        <div class="tech-card">
+          <div class="kind">CC 7.5 · Turing</div>
+          <div class="name">T4 / RTX 20</div>
+          <div class="desc">Workhorse cloud inference GPU through 2023. Still in many fleets.</div>
+          <div class="pill">2018</div>
+        </div>
+        <div class="tech-card">
+          <div class="kind">CC 8.0 · Ampere</div>
+          <div class="name">A100 / A30</div>
+          <div class="desc">Major training and inference workhorse 2020–24. Include in any general image.</div>
+          <div class="pill">2020</div>
+        </div>
+        <div class="tech-card">
+          <div class="kind">CC 8.6 / 8.9 · Ampere/Ada</div>
+          <div class="name">RTX 30/40, L4</div>
+          <div class="desc">Consumer and cloud inference. Different from 8.0 — must add separately.</div>
+          <div class="pill">2020–22</div>
+        </div>
+        <div class="tech-card">
+          <div class="kind">CC 9.0 · Hopper</div>
+          <div class="name">H100 / H200</div>
+          <div class="desc">FP8 tensor cores, SXM &amp; PCIe. The 2024–25 production default.</div>
+          <div class="pill">2023</div>
+        </div>
+        <div class="tech-card">
+          <div class="kind">CC 10.0 · Blackwell</div>
+          <div class="name">B200 / GB200</div>
+          <div class="desc">FP4 tensor cores, dual-die. The 2025–26 frontier hardware.</div>
+          <div class="pill">2025</div>
+        </div>
+      </div>
+
+      <h3>NGC: the curated registry</h3>
+      <p>NVIDIA GPU Cloud (NGC) is a public registry of GPU-optimized containers. For training and inference, NGC's PyTorch / TensorFlow / TensorRT-LLM containers are typically faster than rolling your own — they bundle proprietary optimizations (Apex, transformer_engine, NCCL tuning, NVTX hooks) that take weeks to replicate.</p>
+      <p><strong>Pin NGC tags by digest in production.</strong> Tags like <code>24.10-py3</code> are stable, but always re-resolve to a digest in your Dockerfile for reproducibility.</p>
+
+      <div class="callout">
+        <div class="callout-label">The CUDA version compatibility rule</div>
+        <p>If the host driver is X.y, the container can run any CUDA toolkit ≤ X.y. NVIDIA also publishes <strong>CUDA Forward Compatibility</strong> packages that let newer CUDA toolkits run on older drivers within a major version family — useful when you can't upgrade the host driver but need newer CUDA features. Verify host vs container compatibility with <code>nvidia-smi</code> inside the container before debugging anything else.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 7 -->
+<section class="chapter gpu-ch" id="ch7">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain gpu">GPU</span>
+      Chapter <span class="num">VII</span>
+    </div>
+    <h2 class="chapter-title">NVIDIA NIM · the <em>microservice.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>What NIM is</strong>
+      A pre-optimized inference container per model and GPU SKU. Pull, run, get an OpenAI-compatible API. The fastest path from "I want to serve this model" to production.<br><br>
+      <strong>When to use it</strong>
+      When the model is in the NIM catalog. When NVIDIA GPUs are the target. When the 2× throughput vs. vanilla vLLM is worth the AI Enterprise license cost.
+    </aside>
+    <div class="prose">
+      <p class="lead">A NIM is a container that bundles a foundation model, a GPU-specific inference engine (TensorRT-LLM, vLLM, or SGLang), and an OpenAI-compatible HTTP API. The whole stack is tuned by NVIDIA for the specific model + GPU pair. Pull the image, run with a GPU, point your app at the endpoint — done in minutes, not weeks.</p>
+
+      <h3>What's inside a NIM container</h3>
+      <p>The architecture, from NVIDIA's docs: <strong>NIM LLM is an enterprise orchestration layer for vLLM</strong> (or TRT-LLM / SGLang depending on the model). It packages an inference engine into a production-ready container with curated model profiles, validated configurations, and enterprise features such as health management, observability, and security hardening. The actual layout:</p>
+
+      <div class="layers">
+        <div class="layers-title">Inside a NIM container · the four components</div>
+        <div class="layers-stack">
+          <div class="layer-item">
+            <div class="layer-name">nginx proxy (8000)</div>
+            <div class="layer-size">~10 MB</div>
+            <div class="layer-desc">External port. Handles TLS termination, CORS, immediate liveness probes, model-aware readiness routing. Returns 503 while model loads; 200 once ready.</div>
+          </div>
+          <div class="layer-item">
+            <div class="layer-name">Inference engine (8001, loopback)</div>
+            <div class="layer-size">~200 MB</div>
+            <div class="layer-desc">vLLM, TensorRT-LLM, or SGLang — selected based on model + GPU. Listens on localhost only; proxied by nginx. OpenAI-compatible API.</div>
+          </div>
+          <div class="layer-item">
+            <div class="layer-name">Model weights + engine cache</div>
+            <div class="layer-size">10–500 GB</div>
+            <div class="layer-desc">Stored at NIM_CACHE_PATH. Engine compilation (TensorRT-LLM) happens on first launch and is cached for subsequent starts. Mount as PVC for warm restarts.</div>
+          </div>
+          <div class="layer-item">
+            <div class="layer-name">Process supervisor + observability</div>
+            <div class="layer-size">~50 MB</div>
+            <div class="layer-desc">Fail-fast supervision: if either process exits, container shuts down for K8s to reschedule. Prometheus metrics at /v1/metrics. Structured JSON logs.</div>
+          </div>
+        </div>
+        <div class="layer-summary">
+          <strong>The key abstraction</strong>
+          NIM hides the inference engine selection and tuning. You see an OpenAI-compatible API; NIM picks vLLM / TRT-LLM / SGLang for the model+GPU combination, downloads the right pre-compiled engine, and exposes it. The cost is an NVIDIA AI Enterprise license and lock-in to NVIDIA-architecture GPUs.
+        </div>
+      </div>
+
+      <h3>The NIM deployment pattern</h3>
+      <pre data-label="helm install a NIM"><span class="cmt"># 1. NGC login (one-time)</span>
+helm repo add nim https://helm.ngc.nvidia.com/nim
+helm repo update
+
+<span class="cmt"># 2. Install with API key (NGC org)</span>
+helm install llama3-70b nim/meta-llama-3-3-70b-instruct \
+  --namespace nim --create-namespace \
+  --set image.repository=nvcr.io/nim/meta/llama-3.3-70b-instruct \
+  --set image.tag=<span class="num">1.0</span>.<span class="num">0</span> \
+  --set model.ngcAPIKey=<span class="fn">$NGC_API_KEY</span> \
+  --set persistence.enabled=<span class="ok">true</span> \                  <span class="cmt"># PVC for cache</span>
+  --set persistence.size=200Gi \
+  --set resources.limits.<span class="str">"nvidia\.com/gpu"</span>=<span class="num">2</span> \
+  --set hostNetwork=<span class="err">false</span>
+
+<span class="cmt"># 3. Hit the OpenAI-compatible API</span>
+kubectl port-forward -n nim svc/llama3-70b <span class="num">8000</span>:<span class="num">8000</span>
+curl http://localhost:8000/v1/chat/completions -H <span class="str">"Content-Type: application/json"</span> \
+  -d <span class="str">'{"model": "meta-llama-3-3-70b-instruct", "messages": [...]}'</span></pre>
+
+      <h3>Engine compilation &amp; the cache mount</h3>
+      <p>For TensorRT-LLM-backed NIMs, the first launch compiles the model into a hardware-specific engine — this can take 10–30 minutes for a 70B model. The engine file is then cached in <code>NIM_CACHE_PATH</code> (typically <code>/opt/nim/.cache</code>) so subsequent launches are fast.</p>
+      <p><strong>Always mount a PVC at the cache path.</strong> Without it, every pod restart re-compiles. With it, restarts are 1–2 minutes. For high-availability deployments, the PVC must support <code>ReadWriteMany</code> (so multiple replicas share) or you use one PVC per replica (independent caches).</p>
+
+      <h3>Tuning NIMs in production</h3>
+      <p>NIM exposes most of its tuning surface as environment variables. The high-leverage ones:</p>
+      <pre data-label="env vars worth knowing"><span class="kw">env</span>:
+  <span class="cmt"># Concurrency and batching</span>
+  - <span class="fn">name</span>: NIM_MAX_BATCH_SIZE
+    <span class="fn">value</span>: <span class="str">"256"</span>
+  - <span class="fn">name</span>: NIM_KV_CACHE_FREE_GPU_MEM_FRACTION
+    <span class="fn">value</span>: <span class="str">"0.9"</span>           <span class="cmt"># reclaim from default 0.85</span>
+
+  <span class="cmt"># Engine profile (select pre-compiled variant for your GPU)</span>
+  - <span class="fn">name</span>: NIM_MODEL_PROFILE
+    <span class="fn">value</span>: <span class="str">"tensorrt_llm-h100-fp8-tp2-throughput"</span>
+
+  <span class="cmt"># Disable telemetry if compliance requires it</span>
+  - <span class="fn">name</span>: NIM_TELEMETRY_ENABLED
+    <span class="fn">value</span>: <span class="str">"false"</span>
+
+  <span class="cmt"># Observability</span>
+  - <span class="fn">name</span>: NIM_LOG_LEVEL
+    <span class="fn">value</span>: <span class="str">"INFO"</span>
+  - <span class="fn">name</span>: NIM_ENABLE_PROMETHEUS_METRICS
+    <span class="fn">value</span>: <span class="str">"true"</span></pre>
+
+      <p>The <code>NIM_MODEL_PROFILE</code> setting is the biggest performance lever. NIM ships multiple pre-compiled engine variants per model — different tensor-parallelism sizes, different quantization (FP8 vs FP16), different batch profiles. Pick the one that matches your GPU SKU and traffic shape; the wrong profile costs 30–50% throughput.</p>
+
+      <h3>When NIMs are the right answer</h3>
+      <div class="cmp-table">
+        <div class="cmp-row head">
+          <div>Decision axis</div>
+          <div>Use NIM</div>
+          <div>Use vanilla vLLM/SGLang</div>
+        </div>
+        <div class="cmp-row">
+          <div class="cmp-axis">Throughput per GPU</div>
+          <p>NIM with TensorRT-LLM backend produces ~2× the tokens/sec of vanilla vLLM on Llama-3-3-70B on H100 SXM5.</p>
+          <p>Lower throughput, but free and open-source, with full control.</p>
+        </div>
+        <div class="cmp-row">
+          <div class="cmp-axis">Time to production</div>
+          <p>Hours. Pull, helm install, traffic flows.</p>
+          <p>Days-to-weeks. Engine compilation, profile selection, scaling configuration.</p>
+        </div>
+        <div class="cmp-row">
+          <div class="cmp-axis">Hardware portability</div>
+          <p>NVIDIA only. Compiled engines are SKU-specific.</p>
+          <p>Runs on NVIDIA, AMD, Intel, Google TPU, AWS Trainium.</p>
+        </div>
+        <div class="cmp-row">
+          <div class="cmp-axis">Cost</div>
+          <p>NVIDIA AI Enterprise license: ~$4,500/GPU/year (free for development on up to 16 GPUs).</p>
+          <p>Free. You pay only for the GPUs themselves.</p>
+        </div>
+        <div class="cmp-row">
+          <div class="cmp-axis">Customization</div>
+          <p>Limited. You configure via env vars and ConfigMaps; you don't modify the inference loop.</p>
+          <p>Full. Modify the engine, add custom kernels, change scheduling.</p>
+        </div>
+        <div class="cmp-row">
+          <div class="cmp-axis">Catalog coverage</div>
+          <p>NVIDIA-curated foundation models. Lags slightly behind frontier model releases.</p>
+          <p>Anything with a Hugging Face checkpoint, immediately.</p>
+        </div>
+      </div>
+
+      <div class="callout">
+        <div class="callout-label">The strategic question</div>
+        <p>NIMs are the right answer when you want to <em>deploy</em> a known-good inference setup quickly. They're the wrong answer when you want to <em>experiment</em> with custom kernels, new models, or non-NVIDIA hardware. Many production teams run both — NIMs for the steady-state revenue-generating models, vLLM/SGLang for new model evaluation and bespoke workloads.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 8 -->
+<section class="chapter build-ch" id="ch8">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain build">BUILD</span>
+      Chapter <span class="num">VIII</span>
+    </div>
+    <h2 class="chapter-title">The CI/CD <em>build pipeline.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>The discipline</strong>
+      Build once, sign once, promote through environments by digest. Never rebuild for "staging" — promote the prod-bound artifact instead.<br><br>
+      <strong>The acceptance gate</strong>
+      An image is "promotable" only if it passes scan, has SBOM attached, and is cosign-signed by a trusted identity.
+    </aside>
+    <div class="prose">
+      <p class="lead">A production CI/CD pipeline for containers has seven stages. Each can fail; each failure blocks the next. The discipline is to never deploy something that hasn't passed every stage.</p>
+
+      <div class="pipeline">
+        <div class="pipeline-title">Interactive · The seven-stage build pipeline</div>
+        <div class="pipeline-row" id="pipeRow">
+          <div class="pipe-step active" data-pipe="checkout">
+            <div class="pipe-num">01</div>
+            <div class="pipe-name">Checkout &amp; Lint</div>
+            <div class="pipe-tool">git · hadolint</div>
+          </div>
+          <div class="pipe-step" data-pipe="build">
+            <div class="pipe-num">02</div>
+            <div class="pipe-name">Build &amp; Cache</div>
+            <div class="pipe-tool">buildx · BuildKit</div>
+          </div>
+          <div class="pipe-step" data-pipe="scan">
+            <div class="pipe-num">03</div>
+            <div class="pipe-name">Scan</div>
+            <div class="pipe-tool">trivy · grype</div>
+          </div>
+          <div class="pipe-step" data-pipe="test">
+            <div class="pipe-num">04</div>
+            <div class="pipe-name">Test (in-container)</div>
+            <div class="pipe-tool">pytest · k6</div>
+          </div>
+          <div class="pipe-step" data-pipe="sbom">
+            <div class="pipe-num">05</div>
+            <div class="pipe-name">SBOM &amp; Sign</div>
+            <div class="pipe-tool">syft · cosign</div>
+          </div>
+          <div class="pipe-step" data-pipe="push">
+            <div class="pipe-num">06</div>
+            <div class="pipe-name">Push by Digest</div>
+            <div class="pipe-tool">registry · OCI</div>
+          </div>
+          <div class="pipe-step" data-pipe="promote">
+            <div class="pipe-num">07</div>
+            <div class="pipe-name">Promote</div>
+            <div class="pipe-tool">argo · flux</div>
+          </div>
+        </div>
+        <div class="pipe-detail" id="pipeDetail"></div>
+      </div>
+
+      <h3>The end-to-end GitHub Actions example</h3>
+      <pre data-label=".github/workflows/build.yml"><span class="kw">name</span>: build-and-publish
+<span class="kw">on</span>: { push: { tags: [<span class="str">'v*'</span>] } }
+
+<span class="kw">permissions</span>:
+  contents: read
+  id-token: write              <span class="cmt"># needed for cosign keyless sign</span>
+  packages: write              <span class="cmt"># push to ghcr.io</span>
+
+<span class="kw">jobs</span>:
+  build:
+    <span class="fn">runs-on</span>: ubuntu-latest
+    <span class="fn">steps</span>:
+      - <span class="fn">uses</span>: actions/checkout@v4
+
+      - <span class="fn">uses</span>: hadolint/hadolint-action@v3       <span class="cmt"># lint Dockerfile</span>
+
+      - <span class="fn">uses</span>: docker/setup-qemu-action@v3
+      - <span class="fn">uses</span>: docker/setup-buildx-action@v3
+        with: { driver-opts: <span class="str">"image=moby/buildkit:latest"</span> }
+
+      - <span class="fn">uses</span>: docker/login-action@v3
+        with: { registry: ghcr.io, username: <span class="fn">$</span>{{ github.actor }}, password: <span class="fn">$</span>{{ secrets.GITHUB_TOKEN }} }
+
+      - <span class="fn">name</span>: Build, scan, push
+        <span class="fn">id</span>: build
+        <span class="fn">uses</span>: docker/build-push-action@v5
+        <span class="fn">with</span>:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: <span class="ok">true</span>
+          tags: ghcr.io/<span class="fn">$</span>{{ github.repository }}:<span class="fn">$</span>{{ github.ref_name }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          sbom: <span class="ok">true</span>                       <span class="cmt"># attach CycloneDX SBOM</span>
+          provenance: mode=max               <span class="cmt"># SLSA Level 3 provenance</span>
+          build-args: |
+            SOURCE_DATE_EPOCH=<span class="fn">$</span>{{ github.event.head_commit.timestamp }}
+
+      - <span class="fn">name</span>: Scan for CVEs
+        <span class="fn">uses</span>: aquasecurity/trivy-action@master
+        <span class="fn">with</span>:
+          image-ref: ghcr.io/<span class="fn">$</span>{{ github.repository }}@<span class="fn">$</span>{{ steps.build.outputs.digest }}
+          severity: CRITICAL,HIGH
+          exit-code: <span class="num">1</span>
+          ignore-unfixed: <span class="ok">true</span>
+
+      - <span class="fn">name</span>: Sign image (keyless)
+        <span class="fn">uses</span>: sigstore/cosign-installer@v3
+      - <span class="fn">run</span>: cosign sign --yes ghcr.io/<span class="fn">$</span>{{ github.repository }}@<span class="fn">$</span>{{ steps.build.outputs.digest }}</pre>
+
+      <h3>Build-once, promote-by-digest</h3>
+      <p>The cardinal rule: <strong>the artifact that runs in production is the same artifact that ran in staging is the same artifact that ran in dev</strong>. The artifact's identity is its content digest (<code>sha256:...</code>), not its tag. Tags float; digests don't.</p>
+      <pre data-label="promotion by digest"><span class="cmt"># BAD — rebuild for staging</span>
+docker build -t myapp:staging-v1.2.3 .
+docker push myapp:staging-v1.2.3
+
+<span class="cmt"># GOOD — promote the dev image by digest</span>
+DIGEST=$(crane digest ghcr.io/myorg/myapp:v1.2.3)
+crane tag ghcr.io/myorg/myapp@<span class="fn">$DIGEST</span> staging-v1.2.3
+crane tag ghcr.io/myorg/myapp@<span class="fn">$DIGEST</span> prod-v1.2.3
+<span class="cmt"># All three tags point at the same bytes</span></pre>
+
+      <h3>Cache strategies that scale</h3>
+      <p><strong>GitHub Actions cache</strong> (<code>cache-to: type=gha</code>) is fine for small projects. For larger ones it has 10GB total cache limit and slow read speeds.</p>
+      <p><strong>Registry-based cache</strong> (<code>cache-to: type=registry,ref=...</code>) stores BuildKit cache as a separate manifest in your container registry. Unlimited size, fast pulls, works across CI providers.</p>
+      <p><strong>S3 / GCS cache</strong> (BuildKit S3 cache backend) for the biggest builds — multi-GB CUDA images benefit substantially.</p>
+
+      <div class="callout build">
+        <div class="callout-label">The PR-preview pattern</div>
+        <p>Every PR builds and signs an image tagged <code>pr-NNN</code>. The image gets deployed to an ephemeral namespace via ArgoCD's ApplicationSet PR generator. QA, design review, and load tests happen against real, deployed code. When the PR merges, the same image (by digest) gets promoted to staging, then prod. The image you reviewed is bit-for-bit identical to the image that ships.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 9 -->
+<section class="chapter deploy-ch" id="ch9">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain deploy">DEPLOY</span>
+      Chapter <span class="num">IX</span>
+    </div>
+    <h2 class="chapter-title">Runtime · probes, resources, <em>signals.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>The three contracts</strong>
+      Probes (am I healthy?), Resources (what do I need?), Signals (how do I shut down?). Get these wrong and reliability collapses regardless of how good the image is.<br><br>
+      <strong>For ML</strong>
+      Startup probes matter. A model can take 5+ minutes to load — the cluster needs to know it's loading vs. broken.
+    </aside>
+    <div class="prose">
+      <p class="lead">A container's runtime contract with the orchestrator has three parts: <strong>probes</strong> declare health, <strong>resources</strong> declare needs, <strong>signals</strong> declare lifecycle. The orchestrator (K8s) uses these to decide when to start, route, scale, restart, or terminate. Get them right and the cluster takes care of you. Get them wrong and reliability suffers regardless of how good the application code is.</p>
+
+      <h3>Probes — three flavors, three meanings</h3>
+      <p><strong>Startup probe.</strong> "Are you still loading?" Runs until it succeeds, then never again. <em>Liveness and readiness probes don't run until startup probe passes.</em> Critical for slow-starting services (model loading, JIT compilation, big PVCs). Without it, K8s kills the pod 30 seconds in because liveness times out before the model has loaded.</p>
+      <p><strong>Liveness probe.</strong> "Are you in a stuck state?" If this fails, K8s restarts the container. Use sparingly — a flaky liveness probe causes restart storms. Generally only set this for services that can deadlock (a custom inference engine with a known wedge bug) and not for services that can naturally be slow (a database, an inference engine doing a big batch).</p>
+      <p><strong>Readiness probe.</strong> "Should I receive traffic right now?" If this fails, K8s removes the pod from Service endpoints but doesn't restart it. Use this for "I'm temporarily overloaded" or "I'm draining for shutdown" states. The most important probe in practice.</p>
+      <pre data-label="probes for an inference server"><span class="kw">containers</span>:
+  - <span class="fn">name</span>: inference
+    <span class="fn">startupProbe</span>:                          <span class="cmt"># up to 30 min for model load</span>
+      httpGet: { path: /v1/health/ready, port: <span class="num">8000</span> }
+      periodSeconds: <span class="num">10</span>
+      failureThreshold: <span class="num">180</span>                 <span class="cmt"># 180 * 10s = 30 min</span>
+    <span class="fn">readinessProbe</span>:                        <span class="cmt"># traffic routing</span>
+      httpGet: { path: /v1/health/ready, port: <span class="num">8000</span> }
+      periodSeconds: <span class="num">5</span>
+      failureThreshold: <span class="num">2</span>                   <span class="cmt"># 10s to remove from endpoints</span>
+    <span class="fn">livenessProbe</span>:                         <span class="cmt"># restart only on hard wedge</span>
+      httpGet: { path: /v1/health/live, port: <span class="num">8000</span> }
+      periodSeconds: <span class="num">30</span>
+      failureThreshold: <span class="num">5</span>                   <span class="cmt"># 150s before killing</span></pre>
+
+      <h3>Resources — requests, limits, and QoS</h3>
+      <p>Three QoS classes, in increasing protection from eviction:</p>
+      <p><strong>BestEffort</strong> (no requests, no limits): killed first when the node is under pressure. Acceptable only for non-critical batch work.</p>
+      <p><strong>Burstable</strong> (requests &lt; limits): can use spare capacity but is killable. The default for most web services.</p>
+      <p><strong>Guaranteed</strong> (requests == limits, all resources): protected from eviction. Required for training and inference pods. Required for kubelet's CPU/memory/topology managers to engage (see Issue 03 Case 03).</p>
+      <pre data-label="GPU inference resources"><span class="kw">resources</span>:
+  <span class="fn">requests</span>:
+    cpu: <span class="str">"16"</span>
+    memory: <span class="num">128</span>Gi
+    nvidia.com/gpu: <span class="str">"2"</span>                  <span class="cmt"># 2 H100 for 70B model</span>
+    ephemeral-storage: <span class="num">50</span>Gi              <span class="cmt"># for /tmp, logs</span>
+  <span class="fn">limits</span>:                                <span class="cmt"># MUST equal requests for Guaranteed QoS</span>
+    cpu: <span class="str">"16"</span>
+    memory: <span class="num">128</span>Gi
+    nvidia.com/gpu: <span class="str">"2"</span>
+    ephemeral-storage: <span class="num">50</span>Gi</pre>
+
+      <h3>Signals — graceful shutdown</h3>
+      <p>When K8s decides to stop a pod (deployment rollout, scale-down, eviction), the lifecycle is:</p>
+      <p><strong>1.</strong> Pod removed from Service endpoints (no new traffic).<br>
+      <strong>2.</strong> <code>preStop</code> hook executes (sync) — your chance to drain.<br>
+      <strong>3.</strong> SIGTERM delivered to PID 1.<br>
+      <strong>4.</strong> Wait <code>terminationGracePeriodSeconds</code> (default 30s).<br>
+      <strong>5.</strong> SIGKILL if still running.</p>
+      <p>For inference services, "draining" means: stop accepting new requests but finish in-flight ones. The application must trap SIGTERM and do this:</p>
+      <pre data-label="graceful shutdown handling"><span class="kw">import</span> signal, asyncio
+shutting_down = <span class="ok">False</span>
+
+<span class="kw">def</span> <span class="fn">handle_sigterm</span>(signum, frame):
+    <span class="kw">global</span> shutting_down
+    shutting_down = <span class="ok">True</span>                                   <span class="cmt"># readiness probe now fails</span>
+
+signal.signal(signal.SIGTERM, handle_sigterm)
+
+<span class="kw">async def</span> <span class="fn">readiness</span>():
+    <span class="kw">return</span> {<span class="str">"ready"</span>: <span class="kw">not</span> shutting_down}
+
+<span class="cmt"># And in K8s pod spec:</span></pre>
+<pre data-label="pod lifecycle"><span class="kw">spec</span>:
+  <span class="fn">terminationGracePeriodSeconds</span>: <span class="num">120</span>           <span class="cmt"># long enough to drain</span>
+  <span class="fn">containers</span>:
+    - <span class="fn">lifecycle</span>:
+        <span class="fn">preStop</span>:
+          httpGet: { path: /shutdown, port: <span class="num">8000</span> }
+          <span class="cmt"># Or exec: { command: ["sleep", "10"] } to give LB time to notice</span></pre>
+
+      <h3>What goes wrong, specifically</h3>
+      <p><strong>Pod restarts every N minutes.</strong> Liveness probe too aggressive. Loosen the failureThreshold or remove liveness entirely.</p>
+      <p><strong>504s during deploy.</strong> No graceful shutdown. Pods get killed mid-request. Add preStop, terminationGracePeriodSeconds, and SIGTERM handling.</p>
+      <p><strong>Pod stuck Pending.</strong> Resource requests too large for any node. Or no nodes with the right GPU label. Or no GPU device plugin.</p>
+      <p><strong>"GPU not found" inside container.</strong> Missing NVIDIA Container Toolkit, missing <code>NVIDIA_VISIBLE_DEVICES=all</code>, or device plugin not running. Check <code>nvidia-smi</code> inside the pod first.</p>
+      <p><strong>OOMKilled, no warning.</strong> Memory limit too tight. The kernel doesn't ramp pressure for containers — it just oom-kills at the limit. Add headroom or use <code>memory.high</code> via cgroups v2 for graceful degradation.</p>
+
+      <div class="callout deploy">
+        <div class="callout-label">The most under-used lever</div>
+        <p>Tune the <strong>startup probe</strong>. Most teams don't set one, then panic-fix when their first 70B model takes 8 minutes to load and K8s starts oom-killing pods. Set <code>startupProbe.failureThreshold = 180</code> with <code>periodSeconds: 10</code> = 30 minutes for the model to load before anyone gets upset. Costs nothing; prevents a class of outages.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 10 -->
+<section class="chapter deploy-ch" id="ch10">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain deploy">DEPLOY</span>
+      Chapter <span class="num">X</span>
+    </div>
+    <h2 class="chapter-title">Disaggregated inference <em>at scale.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>The pattern</strong>
+      Separate prefill workers (compute-bound) from decode workers (memory-bound). Ship the KV cache between them over RDMA. Independently scale each pool.<br><br>
+      <strong>The tooling</strong>
+      NVIDIA Dynamo on K8s. NIXL for the data transfer. KV-aware routing for cache reuse.
+    </aside>
+    <div class="prose">
+      <p class="lead">Disaggregated inference is the production answer to the prefill/decode interference problem (see Issue 03 Chapter VI). Instead of running both phases on the same GPU pool, you run separate worker pools and ship the KV cache between them when a request transitions from prefill to decode. Done right: tighter TTFT, tighter TPOT, higher goodput. Done wrong: KV transfer becomes the bottleneck.</p>
+
+      <div class="arch">
+        <div class="arch-label">Architecture · Disaggregated inference with Dynamo</div>
+        <div class="arch-title">The five components of a disaggregated cluster</div>
+        <div class="arch-svg-wrap">
+          <svg viewBox="0 0 900 480" style="width: 100%; max-width: 900px; height: auto; display: block; margin: 0 auto;">
+            <defs>
+              <pattern id="dots" patternUnits="userSpaceOnUse" width="6" height="6">
+                <circle cx="1" cy="1" r="0.6" fill="#0a0a0a" opacity="0.2"/>
+              </pattern>
+              <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="#0a0a0a"/>
+              </marker>
+              <marker id="arrG" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="#c9a227"/>
+              </marker>
+              <marker id="arrR" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="#b8401f"/>
+              </marker>
+            </defs>
+
+            <!-- Client -->
+            <rect x="20" y="40" width="120" height="50" fill="#0a0a0a"/>
+            <text x="80" y="62" text-anchor="middle" font-family="Fraunces" font-size="14" font-weight="700" fill="#f4f1ea">Client</text>
+            <text x="80" y="78" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#c9a227">/v1/chat/completions</text>
+
+            <!-- Frontend Router -->
+            <rect x="200" y="20" width="240" height="90" fill="#1e3a5f"/>
+            <text x="320" y="42" text-anchor="middle" font-family="Fraunces" font-size="14" font-weight="700" fill="#f4f1ea">Dynamo Frontend + Router</text>
+            <text x="320" y="60" text-anchor="middle" font-family="JetBrains Mono" font-size="10" fill="#c9a227">KV-aware request routing</text>
+            <text x="320" y="76" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#f4f1ea" opacity="0.8">match new request prefix → cached worker</text>
+            <text x="320" y="92" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#f4f1ea" opacity="0.8">load balance across prefill pool</text>
+
+            <!-- Planner -->
+            <rect x="500" y="20" width="200" height="90" fill="#6d4070"/>
+            <text x="600" y="42" text-anchor="middle" font-family="Fraunces" font-size="14" font-weight="700" fill="#f4f1ea">Dynamo Planner</text>
+            <text x="600" y="60" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#c9a227">SLO-aware autoscaling</text>
+            <text x="600" y="76" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#f4f1ea" opacity="0.8">monitors TTFT, TPOT, queue depth</text>
+            <text x="600" y="92" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#f4f1ea" opacity="0.8">rebalances prefill ↔ decode GPUs</text>
+
+            <!-- Prefill pool -->
+            <rect x="60" y="170" width="340" height="140" fill="url(#dots)" stroke="#0a0a0a" stroke-width="1.5"/>
+            <text x="80" y="190" font-family="JetBrains Mono" font-size="10" letter-spacing="3" fill="#b8401f">PREFILL POOL</text>
+            <text x="80" y="206" font-family="JetBrains Mono" font-size="9" fill="#0a0a0a" opacity="0.8">compute-bound · throughput-tuned</text>
+
+            <g>
+              <rect x="80" y="220" width="100" height="70" fill="#b8401f"/>
+              <text x="130" y="240" text-anchor="middle" font-family="Fraunces" font-size="12" fill="#f4f1ea" font-weight="700">Prefill-1</text>
+              <text x="130" y="256" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#f4f1ea">vLLM / TRT-LLM</text>
+              <text x="130" y="272" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#f4f1ea">2× H100</text>
+            </g>
+            <g>
+              <rect x="200" y="220" width="100" height="70" fill="#b8401f"/>
+              <text x="250" y="240" text-anchor="middle" font-family="Fraunces" font-size="12" fill="#f4f1ea" font-weight="700">Prefill-2</text>
+              <text x="250" y="256" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#f4f1ea">vLLM / TRT-LLM</text>
+              <text x="250" y="272" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#f4f1ea">2× H100</text>
+            </g>
+            <g>
+              <rect x="320" y="220" width="70" height="70" fill="#b8401f" opacity="0.5" stroke-dasharray="3 3" stroke="#b8401f"/>
+              <text x="355" y="252" text-anchor="middle" font-family="Fraunces" font-size="12" font-style="italic" fill="#f4f1ea" font-weight="700">…N</text>
+              <text x="355" y="270" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#f4f1ea">scale out</text>
+            </g>
+
+            <!-- Decode pool -->
+            <rect x="460" y="170" width="400" height="140" fill="url(#dots)" stroke="#0a0a0a" stroke-width="1.5"/>
+            <text x="480" y="190" font-family="JetBrains Mono" font-size="10" letter-spacing="3" fill="#3d5a3d">DECODE POOL</text>
+            <text x="480" y="206" font-family="JetBrains Mono" font-size="9" fill="#0a0a0a" opacity="0.8">memory-bound · TPOT-tuned</text>
+
+            <g>
+              <rect x="480" y="220" width="100" height="70" fill="#3d5a3d"/>
+              <text x="530" y="240" text-anchor="middle" font-family="Fraunces" font-size="12" fill="#f4f1ea" font-weight="700">Decode-1</text>
+              <text x="530" y="256" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#f4f1ea">vLLM / SGLang</text>
+              <text x="530" y="272" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#f4f1ea">8× H100 (TP=8)</text>
+            </g>
+            <g>
+              <rect x="600" y="220" width="100" height="70" fill="#3d5a3d"/>
+              <text x="650" y="240" text-anchor="middle" font-family="Fraunces" font-size="12" fill="#f4f1ea" font-weight="700">Decode-2</text>
+              <text x="650" y="256" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#f4f1ea">vLLM / SGLang</text>
+              <text x="650" y="272" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#f4f1ea">8× H100 (TP=8)</text>
+            </g>
+            <g>
+              <rect x="720" y="220" width="120" height="70" fill="#3d5a3d" opacity="0.5" stroke-dasharray="3 3" stroke="#3d5a3d"/>
+              <text x="780" y="252" text-anchor="middle" font-family="Fraunces" font-size="12" font-style="italic" fill="#f4f1ea" font-weight="700">…M</text>
+              <text x="780" y="270" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#f4f1ea">scale out</text>
+            </g>
+
+            <!-- KV cache offload tier -->
+            <rect x="60" y="350" width="780" height="100" fill="#0a0a0a"/>
+            <text x="80" y="372" font-family="JetBrains Mono" font-size="10" letter-spacing="3" fill="#c9a227">KV CACHE TIER (managed by Dynamo KV Block Manager)</text>
+
+            <rect x="100" y="385" width="170" height="50" fill="#3d3d3d"/>
+            <text x="185" y="402" text-anchor="middle" font-family="Fraunces" font-size="12" fill="#f4f1ea" font-weight="700">GPU HBM</text>
+            <text x="185" y="418" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#c9a227">hottest · &lt; 1ms</text>
+            <text x="185" y="430" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#f4f1ea" opacity="0.7">on the decode GPUs</text>
+
+            <rect x="290" y="385" width="170" height="50" fill="#3d3d3d"/>
+            <text x="375" y="402" text-anchor="middle" font-family="Fraunces" font-size="12" fill="#f4f1ea" font-weight="700">CPU RAM</text>
+            <text x="375" y="418" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#c9a227">warm · ~10ms</text>
+            <text x="375" y="430" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#f4f1ea" opacity="0.7">node-local</text>
+
+            <rect x="480" y="385" width="170" height="50" fill="#3d3d3d"/>
+            <text x="565" y="402" text-anchor="middle" font-family="Fraunces" font-size="12" fill="#f4f1ea" font-weight="700">NVMe / SSD</text>
+            <text x="565" y="418" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#c9a227">cool · ~50ms</text>
+            <text x="565" y="430" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#f4f1ea" opacity="0.7">larger capacity</text>
+
+            <rect x="670" y="385" width="170" height="50" fill="#3d3d3d"/>
+            <text x="755" y="402" text-anchor="middle" font-family="Fraunces" font-size="12" fill="#f4f1ea" font-weight="700">Object Store</text>
+            <text x="755" y="418" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#c9a227">cold · ~500ms</text>
+            <text x="755" y="430" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#f4f1ea" opacity="0.7">S3 / WEKA</text>
+
+            <!-- Arrows -->
+            <line x1="140" y1="90" x2="220" y2="60" stroke="#0a0a0a" stroke-width="1" marker-end="url(#arr)"/>
+            <line x1="280" y1="110" x2="160" y2="220" stroke="#b8401f" stroke-width="1.5" marker-end="url(#arrR)"/>
+            <line x1="350" y1="110" x2="540" y2="220" stroke="#3d5a3d" stroke-width="1.5" marker-end="url(#arrG)"/>
+
+            <!-- KV transfer arrow (the magic) -->
+            <path d="M300,270 Q450,310 530,265" stroke="#c9a227" stroke-width="2.5" fill="none" stroke-dasharray="8 4" marker-end="url(#arrG)"/>
+            <text x="420" y="305" text-anchor="middle" font-family="Fraunces" font-size="11" font-style="italic" fill="#b8401f" font-weight="700">NIXL · KV transfer via NVLink/IB/RDMA</text>
+          </svg>
+        </div>
+      </div>
+
+      <h3>How a request flows</h3>
+      <p><strong>1. Client to Frontend.</strong> Request hits Dynamo's frontend at <code>/v1/chat/completions</code>. Standard OpenAI-compatible API.</p>
+      <p><strong>2. KV-aware routing.</strong> The router computes an "overlap score" between the incoming request and KV cache blocks across the cluster. Routes to a worker that already has the relevant prefix cached if possible — saving compute on the prefill side. As Issue 03 Case 08 demonstrated, prefix caching can yield 90%+ savings on RAG workloads.</p>
+      <p><strong>3. Prefill phase.</strong> The chosen prefill worker processes the prompt, producing a KV cache for the entire input. This is compute-bound (matmul-dominated) — the prefill pool is tuned for throughput, often with smaller tensor parallelism but more replicas.</p>
+      <p><strong>4. KV cache transfer.</strong> NIXL ships the KV cache from the prefill worker to a decode worker. <strong>This is where the architecture lives or dies.</strong> Without RDMA, expect 200-500x performance degradation in Time To First Token — observed ~98s TTFT with TCP vs ~200-500ms with RDMA. Production deployments require InfiniBand or RoCE.</p>
+      <p><strong>5. Decode phase.</strong> The decode worker generates tokens one at a time. This is memory-bandwidth-bound — decode pools are tuned for memory bandwidth, often with larger tensor parallelism (TP=8) to fit big batches of long-context conversations.</p>
+      <p><strong>6. KV offload (when needed).</strong> When GPU memory pressure rises, the Dynamo KV Block Manager offloads cooler cache blocks to CPU RAM, then NVMe, then object storage. NIXL handles every tier transparently.</p>
+
+      <h3>The container architecture</h3>
+      <p>Each worker in this picture is a container. The deployment has at least:</p>
+      <ul style="margin: 16px 0; padding-left: 32px; line-height: 1.8;">
+        <li><strong>frontend</strong> Deployment (Dynamo's request router + KV-aware scheduler)</li>
+        <li><strong>planner</strong> Deployment (SLO monitor, autoscaler)</li>
+        <li><strong>prefill-worker</strong> StatefulSet (each pod has GPU(s); requires RDMA NIC; tuned for throughput)</li>
+        <li><strong>decode-worker</strong> StatefulSet (each pod has GPU(s); requires RDMA NIC; tuned for memory)</li>
+        <li><strong>etcd</strong> StatefulSet (worker registration and KV-block discovery)</li>
+        <li>Optional: <strong>kv-cache-store</strong> StatefulSet (CPU-RAM and NVMe offload nodes, separate from GPU workers)</li>
+      </ul>
+      <pre data-label="dynamo helm values"><span class="kw">deployment</span>:
+  <span class="fn">model</span>: deepseek-ai/DeepSeek-R1
+  <span class="fn">backend</span>: trtllm
+
+<span class="kw">prefill</span>:
+  <span class="fn">replicas</span>: <span class="num">4</span>
+  <span class="fn">parallelism</span>:
+    tensorParallelism: <span class="num">2</span>             <span class="cmt"># 2× H100 each, throughput-tuned</span>
+  <span class="fn">resources</span>:
+    limits:
+      nvidia.com/gpu: <span class="str">"2"</span>
+      rdma/hca: <span class="str">"1"</span>                  <span class="cmt"># required for NIXL</span>
+      memory: <span class="num">256</span>Gi
+
+<span class="kw">decode</span>:
+  <span class="fn">replicas</span>: <span class="num">2</span>
+  <span class="fn">parallelism</span>:
+    tensorParallelism: <span class="num">8</span>             <span class="cmt"># 8× H100 each, memory-tuned</span>
+  <span class="fn">resources</span>:
+    limits:
+      nvidia.com/gpu: <span class="str">"8"</span>
+      rdma/hca: <span class="str">"1"</span>
+      memory: <span class="num">512</span>Gi
+
+<span class="kw">router</span>:
+  <span class="fn">kvAware</span>: <span class="ok">true</span>
+  <span class="fn">prefixCacheBlockSize</span>: <span class="num">16</span>           <span class="cmt"># tokens per cache block</span>
+
+<span class="kw">planner</span>:
+  <span class="fn">sloTargets</span>:
+    ttftP95Ms: <span class="num">800</span>
+    tpotP95Ms: <span class="num">40</span>
+  <span class="fn">scaleInterval</span>: <span class="num">30</span>s
+
+<span class="kw">kvBlockManager</span>:
+  <span class="fn">tiers</span>:
+    - { type: hbm, gb: <span class="num">80</span> }
+    - { type: cpu, gb: <span class="num">256</span> }
+    - { type: nvme, path: /mnt/kv-cache, gb: <span class="num">2000</span> }
+    - { type: s3, bucket: kv-cache-cold, region: us-west-2 }</pre>
+
+      <h3>Why this is operationally complex</h3>
+      <p>Disaggregation adds new failure modes to handle:</p>
+      <p><strong>RDMA must work.</strong> If the RDMA fabric flaps, KV transfers fail, TTFT spikes 200×. Treat IB health monitoring (Issue 02 Chapter VII) as critical infrastructure.</p>
+      <p><strong>Prefill and decode pools must scale together.</strong> Too many decode workers with too few prefills → TTFT cliff. Too many prefills with too few decoders → wasted prefill compute. The Dynamo Planner does this dynamically; without it you tune by hand.</p>
+      <p><strong>KV cache eviction is now a cluster concern.</strong> A request's KV may be on a different GPU than the one currently serving it. Block manager logic, eviction policies, and tier promotion/demotion all matter.</p>
+      <p><strong>Routing decisions affect cache hit rate.</strong> The router's "overlap score" is approximate; bad routing means cache miss and recomputation. Monitor cache hit rate as a primary metric.</p>
+
+      <div class="callout deploy">
+        <div class="callout-label">When to disaggregate</div>
+        <p>The architecture pays back when: (a) traffic is mixed (long prompts + short prompts), (b) TTFT and TPOT SLOs are both tight, (c) you have 100+ GPUs to amortize the operational complexity, (d) you have RDMA fabric. Below that scale, aggregated serving with chunked prefill (Issue 03 Chapter VI) is simpler and competitive.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 11 -->
+<section class="chapter deploy-ch" id="ch11">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain deploy">DEPLOY</span>
+      Chapter <span class="num">XI</span>
+    </div>
+    <h2 class="chapter-title">Scaling to thousands of <em>CPUs &amp; GPUs.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>The transitions</strong>
+      Three breakpoints where the architecture has to change qualitatively. Know which breakpoint you're past.<br><br>
+      <strong>The discipline</strong>
+      Most "fix this at scale" problems are actually "stop scaling the wrong thing" problems.
+    </aside>
+    <div class="prose">
+      <p class="lead">Scale-out doesn't break smoothly. Specific architectural choices fail at specific sizes, and the failures are usually about the parts you forgot rather than the parts you optimized. Three breakpoints to watch.</p>
+
+      <h3>Breakpoint 1 — Image distribution (past ~200 nodes)</h3>
+      <p>Pulling a 50GB CUDA image to 1000 nodes from a single registry crushes the registry, the network, and every pod's startup time. The patterns:</p>
+      <p><strong>Registry mirroring</strong> — a Harbor or Zot registry in each region/cluster, configured as a pull-through cache. First pod pulls from the upstream; the rest hit the local mirror. Pull time drops from minutes to seconds.</p>
+      <p><strong>Lazy / streaming pull</strong> — tools like <code>stargz</code>, <code>nydus</code>, or <code>SOCI</code> let containers start before the image is fully pulled. The container reads chunks on demand. For CUDA images where 80% of bytes are libraries that aren't immediately needed, this is a 5–10× cold-start improvement.</p>
+      <p><strong>Pre-pulling with DaemonSet</strong> — a DaemonSet on every node that pulls "expected" images. Less elegant than lazy pull but works on any K8s.</p>
+
+      <h3>Breakpoint 2 — Scheduling (past ~64 GPU nodes)</h3>
+      <p>The default kube-scheduler is per-pod, greedy, and topology-blind. Past 64 GPU nodes — especially for distributed training — this becomes a serious problem. The three classes of fix (covered in Issue 01 Chapter V):</p>
+      <p><strong>Gang scheduling</strong>: Kueue (lightweight), Volcano (heavyweight), KAI Scheduler (NVIDIA-tuned). Holds the entire job until every pod can be placed. Without this, distributed training partially starts and burns money.</p>
+      <p><strong>Topology-aware scheduling</strong>: nodes labeled with rack, IB switch, NVLink island. Workloads constrain to same-island placement. NCCL bandwidth stays high.</p>
+      <p><strong>Queue policy</strong>: fair-share across teams, preemption from low to high priority, quota enforcement. Without this, a single team consumes the cluster.</p>
+
+      <h3>Breakpoint 3 — Operational tooling (past ~1000 pods)</h3>
+      <p>Hand inspection of <code>kubectl get pods</code> stops working. You can't grep through ten thousand log files. Specific tools must scale with you:</p>
+      <p><strong>Metrics</strong> — Prometheus with shards or Mimir/Thanos for long-term storage. DCGM exporter for GPU metrics. NIM exposes Prometheus metrics out of the box at <code>/v1/metrics</code>.</p>
+      <p><strong>Logging</strong> — Loki, Elastic, or OpenSearch. Structured JSON logs (the NIM default). Index by namespace, model, region.</p>
+      <p><strong>Tracing</strong> — OpenTelemetry from the application; NIM forwards <code>Traceparent</code> and <code>X-Request-Id</code> headers. Critical for debugging multi-hop inference (router → prefill → decode).</p>
+      <p><strong>Cost attribution</strong> — DCGM metrics include namespace and pod labels. Aggregated by team, multiplied by hourly GPU cost, you get chargeback per team. Without this, multi-tenant clusters fight over resources without context.</p>
+
+      <h3>The three architectural patterns</h3>
+      <div class="cards-grid">
+        <div class="tech-card">
+          <div class="kind">small · 1–8 GPUs</div>
+          <div class="name">Single-pod</div>
+          <div class="desc">One container, one or more GPUs on one node. vLLM with tensor parallelism. Simple, debuggable, low operational overhead. The right answer up to a few GPUs of demand.</div>
+          <div class="pill">simplest</div>
+        </div>
+        <div class="tech-card">
+          <div class="kind">medium · 8–128 GPUs</div>
+          <div class="name">Replicated single-node</div>
+          <div class="desc">N identical pods behind a Service. Each pod has all model parallelism it needs within one node (TP=8). K8s autoscaler scales replicas. Good fit for most production inference.</div>
+          <div class="pill">workhorse</div>
+        </div>
+        <div class="tech-card">
+          <div class="kind">large · 128+ GPUs</div>
+          <div class="name">Disaggregated multi-node</div>
+          <div class="desc">Separate prefill and decode pools. NIXL for KV transfer. KV-aware routing. Dynamic autoscaling per phase. Operational complexity high; throughput and SLO attainment justify it for high-volume serving.</div>
+          <div class="pill">frontier</div>
+        </div>
+      </div>
+
+      <h3>The unspoken rule</h3>
+      <p>At every breakpoint, half of teams optimize the wrong thing. Past 200 nodes, they tune the inference engine when they should fix image distribution. Past 64 GPU nodes, they add hardware when they should fix the scheduler. Past 1000 pods, they hire SREs when they should buy a managed metrics product.</p>
+      <p><strong>The right question at each breakpoint: what's the new failure mode that wasn't there yesterday?</strong> Not "what's slower" — what's <em>different</em>. The breakpoints are sharp; the qualitative failure is the signal.</p>
+
+      <div class="callout deploy">
+        <div class="callout-label">Cross-reference</div>
+        <p>Issue 01 (K8s) covers scheduling and orchestration. Issue 02 (NCCL) covers the network underneath. Issue 03 (Performance) covers the metrics. Issue 04 (Landscape) covers the broader stack. This chapter is the deployment-pattern layer that ties them together. None of the breakpoints can be crossed without all four of the lower issues already being right.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 12 -->
+<section class="chapter deploy-ch" id="ch12">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain deploy">DEPLOY</span>
+      Chapter <span class="num">XII</span>
+    </div>
+    <h2 class="chapter-title">The picker · <em>build, pull,</em> or buy.</h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>Click through</strong>
+      Real container-engineering decisions: from "what base image" to "how to serve at scale."<br><br>
+      <strong>Calibration</strong>
+      Recommendations are early 2026; refresh in 12 months.
+    </aside>
+    <div class="prose">
+      <p class="lead">A walkthrough for the most common container decisions in 2026.</p>
+
+      <div class="picker">
+        <div class="picker-label">Interactive · Container decision tree</div>
+        <div class="picker-title" id="pickerTitle">What are you containerizing?</div>
+        <div id="pickerContainer"></div>
+        <button class="picker-reset" id="pickerReset" style="display:none">↺ Reset</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHAPTER 13 -->
+<section class="chapter harden-ch" id="ch13">
+  <div class="chapter-head">
+    <div class="chapter-meta">
+      <span class="domain harden">HARDEN</span>
+      Chapter <span class="num">XIII</span>
+    </div>
+    <h2 class="chapter-title">The production <em>checklist.</em></h2>
+  </div>
+  <div class="chapter-body">
+    <aside class="chapter-aside">
+      <strong>Click each item</strong>
+      To mark complete. The state is local-only.<br><br>
+      <strong>The rubric</strong>
+      If you can't check most of these, you have a development setup, not a production one. Both are valid — know which you have.
+    </aside>
+    <div class="prose">
+      <p class="lead">The merged checklist for any containerized service claiming production-ready status. Click each item to mark complete.</p>
+
+      <div class="checklist" id="checklist">
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Multi-stage Dockerfile with distroless runtime</div><div class="check-desc">Build stage has compilers; runtime stage doesn't. Final image &lt; 200MB for non-GPU services.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Base images pinned by digest</div><div class="check-desc">FROM image@sha256:... not FROM image:latest. Same in CI as in registries.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Runs as non-root, read-only root FS</div><div class="check-desc">USER 65532 in Dockerfile. readOnlyRootFilesystem: true in pod spec. tmpfs for writes.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">All capabilities dropped, seccomp on</div><div class="check-desc">capabilities.drop=ALL, seccompProfile=RuntimeDefault. PSS=restricted on namespace.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Multi-arch images (amd64 + arm64)</div><div class="check-desc">Manifest list with both architectures. Cross-compiled or native-built, not QEMU-only.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Reproducible builds via SOURCE_DATE_EPOCH</div><div class="check-desc">Two builds from the same source produce byte-identical layers. Hashes match.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">SBOM attached as attestation</div><div class="check-desc">CycloneDX or SPDX format. --sbom=true in build. Cosign-attestable.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Image signed with cosign (keyless OIDC)</div><div class="check-desc">cosign sign during CI. Identity issued by GitHub Actions OIDC.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Admission verifies signatures</div><div class="check-desc">Kyverno or Sigstore Policy Controller refuses unsigned images at cluster admission.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">CVE scan in CI, block on HIGH/CRITICAL</div><div class="check-desc">Trivy or Grype as a required PR check. Ignore-unfixed for noise control.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Probes: startup + readiness, liveness sparing</div><div class="check-desc">Startup probe long enough for model load (30+ min for big NIMs). Liveness only on known wedge.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Guaranteed QoS (requests == limits)</div><div class="check-desc">Required for training and inference pods. Engages CPU/memory/topology managers.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Graceful shutdown handling</div><div class="check-desc">SIGTERM trapped; readiness flips to false; in-flight requests finish. terminationGracePeriodSeconds &gt; 60s.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Prometheus metrics + structured logs</div><div class="check-desc">Per-request and per-pod metrics scraped by Prometheus. JSON logs to Loki/Elastic.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Registry mirror in each region/cluster</div><div class="check-desc">Pull-through cache. Image pull times under 60s even for 10GB+ images.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">GitOps deployment (ArgoCD / Flux)</div><div class="check-desc">Helm/Kustomize in Git. Cluster state pulled from Git. PRs to change prod.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">GPU-specific: TORCH_CUDA_ARCH_LIST set</div><div class="check-desc">Targets the GPUs in your fleet. Don't ship kernels for hardware you don't have.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">NIM/Dynamo: PVC mounted at cache path</div><div class="check-desc">Engine compilation cached across restarts. Reduces restart time from 30 min to 2 min.</div></div></div>
+        <div class="check-item"><div class="check-box"></div><div class="check-content"><div class="check-title">Build-once, promote-by-digest</div><div class="check-desc">Dev/staging/prod use the same artifact, different tag aliases. No environment-specific rebuilds.</div></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="colophon">
+  <div class="colophon-mark"><em>The Cluster</em> Quarterly</div>
+  <p>Field Manual · Volume I · Issue 05 · MMXXVI</p>
+</footer>
+
+<script>
+// ============ Layer visualizer ============
+const layerData = {
+  bad: {
+    summary: '<strong>3.2 GB · the typical first attempt</strong> Single FROM, no separation between build tools and runtime, apt cache layers, dev dependencies shipped to prod, runs as root. Every pull is slow; every CVE in build-essential is a prod CVE.',
+    layers: [
+      { name: 'ubuntu:latest', size: '78 MB', desc: 'Base layer — many packages you don\'t need (curl, locale data, etc.)' },
+      { name: 'apt-get install ...', size: '420 MB', desc: 'build-essential, gcc, make, python3-dev — all stay in the image forever' },
+      { name: 'pip install requirements', size: '1,840 MB', desc: 'PyTorch, NumPy, transformers — including build artifacts and tests' },
+      { name: 'apt cache layer', size: '160 MB', desc: 'apt lists that should have been purged but weren\'t' },
+      { name: 'COPY . .', size: '720 MB', desc: 'Entire repo including .git, tests, docs — instead of just src/' },
+      { name: 'config + entrypoint', size: '< 1 MB', desc: 'The actual app metadata' }
+    ]
+  },
+  good: {
+    summary: '<strong>180 MB · production-grade</strong> Multi-stage build, distroless runtime, only the wheel and the app. No shell, no package manager, runs as nonroot. 17× smaller than the naive build with identical functionality.',
+    layers: [
+      { name: 'distroless/python3:nonroot', size: '49 MB', desc: 'Distroless Python — Python runtime only, no shell, no package manager' },
+      { name: '--from=build /install', size: '124 MB', desc: 'Only the installed Python wheels (numpy, fastapi, pydantic)' },
+      { name: 'COPY app.py', size: '< 1 MB', desc: 'Application code (only src/, no tests, no .git)' },
+      { name: 'config + entrypoint', size: '< 1 MB', desc: 'USER 65532, ENTRYPOINT, EXPOSE 8000' }
+    ]
+  },
+  cuda: {
+    summary: '<strong>8.4 GB · a typical CUDA inference image</strong> Most of the bytes are CUDA + cuDNN + PyTorch shared libraries (~6 GB). The app code is &lt; 100 MB. Reducing the bottom of the stack is hard; reducing your contribution is easy.',
+    layers: [
+      { name: 'cuda:12.6-cudnn-runtime', size: '3,200 MB', desc: 'CUDA runtime + cuDNN libraries + Ubuntu 22.04 base' },
+      { name: 'apt: python3.11', size: '180 MB', desc: 'Python runtime' },
+      { name: 'pip: torch', size: '2,800 MB', desc: 'PyTorch with CUDA kernels for all targeted compute capabilities' },
+      { name: 'pip: transformers + others', size: '1,400 MB', desc: 'Hugging Face Transformers, tokenizers, datasets' },
+      { name: 'pip: app deps', size: '320 MB', desc: 'fastapi, pydantic, uvicorn, custom packages' },
+      { name: 'COPY app/', size: '180 MB', desc: 'Application code + small model adapters' },
+      { name: 'config: USER, ENV, CMD', size: '< 1 MB', desc: 'NVIDIA_VISIBLE_DEVICES=all, ENTRYPOINT' }
+    ]
+  },
+  nim: {
+    summary: '<strong>47 GB · a Llama-3-70B NIM</strong> The model weights (~140 GB at FP16, ~70 GB at FP8) dominate. Engine compilation can add another 10–40 GB cached. Mount engine cache as PVC; weight layers are deduplicated across replicas pulling the same image.',
+    layers: [
+      { name: 'nvcr.io/nim base', size: '4,200 MB', desc: 'CUDA + cuDNN + nginx + Python supervisor' },
+      { name: 'TensorRT-LLM runtime', size: '3,800 MB', desc: 'TensorRT-LLM engine kernels for H100, B200' },
+      { name: 'vLLM + SGLang backends', size: '2,400 MB', desc: 'Fallback engines for models without TRT-LLM profiles' },
+      { name: 'Llama-3-70B FP8 weights', size: '34,000 MB', desc: 'Pre-quantized model weights (FP8 on H100)' },
+      { name: 'TRT-LLM engine plans', size: '2,800 MB', desc: 'Multiple pre-compiled engines: TP=1,2,4,8 × throughput/latency profiles' },
+      { name: 'config + profiles', size: '< 10 MB', desc: 'OpenAI-compatible API config, model profiles, NIM metadata' }
+    ]
+  }
+};
+
+const layerTabs = document.querySelectorAll('.layers-tab');
+const layerStack = document.getElementById('layerStack');
+const layerSummary = document.getElementById('layerSummary');
+
+function showLayers(key) {
+  layerTabs.forEach(t => t.classList.toggle('active', t.dataset.img === key));
+  const d = layerData[key];
+  layerStack.innerHTML = d.layers.map(l => `
+    <div class="layer-item">
+      <div class="layer-name">${l.name}</div>
+      <div class="layer-size">${l.size}</div>
+      <div class="layer-desc">${l.desc}</div>
+    </div>`).join('');
+  layerSummary.innerHTML = d.summary;
+}
+layerTabs.forEach(t => t.addEventListener('click', () => showLayers(t.dataset.img)));
+showLayers('bad');
+
+// ============ Pipeline visualizer ============
+const pipeData = {
+  checkout: {
+    title: '01 · Checkout & Lint',
+    body: [
+      'Pull the source from Git at a specific commit. Verify Dockerfile syntax with <code>hadolint</code>. Static-check shell scripts with <code>shellcheck</code>. Validate Helm charts with <code>helm lint</code>.',
+      'This stage is cheap and fast; failing here saves expensive build time downstream.',
+      'Tools: <code>git</code>, <code>hadolint</code>, <code>checkov</code>, <code>kubeval</code>.'
+    ]
+  },
+  build: {
+    title: '02 · Build & Cache',
+    body: [
+      'BuildKit builds the image for all target platforms (linux/amd64, linux/arm64). Uses cache from previous builds — typically a registry-based cache.',
+      'Multi-stage: build dependencies in one stage, copy artifacts into a minimal runtime stage. Final image size monitored as a metric.',
+      'Tools: <code>docker buildx</code>, <code>BuildKit</code>, <code>QEMU</code> (for cross-arch).'
+    ]
+  },
+  scan: {
+    title: '03 · Scan',
+    body: [
+      'Scan the built image for CVEs in OS packages and language dependencies. Fail the build on CRITICAL or HIGH severity (with --ignore-unfixed to drop noise).',
+      'Also scan the Dockerfile itself for misconfigurations (running as root, missing health check, ADD with URL).',
+      'Tools: <code>Trivy</code>, <code>Grype</code>, <code>Clair</code>. Send results to security platforms via SARIF.'
+    ]
+  },
+  test: {
+    title: '04 · Test (in-container)',
+    body: [
+      'Run the test suite <em>inside</em> the built container, not against your dev environment. Catches "works on my machine" issues from missing system deps in the final image.',
+      'For services: integration tests against the container running locally. For ML inference: smoke test that the model loads and produces a valid output.',
+      'Tools: <code>pytest</code>, <code>k6</code> for load, <code>testcontainers</code> for in-container DBs.'
+    ]
+  },
+  sbom: {
+    title: '05 · SBOM & Sign',
+    body: [
+      'Generate Software Bill of Materials (CycloneDX or SPDX). Attach as in-toto attestation to the image manifest.',
+      'Sign image and SBOM with cosign. Use keyless signing via OIDC (GitHub Actions issues a short-lived cert) — no key management.',
+      'Tools: <code>syft</code> (or BuildKit native <code>--sbom=true</code>), <code>cosign</code>, <code>Rekor</code> (transparency log).'
+    ]
+  },
+  push: {
+    title: '06 · Push by Digest',
+    body: [
+      'Push image to registry. Tag with semver + Git SHA + "latest". The <em>identity</em> is the manifest digest (sha256), not the tag.',
+      'All downstream deployments reference the digest. Tags float; digests don\'t.',
+      'Tools: <code>crane</code>, <code>regctl</code>, <code>docker push</code>. Mirror to per-region registries for fast pulls.'
+    ]
+  },
+  promote: {
+    title: '07 · Promote',
+    body: [
+      'GitOps tooling watches the registry and Git config repo. When config changes (or a new image is pushed), it reconciles cluster state.',
+      'Promotion across environments (dev → staging → prod) is a Git commit changing the image digest in the values file. No rebuilds, no environment-specific images.',
+      'Tools: <code>ArgoCD</code>, <code>Flux</code>, <code>Helm</code>, <code>Kustomize</code>.'
+    ]
+  }
+};
+
+const pipeSteps = document.querySelectorAll('.pipe-step');
+const pipeDetail = document.getElementById('pipeDetail');
+function showPipe(key) {
+  pipeSteps.forEach(s => s.classList.toggle('active', s.dataset.pipe === key));
+  const d = pipeData[key];
+  pipeDetail.innerHTML = `<h4>${d.title}</h4>${d.body.map(b => `<p>${b}</p>`).join('')}`;
+}
+pipeSteps.forEach(s => s.addEventListener('click', () => showPipe(s.dataset.pipe)));
+showPipe('checkout');
+
+// ============ Picker decision tree ============
+const pickerTree = {
+  start: {
+    q: 'What are you containerizing?',
+    n: 'Q0',
+    choices: [
+      { label: 'A web service / API', next: 'web' },
+      { label: 'A GPU training workload', next: 'train' },
+      { label: 'An LLM inference service', next: 'infer_q1' },
+      { label: 'A CLI / batch tool', next: 'cli' },
+      { label: 'A data-science notebook environment', next: 'notebook' }
+    ]
+  },
+  web: {
+    verdict: true,
+    title: 'Standard web service',
+    body: [
+      'Stack: multi-stage Dockerfile, <code>distroless</code> or <code>chainguard/wolfi-base</code> runtime, non-root user, read-only root FS at runtime.',
+      'Base: language-specific distroless variant (<code>gcr.io/distroless/python3</code>, <code>gcr.io/distroless/static</code> for Go).',
+      'Final image should be &lt; 200 MB. Cold start &lt; 5s.',
+      'Probes: short startup (10–30s), readiness, optional liveness only if known-wedge bug. K8s Deployment with PodDisruptionBudget.'
+    ]
+  },
+  train: {
+    verdict: true,
+    title: 'GPU training container',
+    body: [
+      'Start from <code>nvcr.io/nvidia/pytorch:24.10-py3</code> (or NeMo if frontier-scale). Don\'t roll your own CUDA + PyTorch image — NVIDIA\'s is pre-tuned.',
+      'Set <code>TORCH_CUDA_ARCH_LIST</code> for your fleet\'s GPUs only (e.g., "9.0;10.0" for H100+B200).',
+      'Deploy via Kubeflow PyTorchJob CRD or VolcanoJob. Gang scheduling required (Kueue or Volcano).',
+      'Cross-reference: Issue 01 (K8s training infra), Issue 03 (training perf), Issue 04 (frameworks).'
+    ]
+  },
+  infer_q1: {
+    q: 'Which model? And how custom is the serving?',
+    n: 'Q1',
+    choices: [
+      { label: 'A foundation model already in the NIM catalog', next: 'infer_nim' },
+      { label: 'Custom fine-tune / niche model, high QPS', next: 'infer_vllm' },
+      { label: 'Multi-model, heavy prefix sharing (RAG, agents)', next: 'infer_sglang' },
+      { label: 'Multi-node disaggregated, 100+ GPUs', next: 'infer_dynamo' }
+    ]
+  },
+  infer_nim: {
+    verdict: true,
+    title: 'Use a NIM',
+    body: [
+      'Pull from <code>nvcr.io/nim/...</code>, deploy via the published Helm chart. 2× the throughput of vanilla vLLM at the cost of an AI Enterprise license.',
+      'PVC at <code>/opt/nim/.cache</code> for engine cache (mandatory for fast restarts).',
+      'Tune <code>NIM_MODEL_PROFILE</code> to match your GPU + traffic shape. <code>NIM_KV_CACHE_FREE_GPU_MEM_FRACTION=0.9</code> to reclaim memory.',
+      'Observability is built-in: Prometheus at <code>/v1/metrics</code>, JSON logs, trace header forwarding.'
+    ]
+  },
+  infer_vllm: {
+    verdict: true,
+    title: 'vLLM with custom container',
+    body: [
+      'Base from <code>vllm/vllm-openai:latest</code> (pinned by digest) or build from source against <code>nvcr.io/nvidia/cuda:12.6-cudnn-runtime</code>.',
+      'Enable continuous batching (default), <code>--enable-chunked-prefill</code>, <code>--enable-prefix-caching</code>, <code>--kv-cache-dtype fp8</code> on H100+.',
+      'Deploy as Deployment with HPA on RPS (not GPU util — too laggy). Guaranteed QoS pods.',
+      'For Blackwell: <code>VLLM_USE_V2_MODEL_RUNNER=1</code>, NVFP4 weights, FlashAttention-4.'
+    ]
+  },
+  infer_sglang: {
+    verdict: true,
+    title: 'SGLang for prefix-heavy workloads',
+    body: [
+      'Base from <code>lmsysorg/sglang:latest</code> (pinned). RadixAttention gives ~29% throughput edge over vLLM on multi-turn chat, ~6× on heavy prefix sharing.',
+      'Enable: prefix caching is on by default; tune <code>--max-prefix-cache-tokens</code>.',
+      'Best fit: RAG with consistent system prompts (audit prompts to keep first 2048 tokens byte-identical across requests — see Issue 03 Case 08).',
+      'Deploy as Deployment with HPA on request queue depth. Consider DeepSeek-class MoE models — SGLang has best-in-class MoE serving.'
+    ]
+  },
+  infer_dynamo: {
+    verdict: true,
+    title: 'Dynamo disaggregated deployment',
+    body: [
+      'Deploy via NVIDIA Dynamo Helm charts. Separate prefill and decode StatefulSets with NIXL communication.',
+      'RDMA required — InfiniBand or RoCE. Without it, TTFT degrades 200–500× (Issue 02).',
+      'KV Block Manager configured with tier hierarchy (HBM → CPU → NVMe → S3). KV-aware routing on the frontend.',
+      'Planner monitors SLOs and rebalances prefill ↔ decode dynamically. Cross-reference Chapter X in this manual.'
+    ]
+  },
+  cli: {
+    verdict: true,
+    title: 'CLI / batch tool',
+    body: [
+      'Use <code>FROM scratch</code> (or <code>gcr.io/distroless/static-debian12</code>) for static binaries (Go, Rust). Final image &lt; 30 MB.',
+      'Single-stage Dockerfile is fine for small CLIs; multi-stage for compiled languages with build-time deps.',
+      'Run as non-root; container runs to completion and exits with status code.',
+      'Deploy as K8s Job or CronJob. Set <code>backoffLimit</code>, <code>ttlSecondsAfterFinished</code>.'
+    ]
+  },
+  notebook: {
+    verdict: true,
+    title: 'Notebook / dev environment',
+    body: [
+      'Different rules: developer ergonomics &gt; minimal size. Start from <code>jupyter/datascience-notebook</code> or <code>nvcr.io/nvidia/pytorch</code>.',
+      'Keep developer-friendly tools: shell, git, editor, debugger.',
+      'Mount user code as a PVC or sidecar volume; don\'t bake it into the image.',
+      'Deploy via JupyterHub on K8s, Kubeflow Notebooks, or a similar managed system.'
+    ]
+  }
+};
+
+let pickerCurrent = 'start';
+const pickerContainer = document.getElementById('pickerContainer');
+const pickerTitle = document.getElementById('pickerTitle');
+const pickerReset = document.getElementById('pickerReset');
+
+function renderPicker() {
+  const node = pickerTree[pickerCurrent];
+  pickerContainer.innerHTML = '';
+  if (node.verdict) {
+    pickerTitle.textContent = '→ Recommendation';
+    const div = document.createElement('div');
+    div.className = 'picker-verdict';
+    div.innerHTML = `<h4>${node.title}</h4>${node.body.map(b => `<p>${b}</p>`).join('')}`;
+    pickerContainer.appendChild(div);
+    pickerReset.style.display = 'inline-block';
+  } else {
+    pickerTitle.textContent = 'Pick a path';
+    const div = document.createElement('div');
+    div.className = 'picker-step';
+    div.innerHTML = `
+      <div class="picker-num">${node.n}</div>
+      <div class="picker-q">${node.q}</div>
+      <div class="picker-choices">
+        ${node.choices.map(c => `<div class="picker-choice" data-next="${c.next}">${c.label}<span class="picker-arrow">→</span></div>`).join('')}
+      </div>`;
+    pickerContainer.appendChild(div);
+    div.querySelectorAll('.picker-choice').forEach(c => {
+      c.addEventListener('click', () => { pickerCurrent = c.dataset.next; renderPicker(); });
+    });
+    pickerReset.style.display = pickerCurrent === 'start' ? 'none' : 'inline-block';
+  }
+}
+pickerReset.addEventListener('click', () => { pickerCurrent = 'start'; renderPicker(); });
+renderPicker();
+
+// ============ Checklist ============
+document.querySelectorAll('.check-item').forEach(el => {
+  el.addEventListener('click', () => {
+    el.classList.toggle('done');
+    const box = el.querySelector('.check-box');
+    box.textContent = el.classList.contains('done') ? '✓' : '';
+  });
+});
+</script>
+</body>
+</html>
