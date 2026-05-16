@@ -1,0 +1,2306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GPU Data Processing — A C++/CUDA Engineer's Handbook</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..800;1,6..72,300..800&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --paper: #faf6ec;
+  --paper-2: #f3ecdb;
+  --paper-3: #e8dfca;
+  --ink: #131a16;
+  --ink-soft: #3a423d;
+  --ink-faint: #7b827c;
+  --rule: #c8c0a8;
+  --rule-soft: #ddd5bc;
+  --emerald: #1a5c47;
+  --emerald-deep: #0e3a2c;
+  --emerald-light: #2d8366;
+  --vermilion: #b8341a;
+  --vermilion-deep: #7d1f0d;
+  --amber: #b8841a;
+  --gold: #c9a849;
+  --indigo: #2f3d6e;
+  --code-bg: #14181a;
+  --code-ink: #e8e3d4;
+  --maxw: 1000px;
+}
+*{ box-sizing: border-box; }
+html{ scroll-behavior: smooth; }
+body{
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: 'Newsreader', Georgia, serif;
+  font-variation-settings: "opsz" 18;
+  font-size: 17px;
+  line-height: 1.62;
+  -webkit-font-smoothing: antialiased;
+}
+/* faint paper texture */
+body::before{
+  content: "";
+  position: fixed; inset: 0;
+  background-image:
+    radial-gradient(rgba(60,40,15,0.025) 1px, transparent 1px);
+  background-size: 3px 3px;
+  pointer-events: none;
+  z-index: 1;
+  mix-blend-mode: multiply;
+}
+header, main, footer{ position: relative; z-index: 2; }
+
+/* ============ HEADER ============ */
+header{
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: 80px 32px 56px;
+  border-bottom: 3px double var(--emerald);
+}
+.kicker{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: .25em;
+  text-transform: uppercase;
+  color: var(--vermilion);
+  margin-bottom: 28px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.kicker::after{
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--rule);
+}
+h1{
+  font-family: 'Instrument Serif', serif;
+  font-weight: 400;
+  font-size: clamp(48px, 8vw, 84px);
+  line-height: 0.95;
+  letter-spacing: -0.015em;
+  margin: 0 0 20px;
+  color: var(--ink);
+}
+h1 .ital{ font-style: italic; color: var(--emerald); }
+.deck{
+  font-family: 'Newsreader', serif;
+  font-variation-settings: "opsz" 24;
+  font-size: 21px;
+  font-style: italic;
+  color: var(--ink-soft);
+  max-width: 680px;
+  line-height: 1.45;
+  margin-top: 16px;
+}
+.meta-row{
+  margin-top: 36px;
+  display: flex;
+  gap: 28px;
+  flex-wrap: wrap;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11.5px;
+  color: var(--ink-faint);
+}
+.meta-row .m b{ color: var(--ink); font-weight: 600; }
+.meta-row .m{ display: flex; gap: 8px; }
+
+/* ============ TOC ============ */
+.toc{
+  margin-top: 48px;
+  background: var(--paper-2);
+  border: 1px solid var(--rule);
+  padding: 24px 28px;
+}
+.toc h5{
+  margin: 0 0 16px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: .22em;
+  color: var(--emerald);
+  text-transform: uppercase;
+  font-weight: 600;
+}
+.toc-grid{
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px 32px;
+}
+@media (max-width: 760px){ .toc-grid{ grid-template-columns: 1fr; } }
+.toc-grid a{
+  color: var(--ink-soft);
+  text-decoration: none;
+  font-size: 14.5px;
+  padding: 4px 0;
+  display: flex;
+  gap: 12px;
+  border-bottom: 1px solid transparent;
+  transition: all .15s;
+}
+.toc-grid a:hover{ color: var(--vermilion); border-color: var(--rule); }
+.toc-grid a .n{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--ink-faint);
+  min-width: 26px;
+}
+
+/* ============ MAIN ============ */
+main{
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: 48px 32px 80px;
+}
+.part{
+  margin-top: 80px;
+  padding-top: 40px;
+  border-top: 1px solid var(--rule);
+}
+.part:first-child{ margin-top: 32px; border-top: none; padding-top: 0; }
+.part-label{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: .25em;
+  color: var(--vermilion);
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+.part-title{
+  font-family: 'Instrument Serif', serif;
+  font-weight: 400;
+  font-size: 44px;
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+  margin: 0 0 12px;
+  color: var(--ink);
+}
+.part-title .ital{ font-style: italic; color: var(--emerald); }
+.part-intro{
+  color: var(--ink-soft);
+  font-size: 17px;
+  max-width: 740px;
+  margin-bottom: 32px;
+  font-style: italic;
+  font-family: 'Newsreader', serif;
+  font-variation-settings: "opsz" 22;
+}
+
+section.chapter{ margin-top: 44px; }
+h2{
+  font-family: 'Instrument Serif', serif;
+  font-weight: 400;
+  font-size: 28px;
+  line-height: 1.2;
+  letter-spacing: -0.005em;
+  margin: 0 0 12px;
+  color: var(--ink);
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+}
+h2 .ch-num{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--vermilion);
+  letter-spacing: .15em;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+h3{
+  font-family: 'Newsreader', serif;
+  font-variation-settings: "opsz" 28, "wght" 600;
+  font-size: 19px;
+  margin: 24px 0 8px;
+  color: var(--ink);
+}
+h4{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--emerald);
+  margin: 20px 0 8px;
+  font-weight: 600;
+}
+p{ margin: 12px 0; }
+p code, li code{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: .82em;
+  background: var(--paper-3);
+  color: var(--vermilion-deep);
+  padding: 1px 6px;
+  border-radius: 2px;
+}
+
+/* lists */
+ul, ol{ padding-left: 1.4em; }
+li{ margin: 6px 0; }
+ul.tight li{ margin: 3px 0; }
+ul.dash{ list-style: none; padding-left: 0; }
+ul.dash li{ position: relative; padding-left: 24px; }
+ul.dash li::before{
+  content: "—";
+  position: absolute; left: 0;
+  color: var(--emerald);
+}
+
+/* ============ CODE ============ */
+pre{
+  background: var(--code-bg);
+  border: 1px solid var(--ink);
+  padding: 16px 20px;
+  overflow-x: auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--code-ink);
+  margin: 18px 0;
+  position: relative;
+}
+pre .com{ color: #7b8a7e; font-style: italic; }
+pre .kw{ color: #b8e8ce; }
+pre .ty{ color: #e8c47a; }
+pre .str{ color: #e89a82; }
+pre .num{ color: #c4a8ff; }
+pre .fn{ color: #84c4e8; }
+pre .pp{ color: #d2b894; }
+pre::before{
+  content: attr(data-lang);
+  position: absolute;
+  top: 6px; right: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9.5px;
+  letter-spacing: .18em;
+  color: #6a7568;
+  text-transform: uppercase;
+}
+
+/* inline code blocks */
+.code-caption{
+  font-family: 'Newsreader', serif;
+  font-style: italic;
+  font-size: 14px;
+  color: var(--ink-faint);
+  margin: -10px 0 18px;
+  padding-left: 4px;
+}
+
+/* ============ CALLOUTS ============ */
+.callout{
+  margin: 22px 0;
+  padding: 16px 22px;
+  border-left: 3px solid var(--emerald);
+  background: var(--paper-2);
+  font-size: 15.5px;
+  line-height: 1.6;
+}
+.callout.warn{ border-color: var(--amber); }
+.callout.danger{ border-color: var(--vermilion); }
+.callout.tip{ border-color: var(--indigo); }
+.callout h5{
+  margin: 0 0 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: var(--emerald);
+  font-weight: 600;
+}
+.callout.warn h5{ color: var(--amber); }
+.callout.danger h5{ color: var(--vermilion); }
+.callout.tip h5{ color: var(--indigo); }
+.callout p:first-child{ margin-top: 0; }
+.callout p:last-child{ margin-bottom: 0; }
+
+/* ============ TABLES ============ */
+.tbl{
+  width: 100%;
+  border-collapse: collapse;
+  margin: 18px 0;
+  font-size: 14px;
+}
+.tbl th, .tbl td{
+  text-align: left;
+  padding: 10px 14px;
+  vertical-align: top;
+  border-bottom: 1px solid var(--rule);
+}
+.tbl th{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--emerald);
+  font-weight: 600;
+  border-bottom: 1.5px solid var(--emerald);
+}
+.tbl tr:hover td{ background: var(--paper-2); }
+.tbl td:first-child{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--vermilion-deep);
+  font-weight: 600;
+  width: 28%;
+}
+
+/* ============ PROBLEM CARDS ============ */
+.problem{
+  margin: 28px 0;
+  background: var(--paper-2);
+  border: 1px solid var(--rule);
+}
+.problem-header{
+  padding: 14px 22px;
+  background: var(--emerald-deep);
+  color: var(--paper);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.problem-header::before{
+  content: "◆";
+  color: var(--gold);
+  font-size: 12px;
+}
+.problem-body{ padding: 20px 24px; }
+.problem-body > h5{
+  margin: 16px 0 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px;
+  letter-spacing: .18em;
+  color: var(--vermilion);
+  text-transform: uppercase;
+  font-weight: 600;
+}
+.problem-body > h5:first-child{ margin-top: 0; }
+
+/* ============ PULL QUOTE ============ */
+.pull{
+  font-family: 'Instrument Serif', serif;
+  font-style: italic;
+  font-size: 26px;
+  line-height: 1.35;
+  color: var(--vermilion-deep);
+  margin: 32px 0;
+  padding: 0 0 0 32px;
+  border-left: 3px solid var(--vermilion);
+}
+
+/* ============ DIAGRAM ============ */
+.diagram{
+  background: var(--paper-2);
+  border: 1px solid var(--rule);
+  padding: 20px 22px;
+  margin: 22px 0;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+  white-space: pre;
+  overflow-x: auto;
+}
+
+/* ============ SEPARATOR ============ */
+.rule-sep{
+  height: 1px;
+  background: var(--rule);
+  margin: 56px 0;
+  position: relative;
+}
+.rule-sep::after{
+  content: "❦";
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--paper);
+  color: var(--emerald);
+  padding: 0 16px;
+  font-size: 16px;
+}
+
+/* ============ FOOTER ============ */
+footer{
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: 48px 32px 80px;
+  border-top: 3px double var(--emerald);
+  color: var(--ink-soft);
+  font-size: 14px;
+}
+footer h4{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: .2em;
+  color: var(--vermilion);
+  margin: 0 0 14px;
+}
+footer ul{ list-style: none; padding: 0; margin: 0 0 24px; }
+footer li{
+  padding: 5px 0;
+  font-size: 14px;
+}
+footer li code{
+  color: var(--emerald);
+  background: transparent;
+  padding: 0;
+  font-weight: 600;
+}
+
+/* ============ NOTE BOX ============ */
+.note{
+  font-size: 14.5px;
+  color: var(--ink-soft);
+  font-style: italic;
+  padding: 10px 0;
+  border-top: 1px dotted var(--rule);
+  border-bottom: 1px dotted var(--rule);
+  margin: 18px 0;
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="kicker">NVIDIA · Analytics &amp; Data Intelligence · cuDF, Velox, Presto, Spark</div>
+  <h1>
+    GPU Data Processing,<br>
+    <span class="ital">a C++/CUDA engineer's handbook</span>
+  </h1>
+  <p class="deck">
+    A systematic, code-first walkthrough of the domains a senior engineer working on dataframe and database acceleration must hold in working memory — from the C++ object model up through Hopper's asynchronous primitives, down to the algorithms that make a billion-row hash join actually finish in milliseconds.
+  </p>
+  <div class="meta-row">
+    <span class="m"><b>Parts</b> 11</span>
+    <span class="m"><b>Chapters</b> 32</span>
+    <span class="m"><b>Code examples</b> ~40</span>
+    <span class="m"><b>Reading</b> dense, ~2 hr</span>
+  </div>
+
+  <div class="toc">
+    <h5>Contents</h5>
+    <div class="toc-grid">
+      <a href="#c01"><span class="n">§01</span><span>Modern C++ for performance libraries</span></a>
+      <a href="#c02"><span class="n">§02</span><span>Templates, concepts &amp; type dispatch</span></a>
+      <a href="#c03"><span class="n">§03</span><span>Compile-time computation</span></a>
+      <a href="#c04"><span class="n">§04</span><span>The CUDA execution hierarchy</span></a>
+      <a href="#c05"><span class="n">§05</span><span>The memory hierarchy</span></a>
+      <a href="#c06"><span class="n">§06</span><span>Synchronization &amp; cooperative groups</span></a>
+      <a href="#c07"><span class="n">§07</span><span>Streams, events, and CUDA graphs</span></a>
+      <a href="#c08"><span class="n">§08</span><span>Coalescing, vectorized loads, bank conflicts</span></a>
+      <a href="#c09"><span class="n">§09</span><span>Occupancy and the register budget</span></a>
+      <a href="#c10"><span class="n">§10</span><span>Warp divergence &amp; predication</span></a>
+      <a href="#c11"><span class="n">§11</span><span>Async copies, pipelining, TMA</span></a>
+      <a href="#c12"><span class="n">§12</span><span>Reductions</span></a>
+      <a href="#c13"><span class="n">§13</span><span>Scans and decoupled lookback</span></a>
+      <a href="#c14"><span class="n">§14</span><span>Radix sort</span></a>
+      <a href="#c15"><span class="n">§15</span><span>Stream compaction, partition, gather</span></a>
+      <a href="#c16"><span class="n">§16</span><span>GPU hash tables</span></a>
+      <a href="#c17"><span class="n">§17</span><span>Apache Arrow columnar format</span></a>
+      <a href="#c18"><span class="n">§18</span><span>cuDF column architecture</span></a>
+      <a href="#c19"><span class="n">§19</span><span>Strings, lists, structs columns</span></a>
+      <a href="#c20"><span class="n">§20</span><span>Hash joins</span></a>
+      <a href="#c21"><span class="n">§21</span><span>Group-by aggregations</span></a>
+      <a href="#c22"><span class="n">§22</span><span>Sort, top-k, window functions</span></a>
+      <a href="#c23"><span class="n">§23</span><span>CSV/JSON parsing on GPU</span></a>
+      <a href="#c24"><span class="n">§24</span><span>Parquet/ORC decode</span></a>
+      <a href="#c25"><span class="n">§25</span><span>RMM &amp; stream-ordered allocation</span></a>
+      <a href="#c26"><span class="n">§26</span><span>Memory pressure &amp; spilling</span></a>
+      <a href="#c27"><span class="n">§27</span><span>Multi-GPU: NCCL, NVSHMEM, UCX</span></a>
+      <a href="#c28"><span class="n">§28</span><span>Distributed: Dask-cuDF shuffles</span></a>
+      <a href="#c29"><span class="n">§29</span><span>Profiling: nsys, ncu, NVTX</span></a>
+      <a href="#c30"><span class="n">§30</span><span>Roofline &amp; performance analysis</span></a>
+      <a href="#c31"><span class="n">§31</span><span>Velox, Spark-RAPIDS integration</span></a>
+      <a href="#c32"><span class="n">§32</span><span>Interview-style implementations</span></a>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<!-- ===================== PART I ===================== -->
+<div class="part" id="p1">
+  <div class="part-label">Part I</div>
+  <h2 class="part-title">Modern C++ <span class="ital">as the substrate</span></h2>
+  <p class="part-intro">cuDF, Velox, and the broader RAPIDS surface are written in C++17/20. Performance isn't only about kernels — the host-side code orchestrates allocation, dispatches on type, manages lifetimes across streams, and is where most of the binary size and compile time lives. This section covers the C++ idioms that show up most.</p>
+
+  <!-- §01 -->
+  <section class="chapter" id="c01">
+    <h2><span class="ch-num">§01</span>Modern C++ foundations for performance libraries</h2>
+
+    <p>The library is full of long-lived value types that own GPU memory, plus thin views that don't. Getting move semantics, RAII, and the rule of five right is the floor; everything above is built on it.</p>
+
+    <h3>RAII for device memory</h3>
+    <p>A canonical pattern: an owning class that holds a device pointer and frees it on destruction. cuDF's <code>rmm::device_uvector</code> is the production version. Here's the skeleton:</p>
+
+<pre data-lang="C++"><span class="com">// A minimal owning device buffer (production: use rmm::device_uvector)</span>
+<span class="kw">template</span>&lt;<span class="kw">typename</span> T&gt;
+<span class="kw">class</span> <span class="ty">device_buffer</span> {
+  T*          d_ptr_   = <span class="kw">nullptr</span>;
+  <span class="ty">std::size_t</span> size_    = 0;
+  <span class="ty">cudaStream_t</span> stream_ = <span class="num">0</span>;
+
+<span class="kw">public</span>:
+  <span class="ty">device_buffer</span>() = <span class="kw">default</span>;
+
+  <span class="ty">device_buffer</span>(<span class="ty">std::size_t</span> n, <span class="ty">cudaStream_t</span> s)
+    : size_(n), stream_(s) {
+    cudaMallocAsync(&amp;d_ptr_, n * <span class="kw">sizeof</span>(T), s);
+  }
+
+  <span class="com">// Rule of five: explicit move, deleted copy</span>
+  <span class="ty">device_buffer</span>(<span class="ty">device_buffer</span> <span class="kw">const</span>&amp;)            = <span class="kw">delete</span>;
+  <span class="ty">device_buffer</span>&amp; <span class="kw">operator</span>=(<span class="ty">device_buffer</span> <span class="kw">const</span>&amp;) = <span class="kw">delete</span>;
+
+  <span class="ty">device_buffer</span>(<span class="ty">device_buffer</span>&amp;&amp; o) <span class="kw">noexcept</span>
+    : d_ptr_(o.d_ptr_), size_(o.size_), stream_(o.stream_) {
+    o.d_ptr_ = <span class="kw">nullptr</span>; o.size_ = 0;
+  }
+
+  <span class="ty">device_buffer</span>&amp; <span class="kw">operator</span>=(<span class="ty">device_buffer</span>&amp;&amp; o) <span class="kw">noexcept</span> {
+    <span class="kw">if</span> (<span class="kw">this</span> != &amp;o) {
+      release();
+      d_ptr_ = o.d_ptr_; size_ = o.size_; stream_ = o.stream_;
+      o.d_ptr_ = <span class="kw">nullptr</span>; o.size_ = 0;
+    }
+    <span class="kw">return</span> *<span class="kw">this</span>;
+  }
+
+  ~<span class="ty">device_buffer</span>() { release(); }
+
+  T*          data()       <span class="kw">noexcept</span> { <span class="kw">return</span> d_ptr_; }
+  T <span class="kw">const</span>*    data() <span class="kw">const</span> <span class="kw">noexcept</span> { <span class="kw">return</span> d_ptr_; }
+  <span class="ty">std::size_t</span> size() <span class="kw">const</span> <span class="kw">noexcept</span> { <span class="kw">return</span> size_; }
+
+<span class="kw">private</span>:
+  <span class="kw">void</span> release() <span class="kw">noexcept</span> {
+    <span class="kw">if</span> (d_ptr_) cudaFreeAsync(d_ptr_, stream_);
+    d_ptr_ = <span class="kw">nullptr</span>;
+  }
+};</pre>
+
+    <div class="callout warn">
+      <h5>Subtleties that cost you in review</h5>
+      <ul class="tight">
+        <li><code>noexcept</code> on the move constructor is not cosmetic — without it, <code>std::vector&lt;device_buffer&gt;</code> falls back to copy on growth, which deletes.</li>
+        <li>Stream-ordered allocation (<code>cudaMallocAsync</code>) must be paired with stream-ordered free; freeing on a different stream than allocation requires a stream-ordered dependency or you have UB.</li>
+        <li>Don't put <code>cudaFree</code> in destructors that may run at static-destruction time — the CUDA driver may already be shut down. Production code structures lifetimes to avoid this.</li>
+      </ul>
+    </div>
+
+    <h3>Owning vs viewing — the column_view pattern</h3>
+    <p>cuDF distinguishes <code>column</code> (owns memory) from <code>column_view</code> (does not). The view is cheap to copy, contains pointers + metadata, and is what kernels receive. This split is the single most important API design decision in the library — it lets algorithms compose without copying.</p>
+
+<pre data-lang="C++"><span class="com">// Conceptual sketch — actual cudf::column_view is more elaborate</span>
+<span class="kw">class</span> <span class="ty">column_view</span> {
+  <span class="kw">void</span> <span class="kw">const</span>*    data_;        <span class="com">// type-erased</span>
+  bitmask_type <span class="kw">const</span>* null_mask_;
+  size_type        size_, offset_, null_count_;
+  data_type        type_;
+  std::vector&lt;<span class="ty">column_view</span>&gt; children_;  <span class="com">// for nested types</span>
+<span class="kw">public</span>:
+  <span class="kw">template</span>&lt;<span class="kw">typename</span> T&gt;
+  T <span class="kw">const</span>* data() <span class="kw">const</span> { <span class="kw">return</span> <span class="kw">static_cast</span>&lt;T <span class="kw">const</span>*&gt;(data_) + offset_; }
+  <span class="ty">size_type</span> size() <span class="kw">const</span> { <span class="kw">return</span> size_; }
+  <span class="kw">bool</span> has_nulls() <span class="kw">const</span> { <span class="kw">return</span> null_count_ &gt; 0; }
+  <span class="com">// ... null bitmap accessor, child accessors, ...</span>
+};</pre>
+  </section>
+
+  <!-- §02 -->
+  <section class="chapter" id="c02">
+    <h2><span class="ch-num">§02</span>Templates, concepts &amp; type dispatch</h2>
+
+    <p>A dataframe library serves dozens of types (int8…int64, float32/64, bool, fixed-point, strings, lists, structs, decimals). Every algorithm must dispatch at runtime to a template instantiation chosen by the column's <code>type_id</code>. This is exactly what cuDF's <code>type_dispatcher</code> does.</p>
+
+<pre data-lang="C++"><span class="com">// Skeleton of cudf::type_dispatcher</span>
+<span class="kw">enum class</span> <span class="ty">type_id</span> { INT8, INT16, INT32, INT64, FLOAT32, FLOAT64, BOOL8, STRING, ... };
+
+<span class="kw">template</span>&lt;<span class="ty">type_id</span> Id&gt; <span class="kw">struct</span> <span class="ty">id_to_type</span>;
+<span class="kw">template</span>&lt;&gt; <span class="kw">struct</span> <span class="ty">id_to_type</span>&lt;<span class="ty">type_id</span>::INT32&gt;   { <span class="kw">using</span> <span class="ty">type</span> = <span class="ty">int32_t</span>; };
+<span class="kw">template</span>&lt;&gt; <span class="kw">struct</span> <span class="ty">id_to_type</span>&lt;<span class="ty">type_id</span>::FLOAT64&gt; { <span class="kw">using</span> <span class="ty">type</span> = <span class="kw">double</span>; };
+<span class="com">// ... one per type ...</span>
+
+<span class="kw">template</span>&lt;<span class="kw">typename</span> Functor, <span class="kw">typename</span>... Args&gt;
+<span class="kw">decltype</span>(<span class="kw">auto</span>) <span class="fn">type_dispatcher</span>(<span class="ty">data_type</span> dt, Functor&amp;&amp; f, Args&amp;&amp;... args) {
+  <span class="kw">switch</span> (dt.id()) {
+    <span class="kw">case</span> <span class="ty">type_id</span>::INT32:
+      <span class="kw">return</span> f.<span class="kw">template</span> <span class="fn">operator</span>()&lt;<span class="ty">int32_t</span>&gt;(<span class="kw">std::forward</span>&lt;Args&gt;(args)...);
+    <span class="kw">case</span> <span class="ty">type_id</span>::FLOAT64:
+      <span class="kw">return</span> f.<span class="kw">template</span> <span class="fn">operator</span>()&lt;<span class="kw">double</span>&gt;(<span class="kw">std::forward</span>&lt;Args&gt;(args)...);
+    <span class="com">// ... etc ...</span>
+    <span class="kw">default</span>: <span class="kw">throw</span> std::logic_error(<span class="str">"unsupported type"</span>);
+  }
+}
+
+<span class="com">// Usage: a generic "sum a column" functor</span>
+<span class="kw">struct</span> <span class="ty">sum_functor</span> {
+  <span class="kw">template</span>&lt;<span class="kw">typename</span> T&gt;
+  <span class="kw">auto</span> <span class="fn">operator</span>()(<span class="ty">column_view</span> <span class="kw">const</span>&amp; col) <span class="kw">const</span> {
+    <span class="kw">if constexpr</span> (std::is_arithmetic_v&lt;T&gt;) {
+      <span class="kw">return</span> <span class="fn">launch_sum_kernel</span>&lt;T&gt;(col.<span class="fn">data</span>&lt;T&gt;(), col.<span class="fn">size</span>());
+    } <span class="kw">else</span> {
+      <span class="kw">throw</span> std::logic_error(<span class="str">"sum requires arithmetic type"</span>);
+    }
+  }
+};
+
+<span class="kw">auto</span> result = <span class="fn">type_dispatcher</span>(col.<span class="fn">type</span>(), <span class="ty">sum_functor</span>{}, col);</pre>
+
+    <div class="code-caption">The <code>if constexpr</code> branch lets one functor handle the "valid only for arithmetic types" case without writing a separate dispatcher for each subset.</div>
+
+    <h3>C++20 concepts — when SFINAE finally got readable</h3>
+
+<pre data-lang="C++"><span class="com">// Before C++20: SFINAE soup</span>
+<span class="kw">template</span>&lt;<span class="kw">typename</span> T,
+         <span class="kw">typename</span> = std::enable_if_t&lt;std::is_arithmetic_v&lt;T&gt; &amp;&amp;
+                                   !std::is_same_v&lt;T, <span class="kw">bool</span>&gt;&gt;&gt;
+T <span class="fn">safe_sum</span>(T <span class="kw">const</span>* p, <span class="ty">size_t</span> n);
+
+<span class="com">// C++20: concepts read like English</span>
+<span class="kw">template</span>&lt;<span class="kw">typename</span> T&gt;
+<span class="kw">concept</span> <span class="ty">Summable</span> = std::is_arithmetic_v&lt;T&gt; &amp;&amp; !std::is_same_v&lt;T, <span class="kw">bool</span>&gt;;
+
+<span class="kw">template</span>&lt;<span class="ty">Summable</span> T&gt;
+T <span class="fn">safe_sum</span>(T <span class="kw">const</span>* p, <span class="ty">size_t</span> n);</pre>
+
+    <div class="callout">
+      <h5>Compile time is a real cost</h5>
+      <p>Dispatching on every type at every call site explodes instantiations. cuDF compiles for ~30 minutes on a beefy machine. Strategies that matter: <code>extern template</code> declarations to push instantiation to a single TU, explicit instantiation in <code>.cu</code> files, splitting the dispatcher into "fixed-width only" / "strings only" / "all" variants to avoid pulling in the full type matrix when an algorithm doesn't need it.</p>
+    </div>
+  </section>
+
+  <!-- §03 -->
+  <section class="chapter" id="c03">
+    <h2><span class="ch-num">§03</span>Compile-time computation</h2>
+    <p><code>constexpr</code> and <code>consteval</code> let you push table lookups, validation, and small computations to compile time. For data-processing libraries, the most common use is type-property tables.</p>
+
+<pre data-lang="C++"><span class="kw">constexpr</span> <span class="ty">size_t</span> <span class="fn">size_of</span>(<span class="ty">type_id</span> id) {
+  <span class="kw">switch</span> (id) {
+    <span class="kw">case</span> <span class="ty">type_id</span>::INT8:    <span class="kw">return</span> 1;
+    <span class="kw">case</span> <span class="ty">type_id</span>::INT16:   <span class="kw">return</span> 2;
+    <span class="kw">case</span> <span class="ty">type_id</span>::INT32:   <span class="kw">return</span> 4;
+    <span class="kw">case</span> <span class="ty">type_id</span>::INT64:   <span class="kw">return</span> 8;
+    <span class="kw">case</span> <span class="ty">type_id</span>::FLOAT32: <span class="kw">return</span> 4;
+    <span class="kw">case</span> <span class="ty">type_id</span>::FLOAT64: <span class="kw">return</span> 8;
+    <span class="kw">default</span>: <span class="kw">return</span> 0;  <span class="com">// variable-width</span>
+  }
+}
+
+<span class="com">// Used in compile-time validation contexts</span>
+<span class="kw">template</span>&lt;<span class="ty">type_id</span> Id&gt;
+<span class="kw">struct</span> <span class="ty">fixed_width_only</span> {
+  <span class="kw">static_assert</span>(<span class="fn">size_of</span>(Id) &gt; 0, <span class="str">"variable-width types not supported here"</span>);
+};</pre>
+
+    <p>C++20 also brings <code>consteval</code> (must run at compile time) and <code>constinit</code> (must be constant-initialized but not necessarily constexpr at use). Both occasionally useful for kernel-launch parameter validation.</p>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART II ===================== -->
+<div class="part" id="p2">
+  <div class="part-label">Part II</div>
+  <h2 class="part-title">The CUDA programming model, <span class="ital">from threads to streams</span></h2>
+  <p class="part-intro">CUDA's mental model is a four-level hierarchy of threads, with a memory hierarchy alongside it. Internalize both, and most performance work is straightforward bookkeeping. Misunderstand them, and every optimization is a guess.</p>
+
+  <!-- §04 -->
+  <section class="chapter" id="c04">
+    <h2><span class="ch-num">§04</span>The CUDA execution hierarchy</h2>
+
+    <div class="diagram">┌─────────────────────────────────────────────────────────────────┐
+│  GRID  (one kernel launch)                                       │
+│  ┌───────────────────────────────┐  ┌──────────────────────────┐ │
+│  │  BLOCK (≤ 1024 threads)        │  │  BLOCK                   │ │
+│  │  ┌─────────────┐ ┌────────────┐│  │   ...                    │ │
+│  │  │ WARP (32 t) │ │ WARP       ││  │                          │ │
+│  │  │ t0…t31      │ │ t32…t63    ││  │                          │ │
+│  │  └─────────────┘ └────────────┘│  │                          │ │
+│  └───────────────────────────────┘  └──────────────────────────┘ │
+│  Blocks land on SMs; warps are the unit of scheduling.           │
+└─────────────────────────────────────────────────────────────────┘</div>
+
+    <p>The non-negotiable facts:</p>
+    <ul class="dash">
+      <li>A <strong>warp</strong> is 32 threads that execute in lockstep on a single SM. The warp is the unit of scheduling, divergence, and most synchronization. <em>Every</em> CUDA optimization is downstream of this fact.</li>
+      <li>A <strong>block</strong> is a group of threads (up to 1024) that share fast on-chip <em>shared memory</em> and can synchronize with <code>__syncthreads()</code>. One block executes entirely on one SM.</li>
+      <li>A <strong>grid</strong> is a collection of blocks. There is no built-in synchronization across blocks within a kernel (except via Cooperative Groups grid sync, which requires special launch).</li>
+      <li>On Hopper, a new level — <strong>thread block clusters</strong> — lets up to 16 blocks on the same GPC share Distributed Shared Memory.</li>
+    </ul>
+
+    <h3>Kernel launch — what the syntax means</h3>
+
+<pre data-lang="CUDA"><span class="com">// A vector add — the "hello world" of CUDA</span>
+<span class="pp">__global__</span> <span class="kw">void</span> <span class="fn">vadd</span>(<span class="kw">float</span> <span class="kw">const</span>* a, <span class="kw">float</span> <span class="kw">const</span>* b, <span class="kw">float</span>* c, <span class="ty">int</span> n) {
+  <span class="ty">int</span> i = blockIdx.x * blockDim.x + threadIdx.x;
+  <span class="kw">if</span> (i &lt; n) c[i] = a[i] + b[i];
+}
+
+<span class="com">// Launch — grid of ceil(n/256) blocks, each of 256 threads</span>
+<span class="ty">int</span>  block_size = 256;
+<span class="ty">int</span>  grid_size  = (n + block_size - 1) / block_size;
+<span class="fn">vadd</span>&lt;&lt;&lt;grid_size, block_size, 0 <span class="com">/* shared mem bytes */</span>, stream&gt;&gt;&gt;(a, b, c, n);</pre>
+
+    <div class="callout warn">
+      <h5>The classic mistakes</h5>
+      <ul class="tight">
+        <li>Forgetting the bounds check (<code>if (i &lt; n)</code>). The last block has threads with indices ≥ n, and they will write past the array.</li>
+        <li>Block size that's not a multiple of 32. Some threads in the last warp will be inactive, costing throughput.</li>
+        <li>Hardcoded block size like 1024 — uses too many registers on complex kernels and tanks occupancy. Default to 128 or 256; tune later.</li>
+        <li>Forgetting that <code>cudaGetLastError()</code> after a launch reports launch-time errors, not runtime errors from inside the kernel.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- §05 -->
+  <section class="chapter" id="c05">
+    <h2><span class="ch-num">§05</span>The memory hierarchy</h2>
+
+    <table class="tbl">
+      <thead><tr><th>Memory</th><th>Latency / Bandwidth</th><th>Scope &amp; size</th></tr></thead>
+      <tbody>
+        <tr><td>Registers</td><td>~1 cycle, ~unlimited BW</td><td>Per-thread. 64K 32-bit regs per SM split among threads.</td></tr>
+        <tr><td>Shared memory</td><td>~20-30 cycles, ~10 TB/s</td><td>Per-block. 48-228 KB per SM (architecture-dependent).</td></tr>
+        <tr><td>L1 cache</td><td>~30 cycles</td><td>Per-SM. Often unified with shared memory.</td></tr>
+        <tr><td>L2 cache</td><td>~200 cycles, ~5 TB/s</td><td>GPU-wide. 40-50 MB on Hopper.</td></tr>
+        <tr><td>Global (HBM)</td><td>~400-800 cycles, ~3 TB/s (H100)</td><td>GPU-wide. 80 GB on H100.</td></tr>
+        <tr><td>Constant</td><td>~1 cycle if cached</td><td>64 KB, broadcast to all threads in a warp.</td></tr>
+        <tr><td>Texture</td><td>cached, 2D-aware</td><td>Rarely used in data processing.</td></tr>
+      </tbody>
+    </table>
+
+    <p>The single most important number: HBM bandwidth (~3 TB/s) is what bounds your kernel when you're memory-bound, which is almost always for data-processing workloads. Make every byte count.</p>
+
+    <h3>Shared memory — the workhorse</h3>
+    <p>Shared memory is the staging area where blocks cooperate. Every reduction, scan, and tile of every BLAS-like kernel uses it.</p>
+
+<pre data-lang="CUDA"><span class="com">// Block-level reduction using shared memory</span>
+<span class="pp">__global__</span> <span class="kw">void</span> <span class="fn">block_reduce_sum</span>(<span class="kw">float</span> <span class="kw">const</span>* in, <span class="kw">float</span>* partial, <span class="ty">int</span> n) {
+  <span class="pp">__shared__</span> <span class="kw">float</span> sdata[256];
+  <span class="ty">int</span> tid = threadIdx.x;
+  <span class="ty">int</span> i   = blockIdx.x * blockDim.x + tid;
+
+  sdata[tid] = (i &lt; n) ? in[i] : 0.0f;
+  <span class="fn">__syncthreads</span>();
+
+  <span class="com">// Tree reduction in shared memory</span>
+  <span class="kw">for</span> (<span class="ty">int</span> s = blockDim.x / 2; s &gt; 0; s &gt;&gt;= 1) {
+    <span class="kw">if</span> (tid &lt; s) sdata[tid] += sdata[tid + s];
+    <span class="fn">__syncthreads</span>();
+  }
+
+  <span class="kw">if</span> (tid == 0) partial[blockIdx.x] = sdata[0];
+}</pre>
+
+    <div class="callout tip">
+      <h5>This is not the fastest reduction</h5>
+      <p>The shared-memory tree above is correct but suboptimal. Modern reductions use warp-level <code>__shfl_down_sync</code> (§12) to do the last 5 stages entirely in registers, then a single shared write. The CUB version (<code>cub::BlockReduce</code>) is what you actually use.</p>
+    </div>
+  </section>
+
+  <!-- §06 -->
+  <section class="chapter" id="c06">
+    <h2><span class="ch-num">§06</span>Synchronization &amp; cooperative groups</h2>
+
+    <p>Five synchronization mechanisms, each with a specific scope:</p>
+
+    <table class="tbl">
+      <thead><tr><th>Primitive</th><th>Scope</th><th>Use case</th></tr></thead>
+      <tbody>
+        <tr><td>__syncthreads()</td><td>Block</td><td>All threads in a block reach this point before any proceed.</td></tr>
+        <tr><td>__syncwarp(mask)</td><td>Warp</td><td>Convergence point for warps; pre-Volta, warps were implicitly converged.</td></tr>
+        <tr><td>atomicAdd, atomicCAS, ...</td><td>Global / shared</td><td>Lock-free updates to a single memory location.</td></tr>
+        <tr><td>cooperative_groups::grid_group::sync()</td><td>Grid</td><td>All threads in the grid; requires cooperative launch.</td></tr>
+        <tr><td>cuda::barrier&lt;Scope&gt;</td><td>Configurable</td><td>C++ async barriers; used in Hopper-style pipelines.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Warp-level primitives — the secret sauce</h3>
+
+<pre data-lang="CUDA"><span class="com">// Sum 32 values across a warp using register-only shuffles</span>
+<span class="pp">__device__</span> <span class="kw">float</span> <span class="fn">warp_reduce_sum</span>(<span class="kw">float</span> v) {
+  <span class="kw">for</span> (<span class="ty">int</span> off = 16; off &gt; 0; off &gt;&gt;= 1) {
+    v += <span class="fn">__shfl_down_sync</span>(0xffffffff, v, off);
+  }
+  <span class="kw">return</span> v;  <span class="com">// thread 0 of the warp holds the result</span>
+}
+
+<span class="com">// Variant: every thread gets the broadcast result</span>
+<span class="pp">__device__</span> <span class="kw">float</span> <span class="fn">warp_reduce_sum_all</span>(<span class="kw">float</span> v) {
+  <span class="kw">for</span> (<span class="ty">int</span> off = 16; off &gt; 0; off &gt;&gt;= 1) {
+    v += <span class="fn">__shfl_xor_sync</span>(0xffffffff, v, off);
+  }
+  <span class="kw">return</span> v;
+}
+
+<span class="com">// Predicate-counting across a warp — used everywhere in stream compaction</span>
+<span class="pp">__device__</span> <span class="ty">int</span> <span class="fn">warp_count</span>(<span class="kw">bool</span> p) {
+  <span class="kw">return</span> <span class="fn">__popc</span>(<span class="fn">__ballot_sync</span>(0xffffffff, p));
+}</pre>
+
+    <div class="callout">
+      <h5>Why the mask matters</h5>
+      <p>The first argument to every <code>_sync</code> intrinsic is a 32-bit mask of which lanes participate. <code>0xffffffff</code> means "all 32 lanes." Pass the wrong mask after a divergent branch and you get undefined behavior. Use <code>__activemask()</code> when you don't know statically which lanes are active.</p>
+    </div>
+
+    <h3>Cooperative groups — the modern abstraction</h3>
+
+<pre data-lang="CUDA"><span class="pp">#include</span> <span class="str">&lt;cooperative_groups.h&gt;</span>
+<span class="pp">#include</span> <span class="str">&lt;cooperative_groups/reduce.h&gt;</span>
+<span class="kw">namespace</span> cg = cooperative_groups;
+
+<span class="pp">__global__</span> <span class="kw">void</span> <span class="fn">reduce_kernel</span>(<span class="kw">float</span>* in, <span class="kw">float</span>* out, <span class="ty">int</span> n) {
+  <span class="kw">auto</span> block = cg::<span class="fn">this_thread_block</span>();
+  <span class="kw">auto</span> warp  = cg::<span class="fn">tiled_partition</span>&lt;32&gt;(block);
+
+  <span class="kw">float</span> v = (block.<span class="fn">thread_rank</span>() &lt; n) ? in[block.<span class="fn">thread_rank</span>()] : 0;
+  v = cg::<span class="fn">reduce</span>(warp, v, cg::<span class="fn">plus</span>&lt;<span class="kw">float</span>&gt;{});
+
+  <span class="kw">if</span> (warp.<span class="fn">thread_rank</span>() == 0) out[warp.<span class="fn">meta_group_rank</span>()] = v;
+}</pre>
+  </section>
+
+  <!-- §07 -->
+  <section class="chapter" id="c07">
+    <h2><span class="ch-num">§07</span>Streams, events, and CUDA graphs</h2>
+
+    <p>A <strong>stream</strong> is a queue of GPU work that executes in order. Operations submitted to different streams can run concurrently, subject to resource availability. Streams are the basic unit of asynchrony.</p>
+
+<pre data-lang="C++"><span class="com">// Two streams for overlap of compute and copy</span>
+<span class="ty">cudaStream_t</span> compute_s, copy_s;
+<span class="fn">cudaStreamCreate</span>(&amp;compute_s);
+<span class="fn">cudaStreamCreate</span>(&amp;copy_s);
+
+<span class="com">// H2D copy on copy_s</span>
+<span class="fn">cudaMemcpyAsync</span>(d_in, h_in, n*<span class="kw">sizeof</span>(<span class="kw">float</span>), cudaMemcpyHostToDevice, copy_s);
+
+<span class="com">// Have compute_s wait on the copy via an event</span>
+<span class="ty">cudaEvent_t</span> copied;
+<span class="fn">cudaEventCreate</span>(&amp;copied);
+<span class="fn">cudaEventRecord</span>(copied, copy_s);
+<span class="fn">cudaStreamWaitEvent</span>(compute_s, copied, 0);
+
+<span class="fn">vadd</span>&lt;&lt;&lt;grid, block, 0, compute_s&gt;&gt;&gt;(d_in, d_in2, d_out, n);
+
+<span class="com">// D2H copy can run on copy_s, dependent on compute_s</span>
+<span class="ty">cudaEvent_t</span> computed;
+<span class="fn">cudaEventRecord</span>(computed, compute_s);
+<span class="fn">cudaStreamWaitEvent</span>(copy_s, computed, 0);
+<span class="fn">cudaMemcpyAsync</span>(h_out, d_out, n*<span class="kw">sizeof</span>(<span class="kw">float</span>), cudaMemcpyDeviceToHost, copy_s);</pre>
+
+    <div class="callout warn">
+      <h5>Stream-zero is a global serialization point</h5>
+      <p>Operations submitted to the legacy default stream (stream 0) implicitly synchronize with all other streams on the device. This is rarely what you want in a library. Use <code>cudaStreamPerThread</code> (compile with <code>--default-stream per-thread</code>) so the default stream is thread-local, or always pass an explicit stream. cuDF passes streams explicitly through every API.</p>
+    </div>
+
+    <h3>CUDA graphs — amortizing launch overhead</h3>
+    <p>Kernel launches cost ~5-10 µs each. A workflow with 100 small kernels burns half a millisecond just in launch overhead. CUDA graphs capture a sequence of operations once and replay them as a single submission.</p>
+
+<pre data-lang="C++"><span class="ty">cudaGraph_t</span> graph;
+<span class="ty">cudaGraphExec_t</span> exec;
+
+<span class="fn">cudaStreamBeginCapture</span>(stream, cudaStreamCaptureModeGlobal);
+<span class="fn">kernel_a</span>&lt;&lt;&lt;g, b, 0, stream&gt;&gt;&gt;(...);
+<span class="fn">kernel_b</span>&lt;&lt;&lt;g, b, 0, stream&gt;&gt;&gt;(...);
+<span class="fn">kernel_c</span>&lt;&lt;&lt;g, b, 0, stream&gt;&gt;&gt;(...);
+<span class="fn">cudaStreamEndCapture</span>(stream, &amp;graph);
+<span class="fn">cudaGraphInstantiate</span>(&amp;exec, graph, <span class="kw">nullptr</span>, <span class="kw">nullptr</span>, 0);
+
+<span class="com">// Replay — single submission, full pipeline</span>
+<span class="kw">for</span> (<span class="ty">int</span> i = 0; i &lt; 1000; ++i) {
+  <span class="fn">cudaGraphLaunch</span>(exec, stream);
+}</pre>
+
+    <p>Graphs matter most for iterative workloads where the same DAG runs repeatedly (training step, inference batch, streaming pipeline). For one-shot data-processing operations, the capture overhead may exceed the savings.</p>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART III ===================== -->
+<div class="part" id="p3">
+  <div class="part-label">Part III</div>
+  <h2 class="part-title">Performance — <span class="ital">what actually makes kernels fast</span></h2>
+  <p class="part-intro">Most kernel-level performance work is one of four levers: get memory access patterns right, keep enough warps in flight, eliminate divergence, and hide latency with asynchrony. Everything else is a special case of these.</p>
+
+  <!-- §08 -->
+  <section class="chapter" id="c08">
+    <h2><span class="ch-num">§08</span>Coalescing, vectorized loads, bank conflicts</h2>
+
+    <h3>Coalescing</h3>
+    <p>When a warp issues a load, the GPU coalesces consecutive thread accesses into the minimum number of memory transactions. The rule: <em>thread <code>i</code> accesses element <code>i</code></em> and you get one 128-byte transaction. Stride-2 access (<code>thread i</code> → <code>element 2*i</code>) needs two transactions. Random access can need up to 32.</p>
+
+<pre data-lang="CUDA"><span class="com">// Coalesced — perfect</span>
+<span class="pp">__global__</span> <span class="kw">void</span> <span class="fn">good</span>(<span class="kw">float</span>* x) {
+  <span class="ty">int</span> i = blockIdx.x * blockDim.x + threadIdx.x;
+  x[i] = x[i] * 2.0f;          <span class="com">// each thread reads/writes its own slot</span>
+}
+
+<span class="com">// Strided — half the bandwidth</span>
+<span class="pp">__global__</span> <span class="kw">void</span> <span class="fn">bad</span>(<span class="kw">float</span>* x) {
+  <span class="ty">int</span> i = blockIdx.x * blockDim.x + threadIdx.x;
+  x[i * 2] = x[i * 2] * 2.0f;  <span class="com">// stride 2 — 50% bandwidth</span>
+}</pre>
+
+    <h3>Vectorized loads</h3>
+    <p>Loading 4 floats with one instruction (<code>float4</code>) is faster than 4 separate float loads — fewer instructions, fewer transactions, more bytes per transaction.</p>
+
+<pre data-lang="CUDA"><span class="com">// Each thread loads/stores 4 floats in one instruction</span>
+<span class="pp">__global__</span> <span class="kw">void</span> <span class="fn">scale4</span>(<span class="kw">float</span>* x, <span class="ty">int</span> n) {
+  <span class="ty">int</span> i = blockIdx.x * blockDim.x + threadIdx.x;
+  <span class="kw">if</span> (i * 4 + 3 &lt; n) {
+    <span class="kw">float4</span> v = *<span class="kw">reinterpret_cast</span>&lt;<span class="kw">float4</span>*&gt;(&amp;x[i * 4]);
+    v.x *= 2.0f; v.y *= 2.0f; v.z *= 2.0f; v.w *= 2.0f;
+    *<span class="kw">reinterpret_cast</span>&lt;<span class="kw">float4</span>*&gt;(&amp;x[i * 4]) = v;
+  }
+}</pre>
+
+    <div class="callout warn">
+      <h5>Alignment is a prerequisite</h5>
+      <p><code>float4</code> loads require 16-byte aligned addresses. <code>cudaMalloc</code> guarantees 256-byte alignment, but offsets into the buffer don't automatically preserve it. Use <code>cuda::std::assume_aligned</code> (or the compiler hint) when you know the pointer is aligned, and fall back to scalar code for the tail.</p>
+    </div>
+
+    <h3>Shared memory bank conflicts</h3>
+    <p>Shared memory is split into 32 banks. Consecutive 4-byte words live in consecutive banks. If two threads in a warp access the same bank (different addresses), the accesses serialize. <em>Same address</em> is broadcast and fine.</p>
+
+<pre data-lang="CUDA"><span class="com">// Classic conflict: column access in a 32-wide tile</span>
+<span class="pp">__shared__</span> <span class="kw">float</span> tile[32][32];
+<span class="kw">float</span> v = tile[threadIdx.y][threadIdx.x];   <span class="com">// row access — fine, broadcasts</span>
+<span class="kw">float</span> u = tile[threadIdx.x][threadIdx.y];   <span class="com">// column access — 32-way conflict, 32× slower</span>
+
+<span class="com">// Fix: pad the inner dimension by 1</span>
+<span class="pp">__shared__</span> <span class="kw">float</span> tile[32][33];                 <span class="com">// note the 33</span>
+<span class="com">// Now column j of tile lives in bank (j*33) %% 32 = (j*1) %% 32, all different</span></pre>
+  </section>
+
+  <!-- §09 -->
+  <section class="chapter" id="c09">
+    <h2><span class="ch-num">§09</span>Occupancy and the register budget</h2>
+
+    <p>Occupancy is the fraction of an SM's maximum warps that are actively scheduled. Higher occupancy hides latency: when one warp stalls on a memory load, another runs. But high occupancy isn't always optimal — registers are precious and a kernel that uses many registers per thread can deliver more work per warp.</p>
+
+    <p>The constraints per SM:</p>
+    <ul class="dash">
+      <li><strong>Registers</strong>: 65,536 32-bit registers. 64-register kernel → 1024 threads max → 32 warps max. 128-register kernel → 512 threads max → 16 warps.</li>
+      <li><strong>Shared memory</strong>: 48-228 KB depending on architecture (configurable on Volta+). A kernel using 32 KB/block → 1-7 blocks/SM.</li>
+      <li><strong>Threads per block</strong>: ≤ 1024.</li>
+      <li><strong>Blocks per SM</strong>: ≤ 32 (Volta+) or 16.</li>
+    </ul>
+
+<pre data-lang="CUDA"><span class="com">// Tell the compiler to limit registers — enables higher occupancy</span>
+<span class="kw">template</span>&lt;<span class="ty">int</span> BLOCK_SIZE&gt;
+<span class="pp">__launch_bounds__</span>(BLOCK_SIZE, 4) <span class="com">// max BLOCK_SIZE threads, target ≥4 blocks/SM</span>
+<span class="pp">__global__</span> <span class="kw">void</span> <span class="fn">my_kernel</span>(...);</pre>
+
+    <div class="callout tip">
+      <h5>The classic occupancy debate</h5>
+      <p>Volkov's "<em>Better Performance at Lower Occupancy</em>" (GTC 2010) made the case that high ILP (instruction-level parallelism) per thread can outperform high occupancy by keeping more memory transactions in flight per warp. Practical guidance: tune your <code>__launch_bounds__</code> and measure. <code>cuobjdump --dump-resource-usage</code> tells you the actual register count; <code>ncu</code> tells you achieved occupancy.</p>
+    </div>
+
+    <h3>Quick occupancy check</h3>
+
+<pre data-lang="C++"><span class="ty">int</span> max_blocks_per_sm;
+<span class="fn">cudaOccupancyMaxActiveBlocksPerMultiprocessor</span>(
+    &amp;max_blocks_per_sm, my_kernel, block_size, dynamic_smem_bytes);
+
+<span class="com">// Or let CUDA pick a launch config that maximizes occupancy</span>
+<span class="ty">int</span> min_grid, block_size;
+<span class="fn">cudaOccupancyMaxPotentialBlockSize</span>(&amp;min_grid, &amp;block_size, my_kernel, 0, 0);</pre>
+  </section>
+
+  <!-- §10 -->
+  <section class="chapter" id="c10">
+    <h2><span class="ch-num">§10</span>Warp divergence &amp; predication</h2>
+
+    <p>When threads in a warp take different branches, the warp executes both paths sequentially, with inactive threads masked off. Pure divergence is 50% efficiency for an if/else; 32-way divergence is 3% efficiency.</p>
+
+<pre data-lang="CUDA"><span class="com">// Divergent — bad if condition varies within warp</span>
+<span class="kw">if</span> (x[i] &gt; 0) {
+  out[i] = <span class="fn">expensive_a</span>(x[i]);
+} <span class="kw">else</span> {
+  out[i] = <span class="fn">expensive_b</span>(x[i]);
+}
+
+<span class="com">// Branchless / predicated — both paths run, compiler emits select</span>
+<span class="kw">float</span> a = <span class="fn">expensive_a</span>(x[i]);
+<span class="kw">float</span> b = <span class="fn">expensive_b</span>(x[i]);
+out[i] = (x[i] &gt; 0) ? a : b;
+
+<span class="com">// Idea: when both branches are cheap, predication wins;</span>
+<span class="com">// when one branch is dramatically more expensive, divergence wins</span>
+<span class="com">// (because most threads skip the expensive path). Measure.</span></pre>
+
+    <h3>Sorting to reduce divergence</h3>
+    <p>A common technique: sort by the branching condition before the kernel runs, so threads in each warp share a path.</p>
+
+<pre data-lang="CUDA"><span class="com">// Before: random distribution, warps diverge ~50%</span>
+<span class="com">// After: cub::DeviceRadixSort sorts by category, warps converge</span>
+
+<span class="com">// In a join, you'd sort by partition id to make probe threads coherent</span>
+<span class="ty">cub::DoubleBuffer</span>&lt;<span class="ty">int32_t</span>&gt; keys(d_partition, d_partition_alt);
+<span class="ty">cub::DoubleBuffer</span>&lt;<span class="ty">int32_t</span>&gt; vals(d_row_id,    d_row_id_alt);
+<span class="ty">cub::DeviceRadixSort</span>::SortPairs(d_temp, temp_bytes, keys, vals, n);</pre>
+  </section>
+
+  <!-- §11 -->
+  <section class="chapter" id="c11">
+    <h2><span class="ch-num">§11</span>Async copies, software pipelining, TMA</h2>
+
+    <p>The pre-Ampere idiom for hiding global-memory latency was issuing loads into registers early, then doing computation while loads completed. Ampere's <code>cp.async</code> made this explicit: copy global → shared <em>asynchronously</em>, work on the previous tile, wait for the next.</p>
+
+<pre data-lang="CUDA"><span class="pp">#include</span> <span class="str">&lt;cuda/pipeline&gt;</span>
+
+<span class="pp">__global__</span> <span class="kw">void</span> <span class="fn">pipelined</span>(<span class="kw">float</span> <span class="kw">const</span>* in, <span class="kw">float</span>* out, <span class="ty">int</span> n) {
+  <span class="pp">__shared__</span> <span class="kw">float</span> tile[2][TILE_SIZE];   <span class="com">// double-buffered</span>
+
+  <span class="kw">auto</span> pipe = cuda::<span class="fn">make_pipeline</span>();
+  <span class="ty">int</span> buf = 0;
+
+  <span class="com">// Prefetch tile 0</span>
+  pipe.<span class="fn">producer_acquire</span>();
+  cuda::<span class="fn">memcpy_async</span>(tile[buf], in + 0, <span class="kw">sizeof</span>(tile[buf]), pipe);
+  pipe.<span class="fn">producer_commit</span>();
+
+  <span class="kw">for</span> (<span class="ty">int</span> t = 1; t &lt; num_tiles; ++t) {
+    <span class="com">// Prefetch tile t into the other buffer</span>
+    pipe.<span class="fn">producer_acquire</span>();
+    cuda::<span class="fn">memcpy_async</span>(tile[1 - buf], in + t * TILE_SIZE,
+                       <span class="kw">sizeof</span>(tile[0]), pipe);
+    pipe.<span class="fn">producer_commit</span>();
+
+    <span class="com">// Wait for tile (t-1) and process it</span>
+    pipe.<span class="fn">consumer_wait</span>();
+    <span class="fn">process_tile</span>(tile[buf], out + (t - 1) * TILE_SIZE);
+    pipe.<span class="fn">consumer_release</span>();
+
+    buf = 1 - buf;
+  }
+  <span class="com">// Drain last tile</span>
+  pipe.<span class="fn">consumer_wait</span>();
+  <span class="fn">process_tile</span>(tile[buf], out + (num_tiles - 1) * TILE_SIZE);
+  pipe.<span class="fn">consumer_release</span>();
+}</pre>
+
+    <h3>TMA — Hopper's tensor memory accelerator</h3>
+    <p>On H100, the TMA is a hardware DMA engine that copies multi-dimensional tiles between global and shared memory <em>without using SMs</em>. A single thread programs the TMA descriptor; the engine handles addressing, strides, swizzling, and barrier signaling. This is what lets H100 matmul kernels saturate HBM at unprecedented occupancy. For data processing, TMA is mostly useful for tile-based aggregations and large-tile scans.</p>
+
+    <div class="callout">
+      <h5>The mental model upgrade</h5>
+      <p>Pre-Ampere: threads issue loads; compiler hopes to schedule independent work between load and use. Ampere/Hopper: separate the <em>request</em> (async copy) from the <em>arrival</em> (barrier wait). Code structure becomes explicit producer-consumer pipelines. CUTLASS, CCCL, and the latest cuDF kernels are full of this pattern.</p>
+    </div>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART IV ===================== -->
+<div class="part" id="p4">
+  <div class="part-label">Part IV</div>
+  <h2 class="part-title">Parallel algorithm primitives — <span class="ital">the building blocks</span></h2>
+  <p class="part-intro">Every cuDF operation reduces to a handful of primitives: reduction, scan, sort, compaction, gather/scatter, hash. Master these, and complex operations (joins, group-bys, parsers) decompose into compositions. CUB and CCCL implement them at production quality; you read their source, you understand them, you reach for them first.</p>
+
+  <!-- §12 -->
+  <section class="chapter" id="c12">
+    <h2><span class="ch-num">§12</span>Reductions</h2>
+
+    <p>Combine N values via an associative operator (sum, max, min, AND, OR, custom). Three levels: warp, block, grid. Sketch each from the bottom up.</p>
+
+<pre data-lang="CUDA"><span class="com">// Warp-level: 5 shuffles, no shared memory</span>
+<span class="pp">__device__</span> <span class="kw">float</span> <span class="fn">warp_sum</span>(<span class="kw">float</span> v) {
+  <span class="pp">#pragma</span> unroll
+  <span class="kw">for</span> (<span class="ty">int</span> off = 16; off &gt; 0; off &gt;&gt;= 1)
+    v += <span class="fn">__shfl_down_sync</span>(0xffffffff, v, off);
+  <span class="kw">return</span> v;
+}
+
+<span class="com">// Block-level: warp reduce, store per-warp result, warp reduce again</span>
+<span class="kw">template</span>&lt;<span class="ty">int</span> BLOCK_SIZE&gt;
+<span class="pp">__device__</span> <span class="kw">float</span> <span class="fn">block_sum</span>(<span class="kw">float</span> v) {
+  <span class="pp">__shared__</span> <span class="kw">float</span> warp_results[BLOCK_SIZE / 32];
+
+  v = <span class="fn">warp_sum</span>(v);
+  <span class="ty">int</span> lane = threadIdx.x %% 32;
+  <span class="ty">int</span> warp = threadIdx.x / 32;
+  <span class="kw">if</span> (lane == 0) warp_results[warp] = v;
+  <span class="fn">__syncthreads</span>();
+
+  <span class="kw">if</span> (warp == 0) {
+    v = (lane &lt; BLOCK_SIZE / 32) ? warp_results[lane] : 0.0f;
+    v = <span class="fn">warp_sum</span>(v);
+  }
+  <span class="kw">return</span> v;  <span class="com">// thread 0 holds the block sum</span>
+}
+
+<span class="com">// Grid-level: each block computes block_sum, atomically adds to global,</span>
+<span class="com">// OR each block writes a partial and a second kernel reduces those</span>
+<span class="pp">__global__</span> <span class="kw">void</span> <span class="fn">reduce_kernel</span>(<span class="kw">float</span> <span class="kw">const</span>* in, <span class="kw">float</span>* result, <span class="ty">int</span> n) {
+  <span class="ty">int</span> tid = blockIdx.x * blockDim.x + threadIdx.x;
+  <span class="kw">float</span> v = (tid &lt; n) ? in[tid] : 0.0f;
+  v = <span class="fn">block_sum</span>&lt;256&gt;(v);
+  <span class="kw">if</span> (threadIdx.x == 0) <span class="fn">atomicAdd</span>(result, v);
+}</pre>
+
+    <p>Production code uses CUB:</p>
+
+<pre data-lang="C++"><span class="com">// CUB device-wide reduction</span>
+<span class="ty">size_t</span> temp_bytes = 0;
+<span class="ty">cub::DeviceReduce</span>::Sum(<span class="kw">nullptr</span>, temp_bytes, d_in, d_out, n, stream);
+<span class="kw">void</span>* d_temp;
+<span class="fn">cudaMallocAsync</span>(&amp;d_temp, temp_bytes, stream);
+<span class="ty">cub::DeviceReduce</span>::Sum(d_temp, temp_bytes, d_in, d_out, n, stream);
+<span class="fn">cudaFreeAsync</span>(d_temp, stream);</pre>
+  </section>
+
+  <!-- §13 -->
+  <section class="chapter" id="c13">
+    <h2><span class="ch-num">§13</span>Scans and decoupled lookback</h2>
+
+    <p>A scan (prefix sum) over <code>[a, b, c, d]</code> produces <code>[a, a+b, a+b+c, a+b+c+d]</code> for inclusive scan, or <code>[0, a, a+b, a+b+c]</code> for exclusive. Scan is the foundational primitive for stream compaction, radix sort, and many partition operations.</p>
+
+    <h3>Block-level scan: Hillis-Steele</h3>
+
+<pre data-lang="CUDA"><span class="com">// Inclusive scan in shared memory — Hillis-Steele, log2(N) steps</span>
+<span class="kw">template</span>&lt;<span class="ty">int</span> BLOCK_SIZE&gt;
+<span class="pp">__device__</span> <span class="kw">int</span> <span class="fn">block_scan_inclusive</span>(<span class="ty">int</span> v) {
+  <span class="pp">__shared__</span> <span class="ty">int</span> s[BLOCK_SIZE];
+  <span class="ty">int</span> tid = threadIdx.x;
+  s[tid] = v;
+  <span class="fn">__syncthreads</span>();
+
+  <span class="kw">for</span> (<span class="ty">int</span> off = 1; off &lt; BLOCK_SIZE; off &lt;&lt;= 1) {
+    <span class="ty">int</span> t = (tid &gt;= off) ? s[tid - off] : 0;
+    <span class="fn">__syncthreads</span>();
+    s[tid] += t;
+    <span class="fn">__syncthreads</span>();
+  }
+  <span class="kw">return</span> s[tid];
+}</pre>
+
+    <h3>Decoupled lookback — the killer device-wide scan</h3>
+    <p>The naïve device-wide scan needs two passes: each block computes local scans, then a second pass adds the prefix from preceding blocks. <strong>Decoupled lookback</strong> (Merrill &amp; Garland, 2016 — implemented in CUB) does it in one pass by having each block atomically publish its result and look back at predecessors. This is what makes <code>cub::DeviceScan</code> the fastest scan implementation extant.</p>
+
+    <div class="diagram">Block 0:  computes local sum → publishes [PREFIX]
+Block 1:  computes local sum → publishes [AGGREGATE]
+          looks back: sees block 0 PREFIX → updates to [PREFIX]
+Block 2:  computes local sum → publishes [AGGREGATE]
+          looks back: sees block 1 [PREFIX], combines → [PREFIX]
+...
+Each block publishes a "state" (AGGREGATE → PREFIX) atomically.
+A trailing block can combine many AGGREGATEs without waiting for the chain.</div>
+
+<pre data-lang="C++"><span class="ty">size_t</span> temp_bytes = 0;
+<span class="ty">cub::DeviceScan</span>::ExclusiveSum(<span class="kw">nullptr</span>, temp_bytes, d_in, d_out, n, stream);
+<span class="kw">void</span>* d_temp;
+<span class="fn">cudaMallocAsync</span>(&amp;d_temp, temp_bytes, stream);
+<span class="ty">cub::DeviceScan</span>::ExclusiveSum(d_temp, temp_bytes, d_in, d_out, n, stream);</pre>
+
+    <div class="callout">
+      <h5>Why this matters operationally</h5>
+      <p>Scan appears wherever you need to compute output positions: "where in the output array does each thread write?" That's compaction, partition, copy_if, segmented operations, run-length encoding, sorting passes. Familiarity with scan and its complexity is a senior-level expectation.</p>
+    </div>
+  </section>
+
+  <!-- §14 -->
+  <section class="chapter" id="c14">
+    <h2><span class="ch-num">§14</span>Radix sort</h2>
+
+    <p>Radix sort, not comparison sort, dominates GPU sorting. Why: it has predictable, regular memory access, no divergence in the inner loop, and complexity O(n · b/r) where b is bits per key and r is radix bits per pass. CUB's radix sort achieves >40 GB/s effective throughput on H100.</p>
+
+    <p>The algorithm:</p>
+    <ol>
+      <li>Take r bits of the key (e.g., 8 bits = 256 buckets).</li>
+      <li>Histogram: count how many keys fall in each bucket.</li>
+      <li>Scan the histogram to get the starting offset for each bucket.</li>
+      <li>Scatter: each key is written to its bucket's current position.</li>
+      <li>Repeat for the next r bits.</li>
+    </ol>
+
+<pre data-lang="C++"><span class="com">// CUB radix sort — what you actually call</span>
+<span class="kw">void</span> <span class="fn">sort_uint64</span>(<span class="ty">uint64_t</span>* d_keys, <span class="ty">size_t</span> n, <span class="ty">cudaStream_t</span> s) {
+  <span class="ty">uint64_t</span>* d_keys_alt;
+  <span class="fn">cudaMallocAsync</span>(&amp;d_keys_alt, n * <span class="kw">sizeof</span>(<span class="ty">uint64_t</span>), s);
+
+  <span class="ty">cub::DoubleBuffer</span>&lt;<span class="ty">uint64_t</span>&gt; keys(d_keys, d_keys_alt);
+
+  <span class="ty">size_t</span> temp_bytes = 0;
+  <span class="ty">cub::DeviceRadixSort</span>::SortKeys(<span class="kw">nullptr</span>, temp_bytes, keys, n, 0, 64, s);
+  <span class="kw">void</span>* d_temp;
+  <span class="fn">cudaMallocAsync</span>(&amp;d_temp, temp_bytes, s);
+
+  <span class="ty">cub::DeviceRadixSort</span>::SortKeys(d_temp, temp_bytes, keys, n, 0, 64, s);
+
+  <span class="com">// If keys.Current() != d_keys, copy the result back</span>
+  <span class="kw">if</span> (keys.<span class="fn">Current</span>() != d_keys)
+    <span class="fn">cudaMemcpyAsync</span>(d_keys, keys.<span class="fn">Current</span>(), n * <span class="kw">sizeof</span>(<span class="ty">uint64_t</span>),
+                    cudaMemcpyDeviceToDevice, s);
+
+  <span class="fn">cudaFreeAsync</span>(d_keys_alt, s);
+  <span class="fn">cudaFreeAsync</span>(d_temp, s);
+}</pre>
+
+    <div class="callout warn">
+      <h5>Floating-point radix sort needs key transformation</h5>
+      <p>IEEE 754 floats can't be radix-sorted by their raw bits because of the sign bit and negative-number ordering. CUB handles this internally; if you roll your own, transform: positive floats keep their bits except flip the sign bit; negative floats flip all bits. Reverse the transform after sorting.</p>
+    </div>
+  </section>
+
+  <!-- §15 -->
+  <section class="chapter" id="c15">
+    <h2><span class="ch-num">§15</span>Stream compaction, partition, gather</h2>
+
+    <p>Compaction: given an array and a predicate, produce the array of elements satisfying the predicate. Sounds simple; on GPU, it's a scan in disguise.</p>
+
+<pre data-lang="CUDA"><span class="com">// Conceptual: copy_if (predicate p), 3 steps</span>
+<span class="com">// Step 1: each thread computes p(x[i]) → 0 or 1</span>
+<span class="com">// Step 2: exclusive scan over the predicates → output positions</span>
+<span class="com">// Step 3: each passing thread writes to its scanned position</span>
+
+<span class="pp">__global__</span> <span class="kw">void</span> <span class="fn">scatter_passing</span>(
+    <span class="kw">float</span> <span class="kw">const</span>* in, <span class="ty">int</span> <span class="kw">const</span>* scanned_pos,
+    <span class="kw">bool</span> <span class="kw">const</span>* pred, <span class="kw">float</span>* out, <span class="ty">int</span> n) {
+  <span class="ty">int</span> i = blockIdx.x * blockDim.x + threadIdx.x;
+  <span class="kw">if</span> (i &lt; n &amp;&amp; pred[i]) {
+    out[scanned_pos[i]] = in[i];
+  }
+}
+
+<span class="com">// In practice: use CUB</span>
+<span class="ty">cub::DeviceSelect</span>::Flagged(d_temp, temp_bytes, d_in, d_flags, d_out, d_num_out, n);
+<span class="com">// Or with a predicate functor</span>
+<span class="ty">cub::DeviceSelect</span>::If(d_temp, temp_bytes, d_in, d_out, d_num_out, n, <span class="fn">is_positive</span>{});</pre>
+
+    <h3>Gather and scatter</h3>
+    <p>Gather: <code>out[i] = in[indices[i]]</code>. Scatter: <code>out[indices[i]] = in[i]</code>. Gather is generally faster than scatter on modern GPUs because reads can be cached and reordered; scatter must commit each write.</p>
+
+<pre data-lang="C++"><span class="ty">thrust::gather</span>(thrust::cuda::par.on(stream),
+               d_indices, d_indices + n,
+               d_source, d_dest);
+
+<span class="com">// In cuDF, gather is the canonical operation for "take rows by index" —</span>
+<span class="com">// used in joins, sorts, filters, and any operation that reorders rows</span></pre>
+  </section>
+
+  <!-- §16 -->
+  <section class="chapter" id="c16">
+    <h2><span class="ch-num">§16</span>GPU hash tables</h2>
+
+    <p>Hash tables are the heart of GPU joins and group-by aggregations. The CPU world's chained-bucket hash tables don't translate well — pointer chasing kills performance. GPU hash tables use <strong>open addressing</strong>: a flat array, probe sequence on collision. The canonical library is <strong>cuCollections (cuco)</strong>.</p>
+
+    <h3>Open-addressing hash table sketch</h3>
+
+<pre data-lang="CUDA"><span class="com">// Concept: a fixed-capacity hash map of K→V using linear probing</span>
+<span class="com">// Insert via atomicCAS on the key slot</span>
+<span class="pp">__device__</span> <span class="kw">bool</span> <span class="fn">insert</span>(<span class="ty">int32_t</span>* keys, <span class="ty">int32_t</span>* vals,
+                       <span class="ty">int32_t</span> k, <span class="ty">int32_t</span> v, <span class="ty">uint32_t</span> cap) {
+  <span class="kw">constexpr</span> <span class="ty">int32_t</span> EMPTY = -1;
+  <span class="ty">uint32_t</span> slot = <span class="fn">hash</span>(k) %% cap;
+  <span class="kw">while</span> (<span class="kw">true</span>) {
+    <span class="ty">int32_t</span> prev = <span class="fn">atomicCAS</span>(&amp;keys[slot], EMPTY, k);
+    <span class="kw">if</span> (prev == EMPTY) {
+      vals[slot] = v;
+      <span class="kw">return</span> <span class="kw">true</span>;
+    }
+    <span class="kw">if</span> (prev == k) <span class="kw">return</span> <span class="kw">false</span>;  <span class="com">// key already present</span>
+    slot = (slot + 1) %% cap;          <span class="com">// linear probe</span>
+  }
+}
+
+<span class="pp">__device__</span> <span class="kw">bool</span> <span class="fn">lookup</span>(<span class="ty">int32_t</span> <span class="kw">const</span>* keys, <span class="ty">int32_t</span> <span class="kw">const</span>* vals,
+                       <span class="ty">int32_t</span> k, <span class="ty">int32_t</span>&amp; out, <span class="ty">uint32_t</span> cap) {
+  <span class="kw">constexpr</span> <span class="ty">int32_t</span> EMPTY = -1;
+  <span class="ty">uint32_t</span> slot = <span class="fn">hash</span>(k) %% cap;
+  <span class="kw">while</span> (<span class="kw">true</span>) {
+    <span class="ty">int32_t</span> kk = keys[slot];
+    <span class="kw">if</span> (kk == k)     { out = vals[slot]; <span class="kw">return</span> <span class="kw">true</span>; }
+    <span class="kw">if</span> (kk == EMPTY) { <span class="kw">return</span> <span class="kw">false</span>; }
+    slot = (slot + 1) %% cap;
+  }
+}</pre>
+
+    <div class="callout warn">
+      <h5>Why this works on GPU</h5>
+      <p>(1) The table is a flat array — no pointer chasing. (2) <code>atomicCAS</code> resolves write contention without locks. (3) Linear probing has good cache behavior (sequential reads). (4) Load factor below ~50% keeps probe lengths short. The cost is wasted space — production cuco maps default to 50-70% load factor.</p>
+    </div>
+
+    <h3>Cooperative probing — using a warp per key</h3>
+    <p>For workloads with long probe sequences (skewed data, high load factor), cuco offers cooperative probing: 8 or 32 lanes work together on one query, scanning a window of slots in parallel and combining via warp ballot. Crucial for join performance on real-world data.</p>
+
+<pre data-lang="C++"><span class="com">// cuco usage — production GPU hash table</span>
+<span class="ty">cuco::static_map</span>&lt;<span class="ty">int32_t</span>, <span class="ty">int32_t</span>&gt; map{
+  capacity, cuco::empty_key{-1}, cuco::empty_value{-1}, stream};
+
+<span class="com">// Bulk insert</span>
+map.<span class="fn">insert</span>(thrust::make_zip_iterator(d_keys, d_vals),
+           thrust::make_zip_iterator(d_keys + n, d_vals + n), stream);
+
+<span class="com">// Bulk lookup</span>
+map.<span class="fn">find</span>(d_query_keys, d_query_keys + m, d_results, stream);</pre>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART V ===================== -->
+<div class="part" id="p5">
+  <div class="part-label">Part V</div>
+  <h2 class="part-title">Columnar data &amp; the cuDF type system</h2>
+  <p class="part-intro">The Apache Arrow columnar format is the lingua franca: cuDF, Velox, DuckDB, Polars, and Spark Photon all read and write it. Internalize Arrow, then layer cuDF's type system on top.</p>
+
+  <!-- §17 -->
+  <section class="chapter" id="c17">
+    <h2><span class="ch-num">§17</span>Apache Arrow columnar format</h2>
+
+    <p>Three principles, embodied in every Arrow type:</p>
+    <ol>
+      <li><strong>Columnar</strong> — values of one column live contiguously in memory. Cache-friendly for analytical operations; trivially SIMD-able.</li>
+      <li><strong>Null mask</strong> — a separate bitmap, one bit per row, says whether the value at that row is valid. Separate from the data buffer, so non-null values stay densely packed.</li>
+      <li><strong>Composable</strong> — strings = (offsets buffer, chars buffer); list = (offsets buffer, child column); struct = (multiple child columns).</li>
+    </ol>
+
+    <div class="diagram">column "x: int32[5]"  (with one null)
+  data:     [10 | 20 | _ | 40 | 50]   (the _ slot is undefined; mask covers it)
+  null_mask: bit 0=1, 1=1, 2=0, 3=1, 4=1
+            → 0b11011
+
+column "name: string[3]"
+  offsets: [0, 5, 10, 13]      (size = n+1)
+  chars:   "alicebobcarol"     (size = offsets[n])
+  null_mask: all valid
+
+column "tags: list&lt;string&gt;[2]"
+  offsets: [0, 2, 3]
+  child:   string column of length 3
+  null_mask: all valid</div>
+
+    <h3>Why this layout dominates for analytics</h3>
+    <ul class="dash">
+      <li><strong>Vectorization</strong> — kernel over a column is a tight loop on a contiguous array.</li>
+      <li><strong>Compression</strong> — column-by-column compression (dictionary, RLE, bit-packing) is dramatically better than row-wise.</li>
+      <li><strong>Predicate pushdown</strong> — for a filter on column X, only X needs to be read. Saves I/O proportional to <code>num_columns / 1</code>.</li>
+      <li><strong>Zero-copy interop</strong> — Arrow buffers can be shared across languages and frameworks without serialization. cuDF's <code>to_arrow()</code> hands a pointer.</li>
+    </ul>
+  </section>
+
+  <!-- §18 -->
+  <section class="chapter" id="c18">
+    <h2><span class="ch-num">§18</span>cuDF column architecture</h2>
+
+    <p>cuDF mirrors Arrow but with device-resident buffers. The core abstractions:</p>
+
+    <table class="tbl">
+      <thead><tr><th>Type</th><th>Owns memory?</th><th>Role</th></tr></thead>
+      <tbody>
+        <tr><td>cudf::column</td><td>Yes</td><td>Owning column — data + null mask + children. The thing in a DataFrame.</td></tr>
+        <tr><td>cudf::column_view</td><td>No</td><td>Immutable view passed to kernels. Cheap to copy.</td></tr>
+        <tr><td>cudf::mutable_column_view</td><td>No</td><td>Mutable view — kernels that modify in place.</td></tr>
+        <tr><td>cudf::table</td><td>Yes</td><td>Owning collection of columns.</td></tr>
+        <tr><td>cudf::table_view</td><td>No</td><td>View of N columns; the input/output of most cuDF APIs.</td></tr>
+        <tr><td>cudf::scalar</td><td>Yes</td><td>A single typed value, possibly null. Used in fill, replace, etc.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>A type-dispatched kernel</h3>
+
+<pre data-lang="C++"><span class="com">// Add-scalar to a column — works for all numeric types via dispatch</span>
+<span class="kw">struct</span> <span class="ty">add_scalar_fn</span> {
+  <span class="kw">template</span>&lt;<span class="kw">typename</span> T, <span class="ty">CUDF_ENABLE_IF</span>(std::is_arithmetic_v&lt;T&gt;)&gt;
+  std::unique_ptr&lt;<span class="ty">cudf::column</span>&gt; <span class="fn">operator</span>()(
+      <span class="ty">cudf::column_view</span> <span class="kw">const</span>&amp; col, <span class="ty">cudf::scalar</span> <span class="kw">const</span>&amp; s,
+      <span class="ty">rmm::cuda_stream_view</span> stream,
+      <span class="ty">rmm::mr::device_memory_resource</span>* mr) <span class="kw">const</span> {
+
+    <span class="kw">auto</span> typed_s = <span class="kw">static_cast</span>&lt;<span class="ty">cudf::numeric_scalar</span>&lt;T&gt; <span class="kw">const</span>&amp;&gt;(s);
+    T val = typed_s.<span class="fn">value</span>(stream);
+
+    <span class="kw">auto</span> result = cudf::<span class="fn">make_numeric_column</span>(
+        col.<span class="fn">type</span>(), col.<span class="fn">size</span>(), cudf::mask_state::UNALLOCATED, stream, mr);
+
+    <span class="kw">auto</span> in  = col.<span class="fn">data</span>&lt;T&gt;();
+    <span class="kw">auto</span> out = result-&gt;<span class="fn">mutable_view</span>().<span class="fn">data</span>&lt;T&gt;();
+
+    thrust::<span class="fn">transform</span>(rmm::exec_policy(stream), in, in + col.<span class="fn">size</span>(), out,
+                      [val] <span class="pp">__device__</span> (T x) { <span class="kw">return</span> x + val; });
+
+    <span class="kw">return</span> result;
+  }
+
+  <span class="kw">template</span>&lt;<span class="kw">typename</span> T, <span class="ty">CUDF_ENABLE_IF</span>(!std::is_arithmetic_v&lt;T&gt;)&gt;
+  std::unique_ptr&lt;<span class="ty">cudf::column</span>&gt; <span class="fn">operator</span>()(...) <span class="kw">const</span> {
+    <span class="ty">CUDF_FAIL</span>(<span class="str">"add requires arithmetic type"</span>);
+  }
+};
+
+std::unique_ptr&lt;<span class="ty">cudf::column</span>&gt; <span class="fn">add_scalar</span>(
+    <span class="ty">cudf::column_view</span> <span class="kw">const</span>&amp; col, <span class="ty">cudf::scalar</span> <span class="kw">const</span>&amp; s,
+    <span class="ty">rmm::cuda_stream_view</span> stream, <span class="ty">rmm::mr::device_memory_resource</span>* mr) {
+  <span class="kw">return</span> cudf::<span class="fn">type_dispatcher</span>(col.<span class="fn">type</span>(), <span class="ty">add_scalar_fn</span>{}, col, s, stream, mr);
+}</pre>
+
+    <div class="callout">
+      <h5>Things to notice</h5>
+      <ul class="tight">
+        <li>Every cuDF API takes <code>stream</code> and <code>mr</code> (memory resource) as the last two arguments — stream-ordered and allocator-injected from the top.</li>
+        <li>Returns are <code>std::unique_ptr&lt;cudf::column&gt;</code> — clear ownership semantics, RAII cleanup.</li>
+        <li>The <code>CUDF_ENABLE_IF</code> macro is just <code>std::enable_if_t</code> wrapped to look cleaner; concepts would replace it post-C++20 migration.</li>
+        <li>The kernel itself is a thrust transform with a device lambda — perfectly fine for simple ops, even though hand-written CUDA is faster for hot paths.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- §19 -->
+  <section class="chapter" id="c19">
+    <h2><span class="ch-num">§19</span>Strings, lists, structs columns</h2>
+
+    <h3>Strings — offsets + chars</h3>
+    <p>The cuDF strings column is two child columns plus a null mask. <code>offsets[i+1] - offsets[i]</code> is the byte length of string <em>i</em>. <code>chars[offsets[i] : offsets[i+1]]</code> is the UTF-8 bytes.</p>
+
+<pre data-lang="C++"><span class="com">// Compute the length of each string in a strings column</span>
+<span class="pp">__global__</span> <span class="kw">void</span> <span class="fn">string_lengths</span>(<span class="ty">int32_t</span> <span class="kw">const</span>* offsets, <span class="ty">size_type</span>* out, <span class="ty">int</span> n) {
+  <span class="ty">int</span> i = blockIdx.x * blockDim.x + threadIdx.x;
+  <span class="kw">if</span> (i &lt; n) out[i] = offsets[i + 1] - offsets[i];
+}</pre>
+
+    <div class="callout warn">
+      <h5>Variable-width strings break naive parallelism</h5>
+      <p>A kernel that does work proportional to string length has heavy thread imbalance — one thread per string means most threads sit idle while the longest string finishes. Three mitigations:</p>
+      <ul class="tight">
+        <li><strong>One warp per string</strong>: warp cooperatively walks the bytes.</li>
+        <li><strong>Two-pass</strong>: first pass computes output offsets; second pass writes chars.</li>
+        <li><strong>Sort by length</strong>: warps process strings of similar size, reducing imbalance within a warp.</li>
+      </ul>
+      <p>cuDF uses combinations of all three depending on the operation. <code>cudf::strings::contains</code> (substring search) uses one warp per string with a parallel matcher.</p>
+    </div>
+
+    <h3>Lists — offsets + child column</h3>
+    <p>A list column of element type T is structurally identical to a strings column where the chars buffer is replaced with a <em>column</em> of T. Algorithms on lists therefore look a lot like algorithms on strings — process per element, then reconstruct offsets via scan.</p>
+
+    <h3>Structs — collection of children</h3>
+    <p>A struct column is N child columns of the same length, sharing a null mask. The null mask at the struct level is logically AND-ed with each child's mask to determine validity of (struct.field).</p>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART VI ===================== -->
+<div class="part" id="p6">
+  <div class="part-label">Part VI</div>
+  <h2 class="part-title">Dataframe algorithms — <span class="ital">where the magic happens</span></h2>
+  <p class="part-intro">Joins, group-bys, sorts, parsers. The four operations a senior engineer on this team will touch in some form every week. Each one is a composition of the primitives from Part IV, with type-system care from Part V, and aggressive performance tuning from Part III.</p>
+
+  <!-- §20 -->
+  <section class="chapter" id="c20">
+    <h2><span class="ch-num">§20</span>Hash joins</h2>
+
+    <p>The canonical GPU join is the hash join: build a hash table on the smaller side, probe with the larger side. The build/probe split exploits both available parallelism (independent inserts/lookups) and the asymmetry between the sides.</p>
+
+    <div class="diagram">build side (smaller):       probe side (larger):
+  k1, v1                       q1
+  k2, v2     ──build──→ HMAP   q2  ──probe──→ for each q,
+  k3, v3                       q3              lookup q in HMAP
+   ...                          ...             emit matched pairs
+
+Complexity: O(|build|) to build + O(|probe| × probe_length) to probe.
+On uniform data, probe length is O(1); on skewed data, can degrade.</div>
+
+    <h3>Implementation outline</h3>
+
+<pre data-lang="C++"><span class="com">// Sketch of an inner-join — actual cuDF is significantly more involved</span>
+<span class="kw">struct</span> <span class="ty">join_result</span> {
+  <span class="ty">rmm::device_uvector</span>&lt;<span class="ty">size_type</span>&gt; left_indices;
+  <span class="ty">rmm::device_uvector</span>&lt;<span class="ty">size_type</span>&gt; right_indices;
+};
+
+<span class="ty">join_result</span> <span class="fn">inner_hash_join</span>(
+    <span class="ty">cudf::table_view</span> <span class="kw">const</span>&amp; build, <span class="ty">cudf::table_view</span> <span class="kw">const</span>&amp; probe,
+    <span class="ty">rmm::cuda_stream_view</span> stream) {
+
+  <span class="com">// 1. Hash each row of the build side into a multimap</span>
+  <span class="kw">auto</span> capacity = <span class="kw">static_cast</span>&lt;<span class="ty">size_t</span>&gt;(build.<span class="fn">num_rows</span>() * 1.5);
+  <span class="ty">cuco::static_multimap</span>&lt;<span class="ty">hash_value_t</span>, <span class="ty">size_type</span>&gt; map{capacity, ...};
+
+  <span class="kw">auto</span> build_hasher = cudf::row_hash{build, stream};
+  map.<span class="fn">insert</span>(thrust::make_transform_iterator(...), ..., stream);
+
+  <span class="com">// 2. For each probe row, look up matches; record (probe_idx, build_idx)</span>
+  <span class="kw">auto</span> probe_hasher = cudf::row_hash{probe, stream};
+  <span class="kw">auto</span> [out_probe, out_build] = map.<span class="fn">pair_retrieve</span>(...);
+
+  <span class="com">// 3. Verify true equality (hash collisions need a second check)</span>
+  <span class="kw">auto</span> row_equal = cudf::row_equality_comparator{build, probe};
+  <span class="kw">auto</span> mask = thrust::<span class="fn">transform_reduce</span>(...,
+      [=] <span class="pp">__device__</span> (<span class="kw">auto</span> i) { <span class="kw">return</span> <span class="fn">row_equal</span>(out_probe[i], out_build[i]); });
+
+  <span class="com">// 4. Stream-compact to keep only true matches</span>
+  <span class="kw">return</span> <span class="fn">compact_pairs</span>(out_probe, out_build, mask, stream);
+}</pre>
+
+    <div class="callout warn">
+      <h5>The skew problem</h5>
+      <p>If the build side is uniform but a few build keys appear billions of times, the multimap has heavy buckets and probes for those keys cause warp divergence and write contention on output writes. Mitigations: <strong>shuffle-aware</strong> joins that detect skew and route heavy keys to a separate path; <strong>broadcast</strong> the small side when one is tiny; <strong>bucketize</strong> the probe by hash range. In Spark-RAPIDS, this is one of the most actively tuned areas.</p>
+    </div>
+
+    <h3>Join variants</h3>
+    <ul class="dash">
+      <li><strong>Inner</strong>: only matched pairs.</li>
+      <li><strong>Left outer</strong>: all probe rows; unmatched get NULL for build columns.</li>
+      <li><strong>Full outer</strong>: all rows from both sides; harder because you need to track which build rows didn't match.</li>
+      <li><strong>Semi/anti</strong>: filter-style — keep probe rows that do/don't have a match. Cheaper because no joined-row materialization.</li>
+      <li><strong>Conditional</strong>: arbitrary predicate beyond equi-join. Nested-loop with parallelism.</li>
+    </ul>
+  </section>
+
+  <!-- §21 -->
+  <section class="chapter" id="c21">
+    <h2><span class="ch-num">§21</span>Group-by aggregations</h2>
+
+    <p>Two approaches; cuDF supports both.</p>
+
+    <h3>Hash-based group-by (default)</h3>
+    <p>A hash table maps group-key → row position (or accumulator). Each row hashes its key, locates or creates the group's slot, and atomically updates the aggregate.</p>
+
+<pre data-lang="CUDA"><span class="com">// Atomic-accumulator hash group-by (sketch)</span>
+<span class="pp">__global__</span> <span class="kw">void</span> <span class="fn">groupby_sum_kernel</span>(
+    <span class="ty">int32_t</span> <span class="kw">const</span>* keys, <span class="kw">double</span> <span class="kw">const</span>* vals,
+    <span class="ty">int32_t</span>* ht_keys, <span class="kw">double</span>* ht_sums, <span class="ty">int</span> cap, <span class="ty">int</span> n) {
+  <span class="ty">int</span> i = blockIdx.x * blockDim.x + threadIdx.x;
+  <span class="kw">if</span> (i &gt;= n) <span class="kw">return</span>;
+
+  <span class="ty">int32_t</span> k = keys[i];
+  <span class="kw">double</span>  v = vals[i];
+  <span class="ty">uint32_t</span> slot = <span class="fn">hash</span>(k) %% cap;
+
+  <span class="kw">while</span> (<span class="kw">true</span>) {
+    <span class="ty">int32_t</span> prev = <span class="fn">atomicCAS</span>(&amp;ht_keys[slot], EMPTY, k);
+    <span class="kw">if</span> (prev == EMPTY || prev == k) {
+      <span class="fn">atomicAdd</span>(&amp;ht_sums[slot], v);
+      <span class="kw">return</span>;
+    }
+    slot = (slot + 1) %% cap;
+  }
+}</pre>
+
+    <h3>Sort-based group-by</h3>
+    <p>Sort by key, then segmented reduction over runs of equal keys. Better for very high cardinality (where the hash table doesn't fit comfortably) and gives sorted output for free.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Property</th><th>Hash-based</th><th>Sort-based</th></tr></thead>
+      <tbody>
+        <tr><td>Memory</td><td>O(num_groups)</td><td>O(num_rows) — needs sorted copy</td></tr>
+        <tr><td>Speed (low cardinality)</td><td>Fastest</td><td>Slower (sort cost)</td></tr>
+        <tr><td>Speed (high cardinality)</td><td>Hash collisions hurt</td><td>Scales gracefully</td></tr>
+        <tr><td>Output ordering</td><td>Arbitrary</td><td>Sorted by key</td></tr>
+        <tr><td>Memory pressure</td><td>Low</td><td>Higher</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <h5>Numeric considerations</h5>
+      <p>Sum of float32 is not associative — parallel reduction can give a different result than sequential. For exact reproducibility (an SQL semantic), use Kahan summation or higher-precision accumulators (float64 accumulator over float32 values). cuDF's <code>sum</code> aggregator opts for "fast and parallel" by default; reproducible mode is opt-in.</p>
+    </div>
+  </section>
+
+  <!-- §22 -->
+  <section class="chapter" id="c22">
+    <h2><span class="ch-num">§22</span>Sort, top-k, window functions</h2>
+
+    <h3>Multi-column sort</h3>
+    <p>Sort by columns A, B, C with mixed ascending/descending. The trick: radix-sort the keys by combining them into a single comparator with a stable sort, sorting on the least-significant column first, then the next, and so on (LSD radix).</p>
+
+<pre data-lang="C++"><span class="com">// cuDF sort signature</span>
+std::unique_ptr&lt;<span class="ty">cudf::table</span>&gt; <span class="fn">sorted</span> = cudf::<span class="fn">sort_by_key</span>(
+    keys_table,                                <span class="com">// columns to sort by</span>
+    values_table,                              <span class="com">// columns to carry along</span>
+    {cudf::order::ASCENDING, cudf::order::DESCENDING},
+    {cudf::null_order::AFTER, cudf::null_order::BEFORE});</pre>
+
+    <h3>Top-K</h3>
+    <p>Top-K when K is small: a partial radix sort (only the top-K bits matter). When K is large: full sort + slice. Hybrid: partial sort with cub::DeviceRadixSort + a manual partition. cuDF picks among these adaptively.</p>
+
+    <h3>Window functions</h3>
+    <p>SQL <code>ROW_NUMBER() OVER (PARTITION BY a ORDER BY b)</code> and its kin: partition the data by a key, sort within partition by another key, compute an aggregate over a window. On GPU, this is sort-by-key followed by segmented scan (for cumulative aggregates) or segmented operations (for rank, lag, lead).</p>
+  </section>
+
+  <!-- §23 -->
+  <section class="chapter" id="c23">
+    <h2><span class="ch-num">§23</span>CSV/JSON parsing on GPU</h2>
+
+    <p>Parsing on GPU is hard because the input is unstructured (you don't know where row boundaries are until you find them), so naïvely each thread can't pick its starting point. The cuDF approach: <strong>two-pass parsing</strong>.</p>
+
+    <div class="diagram">Pass 1: TOKENIZATION
+  Each byte's role: delimiter / quote / newline / data
+  Determined locally — needs context for quoted fields (FSM)
+  Output: array of row offsets
+
+Pass 2: FIELD PARSING
+  Each thread takes one (row, column) cell
+  Parses value into its target type (int, float, date, ...)
+  Writes to typed column buffer</div>
+
+<pre data-lang="CUDA"><span class="com">// Sketch: classify each character into a token type</span>
+<span class="kw">enum class</span> <span class="ty">tok</span> : <span class="ty">uint8_t</span> { DATA=0, DELIM=1, QUOTE=2, NEWLINE=3 };
+
+<span class="pp">__global__</span> <span class="kw">void</span> <span class="fn">classify</span>(<span class="kw">char</span> <span class="kw">const</span>* in, <span class="ty">tok</span>* out, <span class="ty">int</span> n,
+                         <span class="kw">char</span> delim, <span class="kw">char</span> quote) {
+  <span class="ty">int</span> i = blockIdx.x * blockDim.x + threadIdx.x;
+  <span class="kw">if</span> (i &gt;= n) <span class="kw">return</span>;
+  <span class="kw">char</span> c = in[i];
+  out[i] = (c == delim)  ? <span class="ty">tok</span>::DELIM   :
+           (c == quote)  ? <span class="ty">tok</span>::QUOTE   :
+           (c == <span class="str">'\n'</span>)  ? <span class="ty">tok</span>::NEWLINE :
+                           <span class="ty">tok</span>::DATA;
+}
+
+<span class="com">// Then a parallel state machine resolves quoted/unquoted context,</span>
+<span class="com">// distinguishing literal-quote-inside-string from real delimiter.</span>
+<span class="com">// Output: scan-based row offsets, scan-based column offsets per row.</span></pre>
+
+    <div class="callout">
+      <h5>Why parsers are unusually hard</h5>
+      <p>CSV has subtleties (quoted fields with embedded delimiters, escaped quotes, newlines inside quoted fields) that turn the FSM non-local. JSON adds nesting depth, which means a thread can't determine its bracket-depth without context from the left. Modern GPU JSON parsers (cuDF's, simdjson-cuda) use clever speculative parsing + correction passes. This is genuinely hard parallel-algorithm territory.</p>
+    </div>
+  </section>
+
+  <!-- §24 -->
+  <section class="chapter" id="c24">
+    <h2><span class="ch-num">§24</span>Parquet / ORC decode</h2>
+
+    <p>Parquet is the dominant columnar file format. It stores data in column chunks divided into <em>pages</em>; each page can use dictionary encoding, run-length encoding, bit-packing, and a compression codec (Snappy, Zstd, LZ4) on top. Decoding is decompression → decode-encoding → materialize-into-buffer.</p>
+
+    <div class="diagram">Parquet file
+├── Row group 0
+│   ├── Column chunk "a" (int32)
+│   │   ├── Page 0: dict-encoded, snappy-compressed
+│   │   ├── Page 1: plain, zstd-compressed
+│   │   └── ...
+│   ├── Column chunk "b" (string)
+│   └── ...
+├── Row group 1
+├── ...
+└── Footer (schema, statistics, page locations)</div>
+
+    <h3>Per-page parallelism</h3>
+    <p>Each page is decoded by a CUDA block. Inside a page: decompression is sequential within a codec, but multiple pages decode in parallel. The challenge is that decompressed-page sizes are unknown, so the decoder must allocate conservatively or use a two-pass approach to discover sizes.</p>
+
+<pre data-lang="C++"><span class="com">// Outline of the cuDF Parquet reader</span>
+<span class="ty">cudf::io::parquet_reader_options</span> opts = ...;
+opts.<span class="fn">columns</span>({<span class="str">"a"</span>, <span class="str">"b"</span>, <span class="str">"c"</span>});           <span class="com">// projection pushdown</span>
+opts.<span class="fn">filter</span>(...);                       <span class="com">// predicate pushdown</span>
+opts.<span class="fn">row_groups</span>({0, 1, 5});               <span class="com">// row-group pruning</span>
+
+<span class="kw">auto</span> result = cudf::io::<span class="fn">read_parquet</span>(opts);</pre>
+
+    <div class="callout warn">
+      <h5>nvCOMP and the decompression frontier</h5>
+      <p>Parquet's per-page Snappy/Zstd decompression dominates decode time for I/O-heavy workloads. NVIDIA's <code>nvCOMP</code> provides GPU-native implementations of these codecs and is what cuDF uses under the hood. Achieving ~20-50 GB/s decompression makes Parquet ingestion bandwidth-bound on PCIe rather than compute-bound on the CPU — a 10× class improvement.</p>
+    </div>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART VII ===================== -->
+<div class="part" id="p7">
+  <div class="part-label">Part VII</div>
+  <h2 class="part-title">Memory management at scale</h2>
+  <p class="part-intro">Allocators matter. A library that calls <code>cudaMalloc</code> from every kernel pays 100-200 µs per call; one with a pool allocator pays nanoseconds. RAPIDS Memory Manager (RMM) is the contract.</p>
+
+  <!-- §25 -->
+  <section class="chapter" id="c25">
+    <h2><span class="ch-num">§25</span>RMM &amp; stream-ordered allocation</h2>
+
+    <h3>The memory_resource interface</h3>
+
+<pre data-lang="C++"><span class="kw">namespace</span> rmm::mr {
+  <span class="kw">class</span> <span class="ty">device_memory_resource</span> {
+  <span class="kw">public</span>:
+    <span class="kw">virtual</span> <span class="kw">void</span>* <span class="fn">allocate</span>(<span class="ty">std::size_t</span> bytes, <span class="ty">cuda_stream_view</span> s) = 0;
+    <span class="kw">virtual</span> <span class="kw">void</span>  <span class="fn">deallocate</span>(<span class="kw">void</span>* p, <span class="ty">std::size_t</span> bytes, <span class="ty">cuda_stream_view</span> s) = 0;
+  };
+}
+
+<span class="com">// Standard resources, composable</span>
+rmm::mr::<span class="ty">cuda_memory_resource</span>     base;
+rmm::mr::<span class="ty">pool_memory_resource</span>     pool{&amp;base, <span class="num">512_MB</span>, <span class="num">2_GB</span>};
+rmm::mr::<span class="ty">binning_memory_resource</span>  binned{&amp;pool, ...};
+rmm::mr::<span class="ty">tracking_memory_resource</span> tracked{&amp;binned};
+
+rmm::mr::<span class="fn">set_current_device_resource</span>(&amp;tracked);</pre>
+
+    <p>Allocators chain: a binning resource serves small allocations from prebuilt size classes; a pool resource caches large blocks; a tracking resource records allocations for leak detection or accounting. cuDF takes a <code>memory_resource*</code> in every API so callers can swap in any allocator (pool, managed, async, custom).</p>
+
+    <h3>Stream-ordered semantics</h3>
+    <p>The CUDA 11.2+ <code>cudaMallocAsync</code> family is stream-ordered: an allocation is "owned" by a stream; subsequent ops on that stream see the allocation; <em>other streams must sync</em> to see it. RMM's pool wraps this. Stream-ordered allocation is what lets cuDF chain kernels without host-side synchronization.</p>
+
+<pre data-lang="C++"><span class="com">// device_uvector — stream-ordered RAII vector</span>
+<span class="ty">rmm::cuda_stream_view</span> stream = ...;
+<span class="ty">rmm::device_uvector</span>&lt;<span class="ty">int32_t</span>&gt; buffer(n, stream);
+
+<span class="com">// Use directly with kernels on the same stream</span>
+<span class="fn">my_kernel</span>&lt;&lt;&lt;g, b, 0, stream.<span class="fn">value</span>()&gt;&gt;&gt;(buffer.<span class="fn">data</span>(), n);
+
+<span class="com">// Resize is also stream-ordered</span>
+buffer.<span class="fn">resize</span>(2 * n, stream);
+
+<span class="com">// Buffer freed asynchronously on destruction — back to the pool, not to the OS</span></pre>
+
+    <div class="callout">
+      <h5>Why this pattern dominates</h5>
+      <p>Without stream-ordered allocation, every memory op needs an implicit or explicit sync, serializing the host with the device. With it, cuDF can build entire pipelines (read parquet → filter → join → group-by → write) and submit them as fire-and-forget; the host never blocks until the user asks for a result. That's where the speedups come from.</p>
+    </div>
+  </section>
+
+  <!-- §26 -->
+  <section class="chapter" id="c26">
+    <h2><span class="ch-num">§26</span>Memory pressure &amp; spilling</h2>
+
+    <p>GPU memory is finite (40-192 GB on a single device), and analytical workloads happily produce intermediate results larger than that. Strategies:</p>
+
+    <ul class="dash">
+      <li><strong>Unified Memory</strong> — <code>cudaMallocManaged</code>. OS-level paging between host and device. Performance is poor when working sets exceed device memory; works as a safety net.</li>
+      <li><strong>Explicit spill to host</strong> — when memory pressure is detected, move cold buffers to pinned host memory. Dask-cuDF does this via Dask's spill-to-host mechanism.</li>
+      <li><strong>Spill to disk</strong> — last resort. Throughput is bound by storage; with NVMe RAID, ~10 GB/s achievable.</li>
+      <li><strong>Partitioned execution</strong> — break the operation into chunks that fit, process serially. This is what Dask-cuDF does for shuffles.</li>
+    </ul>
+
+    <h3>The OOM debugging workflow</h3>
+    <ol>
+      <li><code>rmm::mr::tracking_memory_resource</code> — records the allocation that crossed the limit, with a stack trace.</li>
+      <li><code>nsys</code> with the memory tracing flag — shows allocation lifecycles.</li>
+      <li>Check for buffer leaks (RAII broken, exception unwinding through CUDA).</li>
+      <li>Check for fragmentation — repeated alloc/free of varying sizes can leave the pool unable to satisfy a large request even when total free is sufficient.</li>
+    </ol>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART VIII ===================== -->
+<div class="part" id="p8">
+  <div class="part-label">Part VIII</div>
+  <h2 class="part-title">Multi-GPU &amp; distributed</h2>
+  <p class="part-intro">Single-GPU is the foundation; multi-GPU and multi-node is where production workloads live. The patterns differ in their communication libraries and shuffle strategies.</p>
+
+  <!-- §27 -->
+  <section class="chapter" id="c27">
+    <h2><span class="ch-num">§27</span>Multi-GPU — NCCL, NVSHMEM, UCX</h2>
+
+    <p>Three libraries; pick by communication pattern.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Library</th><th>Strength</th><th>Use case</th></tr></thead>
+      <tbody>
+        <tr><td>NCCL</td><td>Bulk collectives (AllReduce, AllGather, ReduceScatter, Broadcast)</td><td>Symmetric multi-GPU operations like reduction across data-parallel partitions</td></tr>
+        <tr><td>NVSHMEM</td><td>Fine-grained one-sided messaging — get, put, atomic at sub-µs latency</td><td>Asymmetric algorithms — graph processing, distributed hash tables</td></tr>
+        <tr><td>UCX</td><td>General-purpose RDMA transport (CPU and GPU)</td><td>Dask shuffles, anything needing flexibility plus RDMA</td></tr>
+        <tr><td>MPI</td><td>Traditional HPC interface; CUDA-aware variants exist</td><td>HPC-style code; less common in data processing</td></tr>
+      </tbody>
+    </table>
+
+<pre data-lang="C++"><span class="com">// NCCL all-reduce — symmetric, blocking</span>
+<span class="ty">ncclComm_t</span> comm; <span class="com">// initialized once</span>
+<span class="fn">ncclAllReduce</span>(d_send, d_recv, n, ncclFloat, ncclSum, comm, stream);
+
+<span class="com">// NVSHMEM one-sided put — fire-and-forget RDMA</span>
+<span class="fn">nvshmem_int_p</span>(remote_ptr, value, peer_pe);
+<span class="fn">nvshmem_quiet</span>();  <span class="com">// ensure remote completion</span></pre>
+  </section>
+
+  <!-- §28 -->
+  <section class="chapter" id="c28">
+    <h2><span class="ch-num">§28</span>Distributed — Dask-cuDF shuffles</h2>
+
+    <p>Dask-cuDF distributes a DataFrame across workers (one GPU each, typically). Operations that are "embarrassingly parallel per partition" (map, filter, simple aggregations) are trivial. Operations that need data from multiple partitions — joins, group-bys across partitions, sorts — require <strong>shuffle</strong>.</p>
+
+    <div class="diagram">SHUFFLE: redistribute rows by hash(key) so all rows with the same key
+land on the same worker.
+
+worker 0:  ┐         ┌  worker 0: rows where hash(k) %% N == 0
+worker 1:  │  data   │  worker 1: rows where hash(k) %% N == 1
+worker 2:  │ ─shuffle─→  worker 2: rows where hash(k) %% N == 2
+worker 3:  ┘         └  worker 3: rows where hash(k) %% N == 3
+
+Then each worker performs local join/groupby — and the result is correct.</div>
+
+    <p>Shuffles are dominated by network bandwidth. With UCX-over-IB or NVLink-over-NVSwitch, a Dask-cuDF shuffle on a DGX moves ~10s of GB/s. With TCP, ~1-2 GB/s. The library choice is consequential.</p>
+
+    <div class="callout">
+      <h5>Where the engineering complexity lives</h5>
+      <ul class="tight">
+        <li><strong>Memory pressure during shuffle</strong> — each worker may need to hold (incoming + outgoing) data simultaneously. Spill-to-host or spill-to-disk during shuffle is non-optional.</li>
+        <li><strong>Skew</strong> — a hot key sends 80% of rows to one worker, OOMing it. Detect and split.</li>
+        <li><strong>Fault tolerance</strong> — Dask's scheduler can recompute failed tasks, but stateful shuffles need checkpointing.</li>
+      </ul>
+    </div>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART IX ===================== -->
+<div class="part" id="p9">
+  <div class="part-label">Part IX</div>
+  <h2 class="part-title">Profiling &amp; performance analysis</h2>
+
+  <!-- §29 -->
+  <section class="chapter" id="c29">
+    <h2><span class="ch-num">§29</span>Profiling — nsys, ncu, NVTX</h2>
+
+    <p>Three tools, three resolutions.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Tool</th><th>Resolution</th><th>Best for</th></tr></thead>
+      <tbody>
+        <tr><td>nsys (Nsight Systems)</td><td>Application timeline</td><td>"What's overlapping with what?" Kernel/copy/CPU concurrency.</td></tr>
+        <tr><td>ncu (Nsight Compute)</td><td>Per-kernel detail</td><td>"Why is this kernel slow?" Roofline, occupancy, memory throughput, stall reasons.</td></tr>
+        <tr><td>NVTX</td><td>Markers in your timeline</td><td>Annotate code regions so nsys shows them in the timeline.</td></tr>
+      </tbody>
+    </table>
+
+<pre data-lang="C++"><span class="com">// NVTX ranges — show up as labeled spans in nsys</span>
+<span class="pp">#include</span> <span class="str">&lt;nvtx3/nvToolsExt.h&gt;</span>
+
+<span class="fn">nvtxRangePush</span>(<span class="str">"hash_join_build"</span>);
+<span class="fn">build_hash_table</span>(...);
+<span class="fn">nvtxRangePop</span>();
+
+<span class="com">// RAII version</span>
+<span class="kw">class</span> <span class="ty">nvtx_range</span> {
+  <span class="kw">public</span>:
+  <span class="ty">nvtx_range</span>(<span class="kw">char</span> <span class="kw">const</span>* n) { <span class="fn">nvtxRangePush</span>(n); }
+  ~<span class="ty">nvtx_range</span>() { <span class="fn">nvtxRangePop</span>(); }
+};
+
+<span class="pp">#define</span> NVTX_RANGE(name) <span class="ty">nvtx_range</span> _##__LINE__{name}</pre>
+
+<pre data-lang="BASH"><span class="com"># Capture an application trace</span>
+nsys profile -o myrun --trace=cuda,nvtx,osrt ./my_app
+
+<span class="com"># Detailed kernel-level metrics</span>
+ncu --set full --kernel-name regex:.*join.* -o kernel_report ./my_app
+
+<span class="com"># Quick metrics for one kernel</span>
+ncu --metrics sm__throughput.avg.pct_of_peak_sustained_elapsed,\
+              gpc__cycles_active.avg.pct_of_peak_sustained_elapsed,\
+              dram__throughput.avg.pct_of_peak_sustained_elapsed \
+    ./my_app</pre>
+  </section>
+
+  <!-- §30 -->
+  <section class="chapter" id="c30">
+    <h2><span class="ch-num">§30</span>Roofline &amp; performance analysis</h2>
+
+    <p>The roofline model: a kernel's max performance is bounded by either peak compute or peak bandwidth, whichever the kernel saturates first. <em>Arithmetic intensity</em> (FLOPs per byte loaded) determines which.</p>
+
+    <div class="diagram">log(GFLOPS)
+   ▲
+   │         _______________ peak compute
+   │        /
+   │       /
+   │      /
+   │     /     ← compute-bound region (high arithmetic intensity)
+   │    /
+   │   /  ← memory-bound region (low arithmetic intensity)
+   │  /
+   │ /
+   └──────────────────────────→ log(FLOPs/byte) = arithmetic intensity
+   
+   Inflection point = peak_compute / peak_bandwidth
+   For H100: ~67 FLOP/byte for FP32 (60 TF / 3 TB/s)</div>
+
+    <p>Most data-processing kernels are memory-bound. A reduction is ~1 FLOP per 4 bytes → intensity 0.25, deep in memory-bound. A hash probe is even worse — each byte loaded does very little arithmetic. The optimization frontier is therefore <strong>bandwidth utilization</strong>: load every byte the minimum number of times, in the most coalesced way possible.</p>
+
+    <div class="callout tip">
+      <h5>The 80/20 of perf debugging</h5>
+      <ol>
+        <li><strong>What's the kernel achieving in GB/s?</strong> <code>ncu</code> reports <code>dram__bytes_read.sum</code> / kernel time. Compare to GPU peak (3 TB/s on H100).</li>
+        <li><strong>If ≥ 70% of peak: memory-bound and optimal.</strong> Look elsewhere — kernel launch overhead, host code, allocator.</li>
+        <li><strong>If &lt; 30% of peak: memory access pattern problem.</strong> Check coalescing, vectorized loads, L2 hit rate.</li>
+        <li><strong>30-70%: nuanced.</strong> Could be occupancy, instruction issue, or partial coalescing. Look at <code>ncu</code>'s "Memory Workload Analysis" section.</li>
+      </ol>
+    </div>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART X ===================== -->
+<div class="part" id="p10">
+  <div class="part-label">Part X</div>
+  <h2 class="part-title">Integration with Velox, Presto, Spark</h2>
+
+  <!-- §31 -->
+  <section class="chapter" id="c31">
+    <h2><span class="ch-num">§31</span>Velox, Spark-RAPIDS, Presto</h2>
+
+    <p>The JD calls out cuDF, Velox, Presto, and Spark specifically. The story:</p>
+
+    <h3>Velox</h3>
+    <p>Meta's C++ execution engine — a vectorized, columnar runtime for SQL queries. Underlies Presto, planned for Spark and Trino. Velox's <code>Vector</code> type is its analog of cuDF's <code>column</code>; the formats are compatible at the conceptual level but not bit-identical. The opportunity for ADI: implementing Velox <em>operators</em> (Scan, Filter, HashAggregation, HashJoin) that execute on GPU using cuDF as the substrate.</p>
+
+    <h3>Spark-RAPIDS</h3>
+    <p>The RAPIDS Accelerator for Apache Spark — a JVM plugin that intercepts Spark SQL physical plans and re-implements them on GPU using cuDF. The bridge between JVM-managed Spark objects and native cuDF columns lives in a JNI layer. This is one of the most operationally complex pieces of RAPIDS and a frequent area of new development.</p>
+
+<pre data-lang="C++"><span class="com">// Sketch of a JNI bridge for cuDF → JVM</span>
+<span class="kw">extern</span> <span class="str">"C"</span> JNIEXPORT jlong JNICALL
+<span class="fn">Java_ai_rapids_cudf_Table_filter</span>(JNIEnv* env, jclass,
+                                  jlong input_handle, jlong mask_handle) {
+  <span class="kw">try</span> {
+    <span class="kw">auto</span> input = <span class="kw">reinterpret_cast</span>&lt;<span class="ty">cudf::table_view</span>*&gt;(input_handle);
+    <span class="kw">auto</span> mask  = <span class="kw">reinterpret_cast</span>&lt;<span class="ty">cudf::column_view</span>*&gt;(mask_handle);
+    <span class="kw">auto</span> result = cudf::<span class="fn">apply_boolean_mask</span>(*input, *mask);
+    <span class="kw">return</span> <span class="kw">reinterpret_cast</span>&lt;jlong&gt;(result.<span class="fn">release</span>());
+  } <span class="kw">catch</span> (std::exception <span class="kw">const</span>&amp; e) {
+    env-&gt;<span class="fn">ThrowNew</span>(env-&gt;<span class="fn">FindClass</span>(<span class="str">"java/lang/RuntimeException"</span>), e.<span class="fn">what</span>());
+    <span class="kw">return</span> 0;
+  }
+}</pre>
+
+    <h3>Presto</h3>
+    <p>Presto-on-Velox is the integration target. As Velox gains GPU operators (via cuDF), Presto inherits them. The path to GPU-accelerated SQL across both Spark and Presto runs through Velox as the common execution layer.</p>
+
+    <div class="callout">
+      <h5>Type system bridging — the boring hard part</h5>
+      <p>Each system has its own type catalog: Spark's Catalyst types, Velox's vector types, Arrow's logical types, cuDF's <code>type_id</code>. Decimal precision, timestamp time zones, null semantics, and nested-type ABI vary in subtle ways. A senior engineer in this role spends real time on type-system compatibility, often more than on kernel performance.</p>
+    </div>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART XI ===================== -->
+<div class="part" id="p11">
+  <div class="part-label">Part XI</div>
+  <h2 class="part-title">Interview-style implementations</h2>
+  <p class="part-intro">Concrete problems that test the union of the topics above. Each comes with an implementation sketch and the discussion points that distinguish a senior-level answer.</p>
+
+  <!-- §32 -->
+  <section class="chapter" id="c32">
+    <h2><span class="ch-num">§32</span>Six problems, six implementations</h2>
+
+    <!-- Problem 1 -->
+    <div class="problem">
+      <div class="problem-header">Problem 1 · Implement a histogram on GPU</div>
+      <div class="problem-body">
+        <h5>The prompt</h5>
+        <p>Given an array of N integers in [0, K), produce an array of K counts. K is small (256). Optimize for throughput.</p>
+
+        <h5>Naive — slow</h5>
+<pre data-lang="CUDA"><span class="pp">__global__</span> <span class="kw">void</span> <span class="fn">histo_slow</span>(<span class="ty">int</span> <span class="kw">const</span>* in, <span class="ty">int</span>* counts, <span class="ty">int</span> n) {
+  <span class="ty">int</span> i = blockIdx.x * blockDim.x + threadIdx.x;
+  <span class="kw">if</span> (i &lt; n) <span class="fn">atomicAdd</span>(&amp;counts[in[i]], 1);  <span class="com">// global atomic — contention</span>
+}</pre>
+
+        <h5>Production — shared-memory privatization</h5>
+<pre data-lang="CUDA"><span class="pp">__global__</span> <span class="kw">void</span> <span class="fn">histo_fast</span>(<span class="ty">int</span> <span class="kw">const</span>* in, <span class="ty">int</span>* counts, <span class="ty">int</span> n) {
+  <span class="pp">__shared__</span> <span class="ty">int</span> local[256];
+  <span class="kw">if</span> (threadIdx.x &lt; 256) local[threadIdx.x] = 0;
+  <span class="fn">__syncthreads</span>();
+
+  <span class="ty">int</span> tid = blockIdx.x * blockDim.x + threadIdx.x;
+  <span class="ty">int</span> stride = blockDim.x * gridDim.x;
+  <span class="kw">for</span> (<span class="ty">int</span> i = tid; i &lt; n; i += stride) {
+    <span class="fn">atomicAdd</span>(&amp;local[in[i]], 1);    <span class="com">// shared-mem atomic — fast</span>
+  }
+  <span class="fn">__syncthreads</span>();
+
+  <span class="kw">if</span> (threadIdx.x &lt; 256) <span class="fn">atomicAdd</span>(&amp;counts[threadIdx.x], local[threadIdx.x]);
+}</pre>
+
+        <h5>Senior-level discussion points</h5>
+        <ul class="tight">
+          <li>Why shared-memory atomics are faster than global (lower latency, higher throughput, hardware path).</li>
+          <li>Grid-stride loop — handles N much larger than total threads, gives the launcher flexibility.</li>
+          <li>For larger K (e.g., 1M bins), shared memory doesn't fit; fall back to multiple sub-histograms or use CUB's <code>DeviceHistogram</code>.</li>
+          <li>Privatization scales — replicate the histogram <em>per-warp</em> for even more parallelism if K is small enough.</li>
+          <li>Bank conflicts on the shared histogram if many threads target the same bin — interleave or use atomic.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Problem 2 -->
+    <div class="problem">
+      <div class="problem-header">Problem 2 · Parallel prefix sum, from scratch</div>
+      <div class="problem-body">
+        <h5>The prompt</h5>
+        <p>Implement an inclusive scan on a device array, with full code. Don't use CUB.</p>
+
+        <h5>Implementation — block scan + grid-level offset addition</h5>
+<pre data-lang="CUDA"><span class="pp">__device__</span> <span class="ty">int</span> <span class="fn">warp_inclusive_scan</span>(<span class="ty">int</span> v) {
+  <span class="kw">int</span> lane = threadIdx.x %% 32;
+  <span class="pp">#pragma</span> unroll
+  <span class="kw">for</span> (<span class="ty">int</span> off = 1; off &lt; 32; off &lt;&lt;= 1) {
+    <span class="ty">int</span> n = <span class="fn">__shfl_up_sync</span>(0xffffffff, v, off);
+    <span class="kw">if</span> (lane &gt;= off) v += n;
+  }
+  <span class="kw">return</span> v;
+}
+
+<span class="kw">template</span>&lt;<span class="ty">int</span> BLOCK_SIZE&gt;
+<span class="pp">__device__</span> <span class="ty">int</span> <span class="fn">block_inclusive_scan</span>(<span class="ty">int</span> v) {
+  <span class="pp">__shared__</span> <span class="ty">int</span> warp_sums[BLOCK_SIZE / 32];
+  <span class="ty">int</span> lane = threadIdx.x %% 32;
+  <span class="ty">int</span> warp = threadIdx.x / 32;
+
+  v = <span class="fn">warp_inclusive_scan</span>(v);
+  <span class="kw">if</span> (lane == 31) warp_sums[warp] = v;
+  <span class="fn">__syncthreads</span>();
+
+  <span class="kw">if</span> (warp == 0) {
+    <span class="ty">int</span> w = (lane &lt; BLOCK_SIZE / 32) ? warp_sums[lane] : 0;
+    w = <span class="fn">warp_inclusive_scan</span>(w);
+    <span class="kw">if</span> (lane &lt; BLOCK_SIZE / 32) warp_sums[lane] = w;
+  }
+  <span class="fn">__syncthreads</span>();
+
+  <span class="kw">if</span> (warp &gt; 0) v += warp_sums[warp - 1];
+  <span class="kw">return</span> v;
+}
+
+<span class="com">// Pass 1: each block scans its own chunk, writes block totals</span>
+<span class="pp">__global__</span> <span class="kw">void</span> <span class="fn">scan_block</span>(<span class="ty">int</span> <span class="kw">const</span>* in, <span class="ty">int</span>* out, <span class="ty">int</span>* block_sums, <span class="ty">int</span> n) {
+  <span class="ty">int</span> i = blockIdx.x * blockDim.x + threadIdx.x;
+  <span class="ty">int</span> v = (i &lt; n) ? in[i] : 0;
+  v = <span class="fn">block_inclusive_scan</span>&lt;256&gt;(v);
+  <span class="kw">if</span> (i &lt; n) out[i] = v;
+  <span class="kw">if</span> (threadIdx.x == blockDim.x - 1) block_sums[blockIdx.x] = v;
+}
+
+<span class="com">// Pass 2: scan block totals (recursive — usually one more level suffices)</span>
+<span class="com">// Pass 3: add block_sums[block-1] to every element in block</span>
+<span class="pp">__global__</span> <span class="kw">void</span> <span class="fn">add_block_offset</span>(<span class="ty">int</span>* out, <span class="ty">int</span> <span class="kw">const</span>* scanned_block_sums, <span class="ty">int</span> n) {
+  <span class="ty">int</span> i = blockIdx.x * blockDim.x + threadIdx.x;
+  <span class="kw">if</span> (blockIdx.x &gt; 0 &amp;&amp; i &lt; n) {
+    out[i] += scanned_block_sums[blockIdx.x - 1];
+  }
+}</pre>
+
+        <h5>Senior-level discussion points</h5>
+        <ul class="tight">
+          <li>Three-pass structure is simple but uses extra memory. Decoupled lookback collapses to single pass — sketch it.</li>
+          <li>Warp-level scan with <code>__shfl_up_sync</code> is register-only, no shared memory.</li>
+          <li>For very long arrays, the recursive scan-of-block-sums might itself need a grid — at some point, just use CUB.</li>
+          <li>Numeric stability: this works for int; for floats, the parallel order changes the result. Document or use compensated summation.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Problem 3 -->
+    <div class="problem">
+      <div class="problem-header">Problem 3 · Stream compaction (copy_if)</div>
+      <div class="problem-body">
+        <h5>The prompt</h5>
+        <p>Given an array of N ints and a predicate, produce a compact array of elements satisfying the predicate, in original order.</p>
+
+        <h5>Implementation</h5>
+<pre data-lang="CUDA"><span class="com">// 1. Compute predicate flags (in parallel)</span>
+<span class="pp">__global__</span> <span class="kw">void</span> <span class="fn">compute_flags</span>(<span class="ty">int</span> <span class="kw">const</span>* in, <span class="ty">int</span>* flags, <span class="ty">int</span> n) {
+  <span class="ty">int</span> i = blockIdx.x * blockDim.x + threadIdx.x;
+  <span class="kw">if</span> (i &lt; n) flags[i] = (in[i] &gt; 0) ? 1 : 0;
+}
+
+<span class="com">// 2. Exclusive scan over flags → output positions for passing elements</span>
+<span class="com">//    (use the scan implementation from Problem 2, or CUB)</span>
+
+<span class="com">// 3. Scatter passing elements</span>
+<span class="pp">__global__</span> <span class="kw">void</span> <span class="fn">scatter</span>(<span class="ty">int</span> <span class="kw">const</span>* in, <span class="ty">int</span> <span class="kw">const</span>* flags,
+                        <span class="ty">int</span> <span class="kw">const</span>* positions, <span class="ty">int</span>* out, <span class="ty">int</span> n) {
+  <span class="ty">int</span> i = blockIdx.x * blockDim.x + threadIdx.x;
+  <span class="kw">if</span> (i &lt; n &amp;&amp; flags[i]) out[positions[i]] = in[i];
+}
+
+<span class="com">// Total output size = scan_result[n-1] + flags[n-1] (or sum of flags)</span></pre>
+
+        <h5>Senior-level discussion points</h5>
+        <ul class="tight">
+          <li>Why this is the canonical pattern (predicate → scan → scatter).</li>
+          <li>The total cost is dominated by the scan; the predicate kernel and scatter are bandwidth-bound and embarrassingly parallel.</li>
+          <li>For "partition" (output both passing and failing), use a single pass with two output streams driven by two scans.</li>
+          <li>CUB's <code>DeviceSelect::If</code> wraps this with decoupled-lookback scan internally.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Problem 4 -->
+    <div class="problem">
+      <div class="problem-header">Problem 4 · Sketch a GPU hash join</div>
+      <div class="problem-body">
+        <h5>The prompt</h5>
+        <p>Given two integer-keyed tables (build, probe), output pairs of (build_idx, probe_idx) where keys match.</p>
+
+        <h5>Implementation outline</h5>
+<pre data-lang="CUDA"><span class="com">// Hash table: linear probing, atomicCAS insert (see §16)</span>
+<span class="kw">struct</span> <span class="ty">slot</span> { <span class="ty">int32_t</span> key; <span class="ty">int32_t</span> idx; };
+
+<span class="pp">__global__</span> <span class="kw">void</span> <span class="fn">build_phase</span>(<span class="ty">int32_t</span> <span class="kw">const</span>* keys, <span class="ty">slot</span>* ht,
+                            <span class="ty">int</span> cap, <span class="ty">int</span> n) {
+  <span class="ty">int</span> i = blockIdx.x * blockDim.x + threadIdx.x;
+  <span class="kw">if</span> (i &gt;= n) <span class="kw">return</span>;
+
+  <span class="ty">int32_t</span> k = keys[i];
+  <span class="ty">uint32_t</span> s = <span class="fn">hash</span>(k) %% cap;
+  <span class="kw">while</span> (<span class="kw">true</span>) {
+    <span class="ty">int32_t</span> prev = <span class="fn">atomicCAS</span>(&amp;ht[s].key, -1, k);
+    <span class="kw">if</span> (prev == -1) {
+      ht[s].idx = i;          <span class="com">// note: multimap would chain or use linked slots</span>
+      <span class="kw">return</span>;
+    }
+    s = (s + 1) %% cap;
+  }
+}
+
+<span class="pp">__global__</span> <span class="kw">void</span> <span class="fn">probe_phase</span>(<span class="ty">int32_t</span> <span class="kw">const</span>* keys, <span class="ty">slot</span> <span class="kw">const</span>* ht,
+                            <span class="ty">int32_t</span>* out_build, <span class="ty">int32_t</span>* out_probe,
+                            <span class="ty">int</span>* out_count, <span class="ty">int</span> cap, <span class="ty">int</span> n) {
+  <span class="ty">int</span> i = blockIdx.x * blockDim.x + threadIdx.x;
+  <span class="kw">if</span> (i &gt;= n) <span class="kw">return</span>;
+
+  <span class="ty">int32_t</span> k = keys[i];
+  <span class="ty">uint32_t</span> s = <span class="fn">hash</span>(k) %% cap;
+  <span class="kw">while</span> (<span class="kw">true</span>) {
+    <span class="ty">int32_t</span> kk = ht[s].key;
+    <span class="kw">if</span> (kk == -1) <span class="kw">return</span>;
+    <span class="kw">if</span> (kk == k) {
+      <span class="ty">int</span> pos = <span class="fn">atomicAdd</span>(out_count, 1);   <span class="com">// crude; better: scan-based</span>
+      out_build[pos] = ht[s].idx;
+      out_probe[pos] = i;
+    }
+    s = (s + 1) %% cap;
+  }
+}</pre>
+
+        <h5>Senior-level discussion points</h5>
+        <ul class="tight">
+          <li>This is unique-key only; multimap requires either chaining or rolling additional buckets per key.</li>
+          <li>Output via <code>atomicAdd</code> contends and produces unsorted output — production uses scan-based output position computation.</li>
+          <li>Hash function matters: Murmur3 or xxh32 in production; CRC32 if you have hardware support.</li>
+          <li>Load factor: too high → long probes; too low → wasted memory. Sweet spot ~50-75%.</li>
+          <li>How would you extend to multi-column keys? Combine columns into a single hash; verify true row equality after match (row equality kernel).</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Problem 5 -->
+    <div class="problem">
+      <div class="problem-header">Problem 5 · Optimize a matrix transpose</div>
+      <div class="problem-body">
+        <h5>The prompt</h5>
+        <p>Transpose a NxN float matrix on GPU. Show the naïve version and an optimized one. Explain why the optimized one is ~10× faster.</p>
+
+        <h5>Naïve — uncoalesced writes</h5>
+<pre data-lang="CUDA"><span class="pp">__global__</span> <span class="kw">void</span> <span class="fn">transpose_naive</span>(<span class="kw">float</span> <span class="kw">const</span>* in, <span class="kw">float</span>* out, <span class="ty">int</span> N) {
+  <span class="ty">int</span> x = blockIdx.x * blockDim.x + threadIdx.x;
+  <span class="ty">int</span> y = blockIdx.y * blockDim.y + threadIdx.y;
+  <span class="kw">if</span> (x &lt; N &amp;&amp; y &lt; N) out[x * N + y] = in[y * N + x];
+  <span class="com">// Read is coalesced (consecutive threads, consecutive memory)</span>
+  <span class="com">// Write is strided by N — terrible coalescing</span>
+}</pre>
+
+        <h5>Optimized — shared-memory tile, padded to avoid bank conflicts</h5>
+<pre data-lang="CUDA"><span class="kw">constexpr</span> <span class="ty">int</span> TILE = 32;
+
+<span class="pp">__global__</span> <span class="kw">void</span> <span class="fn">transpose_fast</span>(<span class="kw">float</span> <span class="kw">const</span>* in, <span class="kw">float</span>* out, <span class="ty">int</span> N) {
+  <span class="pp">__shared__</span> <span class="kw">float</span> tile[TILE][TILE + 1];   <span class="com">// +1 padding kills bank conflicts</span>
+
+  <span class="ty">int</span> x = blockIdx.x * TILE + threadIdx.x;
+  <span class="ty">int</span> y = blockIdx.y * TILE + threadIdx.y;
+  <span class="kw">if</span> (x &lt; N &amp;&amp; y &lt; N) {
+    tile[threadIdx.y][threadIdx.x] = in[y * N + x];   <span class="com">// coalesced read</span>
+  }
+  <span class="fn">__syncthreads</span>();
+
+  x = blockIdx.y * TILE + threadIdx.x;
+  y = blockIdx.x * TILE + threadIdx.y;
+  <span class="kw">if</span> (x &lt; N &amp;&amp; y &lt; N) {
+    out[y * N + x] = tile[threadIdx.x][threadIdx.y];   <span class="com">// coalesced write</span>
+  }
+}</pre>
+
+        <h5>Senior-level discussion points</h5>
+        <ul class="tight">
+          <li>The shared memory tile lets both global accesses (read and write) be coalesced. Without it, one direction must be strided.</li>
+          <li>The <code>[TILE+1]</code> padding shifts banks so column accesses don't collide. Without it, the column-major shared-memory read would 32-way conflict.</li>
+          <li>For very large matrices, consider out-of-place vs in-place — in-place transpose is much harder and rarely worth it on GPU.</li>
+          <li><code>cuBLAS</code> has <code>cublasGeam</code> for transpose; in production just use that. But this kernel is a rite of passage.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Problem 6 -->
+    <div class="problem">
+      <div class="problem-header">Problem 6 · A debugging story — kernel produces wrong results</div>
+      <div class="problem-body">
+        <h5>The scenario</h5>
+        <p>Your reduction kernel passes unit tests but produces wrong results on the production data. The output is occasionally off by a few. What do you check?</p>
+
+        <h5>The checklist</h5>
+        <ol>
+          <li><strong>Floating-point non-associativity.</strong> Parallel reduction sums in a different order than sequential. Test against a sequential reference with <code>fabsf(a - b) &lt; tolerance</code>, not <code>==</code>.</li>
+          <li><strong>Race conditions.</strong> <code>compute-sanitizer --tool racecheck</code> finds them. Common cause: missing <code>__syncthreads()</code> between shared-memory writes and reads in different threads.</li>
+          <li><strong>Out-of-bounds.</strong> <code>compute-sanitizer --tool memcheck</code>. Often the boundary in the last block.</li>
+          <li><strong>Uninitialized shared memory.</strong> Shared memory isn't zero-initialized. Threads beyond <code>n</code> may read garbage from <code>sdata[]</code>.</li>
+          <li><strong>Improper warp sync.</strong> Post-Volta, warps no longer implicitly converge after divergence. Need <code>__syncwarp()</code> or <code>_sync</code>-suffixed shuffles.</li>
+          <li><strong>Wrong stream.</strong> Result read before kernel completed because read was on a different stream without dependency.</li>
+          <li><strong>Stale cache.</strong> Rarely — but <code>cudaDeviceSynchronize()</code> + <code>__threadfence()</code> issues can show up in multi-kernel pipelines.</li>
+        </ol>
+
+        <h5>The senior signal</h5>
+        <p>A senior candidate will reach for <code>compute-sanitizer</code> as the first move (free, catches 90% of bugs), then explain how to construct a minimal repro by halving the dataset until the failure isolates. Bonus points for mentioning <code>cuda-gdb</code> for stepping through device code, and for the observation that <em>most production wrong-result bugs are not in the kernel</em> — they're in how the kernel was wired into the pipeline (wrong stream, stale buffer, type punning).</p>
+      </div>
+    </div>
+
+    <p class="pull">A senior engineer in this space can move between the C++ template that dispatches the operation, the CUDA kernel that executes it, and the parallel algorithm that justifies it — without losing fluency at any level.</p>
+  </section>
+</div>
+
+</main>
+
+<footer>
+  <h4>Primary references</h4>
+  <ul>
+    <li><code>cuDF</code> — github.com/rapidsai/cudf; especially <code>cpp/src/</code> for algorithm implementations</li>
+    <li><code>CUB / CCCL</code> — github.com/NVIDIA/cccl; the gold standard for primitives</li>
+    <li><code>cuCollections</code> — github.com/NVIDIA/cuCollections; GPU hash maps and sets</li>
+    <li><code>RMM</code> — github.com/rapidsai/rmm; RAPIDS Memory Manager</li>
+    <li><code>nvCOMP</code> — github.com/NVIDIA/nvcomp; GPU compression primitives</li>
+    <li><code>NVSHMEM</code> — developer.nvidia.com/nvshmem; one-sided GPU communication</li>
+    <li><code>Velox</code> — github.com/facebookincubator/velox</li>
+    <li><code>Spark-RAPIDS</code> — github.com/NVIDIA/spark-rapids</li>
+    <li><code>Apache Arrow</code> — arrow.apache.org; especially the columnar format spec</li>
+  </ul>
+
+  <h4>Foundational papers &amp; reads</h4>
+  <ul>
+    <li>Merrill &amp; Garland, <em>Single-Pass Parallel Prefix Scan with Decoupled Lookback</em> (2016) — the algorithm CUB uses</li>
+    <li>Satish, Harris &amp; Garland, <em>Designing Efficient Sorting Algorithms for Manycore GPUs</em> (2009)</li>
+    <li>Ashkiani et al., <em>Dynamic Hash Tables on the GPU</em> (2018) — the cuCollections lineage</li>
+    <li>Volkov, <em>Better Performance at Lower Occupancy</em> (GTC 2010) — the ILP argument</li>
+    <li>Harris, <em>Optimizing Parallel Reduction in CUDA</em> (NVIDIA, 2007) — still the best intro</li>
+    <li>NVIDIA, <em>CUDA C++ Programming Guide</em> — the canonical reference; reread the memory chapter periodically</li>
+    <li>NVIDIA, <em>CUDA C++ Best Practices Guide</em> — distilled performance wisdom</li>
+    <li>RAPIDS blog posts on cuDF internals — particularly join, group-by, and parquet decoding deep dives</li>
+  </ul>
+
+  <h4>Tooling daily-driver</h4>
+  <ul>
+    <li><code>nvcc</code>, <code>nvc++</code> — compilers; know <code>--keep --keep-dir</code> to inspect PTX/SASS</li>
+    <li><code>cuobjdump --dump-sass</code> — SASS-level inspection of compiled kernels</li>
+    <li><code>compute-sanitizer</code> — memcheck, racecheck, initcheck, synccheck</li>
+    <li><code>nsys</code>, <code>ncu</code> — profiling at timeline and kernel resolution</li>
+    <li><code>cuda-gdb</code> — actual debugger for device code (rarely needed but invaluable when it is)</li>
+    <li><code>Compiler Explorer (godbolt.org)</code> — sometimes works for short CUDA snippets to inspect PTX</li>
+  </ul>
+</footer>
+
+</body>
+</html>
