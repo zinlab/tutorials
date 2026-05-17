@@ -1,0 +1,3442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PyTorch Lifecycle Engineering — A Senior Engineer's Handbook</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --bg:           #1a1d23;
+  --bg-2:         #20242c;
+  --bg-3:         #262b34;
+  --bg-card:      #1e222a;
+  --ink:          #e4e6ec;
+  --ink-soft:     #9ea4b1;
+  --ink-faint:    #6b7280;
+  --rule:         #2d333d;
+  --rule-soft:    #232831;
+  --accent:       #f4c450;
+  --accent-deep:  #b08020;
+  --teal:         #5ab8b0;
+  --teal-deep:    #2e6b65;
+  --green:        #7bc77a;
+  --green-deep:   #4a8049;
+  --rose:         #d97a6c;
+  --rose-deep:    #9c4d3f;
+  --violet:       #9d8ad1;
+  --code-bg:      #14171c;
+  --code-ink:     #e4e6ec;
+  --maxw:         1040px;
+}
+*{ box-sizing: border-box; }
+html{ scroll-behavior: smooth; }
+body{
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+header, main, footer{ position: relative; z-index: 1; }
+
+/* ============ HEADER ============ */
+header{
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: 72px 32px 48px;
+  border-bottom: 1px solid var(--rule);
+}
+.kicker{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 28px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.kicker::before{
+  content: "$";
+  color: var(--green);
+  font-weight: 600;
+}
+.kicker::after{
+  content: "_";
+  color: var(--accent);
+  animation: blink 1.2s steps(2) infinite;
+}
+@keyframes blink {
+  50% { opacity: 0; }
+}
+h1{
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 500;
+  font-size: clamp(42px, 7vw, 76px);
+  line-height: 0.98;
+  letter-spacing: -0.025em;
+  margin: 0 0 24px;
+}
+h1 .frag-a{ color: var(--ink); display: block; }
+h1 .frag-b{ color: var(--accent); display: block; }
+.deck{
+  font-size: 18px;
+  color: var(--ink-soft);
+  max-width: 700px;
+  line-height: 1.55;
+  margin-top: 20px;
+}
+.meta-row{
+  margin-top: 36px;
+  display: flex;
+  gap: 28px;
+  flex-wrap: wrap;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11.5px;
+  color: var(--ink-faint);
+  letter-spacing: .04em;
+}
+.meta-row .m b{ color: var(--ink); font-weight: 500; }
+.meta-row .m{ display: flex; gap: 8px; align-items: center; }
+.meta-row .m::before{ content: "▸"; color: var(--teal); }
+
+/* ============ TOC ============ */
+.toc{
+  margin-top: 48px;
+  background: var(--bg-2);
+  border: 1px solid var(--rule);
+  padding: 24px 28px;
+  border-radius: 4px;
+}
+.toc h5{
+  margin: 0 0 16px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: .22em;
+  color: var(--accent);
+  text-transform: uppercase;
+  font-weight: 600;
+}
+.toc-grid{
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px 36px;
+}
+@media (max-width: 760px){ .toc-grid{ grid-template-columns: 1fr; } }
+.toc-grid a{
+  color: var(--ink-soft);
+  text-decoration: none;
+  font-size: 14px;
+  padding: 5px 0;
+  display: flex;
+  gap: 12px;
+  border-bottom: 1px solid transparent;
+  transition: all .15s;
+}
+.toc-grid a:hover{ color: var(--accent); border-color: var(--rule); }
+.toc-grid a .n{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--teal);
+  min-width: 32px;
+  font-weight: 500;
+}
+
+/* ============ MAIN ============ */
+main{
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: 48px 32px 80px;
+}
+.part{
+  margin-top: 80px;
+  padding-top: 32px;
+  border-top: 1px solid var(--rule);
+}
+.part:first-child{ margin-top: 32px; border-top: none; padding-top: 0; }
+.part-label{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: .25em;
+  color: var(--accent);
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+.part-title{
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 500;
+  font-size: 42px;
+  line-height: 1.05;
+  letter-spacing: -0.015em;
+  margin: 0 0 14px;
+}
+.part-title .acc{ color: var(--accent); font-weight: 400; }
+.part-intro{
+  color: var(--ink-soft);
+  font-size: 16.5px;
+  max-width: 760px;
+  margin-bottom: 32px;
+}
+
+section.chapter{ margin-top: 44px; }
+h2{
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 500;
+  font-size: 26px;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  margin: 0 0 12px;
+  color: var(--ink);
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+}
+h2 .ch-num{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--teal);
+  letter-spacing: .15em;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+h3{
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 500;
+  font-size: 18px;
+  margin: 26px 0 10px;
+  color: var(--ink);
+  letter-spacing: -0.005em;
+}
+h4{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--teal);
+  margin: 20px 0 8px;
+  font-weight: 600;
+}
+p{ margin: 12px 0; }
+p code, li code, td code{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: .82em;
+  background: var(--bg-3);
+  color: var(--accent);
+  padding: 1px 6px;
+  border-radius: 2px;
+  border: 1px solid var(--rule-soft);
+}
+
+ul, ol{ padding-left: 1.3em; }
+li{ margin: 6px 0; }
+ul.tight li{ margin: 3px 0; }
+ul.dash{ list-style: none; padding-left: 0; }
+ul.dash li{ position: relative; padding-left: 24px; }
+ul.dash li::before{
+  content: "▸";
+  position: absolute; left: 0;
+  color: var(--teal);
+}
+ul.check{ list-style: none; padding-left: 0; }
+ul.check li{ position: relative; padding-left: 26px; }
+ul.check li::before{
+  content: "✓";
+  position: absolute; left: 0;
+  color: var(--green);
+  font-weight: bold;
+}
+
+/* ============ CODE ============ */
+pre{
+  background: var(--code-bg);
+  border: 1px solid var(--rule);
+  padding: 16px 20px;
+  overflow-x: auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--code-ink);
+  margin: 18px 0;
+  position: relative;
+  border-radius: 3px;
+}
+pre .com{ color: #6b7280; font-style: italic; }
+pre .kw{  color: #c084d8; }
+pre .ty{  color: #5ab8b0; }
+pre .str{ color: #e09678; }
+pre .num{ color: #f4c450; }
+pre .fn{  color: #88b4d8; }
+pre .pp{  color: #d8b070; }
+pre .var{ color: #e4e6ec; }
+pre::before{
+  content: attr(data-lang);
+  position: absolute;
+  top: 6px; right: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9.5px;
+  letter-spacing: .18em;
+  color: #4b5563;
+  text-transform: uppercase;
+}
+
+.code-caption{
+  font-size: 13.5px;
+  color: var(--ink-faint);
+  margin: -10px 0 18px;
+  padding-left: 4px;
+  font-style: italic;
+}
+
+/* ============ CALLOUTS ============ */
+.callout{
+  margin: 22px 0;
+  padding: 16px 22px;
+  border-left: 3px solid var(--teal);
+  background: var(--bg-2);
+  font-size: 15px;
+  line-height: 1.6;
+  border-radius: 0 3px 3px 0;
+}
+.callout.warn{    border-color: var(--accent); }
+.callout.danger{  border-color: var(--rose); }
+.callout.tip{     border-color: var(--green); }
+.callout h5{
+  margin: 0 0 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: var(--teal);
+  font-weight: 700;
+}
+.callout.warn h5{   color: var(--accent); }
+.callout.danger h5{ color: var(--rose); }
+.callout.tip h5{    color: var(--green); }
+.callout p:first-child{ margin-top: 0; }
+.callout p:last-child{ margin-bottom: 0; }
+
+/* ============ TABLES ============ */
+.tbl{
+  width: 100%;
+  border-collapse: collapse;
+  margin: 18px 0;
+  font-size: 14px;
+}
+.tbl th, .tbl td{
+  text-align: left;
+  padding: 10px 14px;
+  vertical-align: top;
+  border-bottom: 1px solid var(--rule);
+}
+.tbl th{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 600;
+  border-bottom: 1.5px solid var(--accent-deep);
+}
+.tbl tr:hover td{ background: var(--bg-2); }
+.tbl td:first-child{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--teal);
+  font-weight: 500;
+  width: 28%;
+}
+
+/* ============ DIAGRAM ============ */
+.diagram{
+  background: var(--bg-2);
+  border: 1px solid var(--rule);
+  padding: 20px 22px;
+  margin: 22px 0;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+  white-space: pre;
+  overflow-x: auto;
+  border-radius: 3px;
+}
+
+/* ============ PROBLEM CARDS ============ */
+.problem{
+  margin: 28px 0;
+  background: var(--bg-2);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+}
+.problem-header{
+  padding: 14px 22px;
+  background: var(--bg-3);
+  color: var(--accent);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--rule);
+}
+.problem-header::before{
+  content: "▸";
+  color: var(--teal);
+  font-size: 12px;
+}
+.problem-body{ padding: 20px 24px; }
+.problem-body > h5{
+  margin: 16px 0 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px;
+  letter-spacing: .18em;
+  color: var(--accent);
+  text-transform: uppercase;
+  font-weight: 600;
+}
+.problem-body > h5:first-child{ margin-top: 0; }
+
+/* ============ PULL ============ */
+.pull{
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 400;
+  font-style: italic;
+  font-size: 22px;
+  line-height: 1.4;
+  color: var(--accent);
+  margin: 32px 0;
+  padding: 0 0 0 28px;
+  border-left: 2px solid var(--accent);
+}
+
+/* ============ KEY-IDEA BOX ============ */
+.idea{
+  margin: 24px 0;
+  border: 1px solid var(--teal-deep);
+  background: var(--bg-2);
+  padding: 20px 24px;
+  border-radius: 3px;
+}
+.idea h5{
+  margin: 0 0 10px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px;
+  letter-spacing: .22em;
+  color: var(--teal);
+  text-transform: uppercase;
+  font-weight: 700;
+}
+.idea p{ margin: 6px 0; font-size: 15px; }
+
+/* ============ TWO-COL ============ */
+.twocol{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  margin: 22px 0;
+}
+@media (max-width: 760px){ .twocol{ grid-template-columns: 1fr; } }
+.twocol .col{
+  background: var(--bg-2);
+  border: 1px solid var(--rule);
+  padding: 16px 18px;
+  border-radius: 3px;
+}
+.twocol .col h5{
+  margin: 0 0 10px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--teal);
+  font-weight: 600;
+}
+.twocol .col.bad h5{  color: var(--rose); }
+.twocol .col.good h5{ color: var(--green); }
+.twocol .col p{ margin: 8px 0; font-size: 14px; }
+.twocol .col pre{ font-size: 11.5px; padding: 12px 14px; margin: 8px 0 4px; }
+
+/* ============ CHEATSHEET ============ */
+.cheat{
+  background: var(--bg-2);
+  border: 1px solid var(--rule);
+  padding: 20px 22px;
+  margin: 24px 0;
+  border-radius: 3px;
+}
+.cheat h5{
+  margin: 0 0 12px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: .2em;
+  color: var(--accent);
+  text-transform: uppercase;
+  font-weight: 600;
+}
+.cheat-grid{
+  display: grid;
+  grid-template-columns: 1fr 1.5fr;
+  gap: 6px 18px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12.5px;
+}
+.cheat-grid .cmd{ color: var(--teal); }
+.cheat-grid .desc{ color: var(--ink-soft); }
+@media (max-width: 680px){
+  .cheat-grid{ grid-template-columns: 1fr; gap: 2px 18px; }
+  .cheat-grid .desc{ margin-bottom: 10px; }
+}
+
+/* ============ SEPARATOR ============ */
+.rule-sep{
+  height: 1px;
+  background: var(--rule);
+  margin: 48px 0;
+  position: relative;
+}
+.rule-sep::after{
+  content: "▪";
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--bg);
+  color: var(--accent);
+  padding: 0 16px;
+  font-size: 14px;
+}
+
+/* ============ FOOTER ============ */
+footer{
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: 48px 32px 80px;
+  border-top: 1px solid var(--rule);
+  color: var(--ink-soft);
+  font-size: 14px;
+}
+footer h4{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: .2em;
+  color: var(--accent);
+  margin: 0 0 14px;
+  font-weight: 700;
+}
+footer .resources{
+  columns: 2;
+  column-gap: 36px;
+}
+@media (max-width: 680px){ footer .resources{ columns: 1; } }
+footer ul{ list-style: none; padding: 0; margin: 0; }
+footer li{
+  padding: 5px 0;
+  font-size: 13.5px;
+  break-inside: avoid;
+}
+footer li code{
+  color: var(--teal);
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-weight: 500;
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="kicker">NVIDIA · PyTorch Lifecycle · CI/CD &amp; release engineering</div>
+  <h1>
+    <span class="frag-a">Shipping the deep-learning</span>
+    <span class="frag-b">software stack, reliably</span>
+  </h1>
+  <p class="deck">
+    A senior engineer's reference for the PyTorch Lifecycle role &mdash; covering CI/CD systems, C++ build infrastructure (CMake, linker errors, symbol resolution), Python packaging and wheel distribution, the CUDA library compatibility matrix, multi-cloud release pipelines, and the day-to-day debugging that keeps an entire deep-learning stack flowing to customers.
+  </p>
+  <div class="meta-row">
+    <span class="m"><b>Parts</b> 9</span>
+    <span class="m"><b>Chapters</b> 28</span>
+    <span class="m"><b>Code examples</b> ~50</span>
+    <span class="m"><b>Format</b> reference + cheatsheets</span>
+  </div>
+
+  <div class="toc">
+    <h5>Index</h5>
+    <div class="toc-grid">
+      <a href="#c01"><span class="n">&sect;01</span><span>The PyTorch software stack, top to bottom</span></a>
+      <a href="#c02"><span class="n">&sect;02</span><span>What "lifecycle engineering" actually means</span></a>
+      <a href="#c03"><span class="n">&sect;03</span><span>The release engineer's mental model</span></a>
+      <a href="#c04"><span class="n">&sect;04</span><span>Linux fundamentals for release engineers</span></a>
+      <a href="#c05"><span class="n">&sect;05</span><span>Bash, scripting, automation</span></a>
+      <a href="#c06"><span class="n">&sect;06</span><span>Git, branching strategies, monorepos</span></a>
+      <a href="#c07"><span class="n">&sect;07</span><span>SSH, secrets, infrastructure access</span></a>
+      <a href="#c08"><span class="n">&sect;08</span><span>The C++ compilation model (revisited)</span></a>
+      <a href="#c09"><span class="n">&sect;09</span><span>CMake in depth for PyTorch-scale builds</span></a>
+      <a href="#c10"><span class="n">&sect;10</span><span>Ninja, ccache, distributed builds</span></a>
+      <a href="#c11"><span class="n">&sect;11</span><span>Linker errors &amp; symbol resolution</span></a>
+      <a href="#c12"><span class="n">&sect;12</span><span>The dual-ABI problem &amp; libstdc++</span></a>
+      <a href="#c13"><span class="n">&sect;13</span><span>Shared library hell &amp; RPATH</span></a>
+      <a href="#c14"><span class="n">&sect;14</span><span>Python packaging foundations</span></a>
+      <a href="#c15"><span class="n">&sect;15</span><span>Wheels, manylinux, and ABI compliance</span></a>
+      <a href="#c16"><span class="n">&sect;16</span><span>PyTorch's build system end-to-end</span></a>
+      <a href="#c17"><span class="n">&sect;17</span><span>Python extension modules &amp; pybind11</span></a>
+      <a href="#c18"><span class="n">&sect;18</span><span>The CUDA library compatibility matrix</span></a>
+      <a href="#c19"><span class="n">&sect;19</span><span>CI/CD architectures &amp; build farms</span></a>
+      <a href="#c20"><span class="n">&sect;20</span><span>GitHub Actions, GitLab, Jenkins in practice</span></a>
+      <a href="#c21"><span class="n">&sect;21</span><span>Containerized build &amp; test environments</span></a>
+      <a href="#c22"><span class="n">&sect;22</span><span>Test infrastructure at scale</span></a>
+      <a href="#c23"><span class="n">&sect;23</span><span>Multi-cloud build farms</span></a>
+      <a href="#c24"><span class="n">&sect;24</span><span>Release pipelines &amp; promotion</span></a>
+      <a href="#c25"><span class="n">&sect;25</span><span>Versioning, channels, deprecation</span></a>
+      <a href="#c26"><span class="n">&sect;26</span><span>Cross-team collaboration patterns</span></a>
+      <a href="#c27"><span class="n">&sect;27</span><span>Debugging stack-wide failures</span></a>
+      <a href="#c28"><span class="n">&sect;28</span><span>Cheatsheets &amp; learning roadmap</span></a>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<!-- ===================== PART I ===================== -->
+<div class="part" id="p1">
+  <div class="part-label">Part I</div>
+  <h2 class="part-title">The role, <span class="acc">in context</span></h2>
+  <p class="part-intro">Before the technology, the shape of the work. A Lifecycle Engineer sits at the intersection of dozens of teams, owns no product directly, and yet is responsible for whether anything actually ships. The mental model matters as much as any specific tool.</p>
+
+  <section class="chapter" id="c01">
+    <h2><span class="ch-num">&sect;01</span>The PyTorch software stack, top to bottom</h2>
+
+    <p>To do this job, you must hold the full vertical in your head. A user-visible bug in <code>torch.compile</code> can trace to CUDA driver behavior; a wheel that won't import can be a libstdc++ ABI mismatch from three layers below; a CI failure can be a flaky NCCL test or a real correctness regression in cuBLAS. Knowing where to look is half the job.</p>
+
+    <div class="diagram">+-------------------------------------------------------------+
+|  USER CODE                                                   |
+|  model = torch.nn.Module(...); output = model(input)         |
++-------------------------------------------------------------+
+|  PYTORCH PYTHON (torch, torch.nn, torch.compile, dynamo)    |
+|  Python-side autograd, dispatch, frontends                   |
++-------------------------------------------------------------+
+|  PYTORCH C++ (libtorch, ATen, c10, autograd engine)          |
+|  Tensor operations, dispatcher, kernel registration          |
++-------------------------------------------------------------+
+|  KERNEL LIBRARIES                                            |
+|  cuDNN  cuBLAS  cuSPARSE  cuFFT  NCCL  Thrust  CUTLASS       |
+|  + CPU kernels (oneDNN/MKL, sleef, FBGEMM)                   |
++-------------------------------------------------------------+
+|  CUDA RUNTIME &amp; DRIVER                                       |
+|  libcudart.so  (in-process)                                  |
+|  libcuda.so   (driver shim)                                  |
++-------------------------------------------------------------+
+|  KERNEL DRIVER                                               |
+|  nvidia.ko on the host                                       |
++-------------------------------------------------------------+
+|  HARDWARE                                                    |
+|  GPU silicon (Ampere, Hopper, Blackwell, ...)                |
++-------------------------------------------------------------+</div>
+
+    <h3>The layers, in detail</h3>
+
+    <table class="tbl">
+      <thead><tr><th>Layer</th><th>What it owns</th><th>Who maintains</th></tr></thead>
+      <tbody>
+        <tr><td>User code</td><td>Models, training loops, inference apps</td><td>Researchers, customers</td></tr>
+        <tr><td>PyTorch Python</td><td>nn modules, autograd, optimizers, distributed, torch.compile</td><td>PyTorch core team (Meta + community + NVIDIA)</td></tr>
+        <tr><td>PyTorch C++</td><td>ATen (tensor lib), c10 (core abstractions), autograd engine, dispatcher</td><td>PyTorch core team</td></tr>
+        <tr><td>Kernel libraries</td><td>cuDNN (conv, attention), cuBLAS (matmul), NCCL (collective comms), CUTLASS</td><td>NVIDIA library teams</td></tr>
+        <tr><td>CUDA runtime</td><td>Memory management, stream API, kernel launch ABI</td><td>NVIDIA CUDA team</td></tr>
+        <tr><td>CUDA driver</td><td>Kernel-level GPU control, IPC, virtualization</td><td>NVIDIA driver team</td></tr>
+      </tbody>
+    </table>
+
+    <p>A lifecycle engineer for the PyTorch deep-learning frameworks team operates across <em>all</em> of these. A typical day might involve: investigating why a particular cuDNN version broke a torch.nn test, helping the CUTLASS team ship a new release into PyTorch nightlies, debugging a manylinux wheel that won't load on RHEL 9, and writing a CI job that bisects a regression across 12 commits in the C++ layer.</p>
+
+    <div class="callout">
+      <h5>Why this matters for the interview</h5>
+      <p>When an interviewer asks "tell me about a hard bug you debugged," the strongest answer travels at least two layers. "Test failure was a flaky network timeout" is weak. "Test failure was a real correctness issue in a recent cuDNN minor that surfaced because our test exercised an edge case; bisected to a specific commit; mitigated by pinning, then engaged the library team to fix upstream" is what senior looks like.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c02">
+    <h2><span class="ch-num">&sect;02</span>What "Lifecycle Engineering" actually means</h2>
+
+    <p>The term is NVIDIA-specific; the discipline is universal. Across companies it goes by Release Engineering, Build Engineering, Developer Infrastructure, Platform Engineering, or Software Reliability for Engineering Tools. The substance is the same: you own the machinery that turns commits into shipped software.</p>
+
+    <h3>The seven responsibilities</h3>
+
+    <ol>
+      <li><strong>Build systems</strong> &mdash; CMake / Bazel / Buck infrastructure, dependency declarations, build configuration matrices.</li>
+      <li><strong>CI/CD pipelines</strong> &mdash; the systems that build, test, and publish artifacts on every commit and on every release.</li>
+      <li><strong>Test infrastructure</strong> &mdash; the harnesses, runners, sharding, retry logic, flaky-test management, and result aggregation.</li>
+      <li><strong>Artifact distribution</strong> &mdash; wheel servers, container registries, package indices, the routes from build to user.</li>
+      <li><strong>Developer environments</strong> &mdash; the docker images, devcontainers, and on-demand cloud machines other engineers use day-to-day.</li>
+      <li><strong>Release engineering</strong> &mdash; version cuts, RC promotion, hotfix workflows, deprecation cycles.</li>
+      <li><strong>Cross-team coordination</strong> &mdash; the interfaces between PyTorch, CUDA, cuDNN, NCCL, NCC libraries, drivers, and the cadence at which they must align.</li>
+    </ol>
+
+    <h3>What it explicitly is not</h3>
+
+    <p>The JD calls out "without on-call duties" &mdash; this isn't an SRE role. You're not paged at 3am for production outages. The work is engineering-focused: building systems and tools that other engineers use. The bar is different. Where an SRE optimizes for time-to-recovery during incidents, a lifecycle engineer optimizes for time-from-commit-to-shipped, for build farm throughput, and for the developer-hours saved by making the inner loop fast.</p>
+
+    <div class="idea">
+      <h5>Mental model</h5>
+      <p>A good way to frame the role: you are a <em>software engineer whose customer is other software engineers</em>. Every minute of build time you shave saves the team thousands of minutes per week. Every flaky test you fix removes friction from every developer. Every cross-team release you smooth means features ship one cycle earlier.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c03">
+    <h2><span class="ch-num">&sect;03</span>The release engineer's mental model</h2>
+
+    <p>Senior lifecycle engineers internalize a few mental models that shape every decision. None of them are written in a book; they emerge from years of watching builds fail.</p>
+
+    <h3>Builds are programs &mdash; treat them as software</h3>
+    <p>A CI pipeline is code. A CMake configuration is code. A Bash script that wires together five steps is code. Apply the same standards: version control, code review, tests, observability, careful refactoring. The most common failure mode in lifecycle work is treating build scripts as throwaway &mdash; then having no one able to debug them six months later.</p>
+
+    <h3>The blast radius principle</h3>
+    <p>Every change has a blast radius. A typo in a Python utility affects only that script. A typo in a base Docker image affects every CI job. A typo in the build config of a core library affects every downstream consumer. Senior engineers map their changes to the blast radius before pressing merge.</p>
+
+    <div class="diagram">CHANGE LOCATION              BLAST RADIUS
+                              
+your team's CI config    -->  your team
+shared build script      -->  ~5 teams
+base docker image        -->  every team using it
+pytorch CMake            -->  every pytorch consumer
+cudnn ABI                -->  every framework
+cuda driver              -->  every workload on every NVIDIA GPU</div>
+
+    <h3>The trust gradient</h3>
+    <p>Different artifacts have different trust requirements. Nightly builds are for early adopters; release candidates are for partner teams; GA releases are for end users. Each tier has different signal requirements: nightlies can be slightly broken (signal is the diff), RCs need most tests passing, GA needs all tests passing plus integration validation.</p>
+
+    <h3>The composability requirement</h3>
+    <p>PyTorch lives in a software ecosystem with thousands of downstream packages. A working PyTorch ships only when it composes correctly with: torchvision, torchaudio, torchtext, transformers, accelerate, deepspeed, vllm, lightning, plus all the third-party domain libraries built against torch. Lifecycle work includes verifying these compositions, often in dedicated integration suites.</p>
+
+    <div class="callout warn">
+      <h5>The hidden contract</h5>
+      <p>PyTorch's C++ API has soft compatibility guarantees; its Python API has stronger ones. As a lifecycle engineer you have to know which symbols, which behaviors, and which ABIs are part of the contract &mdash; and which are accidentally exposed. Breaking the accidental ones is how you learn about them.</p>
+    </div>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART II ===================== -->
+<div class="part" id="p2">
+  <div class="part-label">Part II</div>
+  <h2 class="part-title">Linux, scripting, <span class="acc">developer tooling</span></h2>
+  <p class="part-intro">The substrate. Every CI pipeline is a Linux machine running shell scripts that orchestrate compilers, package managers, and test runners. Comfort here is non-negotiable &mdash; not as syntax memorization, but as fluency in what's happening when something breaks.</p>
+
+  <section class="chapter" id="c04">
+    <h2><span class="ch-num">&sect;04</span>Linux fundamentals for release engineers</h2>
+
+    <p>Six topics that come up daily, in order of how often they actually matter.</p>
+
+    <h3>Processes, signals, exit codes</h3>
+    <p>Every CI step is a process. Every failure is an exit code. Every flaky test is sometimes a signal handler that didn't clean up. Knowing what these are isn't optional.</p>
+
+<pre data-lang="BASH"><span class="com"># exit codes: 0 = success, anything else = some failure</span>
+my_command; echo $?
+<span class="com"># 0   - success</span>
+<span class="com"># 1   - general error</span>
+<span class="com"># 2   - misuse of shell builtins</span>
+<span class="com"># 127 - command not found</span>
+<span class="com"># 128 + N - killed by signal N (130 = SIGINT, 137 = SIGKILL/OOM, 139 = SIGSEGV)</span>
+
+<span class="com"># common signal codes that come up in CI</span>
+<span class="com"># SIGTERM (15) - graceful shutdown, sent by timeout/orchestrator</span>
+<span class="com"># SIGKILL (9)  - unconditional kill, often OOM killer</span>
+<span class="com"># SIGSEGV (11) - segfault in C/C++ code</span>
+<span class="com"># SIGABRT (6)  - assertion failure, abort()</span></pre>
+
+    <p>The OOM killer is a frequent CI villain for PyTorch builds. Linking <code>libtorch.so</code> peaks at 30+ GB resident; an underprovisioned runner gets killed mid-link and you see exit code 137. The fix is bigger machines, parallel-link limits, or splitting the artifact.</p>
+
+    <h3>The filesystem hierarchy that matters</h3>
+
+    <table class="tbl">
+      <thead><tr><th>Path</th><th>Contains</th></tr></thead>
+      <tbody>
+        <tr><td>/usr/lib/x86_64-linux-gnu/</td><td>System shared libraries (libstdc++, glibc, ...)</td></tr>
+        <tr><td>/usr/local/cuda/</td><td>CUDA toolkit install</td></tr>
+        <tr><td>/etc/ld.so.conf.d/</td><td>Library search paths the dynamic linker consults</td></tr>
+        <tr><td>/proc/&lt;pid&gt;/</td><td>Live process introspection: maps, status, fd</td></tr>
+        <tr><td>/sys/</td><td>Kernel-exposed device state, including <code>/sys/class/nvidia</code></td></tr>
+        <tr><td>/var/log/</td><td>System logs, often the first place to look on a CI machine</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Files, descriptors, and pipes</h3>
+
+<pre data-lang="BASH"><span class="com"># Inspect what files a process has open</span>
+lsof -p <span class="num">12345</span>
+ls -la /proc/<span class="num">12345</span>/fd/
+
+<span class="com"># See exactly what syscalls a stuck process is making</span>
+strace -p <span class="num">12345</span>
+strace -f -e openat ./build.sh   <span class="com"># trace file opens through child processes</span>
+
+<span class="com"># Common patterns in CI scripts</span>
+cmd <span class="num">2</span>&gt;&amp;<span class="num">1</span>                  <span class="com"># merge stderr into stdout</span>
+cmd &gt; /dev/null <span class="num">2</span>&gt;&amp;<span class="num">1</span>      <span class="com"># discard all output</span>
+cmd <span class="num">2</span>&gt; errors.log         <span class="com"># stderr to file, stdout to terminal</span>
+cmd | tee log.txt          <span class="com"># show AND save output</span>
+cmd <span class="num">2</span>&gt;&amp;<span class="num">1</span> | tee log.txt    <span class="com"># save everything</span></pre>
+
+    <h3>Permissions, users, sudo</h3>
+
+<pre data-lang="BASH"><span class="com"># UID/GID matter in containers — files written as root in a docker container</span>
+<span class="com"># have to be cleaned up carefully</span>
+docker run --rm -v $(pwd):/work -u $(id -u):$(id -g) build-image make
+
+<span class="com"># Check effective permissions</span>
+stat -c <span class="str">'%a %U %G %n'</span> file.txt    <span class="com"># 644 user group file.txt</span>
+namei -l /usr/local/cuda/lib64/libcudart.so  <span class="com"># show permissions all the way up the path</span></pre>
+
+    <h3>Environment variables</h3>
+    <p>The single largest source of mystery CI failures: an environment variable that's set on one machine and not on another. Catalog the ones that matter:</p>
+
+<pre data-lang="BASH"><span class="com"># Build / linker environment</span>
+CC, CXX                  <span class="com"># compiler selection</span>
+CFLAGS, CXXFLAGS         <span class="com"># compile flags</span>
+LDFLAGS                  <span class="com"># linker flags</span>
+LD_LIBRARY_PATH          <span class="com"># runtime shared library search</span>
+LIBRARY_PATH             <span class="com"># compile-time search (rarely used directly)</span>
+PKG_CONFIG_PATH          <span class="com"># pkg-config search</span>
+CPATH, C_INCLUDE_PATH    <span class="com"># preprocessor search</span>
+
+<span class="com"># CUDA</span>
+CUDA_HOME                <span class="com"># PyTorch build script reads this</span>
+PATH=/usr/local/cuda/bin:$PATH
+LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+CUDA_VISIBLE_DEVICES     <span class="com"># constrain which GPUs the process sees</span>
+TORCH_CUDA_ARCH_LIST     <span class="com"># which SM architectures to compile for (e.g., "8.0;8.6;9.0")</span>
+
+<span class="com"># Python</span>
+PYTHONPATH               <span class="com"># module search path</span>
+PYTHONDONTWRITEBYTECODE  <span class="com"># don't create .pyc — useful in CI</span>
+PYTHONUNBUFFERED         <span class="com"># flush stdout immediately — critical for CI logs</span>
+
+<span class="com"># CI / build hygiene</span>
+TERM=dumb                <span class="com"># avoid escape codes in logs</span>
+NO_COLOR=1               <span class="com"># tell tools to skip color</span>
+CI=true                  <span class="com"># most tools detect this and adjust output</span></pre>
+
+    <div class="callout warn">
+      <h5>The LD_LIBRARY_PATH trap</h5>
+      <p>Setting <code>LD_LIBRARY_PATH</code> in a CI script "fixes" library loading on the build machine but doesn't help users who pip-install the resulting wheel. The fix has to be inside the wheel (RPATH or bundled libraries via auditwheel). Workarounds in build scripts are how shipped wheels end up broken &mdash; see &sect;13.</p>
+    </div>
+
+    <h3>systemd, services, journalctl</h3>
+    <p>On build hosts you'll occasionally need to manage daemons:</p>
+
+<pre data-lang="BASH">systemctl status nvidia-persistenced     <span class="com"># is the GPU persistence daemon healthy?</span>
+journalctl -u jenkins -n <span class="num">200</span>            <span class="com"># last 200 lines of Jenkins service log</span>
+journalctl --since <span class="str">"1 hour ago"</span> -p err   <span class="com"># last hour of errors, all services</span>
+journalctl -k                            <span class="com"># kernel ring buffer (XID errors land here)</span></pre>
+  </section>
+
+  <section class="chapter" id="c05">
+    <h2><span class="ch-num">&sect;05</span>Bash, scripting, automation</h2>
+
+    <p>The JD mentions "proficiency with scripting languages." In practice this means Bash and Python. Bash for orchestration glue, Python for anything beyond ~50 lines. Knowing where each shines &mdash; and the failure modes of each &mdash; matters.</p>
+
+    <h3>Bash patterns every release engineer uses</h3>
+
+<pre data-lang="BASH"><span class="com">#!/usr/bin/env bash</span>
+<span class="com"># Always start with strict mode in non-trivial scripts</span>
+<span class="kw">set</span> -euo pipefail
+<span class="com">#  e  - exit immediately on any non-zero exit code</span>
+<span class="com">#  u  - treat unset variables as errors</span>
+<span class="com">#  o pipefail - a pipeline fails if any stage fails (not just the last)</span>
+
+<span class="com"># Optional: IFS to safer default</span>
+IFS=$<span class="str">'\n\t'</span>
+
+<span class="com"># A cleanup trap fires on script exit (normal or error)</span>
+<span class="fn">cleanup</span>() {
+    <span class="kw">local</span> exit_code=$?
+    rm -rf <span class="str">"$TMP_DIR"</span>
+    <span class="kw">if</span> [[ $exit_code -ne <span class="num">0</span> ]]; <span class="kw">then</span>
+        <span class="kw">echo</span> <span class="str">"Build failed with exit code $exit_code"</span> &gt;&amp;<span class="num">2</span>
+    <span class="kw">fi</span>
+}
+trap cleanup EXIT
+
+TMP_DIR=$(mktemp -d)
+<span class="kw">echo</span> <span class="str">"Working in $TMP_DIR"</span></pre>
+
+    <h3>The quoting that prevents 90% of bugs</h3>
+
+<pre data-lang="BASH"><span class="com"># Always quote variable expansions unless you specifically need word-splitting</span>
+<span class="kw">if</span> [[ -z <span class="str">"$VERSION"</span> ]]; <span class="kw">then</span> <span class="kw">echo</span> <span class="str">"VERSION unset"</span>; <span class="kw">exit</span> <span class="num">1</span>; <span class="kw">fi</span>
+
+<span class="com"># Filenames with spaces, newlines, special chars</span>
+<span class="kw">for</span> file <span class="kw">in</span> <span class="str">"$@"</span>; <span class="kw">do</span>     <span class="com"># quoted "$@" preserves arguments verbatim</span>
+    <span class="kw">echo</span> <span class="str">"Processing: $file"</span>
+<span class="kw">done</span>
+
+<span class="com"># Use [[ ]] over [ ] — more features, fewer edge cases</span>
+<span class="kw">if</span> [[ <span class="str">"$VERSION"</span> == <span class="str">"2.4"</span>* ]]; <span class="kw">then</span>      <span class="com">// glob patterns</span>
+    <span class="kw">echo</span> <span class="str">"2.4 series"</span>
+<span class="kw">fi</span>
+
+<span class="kw">if</span> [[ <span class="str">"$VERSION"</span> =~ ^[<span class="num">0</span>-<span class="num">9</span>]+\.[<span class="num">0</span>-<span class="num">9</span>]+\.[<span class="num">0</span>-<span class="num">9</span>]+$ ]]; <span class="kw">then</span>   <span class="com">// regex</span>
+    <span class="kw">echo</span> <span class="str">"Valid version"</span>
+<span class="kw">fi</span></pre>
+
+    <h3>Where Bash stops working</h3>
+    <p>Bash is great for ~20-line scripts. Past that, every script becomes a maintenance liability. Move to Python when:</p>
+
+    <ul class="dash">
+      <li>You need structured data (JSON, YAML, TOML) parsed properly &mdash; Bash + jq is brittle.</li>
+      <li>You need error handling with retries, timeouts, exponential backoff.</li>
+      <li>You're doing arithmetic beyond simple counters.</li>
+      <li>You need cross-platform support (CI on Windows is real).</li>
+      <li>The script will be modified by more than one person.</li>
+    </ul>
+
+    <h3>A Python rewrite that becomes maintainable</h3>
+
+<pre data-lang="Python"><span class="com">#!/usr/bin/env python3</span>
+<span class="com">"""Build orchestrator with retries, timeouts, structured logging."""</span>
+<span class="kw">from</span> __future__ <span class="kw">import</span> annotations
+
+<span class="kw">import</span> argparse
+<span class="kw">import</span> logging
+<span class="kw">import</span> os
+<span class="kw">import</span> subprocess
+<span class="kw">import</span> sys
+<span class="kw">import</span> time
+<span class="kw">from</span> dataclasses <span class="kw">import</span> dataclass
+<span class="kw">from</span> pathlib <span class="kw">import</span> Path
+
+log = logging.<span class="fn">getLogger</span>(__name__)
+
+<span class="pp">@dataclass</span>
+<span class="kw">class</span> <span class="ty">BuildConfig</span>:
+    cuda_version: <span class="ty">str</span>
+    python_version: <span class="ty">str</span>
+    torch_cuda_arch_list: <span class="ty">str</span>
+    build_dir: Path
+    parallel: <span class="ty">int</span>
+
+<span class="kw">def</span> <span class="fn">run_with_retry</span>(
+    cmd: <span class="ty">list</span>[<span class="ty">str</span>],
+    *,
+    retries: <span class="ty">int</span> = <span class="num">3</span>,
+    backoff: <span class="ty">float</span> = <span class="num">2.0</span>,
+    timeout: <span class="ty">float</span> | <span class="kw">None</span> = <span class="kw">None</span>,
+    env: <span class="ty">dict</span>[<span class="ty">str</span>, <span class="ty">str</span>] | <span class="kw">None</span> = <span class="kw">None</span>,
+) -&gt; subprocess.CompletedProcess:
+    <span class="str">"""Run cmd; retry on transient failures with exponential backoff."""</span>
+    last_exc: Exception | <span class="kw">None</span> = <span class="kw">None</span>
+    <span class="kw">for</span> attempt <span class="kw">in</span> <span class="fn">range</span>(<span class="num">1</span>, retries + <span class="num">1</span>):
+        log.<span class="fn">info</span>(<span class="str">"Running (attempt %d/%d): %s"</span>, attempt, retries, <span class="str">" "</span>.<span class="fn">join</span>(cmd))
+        <span class="kw">try</span>:
+            <span class="kw">return</span> subprocess.<span class="fn">run</span>(
+                cmd,
+                check=<span class="kw">True</span>,
+                timeout=timeout,
+                env={**os.environ, **(env <span class="kw">or</span> {})},
+                capture_output=<span class="kw">False</span>,
+            )
+        <span class="kw">except</span> subprocess.CalledProcessError <span class="kw">as</span> e:
+            last_exc = e
+            log.<span class="fn">warning</span>(<span class="str">"Failed with exit %d"</span>, e.returncode)
+            <span class="kw">if</span> attempt &lt; retries:
+                sleep_s = backoff ** attempt
+                log.<span class="fn">info</span>(<span class="str">"Sleeping %.1fs before retry"</span>, sleep_s)
+                time.<span class="fn">sleep</span>(sleep_s)
+    <span class="kw">raise</span> <span class="fn">RuntimeError</span>(<span class="str">f"Command failed after </span>{retries}<span class="str"> attempts"</span>) <span class="kw">from</span> last_exc
+
+<span class="kw">def</span> <span class="fn">build_pytorch</span>(cfg: BuildConfig) -&gt; <span class="ty">None</span>:
+    env = {
+        <span class="str">"USE_CUDA"</span>: <span class="str">"1"</span>,
+        <span class="str">"CUDA_HOME"</span>: <span class="str">f"/usr/local/cuda-</span>{cfg.cuda_version}<span class="str">"</span>,
+        <span class="str">"TORCH_CUDA_ARCH_LIST"</span>: cfg.torch_cuda_arch_list,
+        <span class="str">"MAX_JOBS"</span>: <span class="ty">str</span>(cfg.parallel),
+    }
+    <span class="fn">run_with_retry</span>(
+        [<span class="str">"python"</span>, <span class="str">"setup.py"</span>, <span class="str">"bdist_wheel"</span>],
+        timeout=<span class="num">3600</span> * <span class="num">2</span>,
+        env=env,
+    )
+
+<span class="kw">def</span> <span class="fn">main</span>() -&gt; <span class="ty">int</span>:
+    parser = argparse.<span class="fn">ArgumentParser</span>()
+    parser.<span class="fn">add_argument</span>(<span class="str">"--cuda"</span>, required=<span class="kw">True</span>)
+    parser.<span class="fn">add_argument</span>(<span class="str">"--python"</span>, required=<span class="kw">True</span>)
+    parser.<span class="fn">add_argument</span>(<span class="str">"--arch"</span>, default=<span class="str">"8.0;8.6;9.0"</span>)
+    parser.<span class="fn">add_argument</span>(<span class="str">"--parallel"</span>, type=<span class="ty">int</span>, default=os.<span class="fn">cpu_count</span>())
+    args = parser.<span class="fn">parse_args</span>()
+
+    logging.<span class="fn">basicConfig</span>(level=logging.INFO, format=<span class="str">"%(asctime)s %(levelname)s %(message)s"</span>)
+    <span class="fn">build_pytorch</span>(<span class="fn">BuildConfig</span>(
+        cuda_version=args.cuda,
+        python_version=args.python,
+        torch_cuda_arch_list=args.arch,
+        build_dir=<span class="fn">Path</span>(<span class="str">"build"</span>),
+        parallel=args.parallel,
+    ))
+    <span class="kw">return</span> <span class="num">0</span>
+
+<span class="kw">if</span> __name__ == <span class="str">"__main__"</span>:
+    sys.<span class="fn">exit</span>(<span class="fn">main</span>())</pre>
+
+    <p>Notice what this gets you: structured args via argparse, logging instead of <code>echo</code>, retries with backoff, environment merging with defaults, and clear types via dataclass + annotations. The Bash equivalent would be twice the code and three times the bugs.</p>
+  </section>
+
+  <section class="chapter" id="c06">
+    <h2><span class="ch-num">&sect;06</span>Git, branching strategies, monorepos</h2>
+
+    <p>You will be the person who answers "how do we cherry-pick this bugfix to the 2.4 release branch?" Knowing git deeply pays off daily.</p>
+
+    <h3>The git mental model</h3>
+    <p>Git is a content-addressed graph of immutable objects (blobs, trees, commits). Branches and tags are mutable references &mdash; pointers into the graph. <em>Almost every git operation creates new objects and moves a pointer.</em> Internalizing this makes the rest make sense.</p>
+
+    <div class="diagram">refs/heads/main      ----+
+                          |
+                          v
+              [commit A] &lt;-- [commit B] &lt;-- [commit C]
+                  |              |              |
+                [tree]         [tree]         [tree]
+                /  \             |              |
+            [blob][blob]      [blob]         [blob]
+
+A merge commit has TWO parents. A rebase produces NEW commits
+that are independent of the originals (different SHAs).</div>
+
+    <h3>The commands that come up in lifecycle work</h3>
+
+    <div class="cheat">
+      <h5>Daily git for release engineers</h5>
+      <div class="cheat-grid">
+        <span class="cmd">git log --graph --oneline --all</span><span class="desc">Visualize the branch topology</span>
+        <span class="cmd">git log v2.3.0..v2.4.0 --oneline</span><span class="desc">Commits in one release but not the previous</span>
+        <span class="cmd">git log --merges main</span><span class="desc">Only merge commits (often = PRs landed)</span>
+        <span class="cmd">git bisect start good bad</span><span class="desc">Binary search for the commit that introduced a regression</span>
+        <span class="cmd">git cherry-pick &lt;sha&gt;</span><span class="desc">Apply a commit from one branch onto another</span>
+        <span class="cmd">git cherry-pick -x &lt;sha&gt;</span><span class="desc">Same, but record the source SHA in the message</span>
+        <span class="cmd">git rebase -i origin/main</span><span class="desc">Reorder/squash/edit commits before pushing</span>
+        <span class="cmd">git rev-list --count HEAD..origin/main</span><span class="desc">How many commits behind origin?</span>
+        <span class="cmd">git reflog</span><span class="desc">Local history of HEAD; recover lost commits</span>
+        <span class="cmd">git diff --stat &lt;range&gt;</span><span class="desc">Quick view of files+lines changed in a range</span>
+        <span class="cmd">git blame -L 50,70 file.cpp</span><span class="desc">Who last touched lines 50-70</span>
+        <span class="cmd">git submodule update --init --recursive</span><span class="desc">PyTorch uses submodules heavily; this is daily</span>
+      </div>
+    </div>
+
+    <h3>git bisect — the bug-hunting superpower</h3>
+    <p>When a regression lands somewhere in 200 commits, bisecting reduces it to ~8 builds. Automation makes it trivial:</p>
+
+<pre data-lang="BASH"><span class="com"># Mark current commit as bad, an older one as good</span>
+git bisect start
+git bisect bad HEAD
+git bisect good v2.4.0
+
+<span class="com"># Tell git how to test — script returns 0 (good) / 1 (bad) / 125 (skip)</span>
+git bisect run ./scripts/repro_bug.sh
+
+<span class="com"># When done:</span>
+git bisect reset</pre>
+
+    <p>The <code>repro_bug.sh</code> script can build PyTorch, run the failing test, and return the appropriate code. Even at PyTorch scale (full build = ~1 hr), bisecting 200 commits = ~8 builds = 8 hours, beats reading commits one by one.</p>
+
+    <h3>Branching strategies</h3>
+
+    <table class="tbl">
+      <thead><tr><th>Strategy</th><th>Used by</th><th>Trade-offs</th></tr></thead>
+      <tbody>
+        <tr><td>Trunk-based</td><td>Google, Meta, large monorepos</td><td>One mainline; feature flags gate unfinished work; demands strong CI</td></tr>
+        <tr><td>Release branches</td><td>PyTorch, LLVM, most OSS</td><td>main is "next"; release/2.4 branched at RC; backports flow there</td></tr>
+        <tr><td>GitFlow</td><td>Older enterprise codebases</td><td>develop + main + release/* + feature/* — heavy ceremony; rarely worth it</td></tr>
+        <tr><td>Forking workflow</td><td>OSS projects on GitHub</td><td>Contributors fork; PR upstream; standard for community projects</td></tr>
+      </tbody>
+    </table>
+
+    <p>PyTorch uses release branches. The lifecycle engineer's daily life includes triaging "should this fix be backported to release/2.4?" The criteria: severity, blast radius, regression risk of the cherry-pick itself.</p>
+
+    <div class="callout">
+      <h5>Monorepo realities</h5>
+      <p>PyTorch itself is one repo, but the broader stack is many repos: torchvision, torchaudio, torchrec, pytorch/builder (the build infrastructure), pytorch-labs/*, nvidia repos. The "monorepo vs polyrepo" debate is real and consequential &mdash; in lifecycle work you'll deal with both, and you'll learn that the answer is always "depends on the team's discipline more than the tool."</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c07">
+    <h2><span class="ch-num">&sect;07</span>SSH, secrets, infrastructure access</h2>
+
+    <p>Cloud build farms, signing keys for releases, registry credentials, access to bare-metal GPU machines: this work touches secrets every day. Mishandling is how breaches happen.</p>
+
+    <h3>SSH essentials</h3>
+
+<pre data-lang="BASH"><span class="com"># Generate a key pair (Ed25519 preferred over RSA)</span>
+ssh-keygen -t ed25519 -C <span class="str">"engineer@nvidia.com"</span> -f ~/.ssh/id_ed25519_nvidia
+
+<span class="com"># Use specific keys for specific hosts</span>
+cat &gt; ~/.ssh/config &lt;&lt; <span class="str">'EOF'</span>
+Host buildfarm
+    HostName buildfarm.example.com
+    User ci-runner
+    IdentityFile ~/.ssh/id_ed25519_buildfarm
+    IdentitiesOnly yes        <span class="com"># don't try other keys</span>
+    ServerAliveInterval <span class="num">60</span>     <span class="com"># keep long sessions alive</span>
+EOF
+
+<span class="com"># Forward agent for git operations on remote hosts (use carefully)</span>
+ssh -A buildfarm
+
+<span class="com"># Port-forward to a remote service for debugging</span>
+ssh -L <span class="num">8080</span>:localhost:<span class="num">8080</span> buildfarm</pre>
+
+    <h3>The secrets hierarchy</h3>
+
+    <ol>
+      <li><strong>Never in source control.</strong> Use pre-commit hooks (gitleaks, detect-secrets) to enforce.</li>
+      <li><strong>Never in CI logs.</strong> CI systems mask known secrets; double-check by greping logs.</li>
+      <li><strong>Never in environment variables that leak.</strong> A subprocess's environment is visible in <code>/proc/&lt;pid&gt;/environ</code>.</li>
+      <li><strong>Use scoped secrets.</strong> A build needs registry push credentials only at publish time, not during compile.</li>
+      <li><strong>Use OIDC where possible.</strong> GitHub Actions can authenticate to AWS/GCP via OIDC without long-lived keys.</li>
+    </ol>
+
+    <h3>Secret managers in CI</h3>
+
+<pre data-lang="YAML"><span class="com"># GitHub Actions — secrets passed only where needed</span>
+<span class="kw">jobs</span>:
+  <span class="kw">publish</span>:
+    <span class="kw">runs-on</span>: ubuntu-latest
+    <span class="kw">permissions</span>:
+      <span class="kw">id-token</span>: write    <span class="com"># OIDC token for AWS</span>
+      <span class="kw">contents</span>: read
+    <span class="kw">steps</span>:
+      - <span class="kw">uses</span>: aws-actions/configure-aws-credentials@v4
+        <span class="kw">with</span>:
+          <span class="kw">role-to-assume</span>: arn:aws:iam::123:role/release-publisher
+          <span class="kw">aws-region</span>: us-east-<span class="num">1</span>
+          <span class="com"># no access keys! OIDC handshake instead</span>
+      - <span class="kw">name</span>: Push wheels
+        <span class="kw">run</span>: aws s3 cp dist/ s3://wheels-bucket/ --recursive
+
+<span class="com"># Avoid this anti-pattern:</span>
+<span class="com"># env:</span>
+<span class="com">#   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_KEY }}   # long-lived key, broad scope</span></pre>
+
+    <div class="callout danger">
+      <h5>Common secret leaks in CI</h5>
+      <ul class="tight">
+        <li>Printing all env vars for "debugging" (<code>env | sort</code>) &mdash; the secret is in there.</li>
+        <li>Uploading the workspace as an artifact when secrets exist as files inside it.</li>
+        <li>Verbose curl/wget output that includes Authorization headers.</li>
+        <li>Failing CI runs that retain workspaces with cached credentials.</li>
+        <li>Forks of public repos inheriting secrets from the parent (mostly prevented by platforms, but verify).</li>
+      </ul>
+    </div>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART III ===================== -->
+<div class="part" id="p3">
+  <div class="part-label">Part III</div>
+  <h2 class="part-title">C++ build systems &mdash; <span class="acc">where the bodies are buried</span></h2>
+  <p class="part-intro">The JD calls out "C++ build systems, including dependency issues, symbol resolution, and linking problems" as a stand-out qualification. This is where the role bites hardest. A single misconfigured linker flag has consequences felt by millions of PyTorch users. The chapters below build up the model from compilation to linking to the dual-ABI quagmire.</p>
+
+  <section class="chapter" id="c08">
+    <h2><span class="ch-num">&sect;08</span>The C++ compilation model, revisited</h2>
+
+    <p>The four stages: preprocess, compile, assemble, link. Every error in a complex build is locatable to one of these.</p>
+
+    <div class="diagram">  source.cpp                              source.cpp
+       |                                       |
+       v   preprocess (cpp)                    v   one-shot
+  source.ii  (headers expanded)        ----+----+----+----
+       |                                | preprocess     |
+       v   compile (cc1)                | compile        |
+  source.s   (assembly)                 | assemble       |
+       |                                +----+----+----+
+       v   assemble (as)                     |
+  source.o   (object file)                   v
+       |                              source.o (object)
+       v   link (ld)                          |
+  binary or library                           v ld
+                                       binary or library</div>
+
+    <h3>What the linker actually does</h3>
+
+    <p>The linker reads object files and shared libraries, builds a symbol table, resolves references, applies relocations, and emits a final binary. Most C++ build errors that aren't compilation errors are linker errors &mdash; and they are universally cryptic until you know the vocabulary.</p>
+
+<pre data-lang="CPP"><span class="com">// math.h</span>
+<span class="kw">int</span> <span class="fn">square</span>(<span class="kw">int</span> x);
+
+<span class="com">// math.cpp</span>
+<span class="pp">#include</span> <span class="str">"math.h"</span>
+<span class="kw">int</span> <span class="fn">square</span>(<span class="kw">int</span> x) { <span class="kw">return</span> x * x; }
+
+<span class="com">// main.cpp</span>
+<span class="pp">#include</span> <span class="str">"math.h"</span>
+<span class="kw">int</span> <span class="fn">main</span>() { <span class="kw">return</span> <span class="fn">square</span>(<span class="num">5</span>); }</pre>
+
+<pre data-lang="BASH"><span class="com"># Compile each separately</span>
+g++ -c math.cpp -o math.o
+g++ -c main.cpp -o main.o
+
+<span class="com"># Inspect the symbols each object exports/needs</span>
+nm math.o
+<span class="com"># 0000000000000000 T _Z6squarei      &lt;-- T = defined in .text section</span>
+
+nm main.o
+<span class="com">#                  U _Z6squarei      &lt;-- U = undefined, needed from elsewhere</span>
+
+<span class="com"># Linker resolves U-&gt;T by finding the definition in another object/library</span>
+g++ main.o math.o -o program</pre>
+
+    <h3>Name mangling — why C++ symbols look like that</h3>
+    <p>C++ supports overloading, templates, and namespaces &mdash; all of which mean a function name alone doesn't identify a function. The compiler mangles type information into the symbol. <code>c++filt</code> demangles:</p>
+
+<pre data-lang="BASH">echo <span class="str">'_Z6squarei'</span> | c++filt
+<span class="com"># square(int)</span>
+
+nm libtorch.so | c++filt | head -<span class="num">5</span>
+<span class="com"># at::Tensor::add(at::Tensor const&amp;, c10::Scalar const&amp;) const</span>
+<span class="com"># at::Tensor::mul(at::Tensor const&amp;, c10::Scalar const&amp;) const</span>
+<span class="com"># ...</span></pre>
+
+    <p>Two compilers (or two versions of one compiler) using different mangling schemes produce incompatible objects &mdash; one of several reasons C++ ABI compatibility is fragile.</p>
+
+    <h3>Static vs shared libraries</h3>
+
+    <table class="tbl">
+      <thead><tr><th>Aspect</th><th>Static (.a)</th><th>Shared (.so)</th></tr></thead>
+      <tbody>
+        <tr><td>Linking</td><td>Copied into the binary at link time</td><td>Resolved at load time by ld.so</td></tr>
+        <tr><td>Binary size</td><td>Larger (everything bundled)</td><td>Smaller (lib loaded at runtime)</td></tr>
+        <tr><td>Runtime cost</td><td>None (no dynamic dispatch)</td><td>PLT/GOT indirection per call</td></tr>
+        <tr><td>Updates</td><td>Relink to ship a fix</td><td>Replace the .so, all consumers see it</td></tr>
+        <tr><td>Symbol visibility</td><td>All symbols in archive participate</td><td>Only exported symbols visible to consumers</td></tr>
+        <tr><td>Use in PyTorch</td><td>cuDNN sometimes; small CUDA libs</td><td>libtorch.so, libtorch_cpu.so, libtorch_cuda.so</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="chapter" id="c09">
+    <h2><span class="ch-num">&sect;09</span>CMake in depth for PyTorch-scale builds</h2>
+
+    <p>PyTorch uses CMake. So do most large C++ projects in this domain (cuDNN's build infra, NCCL, many third-party deps). Knowing CMake well &mdash; not as a syntax skill but as understanding what it generates and why &mdash; is critical.</p>
+
+    <h3>CMake as a meta-build-system</h3>
+    <p>CMake doesn't build anything. It generates build files for another tool (Make, Ninja, MSBuild, Xcode) which then builds. The two-phase nature is where most confusion comes from.</p>
+
+    <div class="diagram">CMakeLists.txt                 --+
+   +  CMake variables          |    cmake -B build -S .
+   +  toolchain info            +--&gt;  generates build/
+   +  options                  |             |
+   +  find_package results     |             v
+   +  user cache entries       |        build.ninja
+                            ---+         (or Makefile)
+                                              |
+                                cmake --build build (= ninja -C build)
+                                              |
+                                              v
+                                       binaries / libraries</div>
+
+    <h3>The modern (target-based) style</h3>
+
+<pre data-lang="cmake"><span class="fn">cmake_minimum_required</span>(<span class="kw">VERSION</span> <span class="num">3.20</span>)
+<span class="fn">project</span>(my_lib <span class="kw">VERSION</span> <span class="num">1.0</span> <span class="kw">LANGUAGES</span> CXX CUDA)
+
+<span class="fn">set</span>(<span class="kw">CMAKE_CXX_STANDARD</span> <span class="num">17</span>)
+<span class="fn">set</span>(<span class="kw">CMAKE_CXX_STANDARD_REQUIRED</span> <span class="kw">ON</span>)
+<span class="fn">set</span>(<span class="kw">CMAKE_CXX_EXTENSIONS</span> <span class="kw">OFF</span>)   <span class="com"># prefer standard C++ over GNU extensions</span>
+
+<span class="com"># Find dependencies — modern style uses targets, not variables</span>
+<span class="fn">find_package</span>(Torch <span class="kw">REQUIRED</span>)
+<span class="fn">find_package</span>(CUDAToolkit <span class="kw">REQUIRED</span>)
+
+<span class="com"># Define the library as a target</span>
+<span class="fn">add_library</span>(my_lib <span class="kw">SHARED</span> src/main.cpp src/ops.cu)
+
+<span class="com"># Properties go on the target, not as global flags</span>
+<span class="fn">target_include_directories</span>(my_lib
+  <span class="kw">PUBLIC</span>  $&lt;<span class="kw">BUILD_INTERFACE</span>:${<span class="kw">CMAKE_CURRENT_SOURCE_DIR</span>}/include&gt;
+          $&lt;<span class="kw">INSTALL_INTERFACE</span>:include&gt;
+  <span class="kw">PRIVATE</span> ${<span class="kw">CMAKE_CURRENT_SOURCE_DIR</span>}/src
+)
+
+<span class="fn">target_link_libraries</span>(my_lib
+  <span class="kw">PUBLIC</span>  torch
+          CUDA::cudart
+  <span class="kw">PRIVATE</span> CUDA::cublas
+)
+
+<span class="fn">target_compile_options</span>(my_lib <span class="kw">PRIVATE</span>
+  $&lt;$&lt;<span class="kw">COMPILE_LANGUAGE</span>:CXX&gt;:-Wall -Wextra -Werror&gt;
+  $&lt;$&lt;<span class="kw">COMPILE_LANGUAGE</span>:CUDA&gt;:--expt-relaxed-constexpr&gt;
+)
+
+<span class="fn">target_compile_features</span>(my_lib <span class="kw">PUBLIC</span> cxx_std_17)
+<span class="fn">set_target_properties</span>(my_lib <span class="kw">PROPERTIES</span>
+  CUDA_SEPARABLE_COMPILATION <span class="kw">ON</span>
+  POSITION_INDEPENDENT_CODE  <span class="kw">ON</span>
+)</pre>
+
+    <h3>PUBLIC vs PRIVATE vs INTERFACE</h3>
+    <p>The triad that breaks every beginner's CMake:</p>
+
+    <ul class="dash">
+      <li><strong>PRIVATE</strong> &mdash; used to build this target; not propagated to consumers.</li>
+      <li><strong>INTERFACE</strong> &mdash; not used to build this target; propagated to consumers.</li>
+      <li><strong>PUBLIC</strong> &mdash; both: used to build AND propagated.</li>
+    </ul>
+
+    <div class="twocol">
+      <div class="col bad">
+        <h5>Old style — fragile</h5>
+<pre data-lang="cmake"><span class="fn">include_directories</span>(${TORCH_INCLUDE_DIRS})
+<span class="fn">link_libraries</span>(${TORCH_LIBRARIES})
+<span class="fn">add_definitions</span>(-DUSE_CUDA)
+<span class="com"># Global! Affects every target</span>
+<span class="com"># declared after this point.</span></pre>
+      </div>
+      <div class="col good">
+        <h5>Modern style — scoped</h5>
+<pre data-lang="cmake"><span class="fn">target_include_directories</span>(my_lib
+  <span class="kw">PRIVATE</span> ${TORCH_INCLUDE_DIRS})
+<span class="fn">target_link_libraries</span>(my_lib
+  <span class="kw">PRIVATE</span> torch)
+<span class="fn">target_compile_definitions</span>(my_lib
+  <span class="kw">PRIVATE</span> USE_CUDA)
+<span class="com"># Per-target. Composable.</span></pre>
+      </div>
+    </div>
+
+    <h3>Generator expressions</h3>
+    <p>The <code>$&lt;...&gt;</code> syntax evaluates at build time, not config time. Lets you express conditions per configuration, per language, per target:</p>
+
+<pre data-lang="cmake"><span class="com"># Different flags for Debug vs Release</span>
+<span class="fn">target_compile_options</span>(my_lib <span class="kw">PRIVATE</span>
+  $&lt;$&lt;<span class="kw">CONFIG</span>:Debug&gt;:-O0 -g3&gt;
+  $&lt;$&lt;<span class="kw">CONFIG</span>:Release&gt;:-O3 -DNDEBUG&gt;
+  $&lt;$&lt;<span class="kw">CONFIG</span>:RelWithDebInfo&gt;:-O2 -g&gt;
+)
+
+<span class="com"># Different paths for build vs install</span>
+<span class="fn">target_include_directories</span>(my_lib <span class="kw">PUBLIC</span>
+  $&lt;<span class="kw">BUILD_INTERFACE</span>:${<span class="kw">CMAKE_CURRENT_SOURCE_DIR</span>}/include&gt;
+  $&lt;<span class="kw">INSTALL_INTERFACE</span>:include&gt;
+)
+
+<span class="com"># Different flags for CXX vs CUDA</span>
+<span class="fn">target_compile_options</span>(my_lib <span class="kw">PRIVATE</span>
+  $&lt;$&lt;<span class="kw">COMPILE_LANG_AND_ID</span>:CXX,GNU&gt;:-fno-omit-frame-pointer&gt;
+  $&lt;$&lt;<span class="kw">COMPILE_LANGUAGE</span>:CUDA&gt;:--ptxas-options=-v&gt;
+)</pre>
+
+    <h3>CMakePresets — taming the matrix</h3>
+    <p>PyTorch-scale builds have a configuration matrix: debug/release × CUDA versions × Python versions × architectures. <code>CMakePresets.json</code> codifies these without long command lines.</p>
+
+<pre data-lang="JSON">{
+  <span class="str">"version"</span>: <span class="num">3</span>,
+  <span class="str">"configurePresets"</span>: [
+    {
+      <span class="str">"name"</span>: <span class="str">"base"</span>,
+      <span class="str">"hidden"</span>: <span class="kw">true</span>,
+      <span class="str">"generator"</span>: <span class="str">"Ninja"</span>,
+      <span class="str">"binaryDir"</span>: <span class="str">"${sourceDir}/build/${presetName}"</span>,
+      <span class="str">"cacheVariables"</span>: {
+        <span class="str">"CMAKE_EXPORT_COMPILE_COMMANDS"</span>: <span class="str">"ON"</span>,
+        <span class="str">"CMAKE_CXX_STANDARD"</span>: <span class="str">"17"</span>
+      }
+    },
+    {
+      <span class="str">"name"</span>: <span class="str">"release-cuda12"</span>,
+      <span class="str">"inherits"</span>: <span class="str">"base"</span>,
+      <span class="str">"cacheVariables"</span>: {
+        <span class="str">"CMAKE_BUILD_TYPE"</span>: <span class="str">"Release"</span>,
+        <span class="str">"CUDA_TOOLKIT_ROOT_DIR"</span>: <span class="str">"/usr/local/cuda-12"</span>,
+        <span class="str">"TORCH_CUDA_ARCH_LIST"</span>: <span class="str">"8.0;9.0"</span>
+      }
+    },
+    {
+      <span class="str">"name"</span>: <span class="str">"debug-cuda12"</span>,
+      <span class="str">"inherits"</span>: <span class="str">"release-cuda12"</span>,
+      <span class="str">"cacheVariables"</span>: {
+        <span class="str">"CMAKE_BUILD_TYPE"</span>: <span class="str">"Debug"</span>
+      }
+    }
+  ]
+}</pre>
+
+<pre data-lang="BASH">cmake --preset release-cuda12
+cmake --build build/release-cuda12 -j</pre>
+
+    <div class="callout tip">
+      <h5>The cardinal rule of CMake debugging</h5>
+      <p>When something mysterious is happening, dump the cache and look:</p>
+<pre data-lang="BASH">cmake -LAH build/ | less          <span class="com"># All variables with help</span>
+cat build/CMakeCache.txt | less   <span class="com"># The raw cache</span>
+cmake -B build --debug-find       <span class="com"># Why isn't find_package finding X?</span>
+cmake -B build --trace-expand     <span class="com"># Trace every command — verbose but definitive</span></pre>
+    </div>
+  </section>
+
+  <section class="chapter" id="c10">
+    <h2><span class="ch-num">&sect;10</span>Ninja, ccache, distributed builds</h2>
+
+    <p>PyTorch from scratch is ~1 hour on a 32-core machine. Without acceleration, daily iteration becomes untenable. The toolchain matters.</p>
+
+    <h3>Ninja over Make</h3>
+    <p>Ninja is a low-level build executor designed to be fast. CMake generates Ninja files instead of Makefiles when invoked with <code>-G Ninja</code>. Ninja's design choices: no shell parsing during build, accurate dependency tracking, better parallel scheduling. The result: 2-5x faster than Make for large builds.</p>
+
+<pre data-lang="BASH">cmake -B build -G Ninja
+cmake --build build -j         <span class="com"># delegates to ninja</span>
+
+<span class="com"># Direct ninja usage</span>
+ninja -C build                 <span class="com"># build everything</span>
+ninja -C build my_target       <span class="com"># build only this target</span>
+ninja -C build -t graph         <span class="com"># dependency graph in DOT</span>
+ninja -C build -t deps          <span class="com"># show what triggered what</span>
+ninja -C build -t recompact     <span class="com"># clean up the build log</span></pre>
+
+    <h3>ccache — never compile the same file twice</h3>
+
+<pre data-lang="BASH"><span class="com"># Install and configure</span>
+apt install ccache
+<span class="kw">export</span> CC=<span class="str">"ccache gcc"</span>
+<span class="kw">export</span> CXX=<span class="str">"ccache g++"</span>
+<span class="kw">export</span> CCACHE_DIR=/large/disk/ccache
+<span class="kw">export</span> CCACHE_MAXSIZE=<span class="str">"50G"</span>
+
+<span class="com"># Tell ccache to be aggressive about caching</span>
+ccache --set-config compiler_check=<span class="str">"%compiler% -dumpversion"</span>
+ccache --set-config compression=<span class="kw">true</span>
+ccache --set-config compression_level=<span class="num">5</span>
+
+<span class="com"># Check effectiveness</span>
+ccache -s
+<span class="com"># cache size: 32.4 GB</span>
+<span class="com"># cache hit (direct): 78,532</span>
+<span class="com"># cache hit (preprocessed): 1,201</span>
+<span class="com"># cache miss: 4,392</span>
+<span class="com"># hit rate: 94.7%</span></pre>
+
+    <p>A well-configured ccache turns rebuild times from 30 minutes to 30 seconds for most no-op changes. For PyTorch CI, every runner that mounts a shared ccache volume saves dramatic compute hours.</p>
+
+    <h3>sccache — ccache for distributed builds</h3>
+    <p>sccache extends the concept: the cache lives in S3 or Redis, shared across machines. A new CI runner that's never seen the codebase still gets ~80% cache hits. Game-changing for ephemeral build infrastructure.</p>
+
+<pre data-lang="BASH"><span class="kw">export</span> SCCACHE_BUCKET=my-build-cache
+<span class="kw">export</span> SCCACHE_REGION=us-east-<span class="num">1</span>
+<span class="kw">export</span> RUSTC_WRAPPER=sccache
+<span class="kw">export</span> CC=<span class="str">"sccache gcc"</span>
+<span class="kw">export</span> CXX=<span class="str">"sccache g++"</span>
+<span class="kw">export</span> NVCC_PREPEND_FLAGS=<span class="str">"-ccbin sccache"</span>   <span class="com"># tricky: nvcc needs special handling</span>
+
+cmake --build build
+sccache --show-stats</pre>
+
+    <h3>Distributed compilation: distcc, icecc, BuildBuddy, EngFlow</h3>
+    <p>The next step: ship preprocessed source to a pool of build workers, each compiling part of the load. For codebases this large, this is how Bazel + remote build execution gets advertised 5-10x speedups.</p>
+
+    <ul class="dash">
+      <li><strong>distcc</strong> &mdash; the classic; preprocessor runs locally, compiler runs remotely. Still works fine.</li>
+      <li><strong>icecream (icecc)</strong> &mdash; SUSE's improvement on distcc; schedules across heterogeneous farms.</li>
+      <li><strong>Bazel Remote Execution</strong> &mdash; if you use Bazel, this is the answer. Hermetic actions go to a build farm.</li>
+      <li><strong>BuildBuddy / EngFlow / NativeLink</strong> &mdash; hosted REAPIs (Remote Execution APIs). Drop in for Bazel/Buck builds.</li>
+    </ul>
+
+    <h3>Link-time bottleneck and parallel linkers</h3>
+    <p>For libtorch.so, linking is the longest single step. <code>ld.bfd</code> is single-threaded and slow. Alternatives:</p>
+
+<pre data-lang="BASH"><span class="com"># Linker options, fastest first (for ELF/Linux)</span>
+ld.bfd     <span class="com"># default GNU linker; reliable, slow</span>
+ld.gold    <span class="com"># multi-threaded GNU linker; deprecated upstream but widely used</span>
+ld.lld     <span class="com"># LLVM linker; very fast, well maintained</span>
+ld.mold    <span class="com"># Rui Ueyama's modern linker; fastest for large links</span>
+
+<span class="com"># Tell GCC to use a specific linker</span>
+g++ -fuse-ld=lld foo.o bar.o -o prog
+g++ -fuse-ld=mold foo.o bar.o -o prog
+
+<span class="com"># From CMake</span>
+<span class="fn">set</span>(<span class="kw">CMAKE_LINKER_TYPE</span> <span class="kw">MOLD</span>)   <span class="com"># CMake 3.29+</span>
+<span class="com"># Or globally:</span>
+<span class="fn">add_link_options</span>(-fuse-ld=mold)</pre>
+
+    <p>For PyTorch-scale links, mold reduces a 90-second link to ~20 seconds. Cumulative savings across CI runs are substantial.</p>
+
+    <h3>The link step memory problem</h3>
+
+    <div class="callout danger">
+      <h5>The classic CI OOM</h5>
+      <p>A parallel build kicks off 32 compiler jobs (CPU-bound, ~2 GB each) and 4 parallel link jobs (memory-bound, ~30 GB each). Total RAM consumption can spike to 200+ GB at the wrong moment. CI machine with 64 GB RAM gets OOM-killed. The fix:</p>
+<pre data-lang="BASH"><span class="com"># Limit linker parallelism separately from compiler parallelism</span>
+cmake --build build --parallel <span class="num">32</span>   <span class="com"># compile parallelism</span>
+<span class="com"># CMake 3.27+:</span>
+cmake --build build --parallel <span class="num">32</span> -- -l <span class="num">2</span>   <span class="com"># pass to ninja; limit by load average</span>
+
+<span class="com"># Or set ninja pool for link tasks</span></pre>
+<pre data-lang="cmake"><span class="com"># In CMakeLists.txt</span>
+<span class="fn">set_property</span>(<span class="kw">GLOBAL</span> <span class="kw">PROPERTY</span> JOB_POOLS link=<span class="num">4</span>)
+<span class="fn">set</span>(<span class="kw">CMAKE_JOB_POOL_LINK</span> link)</pre>
+    </div>
+  </section>
+
+  <section class="chapter" id="c11">
+    <h2><span class="ch-num">&sect;11</span>Linker errors &amp; symbol resolution &mdash; a field guide</h2>
+
+    <p>This is the chapter to read at 11pm when CI is red. Every common linker error has a fingerprint; learn the fingerprints and resolution becomes pattern matching.</p>
+
+    <h3>Error #1: undefined reference</h3>
+
+<pre data-lang="text">main.o: In function `main':
+main.cpp:(.text+0x1a): undefined reference to `at::Tensor::add(at::Tensor const&amp;, c10::Scalar const&amp;) const'
+collect2: error: ld returned 1 exit status</pre>
+
+    <p>Translation: the linker found a use of a symbol but couldn't find its definition. Five common causes:</p>
+
+    <ol>
+      <li><strong>Library not linked</strong> &mdash; you used the header but didn't add the lib. Add <code>target_link_libraries(my_target PRIVATE torch)</code>.</li>
+      <li><strong>Library linked in wrong order</strong> &mdash; with static libs, order matters (left-to-right resolution). <code>g++ main.o -lA -lB</code> works; <code>-lB -lA</code> may not.</li>
+      <li><strong>Function declared but not defined</strong> &mdash; forward declaration in header, body never written. Common in templates that look defined but aren't instantiated.</li>
+      <li><strong>Wrong language linkage</strong> &mdash; C++ function called from C code (or vice versa) without <code>extern "C"</code>.</li>
+      <li><strong>Symbol visibility hidden</strong> &mdash; the .so file was built with <code>-fvisibility=hidden</code> and the symbol isn't marked exported. See &sect;13.</li>
+    </ol>
+
+<pre data-lang="BASH"><span class="com"># Diagnose: does the symbol exist anywhere?</span>
+nm -D libtorch.so | grep <span class="num">-i</span> <span class="str">"Tensor.*add"</span>
+nm -D libtorch.so | c++filt | grep <span class="str">"Tensor::add"</span>
+
+<span class="com"># Where in the install tree does this symbol live?</span>
+find /opt/conda -name <span class="str">"*.so"</span> -exec nm -D {} \; 2&gt;/dev/null | grep -l squarei</pre>
+
+    <h3>Error #2: multiple definition</h3>
+
+<pre data-lang="text">/usr/bin/ld: foo.o:foo.cpp:(.bss+0x0): multiple definition of `global_state'; bar.o:bar.cpp:(.bss+0x0): first defined here</pre>
+
+    <p>The linker found <em>more than one</em> definition. Either you really did define the same thing twice (ODR violation), or:</p>
+
+    <ul class="dash">
+      <li><strong>Variable in header not marked <code>inline</code></strong> (or <code>extern</code> with definition elsewhere) &mdash; every TU including the header defines its own copy.</li>
+      <li><strong>Same source file compiled into two libraries that both get linked.</strong></li>
+      <li><strong>Template specialization in a header without <code>inline</code>.</strong></li>
+    </ul>
+
+<pre data-lang="CPP"><span class="com">// header.h — multiple definitions if not careful</span>
+<span class="kw">int</span> g_counter = <span class="num">0</span>;             <span class="com">// BAD: every .cpp including this gets a copy</span>
+
+<span class="kw">inline</span> <span class="kw">int</span> g_counter2 = <span class="num">0</span>;     <span class="com">// OK: C++17 inline variable</span>
+
+<span class="kw">extern</span> <span class="kw">int</span> g_counter3;        <span class="com">// OK: declaration; definition in one .cpp</span>
+
+<span class="kw">constexpr</span> <span class="kw">int</span> g_max = <span class="num">100</span>;    <span class="com">// OK: constexpr is implicitly inline since C++17</span></pre>
+
+    <h3>Error #3: undefined reference to vtable / typeinfo</h3>
+
+<pre data-lang="text">main.cpp:(.text+0x42): undefined reference to `vtable for Foo'
+main.cpp:(.text+0x88): undefined reference to `typeinfo for Foo'</pre>
+
+    <p>A class declared but its first non-inline virtual function isn't defined. The vtable is emitted alongside that "key function." If it's not implemented, no vtable, no typeinfo.</p>
+
+    <p>Fix: define <em>any</em> non-inline virtual method (often the destructor):</p>
+
+<pre data-lang="CPP"><span class="com">// foo.h</span>
+<span class="kw">class</span> <span class="ty">Foo</span> {
+<span class="kw">public</span>:
+  <span class="kw">virtual</span> ~<span class="ty">Foo</span>();
+  <span class="kw">virtual</span> <span class="kw">void</span> <span class="fn">go</span>() = <span class="num">0</span>;
+};
+
+<span class="com">// foo.cpp</span>
+<span class="ty">Foo</span>::~<span class="ty">Foo</span>() = <span class="kw">default</span>;   <span class="com">// triggers vtable emission in this TU</span></pre>
+
+    <h3>Error #4: DSO missing from command line</h3>
+
+<pre data-lang="text">/usr/bin/ld: foo.o: undefined reference to symbol 'pthread_create@@GLIBC_2.2.5'
+/usr/bin/ld: libpthread.so.0: error adding symbols: DSO missing from command line</pre>
+
+    <p>Newer linkers refuse to follow indirect library dependencies. The library you linked (say, <code>libX</code>) depends on libpthread, but you didn't link pthread directly. Older linkers were permissive; newer ones say "no &mdash; you used pthread symbols, link it yourself."</p>
+
+<pre data-lang="BASH">g++ main.o -lX -lpthread        <span class="com"># explicitly link transitive deps you use</span>
+
+<span class="com"># Or use --no-as-needed/--as-needed to control library propagation</span>
+g++ main.o -Wl,--no-as-needed -lX -Wl,--as-needed</pre>
+
+    <h3>Error #5: relocation against undefined hidden symbol</h3>
+
+<pre data-lang="text">relocation R_X86_64_PC32 against undefined hidden symbol `_ZN3foo3barEv' can not be used when making a shared object</pre>
+
+    <p>Symbol visibility mismatch. You're trying to call a function across a shared library boundary, but the symbol is marked hidden. See &sect;13.</p>
+
+    <h3>The diagnosis toolkit</h3>
+
+    <div class="cheat">
+      <h5>Symbol-resolution detective tools</h5>
+      <div class="cheat-grid">
+        <span class="cmd">nm -D libfoo.so</span><span class="desc">List dynamic symbols (T=defined, U=undefined)</span>
+        <span class="cmd">nm -D libfoo.so | c++filt</span><span class="desc">Demangled C++ symbols</span>
+        <span class="cmd">ldd ./binary</span><span class="desc">Which .so files does this need; are they all found?</span>
+        <span class="cmd">readelf -d libfoo.so</span><span class="desc">Dynamic section: SONAME, NEEDED, RPATH, RUNPATH</span>
+        <span class="cmd">readelf -h libfoo.so</span><span class="desc">ELF header: arch, type, entry point</span>
+        <span class="cmd">objdump -T libfoo.so</span><span class="desc">Dynamic symbol table with versioning</span>
+        <span class="cmd">objdump -d -M intel binary | less</span><span class="desc">Disassembly</span>
+        <span class="cmd">strings libfoo.so | grep GLIBC</span><span class="desc">Find minimum glibc requirement</span>
+        <span class="cmd">LD_DEBUG=libs ./binary</span><span class="desc">Trace dynamic linker activity</span>
+        <span class="cmd">LD_DEBUG=symbols ./binary</span><span class="desc">Per-symbol resolution traces</span>
+        <span class="cmd">LD_DEBUG=help ./binary</span><span class="desc">All available LD_DEBUG categories</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="chapter" id="c12">
+    <h2><span class="ch-num">&sect;12</span>The dual-ABI problem &amp; libstdc++</h2>
+
+    <p>One of the trickiest topics in C++ release engineering. Mishandling it breaks PyTorch wheels in subtle, customer-visible ways. The full picture:</p>
+
+    <h3>The history</h3>
+    <p>In 2011, C++11 standardized changes to <code>std::string</code> and <code>std::list</code> that broke binary compatibility with C++98. GCC needed to ship libstdc++ that worked for both old and new code without forcing recompilation of every existing binary. The solution: two ABIs side by side, selected by the <code>_GLIBCXX_USE_CXX11_ABI</code> macro.</p>
+
+<pre data-lang="CPP"><span class="com">// Both of these compile against the same libstdc++.so. But</span>
+<span class="com">// they generate DIFFERENT mangled symbols for std::string,</span>
+<span class="com">// std::list, and types using them.</span>
+
+<span class="pp">#define</span> <span class="ty">_GLIBCXX_USE_CXX11_ABI</span> <span class="num">0</span>     <span class="com">// pre-C++11 ABI (old)</span>
+<span class="pp">#define</span> <span class="ty">_GLIBCXX_USE_CXX11_ABI</span> <span class="num">1</span>     <span class="com">// C++11+ ABI (new, default in modern GCC)</span></pre>
+
+    <h3>How the symbols differ</h3>
+
+<pre data-lang="BASH"><span class="com"># Function that takes std::string</span>
+<span class="com"># Old ABI:</span>
+_Z3fooSs                                <span class="com"># std::string = std::basic_string&lt;char&gt;</span>
+
+<span class="com"># New ABI:</span>
+_Z3fooNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE
+<span class="com"># note __cxx11:: in the type name &mdash; the abi_tag</span></pre>
+
+    <p>Two libraries compiled with different settings appear to expose the same C++ API but produce different symbols. Calling one from the other &mdash; or trying to pass a <code>std::string</code> across the boundary &mdash; produces undefined references or, worse, silent memory corruption.</p>
+
+    <h3>How this hits PyTorch</h3>
+    <p>PyTorch wheels distributed via pypi are built with <code>_GLIBCXX_USE_CXX11_ABI=0</code> for compatibility with manylinux2014 (which targets old GCC). If a user builds a custom C++ extension with default modern GCC (which uses ABI=1) and links it against PyTorch's libtorch.so, they get undefined symbol errors.</p>
+
+    <div class="callout danger">
+      <h5>The classic PyTorch extension failure</h5>
+<pre data-lang="text">ImportError: /home/user/myext.cpython-310-x86_64-linux-gnu.so:
+undefined symbol: _ZN3c105ErrorC2ENS_14SourceLocationENSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEE</pre>
+      <p>The user built their extension with ABI=1 (default), but PyTorch from pypi is ABI=0. The C++ types in the symbol name don't match. The fix: build the extension with <code>_GLIBCXX_USE_CXX11_ABI=0</code> &mdash; or use the pytorch-built-from-source variant that matches the user's system.</p>
+    </div>
+
+    <h3>Inspecting which ABI a binary uses</h3>
+
+<pre data-lang="BASH"><span class="com"># Old ABI symbols use Ss for std::string</span>
+nm -D libfoo.so | grep <span class="str">"Ss"</span> | head
+
+<span class="com"># New ABI symbols mention __cxx11</span>
+nm -D libfoo.so | grep <span class="str">"__cxx11"</span> | head
+
+<span class="com"># PyTorch ships a Python API to query this</span>
+python -c <span class="str">"import torch; print(torch._C._GLIBCXX_USE_CXX11_ABI)"</span></pre>
+
+    <h3>The ongoing migration</h3>
+    <p>The deep-learning ecosystem is gradually moving to ABI=1. PyTorch nightlies often ship variants. The lifecycle engineer's job: track which artifacts use which ABI, label them clearly, validate at install time, document the boundary. There is no clean fix &mdash; the only options are pick-one-and-document, or ship both and label.</p>
+
+    <h3>libstdc++ minimum-version requirements</h3>
+    <p>A related problem: libstdc++ symbols have GLIBCXX versions. A binary built against GCC 12 needs at least <code>GLIBCXX_3.4.30</code>; older systems with older libstdc++ can't load it.</p>
+
+<pre data-lang="BASH"><span class="com"># What versions does this binary need?</span>
+objdump -T libtorch.so | grep GLIBCXX | awk <span class="str">'{print $5}'</span> | sort -u
+<span class="com"># GLIBCXX_3.4.21</span>
+<span class="com"># GLIBCXX_3.4.22</span>
+<span class="com"># GLIBCXX_3.4.30</span>
+
+<span class="com"># What does my system provide?</span>
+strings /usr/lib/x86_64-linux-gnu/libstdc++.so.6 | grep <span class="str">'^GLIBCXX_'</span> | sort -V | tail
+<span class="com"># GLIBCXX_3.4.29</span>
+<span class="com"># GLIBCXX_3.4.30   &lt;-- newest available</span></pre>
+
+    <p>This is why manylinux exists: it caps the GLIBCXX version requirement so wheels work on any sufficiently new Linux. More in &sect;15.</p>
+  </section>
+
+  <section class="chapter" id="c13">
+    <h2><span class="ch-num">&sect;13</span>Shared library hell &amp; RPATH</h2>
+
+    <p>When a binary loads, the dynamic linker (<code>ld.so</code>) finds and maps every <code>.so</code> it depends on. Where does it look? The answer is more complex than it should be.</p>
+
+    <h3>The dynamic linker search order</h3>
+
+    <ol>
+      <li><strong>DT_RPATH</strong> in the binary's ELF header &mdash; legacy, evaluated first.</li>
+      <li><strong>LD_LIBRARY_PATH</strong> environment variable.</li>
+      <li><strong>DT_RUNPATH</strong> in the binary's ELF header &mdash; modern; evaluated after LD_LIBRARY_PATH.</li>
+      <li><strong>/etc/ld.so.cache</strong> &mdash; populated by <code>ldconfig</code> from <code>/etc/ld.so.conf.d/</code>.</li>
+      <li><strong>System defaults</strong> &mdash; <code>/lib</code>, <code>/usr/lib</code>, then arch-specific subdirs.</li>
+    </ol>
+
+    <p>RUNPATH vs RPATH is the most-confused distinction. RUNPATH does NOT propagate to dependencies; RPATH does. Modern toolchains default to RUNPATH; you may need <code>-Wl,--disable-new-dtags</code> to get RPATH if you want propagation.</p>
+
+    <h3>$ORIGIN — relocatable installs</h3>
+    <p>The magic string <code>$ORIGIN</code> in RPATH/RUNPATH means "the directory containing this binary." This is how wheels and installable bundles work without LD_LIBRARY_PATH manipulation:</p>
+
+<pre data-lang="BASH">readelf -d libtorch.so | grep PATH
+<span class="com"># 0x000000000000001d (RUNPATH)   Library runpath: [$ORIGIN]</span>
+
+<span class="com"># The wheel layout:</span>
+torch/
+  lib/
+    libtorch.so          <span class="com"># RUNPATH = $ORIGIN</span>
+    libtorch_cpu.so      <span class="com"># RUNPATH = $ORIGIN</span>
+    libtorch_cuda.so     <span class="com"># RUNPATH = $ORIGIN</span>
+    libc10.so            <span class="com"># RUNPATH = $ORIGIN</span>
+    ...
+
+<span class="com"># When libtorch.so is loaded, ld.so resolves dependencies from $ORIGIN,</span>
+<span class="com"># which expands to torch/lib/. No env vars, no system pollution.</span></pre>
+
+<pre data-lang="cmake"><span class="com"># Set RUNPATH in CMake</span>
+<span class="fn">set_target_properties</span>(my_lib <span class="kw">PROPERTIES</span>
+  <span class="kw">INSTALL_RPATH</span> <span class="str">"$ORIGIN"</span>
+  <span class="kw">BUILD_WITH_INSTALL_RPATH</span> <span class="kw">TRUE</span>
+)
+<span class="com"># Or use a more sophisticated pattern</span>
+<span class="fn">set_target_properties</span>(my_lib <span class="kw">PROPERTIES</span>
+  <span class="kw">INSTALL_RPATH</span> <span class="str">"$ORIGIN;$ORIGIN/../lib"</span>
+)</pre>
+
+    <div class="callout warn">
+      <h5>The $ORIGIN escaping trap</h5>
+      <p>In CMake, <code>$ORIGIN</code> can get expanded by shell or escaped wrong. The literal characters that must reach the binary are <code>$</code><code>O</code><code>R</code><code>I</code><code>G</code><code>I</code><code>N</code>. In CMakeLists.txt:</p>
+<pre data-lang="cmake"><span class="fn">set</span>(<span class="kw">CMAKE_INSTALL_RPATH</span> <span class="str">"\$ORIGIN"</span>)        <span class="com"># Note: backslash escape</span>
+<span class="com"># Or use $&lt;TARGET_GENEX_EVAL:...&gt; or set via a CACHE STRING</span></pre>
+    </div>
+
+    <h3>Symbol visibility</h3>
+    <p>By default on Linux, every non-static symbol in a .so is exported. For a library the size of libtorch, that's millions of symbols &mdash; bloating the file, slowing dynamic linker startup, and exposing internals as part of the ABI by accident.</p>
+
+<pre data-lang="CPP"><span class="com">// Compile with -fvisibility=hidden to make everything hidden by default</span>
+<span class="com">// Then explicitly export the public API:</span>
+
+<span class="pp">#define</span> <span class="ty">EXPORT</span> __attribute__((visibility(<span class="str">"default"</span>)))
+
+<span class="ty">EXPORT</span> <span class="kw">void</span> <span class="fn">public_api</span>();         <span class="com">// in the .so's ABI</span>
+<span class="kw">void</span> <span class="fn">internal_helper</span>();           <span class="com">// hidden — not part of the ABI</span>
+
+<span class="com">// PyTorch uses macros like TORCH_API:</span>
+<span class="ty">TORCH_API</span> <span class="kw">void</span> <span class="fn">someFunction</span>();
+<span class="com">// Defined as: __attribute__((__visibility__("default")))</span>
+<span class="com">// On Windows: __declspec(dllexport) / dllimport</span></pre>
+
+<pre data-lang="cmake"><span class="fn">set</span>(<span class="kw">CMAKE_CXX_VISIBILITY_PRESET</span> hidden)
+<span class="fn">set</span>(<span class="kw">CMAKE_C_VISIBILITY_PRESET</span>   hidden)
+<span class="fn">set</span>(<span class="kw">CMAKE_VISIBILITY_INLINES_HIDDEN</span> <span class="kw">ON</span>)</pre>
+
+    <h3>auditwheel — the manylinux enforcer</h3>
+    <p>For Python wheels, <code>auditwheel</code> is the tool that ensures shared library hygiene. It scans the wheel's <code>.so</code> files, checks GLIBCXX version requirements, copies in needed system libraries (so the wheel is self-contained), and rewrites RPATHs.</p>
+
+<pre data-lang="BASH"><span class="com"># Build the wheel</span>
+python setup.py bdist_wheel
+
+<span class="com"># Audit — verify manylinux compliance</span>
+auditwheel show dist/torch-2.5.0-cp310-cp310-linux_x86_64.whl
+<span class="com"># Shows:</span>
+<span class="com"># - The platform tag it currently claims</span>
+<span class="com"># - The platform tag it qualifies for (e.g., manylinux_2_28)</span>
+<span class="com"># - External libraries it depends on (libcuda.so etc.)</span>
+
+<span class="com"># Repair — bundle missing libs and relabel</span>
+auditwheel repair --plat manylinux_2_28_x86_64 dist/*.whl
+<span class="com"># Produces a new wheel in wheelhouse/ with bundled deps and correct RPATH</span>
+
+<span class="com"># For CUDA libraries that are intentionally external (libcuda.so is on the host),</span>
+<span class="com"># exclude them from bundling:</span>
+auditwheel repair --exclude libcuda.so.<span class="num">1</span> --exclude libnvidia-ml.so.<span class="num">1</span> ...</pre>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART IV ===================== -->
+<div class="part" id="p4">
+  <div class="part-label">Part IV</div>
+  <h2 class="part-title">Python packaging <span class="acc">&amp; PyTorch itself</span></h2>
+  <p class="part-intro">PyTorch ships as Python wheels &mdash; binary distributions that bundle compiled C++/CUDA code with Python bindings. The packaging machinery is non-obvious; the PyTorch build itself is multi-stage and finicky. This part covers both.</p>
+
+  <section class="chapter" id="c14">
+    <h2><span class="ch-num">&sect;14</span>Python packaging foundations</h2>
+
+    <h3>The vocabulary that confuses everyone</h3>
+
+    <table class="tbl">
+      <thead><tr><th>Term</th><th>Definition</th></tr></thead>
+      <tbody>
+        <tr><td>Source distribution (sdist)</td><td>A tarball of source code (<code>.tar.gz</code>). Requires building on install.</td></tr>
+        <tr><td>Wheel (bdist)</td><td>A pre-built binary distribution (<code>.whl</code>). Just unpacks on install.</td></tr>
+        <tr><td>PEP 517 build backend</td><td>The tool that turns source into a wheel: setuptools, hatch, poetry, scikit-build, maturin.</td></tr>
+        <tr><td>PEP 518 / pyproject.toml</td><td>The declarative way to specify build requirements and backend.</td></tr>
+        <tr><td>Wheel tag</td><td>The compatibility metadata in the filename: python tag, ABI tag, platform tag.</td></tr>
+        <tr><td>manylinux</td><td>A platform tag promising compatibility with any sufficiently new Linux.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Anatomy of a wheel filename</h3>
+
+<pre data-lang="text">torch-2.5.0+cu121-cp310-cp310-manylinux_2_28_x86_64.whl
+       |        |    |     |       |
+       |        |    |     |       +-- platform tag (manylinux 2.28, x86_64)
+       |        |    |     +-- ABI tag (CPython 3.10's stable ABI)
+       |        |    +-- Python tag (CPython 3.10)
+       |        +-- local version (CUDA 12.1 build)
+       +-- version</pre>
+
+    <h3>Modern pyproject.toml</h3>
+
+<pre data-lang="TOML"><span class="com"># Specifies what's needed to BUILD the package</span>
+[build-system]
+requires = [<span class="str">"setuptools&gt;=64"</span>, <span class="str">"wheel"</span>, <span class="str">"cmake&gt;=3.20"</span>]
+build-backend = <span class="str">"setuptools.build_meta"</span>
+
+[project]
+name = <span class="str">"my-extension"</span>
+version = <span class="str">"0.1.0"</span>
+description = <span class="str">"A PyTorch extension"</span>
+requires-python = <span class="str">"&gt;=3.9"</span>
+dependencies = [
+    <span class="str">"torch&gt;=2.0,&lt;3.0"</span>,
+    <span class="str">"numpy&gt;=1.21"</span>,
+]
+
+[project.optional-dependencies]
+dev = [<span class="str">"pytest"</span>, <span class="str">"pytest-xdist"</span>, <span class="str">"ruff"</span>, <span class="str">"mypy"</span>]
+test = [<span class="str">"pytest"</span>, <span class="str">"hypothesis"</span>]</pre>
+
+    <h3>setuptools, scikit-build-core, and the build-backend zoo</h3>
+
+    <ul class="dash">
+      <li><strong>setuptools</strong> &mdash; the OG; works for everything; <code>setup.py</code> is increasingly legacy in favor of <code>pyproject.toml</code>.</li>
+      <li><strong>scikit-build-core</strong> &mdash; the modern way to build CMake-based Python extensions. Replaces the <code>setup.py + cmake_setuptools</code> hack.</li>
+      <li><strong>maturin</strong> &mdash; for Rust extensions via PyO3.</li>
+      <li><strong>hatch / poetry / pdm</strong> &mdash; pure-Python project management; rarely the right tool for binary extensions.</li>
+      <li><strong>meson-python</strong> &mdash; NumPy and SciPy use this; gaining traction.</li>
+    </ul>
+
+    <h3>scikit-build-core in practice</h3>
+
+<pre data-lang="TOML">[build-system]
+requires = [<span class="str">"scikit-build-core&gt;=0.10"</span>, <span class="str">"pybind11&gt;=2.11"</span>]
+build-backend = <span class="str">"scikit_build_core.build"</span>
+
+[project]
+name = <span class="str">"my_cuda_ext"</span>
+version = <span class="str">"0.1.0"</span>
+
+[tool.scikit-build]
+cmake.version = <span class="str">"&gt;=3.20"</span>
+cmake.build-type = <span class="str">"Release"</span>
+cmake.args = [<span class="str">"-DCMAKE_CUDA_ARCHITECTURES=80;90"</span>]
+wheel.packages = [<span class="str">"src/my_cuda_ext"</span>]</pre>
+
+<pre data-lang="cmake"><span class="com"># CMakeLists.txt for a Python extension</span>
+<span class="fn">cmake_minimum_required</span>(<span class="kw">VERSION</span> <span class="num">3.20</span>)
+<span class="fn">project</span>(my_cuda_ext <span class="kw">LANGUAGES</span> CXX CUDA)
+
+<span class="fn">find_package</span>(Python <span class="num">3.9</span> <span class="kw">COMPONENTS</span> Interpreter Development.Module <span class="kw">REQUIRED</span>)
+<span class="fn">find_package</span>(pybind11 <span class="kw">CONFIG</span> <span class="kw">REQUIRED</span>)
+
+<span class="fn">pybind11_add_module</span>(_C
+  src/binding.cpp
+  src/kernel.cu
+)
+
+<span class="fn">target_link_libraries</span>(_C <span class="kw">PRIVATE</span> CUDA::cudart)
+
+<span class="fn">install</span>(<span class="kw">TARGETS</span> _C <span class="kw">LIBRARY</span> <span class="kw">DESTINATION</span> my_cuda_ext)</pre>
+
+<pre data-lang="BASH">pip install -e .   <span class="com"># editable install — rebuilds on import if source changed (with scikit-build-core)</span>
+pip wheel . -o dist/   <span class="com"># build a wheel</span></pre>
+  </section>
+
+  <section class="chapter" id="c15">
+    <h2><span class="ch-num">&sect;15</span>Wheels, manylinux, and ABI compliance</h2>
+
+    <h3>The manylinux standards</h3>
+
+    <p>"manylinux" is a series of PEPs that define platform tags for wheels that work on most Linux distributions. The constraint: wheels must only use symbols available in old-enough glibc / libstdc++ that almost any production Linux has them.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Tag</th><th>glibc min</th><th>Base distro era</th></tr></thead>
+      <tbody>
+        <tr><td>manylinux1</td><td>2.5</td><td>CentOS 5 (2007) — deprecated</td></tr>
+        <tr><td>manylinux2010</td><td>2.12</td><td>CentOS 6 (2010) — deprecated</td></tr>
+        <tr><td>manylinux2014</td><td>2.17</td><td>CentOS 7 (2014) — used by PyTorch through ~2024</td></tr>
+        <tr><td>manylinux_2_28</td><td>2.28</td><td>AlmaLinux 8 (2019) — current PyTorch baseline</td></tr>
+        <tr><td>manylinux_2_34</td><td>2.34</td><td>AlmaLinux 9 (2021) — next-gen baseline</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Building inside manylinux containers</h3>
+
+    <p>The standard practice: build wheels inside an official manylinux container image. The container has the right base glibc, gcc, and toolchain. PyTorch's CI does exactly this:</p>
+
+<pre data-lang="BASH"><span class="com"># Pull the manylinux container with CUDA pre-installed</span>
+docker pull quay.io/pypa/manylinux_2_28_x86_64
+
+<span class="com"># Or the PyTorch-flavored variants</span>
+docker pull pytorch/manylinux-builder:cuda12.1
+docker pull pytorch/manylinux-builder:cuda12.4
+
+<span class="com"># Build inside the container</span>
+docker run --rm \
+    -v $(pwd):/workspace -w /workspace \
+    -e PYTHON_VERSION=<span class="num">3.10</span> \
+    -e CUDA_VERSION=<span class="num">12.1</span> \
+    pytorch/manylinux-builder:cuda12.<span class="num">1</span> \
+    /workspace/build_wheel.sh</pre>
+
+    <h3>auditwheel: the manylinux compliance check</h3>
+
+<pre data-lang="BASH"><span class="com"># Inspect a wheel</span>
+auditwheel show dist/torch-2.5.0-cp310-cp310-linux_x86_64.whl
+
+<span class="com"># Sample output</span>
+<span class="com"># torch-2.5.0-cp310-cp310-linux_x86_64.whl is consistent with the</span>
+<span class="com"># following platform tag: "manylinux_2_28_x86_64".</span>
+<span class="com">#</span>
+<span class="com"># The wheel references external versioned symbols in these system-</span>
+<span class="com"># provided shared libraries:</span>
+<span class="com">#   libc.so.6 with versions {GLIBC_2.27, ...}</span>
+<span class="com">#   libstdc++.so.6 with versions {GLIBCXX_3.4.25, ...}</span>
+<span class="com">#</span>
+<span class="com"># This constrains the platform tag to "manylinux_2_28_x86_64".</span></pre>
+
+    <p>If <code>auditwheel show</code> reports a wheel needs a newer glibc than the claimed tag, the wheel will break for users on older Linux. The fix: build on an older base, or accept the higher minimum (and the audience drop).</p>
+
+    <h3>The CUDA wheel exception</h3>
+
+    <p>PyTorch wheels with CUDA support don't follow standard manylinux practice because they ship enormous CUDA libraries inside. Two strategies coexist:</p>
+
+    <ol>
+      <li><strong>Bundled CUDA runtime</strong> &mdash; wheel includes libcudart, libcublas, libcudnn, etc. ~2-4 GB wheels. Users get a self-contained install but pay disk and bandwidth.</li>
+      <li><strong>nvidia-* dependency packages</strong> &mdash; PyTorch depends on <code>nvidia-cuda-runtime-cu12</code>, <code>nvidia-cublas-cu12</code>, etc., which ship the libraries as separate wheels. Composable, smaller per-package, but install pulls many wheels.</li>
+    </ol>
+
+<pre data-lang="BASH"><span class="com"># Modern (PyTorch 2.x): depend on nvidia-* packages</span>
+pip install torch
+<span class="com"># Pulls torch + nvidia-cuda-runtime-cu12 + nvidia-cublas-cu12 + ...</span>
+
+<span class="com"># What's actually inside</span>
+python -c <span class="str">"import torch; print(torch._C._cuda_getCompiledVersion())"</span>
+ls $(python -c <span class="str">"import torch, os; print(os.path.dirname(torch.__file__))"</span>)/lib/
+<span class="com"># libtorch.so</span>
+<span class="com"># libtorch_cpu.so</span>
+<span class="com"># libtorch_cuda.so   &lt;- linked against the nvidia-* wheels' libs</span></pre>
+
+    <div class="callout warn">
+      <h5>The forever-classic wheel issue</h5>
+      <p>A user has CUDA 12.4 installed system-wide, but pip-installed torch's bundled CUDA is 12.1. The pip-installed CUDA wins (it's in the wheel's RPATH). User's system code that loaded torch then dlopens a custom .so built against system CUDA 12.4 &mdash; symbol clash. This is why <code>conda</code> and rigorous environment management exist in this domain.</p>
+    </div>
+
+    <h3>Wheel size budgets</h3>
+
+    <p>PyPI imposes a 100 MB per-file limit (raised on request). A full PyTorch wheel with CUDA pushes 2-3 GB &mdash; far over the limit. PyTorch uses its own index (<code>download.pytorch.org/whl/</code>) for binary distribution. CDN-backed; geographic distribution; per-CUDA-version subindexes.</p>
+  </section>
+
+  <section class="chapter" id="c16">
+    <h2><span class="ch-num">&sect;16</span>PyTorch's build system end-to-end</h2>
+
+    <p>PyTorch is enormous: ~5 million lines of code, 5,000+ files, with C++/CUDA/Python woven together. Its build is a multi-stage pipeline.</p>
+
+    <h3>The stages</h3>
+
+    <div class="diagram">
+                      pytorch/ source tree
+                              |
+                              v
+           +------------------+----------------------+
+           |                                         |
+       PYTHON CODE                           C++/CUDA CODE
+       (torch/*.py)                       (aten/, c10/, torch/csrc/)
+           |                                         |
+           |                                         v
+           |                              tools/codegen runs
+           |                              - generate from native_functions.yaml
+           |                              - generate dispatch tables
+           |                              - generate Python bindings (THP)
+           |                                         |
+           |                                         v
+           |                              CMake configure
+           |                                         |
+           |                                         v
+           |                              C++/CUDA compile (Ninja)
+           |                                         |
+           |                                         v
+           |                              Link libtorch.so, libtorch_cpu.so,
+           |                              libtorch_cuda.so, libc10.so
+           |                                         |
+           +------------------+----------------------+
+                              |
+                              v
+                      assemble wheel layout
+                      torch/lib/*.so
+                      torch/*.py
+                      torch/_C.cpython-*.so   (Python bindings)
+                              |
+                              v
+                       bdist_wheel
+                              |
+                              v
+                       torch-X-cp310-cp310-manylinux_2_28_x86_64.whl
+                              |
+                              v (optional)
+                      auditwheel repair
+                              |
+                              v
+                       upload to download.pytorch.org</div>
+
+    <h3>The codegen step &mdash; not optional</h3>
+
+    <p>PyTorch generates a lot of source code at build time. The canonical file <code>aten/src/ATen/native/native_functions.yaml</code> declares every tensor operation; tools parse it to emit:</p>
+
+    <ul class="dash">
+      <li>C++ headers and dispatch stubs for the dispatcher.</li>
+      <li>Per-backend kernel registration code.</li>
+      <li>Python bindings (THPVariable methods).</li>
+      <li>Autograd code (derivative formulas from <code>derivatives.yaml</code>).</li>
+      <li>Stub files (<code>.pyi</code>) for IDE/type-checker support.</li>
+    </ul>
+
+<pre data-lang="BASH"><span class="com"># Run codegen explicitly</span>
+python -m tools.codegen.gen --source-path aten/src/ATen --install_dir build/codegen
+
+<span class="com"># Many builds fail because codegen output is stale. Force regeneration:</span>
+rm -rf build/aten/src/ATen/Operators.h <span class="com"># etc.</span></pre>
+
+    <h3>setup.py for PyTorch</h3>
+
+    <p>PyTorch's <code>setup.py</code> is 1,500+ lines that orchestrate the whole build. Selected environment variables you'll see in CI:</p>
+
+<pre data-lang="BASH"><span class="com"># What features to build</span>
+<span class="kw">export</span> USE_CUDA=<span class="num">1</span>             <span class="com"># build CUDA support</span>
+<span class="kw">export</span> USE_CUDNN=<span class="num">1</span>            <span class="com"># use cuDNN</span>
+<span class="kw">export</span> USE_NCCL=<span class="num">1</span>             <span class="com"># multi-GPU collectives</span>
+<span class="kw">export</span> USE_DISTRIBUTED=<span class="num">1</span>      <span class="com"># torch.distributed</span>
+<span class="kw">export</span> USE_MKLDNN=<span class="num">1</span>           <span class="com"># oneDNN for CPU</span>
+<span class="kw">export</span> USE_FBGEMM=<span class="num">1</span>           <span class="com"># quantized CPU kernels</span>
+<span class="kw">export</span> BUILD_TEST=<span class="num">0</span>           <span class="com"># skip C++ tests in CI build (built separately)</span>
+
+<span class="com"># Where things live</span>
+<span class="kw">export</span> CUDA_HOME=/usr/local/cuda
+<span class="kw">export</span> CUDNN_LIB_DIR=/usr/lib/x86_64-linux-gnu
+<span class="kw">export</span> CUDNN_INCLUDE_DIR=/usr/include
+<span class="kw">export</span> NCCL_ROOT_DIR=/usr/local/nccl
+
+<span class="com"># Target architectures (massively affects build time and size)</span>
+<span class="kw">export</span> TORCH_CUDA_ARCH_LIST=<span class="str">"7.0;7.5;8.0;8.6;9.0"</span>     <span class="com">// what's released</span>
+<span class="kw">export</span> TORCH_CUDA_ARCH_LIST=<span class="str">"8.0+PTX"</span>                   <span class="com">// fast iteration (one arch)</span>
+
+<span class="com"># Build performance</span>
+<span class="kw">export</span> MAX_JOBS=<span class="num">32</span>             <span class="com"># parallelism cap</span>
+<span class="kw">export</span> CMAKE_BUILD_PARALLEL_LEVEL=<span class="num">32</span>
+<span class="kw">export</span> BUILD_SHARED_LIBS=<span class="num">1</span>    <span class="com"># shared libs vs static</span>
+
+<span class="com"># Now build</span>
+python setup.py bdist_wheel</pre>
+
+    <h3>Iterative development build</h3>
+
+    <p>For someone iterating on PyTorch C++ code, full rebuilds are death. The conventional iterative loop:</p>
+
+<pre data-lang="BASH"><span class="com"># Install in develop mode — rebuilds incrementally</span>
+python setup.py develop
+
+<span class="com"># Or just rebuild C++ code in place</span>
+python setup.py build_ext --inplace -j <span class="num">32</span>
+
+<span class="com"># Reduce arch list to one architecture for 4x speedup</span>
+<span class="kw">export</span> TORCH_CUDA_ARCH_LIST=<span class="str">"8.6"</span>     <span class="com">// just my dev GPU</span>
+
+<span class="com"># Use ccache aggressively</span>
+<span class="kw">export</span> CC=<span class="str">"ccache gcc"</span>
+<span class="kw">export</span> CXX=<span class="str">"ccache g++"</span>
+<span class="kw">export</span> CMAKE_CUDA_COMPILER_LAUNCHER=ccache  <span class="com">// CMake 3.18+ way to ccache nvcc</span>
+
+<span class="com"># Use ninja and mold</span>
+<span class="kw">export</span> CMAKE_GENERATOR=Ninja
+<span class="kw">export</span> CMAKE_EXE_LINKER_FLAGS=<span class="str">"-fuse-ld=mold"</span>
+
+<span class="com"># Skip features you don't need</span>
+<span class="kw">export</span> USE_DISTRIBUTED=<span class="num">0</span>
+<span class="kw">export</span> USE_KINETO=<span class="num">0</span>           <span class="com"># profiler</span>
+<span class="kw">export</span> BUILD_CAFFE2=<span class="num">0</span>          <span class="com"># legacy</span></pre>
+
+    <p>A typical iteration time: full from-scratch build = 60-90 minutes; warm rebuild after touching one file = 30-60 seconds; warm rebuild after touching a heavily-included header = 5-15 minutes.</p>
+
+    <div class="callout tip">
+      <h5>PyTorch build performance tips senior engineers know</h5>
+      <ul class="tight">
+        <li><strong>Limit TORCH_CUDA_ARCH_LIST</strong> aggressively for dev. Each arch is a full recompile of every CUDA kernel.</li>
+        <li><strong>Use unified or split CUDA architectures</strong>: <code>"8.0"</code> generates SASS for sm_80; <code>"8.0+PTX"</code> also emits PTX. PTX adds 30% to build time.</li>
+        <li><strong>Disable unused features</strong>: USE_DISTRIBUTED=0 alone shaves significant time.</li>
+        <li><strong>Use a fast linker</strong>: mold or lld instead of bfd.</li>
+        <li><strong>ccache + sccache</strong> for cross-machine and cross-checkout reuse.</li>
+        <li><strong>Pre-built libtorch</strong> + Python-only rebuild for Python-only changes.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="chapter" id="c17">
+    <h2><span class="ch-num">&sect;17</span>Python extension modules &amp; pybind11</h2>
+
+    <p>The bridge between C++ and Python. PyTorch itself uses a hand-written CPython extension layer (<code>torch/csrc/</code>) but most extensions use pybind11. Knowing both matters.</p>
+
+    <h3>The CPython extension model</h3>
+
+    <p>Python C extensions are shared libraries that expose a specific symbol &mdash; <code>PyInit_modulename</code> &mdash; that returns a Python module object. The CPython C API is what you bind to.</p>
+
+<pre data-lang="CPP"><span class="com">// raw_extension.c</span>
+<span class="pp">#define</span> <span class="ty">PY_SSIZE_T_CLEAN</span>
+<span class="pp">#include</span> <span class="str">&lt;Python.h&gt;</span>
+
+<span class="kw">static</span> PyObject* <span class="fn">my_square</span>(PyObject* self, PyObject* args) {
+  <span class="kw">int</span> x;
+  <span class="kw">if</span> (!<span class="fn">PyArg_ParseTuple</span>(args, <span class="str">"i"</span>, &amp;x)) <span class="kw">return</span> <span class="kw">NULL</span>;
+  <span class="kw">return</span> <span class="fn">PyLong_FromLong</span>(x * x);
+}
+
+<span class="kw">static</span> PyMethodDef methods[] = {
+  {<span class="str">"square"</span>, my_square, METH_VARARGS, <span class="str">"Return x*x"</span>},
+  {<span class="kw">NULL</span>, <span class="kw">NULL</span>, <span class="num">0</span>, <span class="kw">NULL</span>}
+};
+
+<span class="kw">static</span> <span class="kw">struct</span> PyModuleDef module = {
+  PyModuleDef_HEAD_INIT, <span class="str">"my_ext"</span>, <span class="kw">NULL</span>, -<span class="num">1</span>, methods
+};
+
+PyMODINIT_FUNC <span class="fn">PyInit_my_ext</span>(<span class="kw">void</span>) {
+  <span class="kw">return</span> <span class="fn">PyModule_Create</span>(&amp;module);
+}</pre>
+
+    <p>This is "raw" CPython. Powerful but verbose, and you handle reference counting manually. PyTorch's internals use this layer for performance; most extension authors use a wrapper.</p>
+
+    <h3>pybind11 &mdash; the modern wrapper</h3>
+
+<pre data-lang="CPP"><span class="pp">#include</span> <span class="str">&lt;pybind11/pybind11.h&gt;</span>
+<span class="pp">#include</span> <span class="str">&lt;pybind11/stl.h&gt;</span>      <span class="com">// std::vector, std::map, etc.</span>
+
+<span class="kw">namespace</span> py = pybind11;
+
+<span class="ty">int</span> <span class="fn">add</span>(<span class="ty">int</span> a, <span class="ty">int</span> b) { <span class="kw">return</span> a + b; }
+
+<span class="kw">struct</span> <span class="ty">Counter</span> {
+  <span class="ty">int</span> count = <span class="num">0</span>;
+  <span class="kw">void</span> <span class="fn">inc</span>(<span class="ty">int</span> by = <span class="num">1</span>) { count += by; }
+  <span class="ty">int</span> <span class="fn">get</span>() <span class="kw">const</span> { <span class="kw">return</span> count; }
+};
+
+<span class="fn">PYBIND11_MODULE</span>(my_ext, m) {
+  m.<span class="fn">doc</span>() = <span class="str">"My extension"</span>;
+  m.<span class="fn">def</span>(<span class="str">"add"</span>, &amp;add, <span class="str">"Add two integers"</span>);
+
+  py::<span class="fn">class_</span>&lt;<span class="ty">Counter</span>&gt;(m, <span class="str">"Counter"</span>)
+    .<span class="fn">def</span>(py::<span class="fn">init</span>&lt;&gt;())
+    .<span class="fn">def</span>(<span class="str">"inc"</span>, &amp;<span class="ty">Counter</span>::inc, py::<span class="fn">arg</span>(<span class="str">"by"</span>) = <span class="num">1</span>)
+    .<span class="fn">def</span>(<span class="str">"get"</span>, &amp;<span class="ty">Counter</span>::get)
+    .<span class="fn">def_readonly</span>(<span class="str">"count"</span>, &amp;<span class="ty">Counter</span>::count);
+}</pre>
+
+    <h3>Working with torch::Tensor in extensions</h3>
+
+<pre data-lang="CPP"><span class="pp">#include</span> <span class="str">&lt;torch/extension.h&gt;</span>
+
+torch::Tensor <span class="fn">my_op</span>(torch::Tensor x) {
+  <span class="ty">TORCH_CHECK</span>(x.<span class="fn">device</span>().<span class="fn">is_cuda</span>(), <span class="str">"Input must be CUDA"</span>);
+  <span class="ty">TORCH_CHECK</span>(x.<span class="fn">dtype</span>() == torch::kFloat32, <span class="str">"Input must be float32"</span>);
+  <span class="ty">TORCH_CHECK</span>(x.<span class="fn">is_contiguous</span>(), <span class="str">"Input must be contiguous"</span>);
+
+  <span class="kw">auto</span> y = torch::<span class="fn">empty_like</span>(x);
+  <span class="com">// Launch CUDA kernel here</span>
+  <span class="fn">my_kernel_launcher</span>(x.<span class="fn">data_ptr</span>&lt;<span class="kw">float</span>&gt;(), y.<span class="fn">data_ptr</span>&lt;<span class="kw">float</span>&gt;(), x.<span class="fn">numel</span>());
+  <span class="kw">return</span> y;
+}
+
+<span class="fn">PYBIND11_MODULE</span>(TORCH_EXTENSION_NAME, m) {
+  m.<span class="fn">def</span>(<span class="str">"my_op"</span>, &amp;my_op, <span class="str">"My CUDA op"</span>);
+}</pre>
+
+    <h3>Building with torch.utils.cpp_extension</h3>
+
+    <p>PyTorch ships a build helper that handles the CUDA + Python bindings details:</p>
+
+<pre data-lang="Python"><span class="com"># setup.py</span>
+<span class="kw">from</span> setuptools <span class="kw">import</span> setup
+<span class="kw">from</span> torch.utils.cpp_extension <span class="kw">import</span> CUDAExtension, BuildExtension
+
+<span class="fn">setup</span>(
+    name=<span class="str">"my_cuda_ext"</span>,
+    ext_modules=[
+        <span class="fn">CUDAExtension</span>(
+            name=<span class="str">"my_cuda_ext._C"</span>,
+            sources=[<span class="str">"src/binding.cpp"</span>, <span class="str">"src/kernel.cu"</span>],
+            extra_compile_args={
+                <span class="str">"cxx"</span>: [<span class="str">"-O3"</span>],
+                <span class="str">"nvcc"</span>: [<span class="str">"-O3"</span>, <span class="str">"--use_fast_math"</span>],
+            },
+        )
+    ],
+    cmdclass={<span class="str">"build_ext"</span>: BuildExtension},
+)</pre>
+
+    <h3>JIT compilation via torch.utils.cpp_extension.load</h3>
+
+<pre data-lang="Python"><span class="com"># For prototyping — compiles on first call, caches between runs</span>
+<span class="kw">from</span> torch.utils.cpp_extension <span class="kw">import</span> load
+
+my_ext = <span class="fn">load</span>(
+    name=<span class="str">"my_ext"</span>,
+    sources=[<span class="str">"kernel.cu"</span>, <span class="str">"binding.cpp"</span>],
+    extra_cuda_cflags=[<span class="str">"-O3"</span>, <span class="str">"--use_fast_math"</span>],
+    verbose=<span class="kw">True</span>,
+)
+
+my_ext.<span class="fn">my_op</span>(x)</pre>
+
+    <p>Useful for experimentation. Don't ship this way &mdash; users pay compile time on first import.</p>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART V ===================== -->
+<div class="part" id="p5">
+  <div class="part-label">Part V</div>
+  <h2 class="part-title">The CUDA compatibility <span class="acc">matrix</span></h2>
+  <p class="part-intro">A single chapter, but big enough to deserve its own part. Almost every weird ML-framework bug eventually reduces to a version-skew problem somewhere in this matrix. Senior lifecycle engineers carry this map in their heads.</p>
+
+  <section class="chapter" id="c18">
+    <h2><span class="ch-num">&sect;18</span>The CUDA library compatibility matrix</h2>
+
+    <h3>The components and who pins what</h3>
+
+    <table class="tbl">
+      <thead><tr><th>Component</th><th>Lives where</th><th>Pinned by</th></tr></thead>
+      <tbody>
+        <tr><td>NVIDIA driver</td><td>Host kernel + libcuda.so</td><td>System admin</td></tr>
+        <tr><td>CUDA Runtime (libcudart)</td><td>Inside the wheel/container</td><td>Library author (PyTorch)</td></tr>
+        <tr><td>cuDNN</td><td>Inside the wheel/container</td><td>PyTorch build</td></tr>
+        <tr><td>cuBLAS, cuFFT, cuSPARSE</td><td>Inside the wheel/container</td><td>PyTorch build (via CUDA toolkit)</td></tr>
+        <tr><td>NCCL</td><td>Inside the wheel/container</td><td>PyTorch build</td></tr>
+        <tr><td>NVTX, NVML</td><td>Host + bundled stubs</td><td>Mixed</td></tr>
+      </tbody>
+    </table>
+
+    <h3>The forward-compatibility story</h3>
+
+    <p>CUDA promises: newer drivers run older CUDA Runtime. A driver built for CUDA 12.4 supports any CUDA Runtime version from 12.0 up to 12.4. This is what makes "pip install torch" work without users needing to upgrade drivers.</p>
+
+    <p>The corollary that bites: a CUDA Runtime 12.4 wheel will NOT run on a driver from CUDA 12.0. CUDA-side forward-compatibility (newer runtime on older driver) is the special-package case &mdash; not the default.</p>
+
+    <div class="diagram">  CUDA Runtime Version (in wheel)
+    |
+    |  10.2  11.0  11.4  12.0  12.4  13.0
+    +-------------------------------------
+10.2|  OK
+11.0|  OK    OK
+11.4|  OK    OK    OK
+12.0|  ----- ----- ----- OK
+12.4|  ----- ----- ----- OK    OK
+13.0|  ----- ----- ----- ----- ----- OK
+    +-------------------------------------
+                          v
+                Driver Version
+                (host)
+
+OK means: the driver supports the runtime.
+Major version bumps (10 -&gt; 11, 11 -&gt; 12) break compat.
+Within a major, newer driver supports older runtime.</div>
+
+    <h3>cuDNN compatibility within CUDA</h3>
+
+    <p>cuDNN has its own version line, independent of CUDA. Each cuDNN release builds against one or more CUDA major versions. cuDNN 9.x supports CUDA 11 and 12. cuDNN 8.x supports CUDA 11 and 12 (different builds). A wheel ships a specific cuDNN .so &mdash; users get the version PyTorch chose.</p>
+
+    <h3>NCCL: the version everyone in distributed training cares about</h3>
+
+    <p>NCCL handles multi-GPU and multi-node collectives. NCCL releases follow CUDA major versions; within a major, minor releases add features but maintain ABI. A common production issue: a training job's containers ship different NCCL minors and the slow ranks crash.</p>
+
+<pre data-lang="BASH"><span class="com"># What NCCL does PyTorch use?</span>
+python -c <span class="str">"import torch; print(torch.cuda.nccl.version())"</span>
+<span class="com"># (2, 21, 5)</span>
+
+<span class="com"># What system NCCL is loaded?</span>
+strings /usr/local/nccl/lib/libnccl.so.<span class="num">2</span> | grep <span class="str">"NCCL version"</span>
+
+<span class="com"># Force PyTorch to log NCCL info at startup</span>
+<span class="kw">export</span> NCCL_DEBUG=INFO</pre>
+
+    <h3>The TORCH_CUDA_ARCH_LIST decision</h3>
+
+    <p>Which SM architectures get compiled into a PyTorch wheel? Each adds compile time and binary size.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Compute</th><th>Architecture</th><th>Hardware</th></tr></thead>
+      <tbody>
+        <tr><td>5.0, 5.2</td><td>Maxwell</td><td>GTX 9xx, Tegra X1 — usually dropped</td></tr>
+        <tr><td>6.0, 6.1</td><td>Pascal</td><td>P100, GTX 10xx — dropped in PyTorch 2.5+</td></tr>
+        <tr><td>7.0</td><td>Volta</td><td>V100, Titan V</td></tr>
+        <tr><td>7.5</td><td>Turing</td><td>T4, RTX 20xx</td></tr>
+        <tr><td>8.0</td><td>Ampere data center</td><td>A100</td></tr>
+        <tr><td>8.6</td><td>Ampere consumer</td><td>A40, RTX 30xx</td></tr>
+        <tr><td>8.9</td><td>Ada Lovelace</td><td>L40, L40S, RTX 40xx</td></tr>
+        <tr><td>9.0</td><td>Hopper</td><td>H100, H200</td></tr>
+        <tr><td>10.0</td><td>Blackwell</td><td>B100, B200, GB200</td></tr>
+        <tr><td>12.0</td><td>Blackwell consumer</td><td>RTX 50xx</td></tr>
+      </tbody>
+    </table>
+
+<pre data-lang="BASH"><span class="com"># Released PyTorch wheels typically support a wide list</span>
+TORCH_CUDA_ARCH_LIST=<span class="str">"7.0;7.5;8.0;8.6;9.0;10.0"</span>
+
+<span class="com"># Each arch is a full kernel recompile. For development, restrict to one:</span>
+TORCH_CUDA_ARCH_LIST=<span class="str">"8.6"</span>    <span class="com"># my dev GPU only</span>
+
+<span class="com"># The "PTX" suffix emits forward-compatible intermediate</span>
+TORCH_CUDA_ARCH_LIST=<span class="str">"9.0+PTX"</span>   <span class="com"># sm_90 binary + PTX for forward compat</span>
+
+<span class="com"># What does an existing .so support?</span>
+cuobjdump --list-elf libtorch_cuda.so | head
+<span class="com"># ELF file 1: sm_70</span>
+<span class="com"># ELF file 2: sm_75</span>
+<span class="com"># ELF file 3: sm_80</span>
+<span class="com"># ...</span></pre>
+
+    <h3>PTX and JIT compilation</h3>
+
+    <p>PTX is NVIDIA's intermediate assembly. When a binary contains PTX for arch X and runs on hardware that's X or newer, the driver JIT-compiles the PTX to SASS at first use. This is the only way to run on future architectures unknown at build time &mdash; but JIT adds startup latency (typically seconds, occasionally minutes for large kernels).</p>
+
+    <div class="callout warn">
+      <h5>The startup-latency mystery</h5>
+      <p>User reports: "torch.cuda.is_available() takes 90 seconds." Often this is JIT-compilation of every cached PTX kernel against an unrecognized architecture. Mitigations: ship SASS for the user's arch (preferred); use the JIT cache (<code>$HOME/.nv/ComputeCache</code>); or set <code>CUDA_CACHE_DISABLE=0</code> and warm the cache once. Modern PyTorch + driver combinations cache aggressively, so this is rarer than it used to be.</p>
+    </div>
+
+    <h3>The investigation flow when things go wrong</h3>
+
+<pre data-lang="BASH"><span class="com"># Step 1: identify driver and runtime versions</span>
+nvidia-smi                          <span class="com"># Driver version, CUDA "Driver API" version</span>
+nvcc --version                      <span class="com"># CUDA toolkit version</span>
+python -c <span class="str">"import torch; print(torch.version.cuda, torch.version.cudnn)"</span>
+python -c <span class="str">"import torch; print(torch.cuda.get_device_capability())"</span>
+
+<span class="com"># Step 2: what's actually loaded at runtime?</span>
+python -c <span class="str">"import torch; torch.cuda.is_available()"</span> &amp;
+PID=$!
+sleep <span class="num">1</span>
+cat /proc/$PID/maps | grep -E <span class="str">"libcudart|libcudnn|libcublas|libnccl"</span>
+kill $PID
+
+<span class="com"># Step 3: trace dlopen activity to see the resolution path</span>
+LD_DEBUG=libs python -c <span class="str">"import torch"</span> 2&gt;&amp;<span class="num">1</span> | grep -E <span class="str">"cuda|cudnn|cublas|nccl"</span></pre>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART VI (CI/CD) ===================== -->
+<div class="part" id="p6">
+  <div class="part-label">Part VI</div>
+  <h2 class="part-title">CI/CD &mdash; <span class="acc">the daily work</span></h2>
+  <p class="part-intro">This is the substantive day-to-day of the role: designing, operating, and improving the systems that turn commits into validated artifacts. The technology stack varies by company; the patterns are universal.</p>
+
+  <section class="chapter" id="c19">
+    <h2><span class="ch-num">&sect;19</span>CI/CD architectures &amp; build farms</h2>
+
+    <h3>The conceptual architecture</h3>
+    <div class="diagram">  developer pushes commit
+           |
+           v
+    +----[ source control: GitHub / GitLab ]----+
+    |                                            |
+    | event: push, PR, tag                       |
+    +-------------------+------------------------+
+                        |
+                        v
+              +---------+---------+
+              | webhook / poller  |
+              | dispatches jobs   |
+              +---------+---------+
+                        |
+                        v
+          +-------------+-------------+
+          |     scheduler / queue     |
+          | (GitHub Actions / Jenkins |
+          |  / GitLab Runners / etc.) |
+          +-+---------+-----------+---+
+            |         |           |
+            v         v           v
+       +----+-+   +---+--+    +---+---+
+       |runner|   |runner|    |runner |
+       | CPU  |   | GPU  |    | ARM   |
+       +------+   +------+    +-------+
+            |         |           |
+            +----+----+-----------+
+                 |
+                 v
+        +--------+--------+
+        | artifact store  |
+        | (wheels, OCI,   |
+        |  reports, logs) |
+        +-----------------+</div>
+
+    <h3>What the build farm needs to deliver</h3>
+    <ul class="dash">
+      <li><strong>Throughput</strong> &mdash; absorb daily PR + nightly load without queueing.</li>
+      <li><strong>Isolation</strong> &mdash; runs don't contaminate each other; secrets scoped per job.</li>
+      <li><strong>Determinism</strong> &mdash; same inputs produce the same outputs.</li>
+      <li><strong>Heterogeneity</strong> &mdash; CPU runners, GPU runners (multiple arches), ARM, Windows.</li>
+      <li><strong>Observability</strong> &mdash; answer "why is this slow?" without SSH'ing to a runner.</li>
+      <li><strong>Cost discipline</strong> &mdash; GPU runner-hours dominate; rightsize aggressively.</li>
+    </ul>
+
+    <h3>Self-hosted vs SaaS</h3>
+    <table class="tbl">
+      <thead><tr><th>Aspect</th><th>SaaS (GitHub-hosted)</th><th>Self-hosted</th></tr></thead>
+      <tbody>
+        <tr><td>Setup cost</td><td>Near zero</td><td>Infrastructure team needed</td></tr>
+        <tr><td>Per-job cost</td><td>Premium (~$0.08-0.30/min)</td><td>Marginal (electricity + amortized hardware)</td></tr>
+        <tr><td>GPU access</td><td>Limited, expensive</td><td>Your hardware, your choice</td></tr>
+        <tr><td>Custom toolchains</td><td>Constrained</td><td>Anything you want</td></tr>
+        <tr><td>Best for</td><td>Small teams, public OSS</td><td>Heavy build workloads, GPU-intensive testing</td></tr>
+      </tbody>
+    </table>
+
+    <p>PyTorch CI at NVIDIA scale: mostly self-hosted runners on internal infrastructure, with strategic cloud bursting for peak loads. GitHub-hosted for OSS-facing PR checks; internal for full validation matrices.</p>
+  </section>
+
+  <section class="chapter" id="c20">
+    <h2><span class="ch-num">&sect;20</span>GitHub Actions, GitLab, Jenkins in practice</h2>
+
+    <h3>GitHub Actions &mdash; the OSS standard</h3>
+<pre data-lang="YAML"><span class="kw">name</span>: build-and-test
+<span class="kw">on</span>:
+  <span class="kw">push</span>: { <span class="kw">branches</span>: [main] }
+  <span class="kw">pull_request</span>:
+
+<span class="kw">jobs</span>:
+  <span class="kw">build</span>:
+    <span class="kw">strategy</span>:
+      <span class="kw">fail-fast</span>: <span class="kw">false</span>
+      <span class="kw">matrix</span>:
+        <span class="kw">python</span>: [<span class="str">"3.10"</span>, <span class="str">"3.11"</span>, <span class="str">"3.12"</span>]
+        <span class="kw">cuda</span>: [<span class="str">"12.1"</span>, <span class="str">"12.4"</span>]
+    <span class="kw">runs-on</span>: ubuntu-22.04
+    <span class="kw">container</span>:
+      <span class="kw">image</span>: pytorch/manylinux-builder:cuda${{ matrix.cuda }}
+    <span class="kw">timeout-minutes</span>: <span class="num">180</span>
+
+    <span class="kw">steps</span>:
+      - <span class="kw">uses</span>: actions/checkout@v4
+        <span class="kw">with</span>: { submodules: recursive, fetch-depth: <span class="num">0</span> }
+
+      - <span class="kw">name</span>: Configure sccache
+        <span class="kw">run</span>: |
+          echo <span class="str">"CC=sccache gcc"</span> &gt;&gt; $GITHUB_ENV
+          echo <span class="str">"CXX=sccache g++"</span> &gt;&gt; $GITHUB_ENV
+        <span class="kw">env</span>:
+          <span class="kw">SCCACHE_BUCKET</span>: ${{ vars.SCCACHE_BUCKET }}
+
+      - <span class="kw">name</span>: Build wheel
+        <span class="kw">run</span>: |
+          set -euo pipefail
+          export PYTHON_VERSION=${{ matrix.python }}
+          export TORCH_CUDA_ARCH_LIST=<span class="str">"8.0;9.0"</span>
+          ./.ci/build_wheel.sh
+
+      - <span class="kw">name</span>: Upload wheel
+        <span class="kw">uses</span>: actions/upload-artifact@v4
+        <span class="kw">with</span>:
+          <span class="kw">name</span>: wheel-py${{ matrix.python }}-cu${{ matrix.cuda }}
+          <span class="kw">path</span>: dist/*.whl
+
+  <span class="kw">gpu-test</span>:
+    <span class="kw">needs</span>: build
+    <span class="kw">runs-on</span>: [self-hosted, gpu, h100]
+    <span class="kw">steps</span>:
+      - <span class="kw">uses</span>: actions/download-artifact@v4
+      - <span class="kw">run</span>: pip install *.whl
+      - <span class="kw">run</span>: pytest tests/ -n auto</pre>
+
+    <h3>Reusable workflows</h3>
+    <p>Once you have 10 similar pipelines, copy-paste falls apart:</p>
+
+<pre data-lang="YAML"><span class="com"># .github/workflows/_build.yml &mdash; reusable workflow</span>
+<span class="kw">name</span>: _build
+<span class="kw">on</span>:
+  <span class="kw">workflow_call</span>:
+    <span class="kw">inputs</span>:
+      <span class="kw">python-version</span>: { type: string, required: <span class="kw">true</span> }
+      <span class="kw">cuda-version</span>:   { type: string, required: <span class="kw">true</span> }
+      <span class="kw">arch-list</span>:      { type: string, default: <span class="str">"8.0;9.0"</span> }
+
+<span class="kw">jobs</span>:
+  <span class="kw">build</span>:
+    <span class="kw">runs-on</span>: ubuntu-22.04
+    <span class="kw">steps</span>:
+      <span class="com"># ... shared build steps ...</span>
+
+<span class="com"># Caller workflow:</span>
+<span class="kw">jobs</span>:
+  <span class="kw">build-py310-cu121</span>:
+    <span class="kw">uses</span>: ./.github/workflows/_build.yml
+    <span class="kw">with</span>: { python-version: <span class="str">"3.10"</span>, cuda-version: <span class="str">"12.1"</span> }</pre>
+
+    <h3>GitLab CI &mdash; the enterprise standard</h3>
+<pre data-lang="YAML">stages: [build, test, publish]
+variables: { GIT_SUBMODULE_STRATEGY: recursive }
+
+.build-template:
+  stage: build
+  tags: [linux, x86_64]
+  cache:
+    key: <span class="str">"sccache-$CI_COMMIT_REF_NAME"</span>
+    paths: [.sccache/]
+  script:
+    - export CC=<span class="str">"sccache gcc"</span> CXX=<span class="str">"sccache g++"</span>
+    - ./.ci/build_wheel.sh
+  artifacts:
+    paths: [dist/]
+    expire_in: <span class="num">14</span> days
+
+build:py311:cu124:
+  extends: .build-template
+  image: pytorch/manylinux-builder:cuda12.<span class="num">4</span>
+  variables: { PYTHON_VERSION: <span class="str">"3.11"</span> }
+
+gpu-test:
+  stage: test
+  tags: [linux, h100]
+  needs: [<span class="str">"build:py311:cu124"</span>]
+  script: [pip install dist/*.whl, pytest tests/]</pre>
+
+    <h3>Jenkins &mdash; still everywhere</h3>
+    <p>Jenkins remains common in environments with strong infra requirements (self-hosted, complex auth, hardware-attached workers). Modern Jenkins uses declarative Pipelines:</p>
+
+<pre data-lang="Groovy">pipeline {
+  agent none
+  options { timeout(time: <span class="num">3</span>, unit: <span class="str">'HOURS'</span>) }
+
+  stages {
+    stage(<span class="str">'Build matrix'</span>) {
+      matrix {
+        axes {
+          axis { name <span class="str">'PY'</span>;   values <span class="str">'3.10'</span>, <span class="str">'3.11'</span>, <span class="str">'3.12'</span> }
+          axis { name <span class="str">'CUDA'</span>; values <span class="str">'12.1'</span>, <span class="str">'12.4'</span> }
+        }
+        agent {
+          docker {
+            image <span class="str">"pytorch/manylinux-builder:cuda${CUDA}"</span>
+            label <span class="str">'docker'</span>
+            args  <span class="str">'-v /sccache:/sccache'</span>
+          }
+        }
+        stages {
+          stage(<span class="str">'Build'</span>) {
+            steps { sh <span class="str">"./.ci/build_wheel.sh"</span> }
+            post { success { archiveArtifacts <span class="str">'dist/*.whl'</span> } }
+          }
+        }
+      }
+    }
+  }
+  post {
+    failure {
+      slackSend channel: <span class="str">'#ci-alerts'</span>, message: <span class="str">"FAILED: ${env.JOB_NAME}"</span>
+    }
+  }
+}</pre>
+
+    <h3>The patterns that recur regardless of platform</h3>
+    <ul class="dash">
+      <li><strong>Matrix builds</strong> &mdash; Python &times; CUDA &times; OS &times; arch.</li>
+      <li><strong>Conditional execution</strong> &mdash; full GPU tests only on release branches.</li>
+      <li><strong>Caching layers</strong> &mdash; pip cache, ccache/sccache, docker layer cache.</li>
+      <li><strong>Artifacts</strong> &mdash; built wheels, test results (JUnit XML), benchmarks, coverage.</li>
+      <li><strong>Required vs optional checks</strong> &mdash; gate merge on required; surface optional.</li>
+      <li><strong>Manual approval gates</strong> &mdash; for promotion to production / pypi.</li>
+    </ul>
+  </section>
+
+  <section class="chapter" id="c21">
+    <h2><span class="ch-num">&sect;21</span>Containerized build &amp; test environments</h2>
+
+    <p>Containers are how reproducibility happens at lifecycle scale. Every CI job runs in a container; every developer environment derives from one. Owning these images is core lifecycle work.</p>
+
+    <h3>The build-time vs runtime image distinction</h3>
+<pre data-lang="dockerfile"><span class="com"># BUILD image: large, has toolchain</span>
+<span class="kw">FROM</span> nvidia/cuda:12.4.0-devel-ubuntu22.04 <span class="kw">AS</span> builder
+<span class="kw">RUN</span> apt-get update &amp;&amp; apt-get install -y \
+      git cmake ninja-build python3.11 python3.11-dev python3-pip \
+      ccache mold &amp;&amp; rm -rf /var/lib/apt/lists/*
+<span class="kw">WORKDIR</span> /work
+
+<span class="com"># RUNTIME image: small, no toolchain</span>
+<span class="kw">FROM</span> nvidia/cuda:12.4.0-runtime-ubuntu22.04 <span class="kw">AS</span> runtime
+<span class="kw">RUN</span> apt-get update &amp;&amp; apt-get install -y python3.11 &amp;&amp; rm -rf /var/lib/apt/lists/*
+<span class="kw">COPY</span> --from=builder /work/dist/*.whl /tmp/
+<span class="kw">RUN</span> pip install /tmp/*.whl &amp;&amp; rm /tmp/*.whl</pre>
+
+    <h3>Layer ordering &mdash; the rebuild-speed lever</h3>
+    <p>Dockerfile lines that change rarely should be earlier; lines that change often should be later. A typo in line 50 invalidates the cache for everything after.</p>
+
+<pre data-lang="dockerfile"><span class="kw">FROM</span> nvidia/cuda:12.4.0-devel-ubuntu22.04
+
+<span class="com"># 1. System packages &mdash; rarely change</span>
+<span class="kw">RUN</span> apt-get update &amp;&amp; apt-get install -y git cmake ninja-build python3.11
+
+<span class="com"># 2. Pip dependencies &mdash; change occasionally</span>
+<span class="kw">COPY</span> requirements.txt /tmp/
+<span class="kw">RUN</span> pip install --no-cache-dir -r /tmp/requirements.txt
+
+<span class="com"># 3. Project files &mdash; change frequently</span>
+<span class="kw">COPY</span> . /work
+<span class="kw">WORKDIR</span> /work
+<span class="kw">RUN</span> ./build.sh</pre>
+
+    <h3>BuildKit and cache mounts</h3>
+<pre data-lang="dockerfile"><span class="com"># syntax=docker/dockerfile:1.7</span>
+<span class="kw">FROM</span> nvidia/cuda:12.4.0-devel-ubuntu22.04
+
+<span class="kw">RUN</span> --mount=type=cache,target=/var/cache/apt \
+    --mount=type=cache,target=/var/lib/apt \
+    apt-get update &amp;&amp; apt-get install -y git cmake
+
+<span class="kw">RUN</span> --mount=type=cache,target=/root/.cache/pip \
+    pip install -r requirements.txt
+
+<span class="kw">RUN</span> --mount=type=cache,target=/sccache,id=sccache \
+    sccache --start-server &amp;&amp; ./build.sh</pre>
+
+    <p>Cache mounts persist between builds without being baked into the image. Crucial for PyTorch-scale: the sccache cache stays warm even when the Dockerfile changes.</p>
+
+    <h3>devcontainers &mdash; the developer environment story</h3>
+    <p>The JD calls for "development of cloud-hosted developer environments." The devcontainer spec lets you ship a fully-configured environment as code:</p>
+
+<pre data-lang="JSON">{
+  <span class="str">"name"</span>: <span class="str">"PyTorch Dev"</span>,
+  <span class="str">"build"</span>: { <span class="str">"dockerfile"</span>: <span class="str">"Dockerfile.dev"</span> },
+  <span class="str">"runArgs"</span>: [<span class="str">"--gpus=all"</span>, <span class="str">"--shm-size=8g"</span>],
+  <span class="str">"mounts"</span>: [<span class="str">"source=ccache-vol,target=/root/.ccache,type=volume"</span>],
+  <span class="str">"customizations"</span>: {
+    <span class="str">"vscode"</span>: {
+      <span class="str">"extensions"</span>: [<span class="str">"ms-python.python"</span>, <span class="str">"ms-vscode.cpptools"</span>],
+      <span class="str">"settings"</span>: { <span class="str">"python.defaultInterpreterPath"</span>: <span class="str">"/usr/bin/python3"</span> }
+    }
+  },
+  <span class="str">"postCreateCommand"</span>: <span class="str">"git submodule update --init --recursive"</span>
+}</pre>
+
+    <p>This is what lets a new engineer go from "I want to contribute" to "I have a working build, debugger, GPU access" in 5 minutes instead of 5 days.</p>
+
+    <h3>Image hygiene checklist</h3>
+    <ul class="check">
+      <li>Pin every base image by digest, not tag (<code>FROM image@sha256:...</code>).</li>
+      <li>Generate SBOMs (<code>syft</code>) and scan for CVEs (<code>trivy</code>, <code>grype</code>) on every push.</li>
+      <li>Multi-arch manifests when arm64 matters (Grace Hopper).</li>
+      <li>Sign images with cosign; verify at runtime via policy controllers.</li>
+      <li>Rebuild base images on a schedule (weekly), not just on demand &mdash; security patches.</li>
+    </ul>
+  </section>
+
+  <section class="chapter" id="c22">
+    <h2><span class="ch-num">&sect;22</span>Test infrastructure at scale</h2>
+
+    <p>PyTorch has ~50,000 tests. Running them all on every commit is impossible; running none invites regressions. The lifecycle engineer designs the balance.</p>
+
+    <h3>Test tiering</h3>
+    <table class="tbl">
+      <thead><tr><th>Tier</th><th>Trigger</th><th>Coverage</th><th>Wall time</th></tr></thead>
+      <tbody>
+        <tr><td>Lint / format</td><td>Every push</td><td>Static analysis only</td><td>Seconds</td></tr>
+        <tr><td>Unit tests (CPU)</td><td>Every PR</td><td>Core functionality</td><td>~10 min</td></tr>
+        <tr><td>Unit tests (GPU)</td><td>Every PR</td><td>CUDA-specific paths</td><td>~30 min</td></tr>
+        <tr><td>Integration tests</td><td>Merge to main</td><td>End-to-end model runs</td><td>~2 hr</td></tr>
+        <tr><td>Distributed tests</td><td>Nightly</td><td>Multi-GPU, multi-node</td><td>~6 hr</td></tr>
+        <tr><td>Compatibility matrix</td><td>Release branches</td><td>All CUDA/Python combos</td><td>~12 hr</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Sharding</h3>
+    <p>50,000 tests on one runner = 12 hours. 50,000 tests across 30 runners = 24 minutes. Test sharding is non-negotiable at this scale.</p>
+
+<pre data-lang="BASH"><span class="com"># pytest with xdist for in-process parallelism</span>
+pytest tests/ -n auto              <span class="com"># auto = CPU count</span>
+pytest tests/ -n <span class="num">8</span> --dist=loadscope   <span class="com"># shard by test file</span>
+
+<span class="com"># Cross-runner sharding via test selection</span>
+pytest tests/ --shard-id=<span class="num">0</span> --num-shards=<span class="num">4</span>   <span class="com"># Runner 1 of 4</span>
+pytest tests/ --shard-id=<span class="num">1</span> --num-shards=<span class="num">4</span>   <span class="com"># Runner 2 of 4</span></pre>
+
+    <h3>Flaky test management</h3>
+    <p>Some tests fail occasionally for non-deterministic reasons: timing, numerical tolerance, network calls, resource contention. Senior lifecycle engineers know: flakes are debt that compounds.</p>
+
+    <ul class="dash">
+      <li><strong>Detect</strong>: re-run failed tests; track pass/fail history per test name.</li>
+      <li><strong>Quarantine</strong>: when flake rate exceeds 5%, mark non-blocking and file a bug.</li>
+      <li><strong>Auto-retry policy</strong>: max 2 retries; mark "flaky pass" but don't block merge.</li>
+      <li><strong>Don't normalize flakes</strong>: every flaky test is a real bug, even if the bug is in the test. Pay it down.</li>
+    </ul>
+
+<pre data-lang="Python"><span class="com"># pytest plugin for retry with markers</span>
+<span class="pp">@pytest.mark.flaky</span>(reruns=<span class="num">2</span>, reruns_delay=<span class="num">5</span>)
+<span class="kw">def</span> <span class="fn">test_distributed_allreduce</span>():
+    <span class="com"># known to occasionally time out under load</span>
+    <span class="kw">pass</span></pre>
+
+    <h3>A flaky-detector tool</h3>
+    <p>The kind of utility you build once and use forever &mdash; aggregates JUnit XMLs from many CI runs and ranks tests by flake rate:</p>
+
+<pre data-lang="Python"><span class="com">"""Aggregate JUnit XMLs from many CI runs; rank tests by flake rate."""</span>
+<span class="kw">from</span> __future__ <span class="kw">import</span> annotations
+
+<span class="kw">import</span> xml.etree.ElementTree <span class="kw">as</span> ET
+<span class="kw">from</span> collections <span class="kw">import</span> defaultdict
+<span class="kw">from</span> dataclasses <span class="kw">import</span> dataclass
+<span class="kw">from</span> pathlib <span class="kw">import</span> Path
+
+<span class="pp">@dataclass</span>
+<span class="kw">class</span> <span class="ty">TestStats</span>:
+    runs:  <span class="ty">int</span> = <span class="num">0</span>
+    fails: <span class="ty">int</span> = <span class="num">0</span>
+
+    <span class="pp">@property</span>
+    <span class="kw">def</span> <span class="fn">flake_rate</span>(self) -&gt; <span class="ty">float</span>:
+        <span class="kw">return</span> self.fails / self.runs <span class="kw">if</span> self.runs <span class="kw">else</span> <span class="num">0.0</span>
+
+<span class="kw">def</span> <span class="fn">collect</span>(xml_files):
+    stats = <span class="fn">defaultdict</span>(TestStats)
+    <span class="kw">for</span> path <span class="kw">in</span> xml_files:
+        root = ET.<span class="fn">parse</span>(path).<span class="fn">getroot</span>()
+        <span class="kw">for</span> tc <span class="kw">in</span> root.<span class="fn">iter</span>(<span class="str">"testcase"</span>):
+            name = <span class="str">f"{tc.get('classname')}::{tc.get('name')}"</span>
+            stats[name].runs += <span class="num">1</span>
+            <span class="kw">if</span> tc.<span class="fn">find</span>(<span class="str">"failure"</span>) <span class="kw">is</span> <span class="kw">not</span> <span class="kw">None</span> <span class="kw">or</span> tc.<span class="fn">find</span>(<span class="str">"error"</span>) <span class="kw">is</span> <span class="kw">not</span> <span class="kw">None</span>:
+                stats[name].fails += <span class="num">1</span>
+    <span class="kw">return</span> stats
+
+<span class="kw">def</span> <span class="fn">main</span>():
+    stats = <span class="fn">collect</span>(<span class="fn">list</span>(<span class="fn">Path</span>(<span class="str">"reports"</span>).<span class="fn">glob</span>(<span class="str">"**/results.xml"</span>)))
+    flaky = [(name, s) <span class="kw">for</span> name, s <span class="kw">in</span> stats.<span class="fn">items</span>()
+             <span class="kw">if</span> <span class="num">0</span> &lt; s.fails &lt; s.runs <span class="kw">and</span> s.flake_rate &gt;= <span class="num">0.02</span>]
+    flaky.<span class="fn">sort</span>(key=<span class="kw">lambda</span> kv: kv[<span class="num">1</span>].flake_rate, reverse=<span class="kw">True</span>)
+    <span class="kw">for</span> name, s <span class="kw">in</span> flaky[:<span class="num">30</span>]:
+        <span class="fn">print</span>(<span class="str">f"{s.flake_rate:5.1%}  {s.fails}/{s.runs}  {name}"</span>)
+
+<span class="kw">if</span> __name__ == <span class="str">"__main__"</span>:
+    <span class="fn">main</span>()</pre>
+
+    <div class="callout tip">
+      <h5>The triage discipline</h5>
+      <p>Every week: pull flaky-test rankings, open issues for the top 5, assign to the team that owns the code. Don't let the list grow past 20 &mdash; that's the point at which engineers stop trusting the test suite and the rot accelerates.</p>
+    </div>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART VII ===================== -->
+<div class="part" id="p7">
+  <div class="part-label">Part VII</div>
+  <h2 class="part-title">Multi-cloud delivery <span class="acc">&amp; release engineering</span></h2>
+  <p class="part-intro">The JD calls out "multi-cloud large-scale systems" as a stand-out qualification. Building software is one half; getting it to users across regions, clouds, registries, and trust boundaries is the other. The release pipeline is the connective tissue.</p>
+
+  <section class="chapter" id="c23">
+    <h2><span class="ch-num">&sect;23</span>Multi-cloud build farms</h2>
+
+    <p>"Multi-cloud" here means: build infrastructure that spans AWS, GCP, Azure, and possibly on-prem. Reasons it happens: cost (different GPU pricing per cloud), capacity (one cloud's H100 quota isn't enough), geography (regional latency for distributed test farms), disaster recovery, and vendor diversity for negotiation leverage.</p>
+
+    <h3>The architecture decisions</h3>
+
+    <div class="diagram">    +-------------+      +-------------+      +-------------+
+    |    AWS      |      |    GCP      |      |   On-prem   |
+    | us-east-1   |      | us-central1 |      | DGX cluster |
+    |             |      |             |      |             |
+    | A100 / H100 |      | A100 / H100 |      | H100 / GB200|
+    +------+------+      +------+------+      +------+------+
+           |                    |                    |
+           |                    |                    |
+           +---------+----------+----------+---------+
+                     |                     |
+              +------+------+      +-------+-------+
+              | Job router  |      | Artifact      |
+              | (matches    |      | mirror        |
+              | workload to |      | (per cloud,   |
+              | runner)     |      | bidirectional)|
+              +------+------+      +---------------+
+                     |
+                     v
+              orchestrator
+              (Jenkins,
+               Buildkite,
+               Argo Workflows)</div>
+
+    <h3>The hard parts</h3>
+
+    <ul class="dash">
+      <li><strong>Identity</strong> &mdash; one CI system, three identity providers. Federate via OIDC; avoid sharing long-lived credentials across clouds.</li>
+      <li><strong>Artifact replication</strong> &mdash; build in AWS, test in GCP, publish from on-prem? You need fast, deduplicated transfer of multi-GB artifacts.</li>
+      <li><strong>Cost attribution</strong> &mdash; each cloud has its own billing model. Tag aggressively (per-team, per-job-type, per-stage) so you can see where the budget goes.</li>
+      <li><strong>Egress fees</strong> &mdash; cross-cloud data transfer is shockingly expensive. Architect to minimize it: keep artifacts in the same cloud as the runners that consume them.</li>
+      <li><strong>Job routing</strong> &mdash; not every job runs everywhere. CPU-only jobs go to the cheapest CPU runner; H100 jobs go where H100s are available right now.</li>
+    </ul>
+
+    <h3>A practical pattern: cloud-agnostic runner pool</h3>
+
+<pre data-lang="HCL"><span class="com"># Terraform — one module deployed three times, once per cloud</span>
+<span class="kw">module</span> <span class="str">"runner_pool_aws"</span> {
+  source       = <span class="str">"./modules/runner-pool"</span>
+  cloud        = <span class="str">"aws"</span>
+  region       = <span class="str">"us-east-1"</span>
+  gpu_type     = <span class="str">"h100"</span>
+  max_runners  = <span class="num">200</span>
+  scale_down_after_minutes = <span class="num">5</span>
+}
+
+<span class="kw">module</span> <span class="str">"runner_pool_gcp"</span> {
+  source       = <span class="str">"./modules/runner-pool"</span>
+  cloud        = <span class="str">"gcp"</span>
+  region       = <span class="str">"us-central1"</span>
+  gpu_type     = <span class="str">"h100"</span>
+  max_runners  = <span class="num">150</span>
+  scale_down_after_minutes = <span class="num">5</span>
+}
+
+<span class="com"># Each module knows how to provision its cloud's machines and</span>
+<span class="com"># register them with the central scheduler.</span></pre>
+
+    <p>The interface to the rest of CI is uniform: jobs declare requirements (<code>label: gpu-h100</code>), the scheduler picks a runner from any pool that satisfies them. Cost optimizers and capacity managers can shift between pools without changing job definitions.</p>
+
+    <h3>Artifact mirroring</h3>
+
+<pre data-lang="BASH"><span class="com"># Mirror an S3 bucket to a GCS bucket nightly</span>
+<span class="com"># Avoid this if it can be done with cross-region replication or storage gateway</span>
+gcloud storage rsync -r \
+  s3://pytorch-wheels-us-east-<span class="num">1</span>/ \
+  gs://pytorch-wheels-us-central<span class="num">1</span>/
+
+<span class="com"># Or with rclone — handles many clouds uniformly</span>
+rclone sync --transfers=<span class="num">32</span> --checkers=<span class="num">64</span> \
+  aws:pytorch-wheels-us-east-<span class="num">1</span>/ \
+  gcs:pytorch-wheels-us-central<span class="num">1</span>/</pre>
+
+    <p>For container images, use registry mirroring: Harbor with replication policies, or each cloud's native registry with pull-through caching to an upstream.</p>
+  </section>
+
+  <section class="chapter" id="c24">
+    <h2><span class="ch-num">&sect;24</span>Release pipelines &amp; promotion</h2>
+
+    <p>Every artifact has a lifecycle from "fresh from CI" to "in production." The promotion pipeline is the workflow that walks artifacts through validation gates and into customer hands.</p>
+
+    <h3>The canonical promotion ladder</h3>
+
+    <div class="diagram">  PR build           ----+
+                          |
+                          v
+  nightly build      ----+----&gt;  download.pytorch.org/whl/nightly/
+                          |        (~daily; latest dev)
+                          v
+  release candidate  ----+----&gt;  download.pytorch.org/whl/test/
+                          |        (RCs for partner testing)
+                          v
+  GA release         ----+----&gt;  download.pytorch.org/whl/cu121/
+                          |        + pypi.org (subset, no CUDA)
+                          v
+  archived release   ----+----&gt;  download.pytorch.org/whl/cu121/torch-2.4.0+...
+                                   (frozen; never modified)</div>
+
+    <h3>Promotion criteria</h3>
+
+    <p>Each step has explicit pass/fail criteria. Some examples:</p>
+
+    <table class="tbl">
+      <thead><tr><th>Transition</th><th>Criteria</th></tr></thead>
+      <tbody>
+        <tr><td>PR &rarr; nightly</td><td>Build succeeds; smoke tests pass on CPU + 1 GPU arch</td></tr>
+        <tr><td>nightly &rarr; RC</td><td>Full test matrix green for 7 consecutive days; no critical bugs open</td></tr>
+        <tr><td>RC &rarr; GA</td><td>RC has been in market 14+ days; no P0 issues; downstream packages compatible</td></tr>
+        <tr><td>GA &rarr; archived</td><td>Time-based; immutable thereafter</td></tr>
+      </tbody>
+    </table>
+
+    <h3>An automated promotion job</h3>
+
+<pre data-lang="Python"><span class="com">"""Promote a candidate wheel set from staging to test channel."""</span>
+<span class="kw">from</span> __future__ <span class="kw">import</span> annotations
+
+<span class="kw">import</span> argparse
+<span class="kw">import</span> hashlib
+<span class="kw">import</span> sys
+<span class="kw">from</span> dataclasses <span class="kw">import</span> dataclass
+<span class="kw">from</span> pathlib <span class="kw">import</span> Path
+
+<span class="kw">import</span> boto3
+
+<span class="pp">@dataclass</span>
+<span class="kw">class</span> <span class="ty">PromotionPlan</span>:
+    src_bucket: <span class="ty">str</span>
+    src_prefix: <span class="ty">str</span>
+    dst_bucket: <span class="ty">str</span>
+    dst_prefix: <span class="ty">str</span>
+    version:    <span class="ty">str</span>
+
+<span class="kw">def</span> <span class="fn">checksum_s3_object</span>(s3, bucket: <span class="ty">str</span>, key: <span class="ty">str</span>) -&gt; <span class="ty">str</span>:
+    <span class="kw">try</span>:
+        head = s3.<span class="fn">head_object</span>(Bucket=bucket, Key=key)
+    <span class="kw">except</span> Exception:
+        <span class="kw">return</span> <span class="str">""</span>
+    <span class="kw">return</span> head.<span class="fn">get</span>(<span class="str">"ETag"</span>, <span class="str">""</span>).<span class="fn">strip</span>(<span class="str">'"'</span>)
+
+<span class="kw">def</span> <span class="fn">verify_signature</span>(path: <span class="ty">str</span>) -&gt; <span class="ty">bool</span>:
+    <span class="kw">import</span> subprocess
+    result = subprocess.<span class="fn">run</span>(
+        [<span class="str">"cosign"</span>, <span class="str">"verify-blob"</span>,
+         <span class="str">"--signature"</span>, <span class="str">f"</span>{path}<span class="str">.sig"</span>,
+         <span class="str">"--certificate"</span>, <span class="str">f"</span>{path}<span class="str">.crt"</span>,
+         path],
+        capture_output=<span class="kw">True</span>, text=<span class="kw">True</span>,
+    )
+    <span class="kw">return</span> result.returncode == <span class="num">0</span>
+
+<span class="kw">def</span> <span class="fn">promote</span>(plan: PromotionPlan, dry_run: <span class="ty">bool</span> = <span class="kw">True</span>) -&gt; <span class="ty">int</span>:
+    s3 = boto3.<span class="fn">client</span>(<span class="str">"s3"</span>)
+    paginator = s3.<span class="fn">get_paginator</span>(<span class="str">"list_objects_v2"</span>)
+
+    promoted = <span class="num">0</span>
+    skipped  = <span class="num">0</span>
+    failed: <span class="ty">list</span>[<span class="ty">str</span>] = []
+
+    <span class="kw">for</span> page <span class="kw">in</span> paginator.<span class="fn">paginate</span>(Bucket=plan.src_bucket, Prefix=plan.src_prefix):
+        <span class="kw">for</span> obj <span class="kw">in</span> page.<span class="fn">get</span>(<span class="str">"Contents"</span>, []):
+            <span class="kw">if</span> <span class="kw">not</span> obj[<span class="str">"Key"</span>].<span class="fn">endswith</span>((<span class="str">".whl"</span>, <span class="str">".tar.gz"</span>)):
+                <span class="kw">continue</span>
+            <span class="kw">if</span> plan.version <span class="kw">not</span> <span class="kw">in</span> obj[<span class="str">"Key"</span>]:
+                <span class="kw">continue</span>
+
+            dst_key = obj[<span class="str">"Key"</span>].<span class="fn">replace</span>(plan.src_prefix, plan.dst_prefix)
+
+            <span class="com"># Idempotent: if same ETag exists at destination, skip</span>
+            src_etag = obj[<span class="str">"ETag"</span>].<span class="fn">strip</span>(<span class="str">'"'</span>)
+            dst_etag = <span class="fn">checksum_s3_object</span>(s3, plan.dst_bucket, dst_key)
+            <span class="kw">if</span> src_etag == dst_etag:
+                <span class="fn">print</span>(<span class="str">f"[skip] </span>{dst_key}<span class="str"> already at destination"</span>)
+                skipped += <span class="num">1</span>
+                <span class="kw">continue</span>
+
+            <span class="fn">print</span>(<span class="str">f"[promote] </span>{obj[<span class="str">'Key'</span>]}<span class="str"> -&gt; </span>{dst_key}<span class="str">"</span>)
+            <span class="kw">if</span> <span class="kw">not</span> dry_run:
+                s3.<span class="fn">copy_object</span>(
+                    Bucket=plan.dst_bucket,
+                    Key=dst_key,
+                    CopySource={<span class="str">"Bucket"</span>: plan.src_bucket, <span class="str">"Key"</span>: obj[<span class="str">"Key"</span>]},
+                    MetadataDirective=<span class="str">"REPLACE"</span>,
+                    Metadata={<span class="str">"promoted-from"</span>: plan.src_prefix},
+                )
+            promoted += <span class="num">1</span>
+
+    <span class="fn">print</span>(<span class="str">f"\nPromoted </span>{promoted}<span class="str">, skipped </span>{skipped}<span class="str">"</span>)
+    <span class="kw">return</span> <span class="num">0</span> <span class="kw">if</span> <span class="kw">not</span> failed <span class="kw">else</span> <span class="num">1</span>
+
+<span class="kw">if</span> __name__ == <span class="str">"__main__"</span>:
+    p = argparse.<span class="fn">ArgumentParser</span>()
+    p.<span class="fn">add_argument</span>(<span class="str">"--version"</span>, required=<span class="kw">True</span>)
+    p.<span class="fn">add_argument</span>(<span class="str">"--apply"</span>, action=<span class="str">"store_true"</span>, help=<span class="str">"actually copy"</span>)
+    args = p.<span class="fn">parse_args</span>()
+    sys.<span class="fn">exit</span>(<span class="fn">promote</span>(<span class="fn">PromotionPlan</span>(
+        src_bucket=<span class="str">"pytorch-staging"</span>,
+        src_prefix=<span class="str">f"nightly/</span>{args.version}<span class="str">/"</span>,
+        dst_bucket=<span class="str">"pytorch-wheels"</span>,
+        dst_prefix=<span class="str">f"test/cu121/</span>{args.version}<span class="str">/"</span>,
+        version=args.version,
+    ), dry_run=<span class="kw">not</span> args.apply))</pre>
+
+    <div class="callout tip">
+      <h5>The dry-run discipline</h5>
+      <p>Every promotion script defaults to dry-run. Promotion produces production-visible changes; mistakes are recovered only by republishing. The pattern: run with no flags to preview; add <code>--apply</code> only when the preview matches expectations. CI jobs that promote add a manual approval gate.</p>
+    </div>
+
+    <h3>Rollback strategies</h3>
+
+    <p>A broken release lands. Now what?</p>
+
+    <ul class="dash">
+      <li><strong>Pull from the index</strong> &mdash; remove the bad wheel from <code>simple/torch/</code>. Users not yet pinned can no longer install it. Existing installs unaffected.</li>
+      <li><strong>Publish a yanked release</strong> &mdash; PEP 592: wheels can be marked yanked so pip skips them unless explicitly requested. Less disruptive than removal.</li>
+      <li><strong>Hotfix release</strong> &mdash; cut <code>X.Y.Z+1</code> with the fix. Promote through the ladder, expedited. This is the right answer most of the time; "pull" is for emergencies.</li>
+      <li><strong>Documentation</strong> &mdash; update the release notes; pin "known broken" in the changelog. Users self-serve when they hit the issue.</li>
+    </ul>
+
+    <h3>Channels and pre-release identifiers</h3>
+
+<pre data-lang="text">torch 2.5.0.dev20241015+cu121          <span class="com"># nightly (dev release)</span>
+torch 2.5.0rc1+cu121                   <span class="com"># release candidate</span>
+torch 2.5.0+cu121                      <span class="com"># GA</span>
+torch 2.5.1+cu121                      <span class="com"># patch</span>
+torch 2.5.0.post1+cu121                <span class="com"># post-release fix (no source changes)</span>
+
+<span class="com"># pip respects these — installs latest stable by default</span>
+pip install torch                       <span class="com"># &mdash;&gt; 2.5.0</span>
+pip install --pre torch                 <span class="com"># &mdash;&gt; 2.5.0rc1 OK</span>
+pip install torch==2.5.0.dev20241015    <span class="com"># exact dev pin</span></pre>
+  </section>
+
+  <section class="chapter" id="c25">
+    <h2><span class="ch-num">&sect;25</span>Versioning, channels, deprecation</h2>
+
+    <h3>Semantic versioning &mdash; what it does and doesn't promise</h3>
+
+    <p>PyTorch follows a soft SemVer: <code>MAJOR.MINOR.PATCH</code>, with:</p>
+    <ul class="dash">
+      <li><strong>MAJOR</strong> &mdash; breaking changes. Rare. PyTorch 1 to 2 happened over many years.</li>
+      <li><strong>MINOR</strong> &mdash; new features, additive API changes. Quarterly cadence.</li>
+      <li><strong>PATCH</strong> &mdash; bug fixes, no API changes. As-needed.</li>
+    </ul>
+
+    <p>The reality: minor releases sometimes remove deprecated features. Senior lifecycle engineers maintain compatibility matrices that go beyond what the version numbers claim.</p>
+
+    <h3>Deprecation cycles</h3>
+
+    <p>A function that needs to go away takes 2-4 minor releases to actually disappear:</p>
+
+    <ol>
+      <li><strong>Mark for deprecation</strong> &mdash; the API still works; warns on use. Users learn.</li>
+      <li><strong>Document the migration path</strong> &mdash; release notes, blog posts, alternative APIs.</li>
+      <li><strong>Default to alternative</strong> (if applicable) &mdash; new default behavior with opt-out for old.</li>
+      <li><strong>Remove</strong> &mdash; the API is gone. Users on the old code have to migrate.</li>
+    </ol>
+
+<pre data-lang="Python"><span class="com"># PyTorch's deprecation pattern</span>
+<span class="kw">import</span> warnings
+
+<span class="kw">def</span> <span class="fn">old_api</span>(*args, **kwargs):
+    warnings.<span class="fn">warn</span>(
+        <span class="str">"torch.old_api is deprecated since 2.4 and will be removed in 2.6. "</span>
+        <span class="str">"Use torch.new_api instead. See https://pytorch.org/docs/migration/old_api"</span>,
+        DeprecationWarning,
+        stacklevel=<span class="num">2</span>,
+    )
+    <span class="kw">return</span> <span class="fn">new_api</span>(*args, **kwargs)</pre>
+
+    <h3>The compatibility table you maintain</h3>
+
+    <table class="tbl">
+      <thead><tr><th>PyTorch</th><th>Python</th><th>CUDA</th><th>Released</th><th>EOL</th></tr></thead>
+      <tbody>
+        <tr><td>2.5.x</td><td>3.9 - 3.12</td><td>11.8, 12.1, 12.4</td><td>2024-10</td><td>~2025-Q4</td></tr>
+        <tr><td>2.4.x</td><td>3.8 - 3.12</td><td>11.8, 12.1, 12.4</td><td>2024-07</td><td>~2025-Q3</td></tr>
+        <tr><td>2.3.x</td><td>3.8 - 3.12</td><td>11.8, 12.1</td><td>2024-04</td><td>EOL'd</td></tr>
+      </tbody>
+    </table>
+
+    <p>This table is communication. Customers plan around it. Internal teams pin against it. Drop a row before announcing and you create churn; announce a drop you can't deliver and you lose credibility.</p>
+
+    <h3>How dependency pins work in releases</h3>
+
+<pre data-lang="Python"><span class="com"># pyproject.toml fragment for torch's published metadata</span>
+[project]
+name = <span class="str">"torch"</span>
+version = <span class="str">"2.5.0"</span>
+requires-python = <span class="str">"&gt;=3.9"</span>
+dependencies = [
+    <span class="str">"filelock"</span>,
+    <span class="str">"typing-extensions&gt;=4.10.0"</span>,
+    <span class="str">"sympy==1.13.1; python_version&gt;=\"3.9\""</span>,
+    <span class="str">"networkx"</span>,
+    <span class="str">"jinja2"</span>,
+    <span class="str">"fsspec"</span>,
+    <span class="com"># CUDA-specific deps gated by extras and platform tags</span>
+    <span class="str">"nvidia-cuda-runtime-cu12==12.1.105; platform_system == \"Linux\""</span>,
+    <span class="str">"nvidia-cudnn-cu12==9.1.0.70; platform_system == \"Linux\""</span>,
+    ...
+]</pre>
+
+    <p>The exact-pin (<code>==12.1.105</code>) on CUDA components is intentional: PyTorch was built and tested against that specific version. Loose pins here would cause user-visible failures when the dep updates.</p>
+  </section>
+
+  <section class="chapter" id="c26">
+    <h2><span class="ch-num">&sect;26</span>Cross-team collaboration patterns</h2>
+
+    <p>The JD calls out "great people skills" and "globally distributed teams" because the technical work is half the job. The other half is interfacing with: PyTorch core (Meta), CUDA library teams, driver teams, partner framework teams (DeepSpeed, Lightning, vLLM), customer engineering, and OSS contributors.</p>
+
+    <h3>The standing meeting cadences</h3>
+
+    <ul class="dash">
+      <li><strong>Daily standup with your immediate team</strong> &mdash; the lifecycle squad.</li>
+      <li><strong>Weekly sync with each library team</strong> (cuDNN, NCCL, cuBLAS) &mdash; "what's landing in the next release that we need to integrate?"</li>
+      <li><strong>Bi-weekly with PyTorch core upstream</strong> &mdash; coordination on NVIDIA-side patches landing in PyTorch.</li>
+      <li><strong>Monthly cross-org release planning</strong> &mdash; the full stack alignment meeting.</li>
+    </ul>
+
+    <p>This is a lot of meetings. The senior skill: come prepared with status, blockers, and asks &mdash; not just attendance.</p>
+
+    <h3>The status update format that works</h3>
+
+<pre data-lang="text">## Lifecycle Status — Week of YYYY-MM-DD
+
+### Shipped this week
+- [DONE] CUDA 12.4 wheels published to test channel
+- [DONE] Bisected regression #45123 to commit abc12345; reverted
+
+### In flight
+- [WIP] manylinux_2_28 migration: 80% of CI green; PyTorch-builder image rebuild blocked on
+  upstream gcc-toolset bug (filed RH-NNNN, working with Red Hat)
+- [WIP] sccache cluster scale-out to handle nightly load (Q1 OKR)
+
+### Blocked
+- ARM64 wheels need cuDNN 9.2.0 SBSA build; ETA from cuDNN team end of month
+
+### Asks
+- Need decision: drop Python 3.9 in 2.6 or wait until 2.7? (matters for matrix size)
+- Need review: NVIDIA-internal PR pytorch/builder#9876 to add Hopper-only build path</pre>
+
+    <h3>RFCs and design documents</h3>
+
+    <p>Anything that changes how releases work, the artifact layout, or cross-team interfaces should be an RFC. A few pages, circulated 1-2 weeks before implementation. Format:</p>
+
+    <ol>
+      <li><strong>Problem</strong> &mdash; what's broken or missing</li>
+      <li><strong>Goals / Non-goals</strong> &mdash; scope</li>
+      <li><strong>Proposal</strong> &mdash; what you'll do</li>
+      <li><strong>Alternatives considered</strong> &mdash; what you rejected and why</li>
+      <li><strong>Migration plan</strong> &mdash; how affected teams transition</li>
+      <li><strong>Rollback plan</strong> &mdash; what happens if it goes wrong</li>
+    </ol>
+
+    <p>An RFC is more work than a Slack message but less than a year-long political conflict over an arbitrary decision.</p>
+
+    <h3>The customer engineering interface</h3>
+
+    <p>"Customer" here means: large strategic users of PyTorch on NVIDIA GPUs &mdash; Meta, OpenAI, xAI, Anthropic, large enterprises with internal AI teams. They have direct lines to NVIDIA engineering. When they file an issue, you may be triaged within minutes.</p>
+
+    <p>The lifecycle engineer's role with customers:</p>
+    <ul class="dash">
+      <li>Triage: is this a real bug, a regression, a misconfiguration, or a wishlist item?</li>
+      <li>Provide affected version range and workaround quickly &mdash; "use cuDNN 9.1 instead of 9.2 until we ship 9.2.1."</li>
+      <li>Coordinate the fix: which team owns it, what's the ETA, when can we publish a patched wheel.</li>
+      <li>Close the loop: confirm fix in their environment.</li>
+    </ul>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART VIII ===================== -->
+<div class="part" id="p8">
+  <div class="part-label">Part VIII</div>
+  <h2 class="part-title">Debugging stack-wide <span class="acc">failures</span></h2>
+  <p class="part-intro">Real-world problems in this role traverse the stack: a customer report at the top, the root cause five layers below. Interview-style problems walk through the diagnosis flow; production work demands you do this in real time.</p>
+
+  <section class="chapter" id="c27">
+    <h2><span class="ch-num">&sect;27</span>Debugging stack-wide failures</h2>
+
+    <h3>The investigation discipline</h3>
+    <p>Before any specific tools: a senior engineer follows a few habits that compound. Reproduce first, isolate the minimum failing case, write down what you've ruled out (so you don't redo it), and check both ends of the stack (the bug isn't always where the symptom is).</p>
+
+    <!-- Problem 1 -->
+    <div class="problem">
+      <div class="problem-header">Problem 1 &middot; ImportError: undefined symbol</div>
+      <div class="problem-body">
+        <h5>Symptom</h5>
+        <p>User reports that after upgrading to PyTorch 2.5, <code>import torch</code> fails with:</p>
+<pre data-lang="text">ImportError: /opt/conda/lib/python3.11/site-packages/torch/lib/libtorch_cuda.so:
+undefined symbol: cublasLtMatmulPreferenceCreate</pre>
+
+        <h5>Diagnosis flow</h5>
+        <ol>
+          <li><strong>Read the symbol</strong>: <code>cublasLtMatmulPreferenceCreate</code> &mdash; from libcublasLt. Means libtorch_cuda.so was built against a cuBLAS that has this symbol; the loaded one doesn't.</li>
+          <li><strong>Check which cuBLAS is loaded</strong>:
+<pre data-lang="BASH">python -c <span class="str">"import torch"</span> 2&gt;&amp;<span class="num">1</span> &amp;
+PID=$!
+sleep <span class="num">2</span>
+cat /proc/$PID/maps | grep cublas</pre>
+          </li>
+          <li><strong>Compare versions</strong>: PyTorch built against cuBLAS X, system has cuBLAS Y. Probably Y is older.</li>
+          <li><strong>Find the root cause</strong>: user has <code>LD_LIBRARY_PATH</code> set to <code>/usr/local/cuda-11.8/lib64</code>, which preempts the cuBLAS bundled inside PyTorch's wheel.</li>
+          <li><strong>Fix</strong>: <code>unset LD_LIBRARY_PATH</code> or remove that path; let RPATH resolution work.</li>
+        </ol>
+
+        <h5>What a senior writes in the response</h5>
+        <p>Don't just say "unset LD_LIBRARY_PATH." Explain <em>why</em> &mdash; user learns the model, future failures are faster to diagnose, and the documentation gets better. Also: file a PyTorch docs PR to highlight this footgun.</p>
+      </div>
+    </div>
+
+    <!-- Problem 2 -->
+    <div class="problem">
+      <div class="problem-header">Problem 2 &middot; Flaky distributed test &mdash; or real bug?</div>
+      <div class="problem-body">
+        <h5>Symptom</h5>
+        <p>A specific NCCL allreduce test, <code>test_ddp_allreduce_4gpu</code>, fails ~5% of nightly runs. Always on the same H100 box. Other tests on the same box pass.</p>
+
+        <h5>The temptation</h5>
+        <p>Mark it flaky, move on. Wrong &mdash; flaky implies non-determinism, but the failure correlates with a specific machine. That's a signal.</p>
+
+        <h5>Diagnosis</h5>
+        <ol>
+          <li>Pull the last 30 failures' logs. Look for patterns: same rank fails? same error code?</li>
+          <li>The pattern: rank 2 hangs on the third allreduce iteration. <code>NCCL_DEBUG=INFO</code> logs show it can't establish a NVLink connection.</li>
+          <li>Cross-check <code>nvidia-smi nvlink --status</code> on the machine. Two of the eight NVLinks show degraded state.</li>
+          <li>Hardware-level diagnostic (<code>dcgmi diag -r 3</code>) confirms NVLink errors on those connections.</li>
+          <li>Root cause: degraded hardware. The 5% flake rate is the percentage of test runs that touch the failing link.</li>
+          <li>Fix: drain the machine for repair; mark the test for explicit topology requirement so we don't schedule it on partial-NVLink boxes.</li>
+        </ol>
+
+        <h5>The senior lesson</h5>
+        <p>Treat flakes that correlate with location as priority-1 hardware investigation, not test reliability. The seniority signal is recognizing the correlation early.</p>
+      </div>
+    </div>
+
+    <!-- Problem 3 -->
+    <div class="problem">
+      <div class="problem-header">Problem 3 &middot; Wheel works locally, not on customer system</div>
+      <div class="problem-body">
+        <h5>Symptom</h5>
+        <p>A wheel built and tested in CI works fine. Customer reports it crashes on import on their Ubuntu 20.04 system.</p>
+<pre data-lang="text">ImportError: /lib/x86_64-linux-gnu/libstdc++.so.6:
+version 'GLIBCXX_3.4.30' not found (required by .../libtorch_cpu.so)</pre>
+
+        <h5>Diagnosis</h5>
+        <ol>
+          <li>The wheel claims <code>manylinux_2_28_x86_64</code> &mdash; should be fine on Ubuntu 20.04 (glibc 2.31, &gt; 2.28).</li>
+          <li>But it needs <code>GLIBCXX_3.4.30</code> &mdash; that's libstdc++ from GCC 12. Ubuntu 20.04 ships libstdc++ from GCC 9 (<code>GLIBCXX_3.4.28</code>).</li>
+          <li>libstdc++ minimum has nothing to do with glibc minimum &mdash; two different libraries, two different version trains.</li>
+          <li>Check the wheel: <code>objdump -T libtorch_cpu.so | grep GLIBCXX | sort -u | tail</code>. Confirms <code>GLIBCXX_3.4.30</code>.</li>
+          <li>Root cause: the build container's GCC is too new for what manylinux_2_28 actually guarantees. The container needs to use an older GCC, or use scl/gcc-toolset to target an older libstdc++.</li>
+          <li>Workaround for the user: <code>conda install -c conda-forge libstdcxx-ng&gt;=12</code> &mdash; ships a newer libstdc++ into the conda env.</li>
+          <li>Real fix: rebuild the wheel with proper toolchain pinning.</li>
+        </ol>
+
+        <h5>The senior lesson</h5>
+        <p>"Works on my machine" CI lies to you when the CI's base image differs from real customer environments. Validate manylinux compliance in a clean, separate validation step &mdash; ideally on an actually-old base distro.</p>
+      </div>
+    </div>
+
+    <!-- Problem 4 -->
+    <div class="problem">
+      <div class="problem-header">Problem 4 &middot; Build slowdown across a release cycle</div>
+      <div class="problem-body">
+        <h5>Symptom</h5>
+        <p>PyTorch full-build wall time has grown from 65 minutes (start of 2.4) to 95 minutes (mid-2.5). Engineers are increasingly frustrated. Where did the time go?</p>
+
+        <h5>Diagnosis</h5>
+        <ol>
+          <li>Pull CI build durations from the last 6 months. Plot. Identify when the growth started.</li>
+          <li>Bisect: build at HEAD, build at HEAD~1000, find the inflection commits.</li>
+          <li>For the suspect commits, use <code>ninja -t commands</code> and timing to identify which targets got slower.</li>
+          <li>Three culprits found:
+            <ul class="tight">
+              <li>A new feature added an arch (sm_100, Blackwell). Each kernel now compiled 6 times instead of 5.</li>
+              <li>A header reorganization in <code>c10/</code> caused massive rebuild fan-out.</li>
+              <li>A new dependency on Flash Attention 3 added 200+ heavy template instantiations.</li>
+            </ul>
+          </li>
+          <li>Fixes:
+            <ul class="tight">
+              <li>Move the new arch to a separate build matrix entry; default to fewer arches for dev.</li>
+              <li>Re-include-what-you-use pass on the affected headers; precompiled headers for the largest aggregators.</li>
+              <li>Move Flash Attention to a separate library target so it links once and gets cached.</li>
+            </ul>
+          </li>
+          <li>Result: 95 minutes back to 70.</li>
+        </ol>
+
+        <h5>The senior lesson</h5>
+        <p>Build performance is not free &mdash; it slowly regresses unless someone watches the trends. Set up dashboards with alerts on build time week-over-week; treat 10% regressions as a bug.</p>
+      </div>
+    </div>
+
+    <!-- Problem 5 -->
+    <div class="problem">
+      <div class="problem-header">Problem 5 &middot; Mysterious silent test corruption</div>
+      <div class="problem-body">
+        <h5>Symptom</h5>
+        <p>A test asserts <code>torch.allclose(actual, expected)</code> and fails with a 1e-3 tolerance. Numerical output looks "close but wrong" by a few percent. Test passes on developer machines.</p>
+
+        <h5>Diagnosis</h5>
+        <ol>
+          <li>Reproduce on the failing runner. Same code, different output. <em>This means the environment differs in a way that affects numerics.</em></li>
+          <li>Suspects: different cuDNN, different cuBLAS, different precision mode (TF32 vs FP32), different SM architecture.</li>
+          <li>Compare environments:
+<pre data-lang="BASH">python -c <span class="str">"import torch; print(torch.backends.cudnn.version(), torch.version.cuda)"</span>
+python -c <span class="str">"import torch; print(torch.backends.cuda.matmul.allow_tf32)"</span>
+nvidia-smi -q | grep -E <span class="str">"Product Name|Driver Version"</span></pre>
+          </li>
+          <li>Found: failing runner is A100 (sm_80), dev machine is V100 (sm_70). A100 enables TF32 by default for matmuls. The kernel paths differ.</li>
+          <li>The test was written assuming FP32 precision. On A100 with default TF32, it converges to slightly different numerics.</li>
+          <li>Fix: the test should explicitly disable TF32:
+<pre data-lang="Python">torch.backends.cuda.matmul.allow_tf32 = <span class="kw">False</span>
+torch.backends.cudnn.allow_tf32 = <span class="kw">False</span></pre>
+            Or accept the wider tolerance with documentation explaining why.</li>
+        </ol>
+
+        <h5>The senior lesson</h5>
+        <p>"Different runners produce different numerics" is a feature of modern GPU compute, not a bug. CI must explicitly control numerical precision modes, or tests must be hardware-aware in their tolerance.</p>
+      </div>
+    </div>
+
+    <!-- Problem 6 -->
+    <div class="problem">
+      <div class="problem-header">Problem 6 &middot; Customer urgent: production training stuck</div>
+      <div class="problem-body">
+        <h5>Symptom</h5>
+        <p>Large customer training job &mdash; 256 H100s &mdash; hangs after 4 hours every time. No exception, no log entries, just stops making progress.</p>
+
+        <h5>Diagnosis (the live war-room flow)</h5>
+        <ol>
+          <li>Get a py-spy dump on a stuck rank:
+<pre data-lang="BASH">py-spy dump --pid &lt;training_pid&gt; --native</pre>
+          All ranks are stuck inside NCCL <code>ncclAllReduce</code>.</li>
+          <li>Get NCCL state: enable async error checking, dump comm state.
+<pre data-lang="BASH"><span class="kw">export</span> NCCL_ASYNC_ERROR_HANDLING=<span class="num">1</span>
+<span class="kw">export</span> TORCH_NCCL_BLOCKING_WAIT=<span class="num">1</span>
+<span class="kw">export</span> NCCL_DEBUG=INFO
+<span class="kw">export</span> NCCL_DEBUG_SUBSYS=INIT,ENV,NET,GRAPH</pre>
+          Restart; reproduce; collect logs.</li>
+          <li>Pattern in logs: rank 47 is "ahead" by one iteration. The other ranks wait for its next allreduce, which never comes.</li>
+          <li>Investigate rank 47's host: <code>nvidia-smi</code>, <code>dmesg</code> output. Finding: dmesg shows ECC error retired 4 GB of GPU memory on that node 4 hours into the run. The job's memory allocations crossed into retired regions, triggering UB.</li>
+          <li>Root cause: silent ECC events on aging hardware, not handled by the framework, causing one rank to crash while others wait forever.</li>
+          <li>Immediate mitigation: ban the affected node from the pool; rerun.</li>
+          <li>Long-term fix: surface ECC events to PyTorch's NCCL watchdog so a hang becomes a clean failure.</li>
+        </ol>
+
+        <h5>The senior lesson</h5>
+        <p>At customer scale, hardware ages and fails. Lifecycle engineers don't fix the hardware, but they ensure software detects and reports hardware events instead of silently hanging.</p>
+      </div>
+    </div>
+
+    <p class="pull">The diagnosis pattern: read the symptom carefully, hold multiple hypotheses, gather evidence that distinguishes them, follow the evidence to the layer that owns the bug, document for next time.</p>
+  </section>
+
+  <section class="chapter" id="c28">
+    <h2><span class="ch-num">&sect;28</span>Cheatsheets &amp; learning roadmap</h2>
+
+    <div class="cheat">
+      <h5>The first commands to run when CI fails mysteriously</h5>
+      <div class="cheat-grid">
+        <span class="cmd">ls -la build/ &amp;&amp; cat build/CMakeCache.txt | head -50</span><span class="desc">Verify build configuration</span>
+        <span class="cmd">env | grep -E "CC|CXX|CUDA|TORCH|LD" | sort</span><span class="desc">Compiler &amp; CUDA env state</span>
+        <span class="cmd">nvcc --version &amp;&amp; nvidia-smi</span><span class="desc">Driver vs runtime CUDA versions</span>
+        <span class="cmd">df -h /tmp /var /home &amp;&amp; free -h</span><span class="desc">Disk and memory; CI runners run out of both</span>
+        <span class="cmd">dmesg | tail -30 &amp;&amp; journalctl -k --since "1 hour ago"</span><span class="desc">Kernel-level errors (OOM, GPU XID)</span>
+        <span class="cmd">ccache -s &amp;&amp; sccache --show-stats</span><span class="desc">Cache health; near-zero hit rate is a smell</span>
+      </div>
+    </div>
+
+    <div class="cheat">
+      <h5>The first commands when a wheel install breaks</h5>
+      <div class="cheat-grid">
+        <span class="cmd">pip install -v &lt;wheel&gt; 2&gt;&amp;1 | grep -E "ERROR|tag"</span><span class="desc">Reveals tag-mismatch issues</span>
+        <span class="cmd">auditwheel show &lt;wheel&gt;</span><span class="desc">manylinux compliance audit</span>
+        <span class="cmd">unzip -l &lt;wheel&gt; | head -30</span><span class="desc">What's inside</span>
+        <span class="cmd">readelf -d &lt;wheel-extracted&gt;/torch/lib/libtorch.so</span><span class="desc">RPATH, SONAME, NEEDED</span>
+        <span class="cmd">ldd torch/lib/libtorch.so</span><span class="desc">What it loads at runtime</span>
+        <span class="cmd">LD_DEBUG=libs python -c "import torch" 2&gt;&amp;1 | head -100</span><span class="desc">Trace dynamic loader</span>
+        <span class="cmd">strings torch/lib/libtorch_cpu.so | grep GLIBCXX | sort -V | tail</span><span class="desc">libstdc++ minimum version</span>
+      </div>
+    </div>
+
+    <div class="cheat">
+      <h5>The first commands when GPU code misbehaves</h5>
+      <div class="cheat-grid">
+        <span class="cmd">CUDA_LAUNCH_BLOCKING=1 python repro.py</span><span class="desc">Synchronous launches; pin error to exact kernel</span>
+        <span class="cmd">compute-sanitizer --tool=memcheck python repro.py</span><span class="desc">CUDA's ASan equivalent</span>
+        <span class="cmd">nsys profile -o trace python repro.py</span><span class="desc">Timeline of CUDA activity</span>
+        <span class="cmd">dcgmi diag -r 3</span><span class="desc">Hardware-level GPU diagnostic</span>
+        <span class="cmd">nvidia-smi -q -d ECC,XID,POWER</span><span class="desc">Detailed device state</span>
+        <span class="cmd">cat /sys/class/nvidia*/xid</span><span class="desc">XID error counter on the device</span>
+      </div>
+    </div>
+
+    <h3>A 12-week learning roadmap</h3>
+
+    <div class="diagram">WEEKS 1-3  | FOUNDATIONS
+           | - Read PyTorch CONTRIBUTING.md + dev guide cover-to-cover
+           | - Build PyTorch from source on your machine; measure cold + warm times
+           | - Install ccache, sccache, mold; remeasure
+           | - Write a tiny pybind11 extension that calls a CUDA kernel
+           | - Read manylinux PEPs (513, 599, 600); explain why each was needed
+
+WEEKS 4-6  | C++ BUILD INTERNALS
+           | - Build LLVM from source; compare to PyTorch's build complexity
+           | - Read CMake's Modern Effective book or equivalent
+           | - Deliberately produce 5 categories of linker errors; fix them
+           | - Practice with nm, readelf, objdump, ldd until they feel routine
+           | - Reproduce the dual-ABI failure; fix both ways
+           | - Inspect 3 random shared libraries on your system
+
+WEEKS 7-9  | CI/CD AT SCALE
+           | - Set up GitHub Actions for a small project with matrix builds + caching
+           | - Containerize a build inside manylinux; audit the wheel
+           | - Set up sccache backed by S3 or local Redis
+           | - Read PyTorch's CI configuration (pytorch/builder repo) end-to-end
+           | - Pick a flaky test in any OSS project; investigate; submit fix
+
+WEEKS 10-12| INTEGRATION &amp; OWNERSHIP
+           | - Read NVIDIA's RAPIDS lifecycle docs; observe build cadence
+           | - Set up a local build cluster (2+ machines) with distributed builds
+           | - Build a tiny dashboard that tracks build times week-over-week
+           | - Practice rollback workflows end-to-end on a sample release
+           | - Contribute one merged PR to pytorch/builder or similar infra repo</div>
+
+    <h3>The interview signals senior lifecycle engineers project</h3>
+
+    <ul class="check">
+      <li>Distinguishing flaky-from-environment vs flaky-from-code vs real-bug-with-low-trigger-rate.</li>
+      <li>Diagnosing a linker error by reading the symbol name and demangling, before opening any docs.</li>
+      <li>Knowing which CUDA / cuDNN / NCCL / driver version any tested PyTorch version was built against, or how to find out.</li>
+      <li>Walking from a customer-reported symptom to the layer that owns the bug without thrashing.</li>
+      <li>Explaining what an RPATH is, why it matters, and how a wheel uses <code>$ORIGIN</code> &mdash; without checking notes.</li>
+      <li>Articulating the dual-ABI problem and the ongoing migration story without inventing details.</li>
+      <li>Talking about flaky tests as technical debt, not as inevitable noise.</li>
+      <li>Reasoning about a build farm's economics &mdash; per-job cost, cache hit rate, throughput limits.</li>
+      <li>Coordinating across teams: when to call a meeting, when to write an RFC, when to just do the work and explain in the PR.</li>
+    </ul>
+
+    <p class="pull">A senior lifecycle engineer is someone whose work is invisible when it goes well: builds are fast, tests are stable, releases happen on schedule, and the rest of the org takes it for granted. The senior-level skill is making this state happen by design, not by luck.</p>
+
+    <div class="idea">
+      <h5>The end goal</h5>
+      <p>What you're building, accumulated over years: a software-delivery system that ten different teams trust without thinking about it. They write code; it lands; it ships; customers receive it; problems get caught and fixed before they propagate. The lifecycle engineer is the architect and operator of that machine. The JD calls it "software quality and reliability without on-call duties" &mdash; that's exactly right.</p>
+    </div>
+  </section>
+</div>
+
+</main>
+
+<footer>
+  <h4>Reference materials</h4>
+  <div class="resources">
+    <ul>
+      <li><code>PyTorch CONTRIBUTING.md</code> &mdash; github.com/pytorch/pytorch &mdash; the canonical "how to build" guide</li>
+      <li><code>pytorch/builder</code> &mdash; github.com/pytorch/builder &mdash; the actual release infrastructure repo</li>
+      <li><code>CMake documentation</code> &mdash; cmake.org/cmake/help &mdash; especially the modern-target chapter</li>
+      <li><code>Professional CMake</code> &mdash; Craig Scott &mdash; the in-depth reference</li>
+      <li><code>manylinux PEPs</code> &mdash; PEP 513, 571, 599, 600, 656; the wheel-compat specifications</li>
+      <li><code>auditwheel</code> &mdash; github.com/pypa/auditwheel &mdash; tool + design discussion</li>
+      <li><code>scikit-build-core</code> docs &mdash; scikit-build-core.readthedocs.io</li>
+      <li><code>pybind11</code> docs &mdash; pybind11.readthedocs.io</li>
+      <li><code>CUDA Toolkit Documentation</code> &mdash; docs.nvidia.com/cuda</li>
+      <li><code>CUDA Compatibility</code> &mdash; docs.nvidia.com/deploy/cuda-compatibility</li>
+      <li><code>NCCL Developer Guide</code> &mdash; docs.nvidia.com/deeplearning/nccl</li>
+      <li><code>cuDNN Developer Guide</code> &mdash; docs.nvidia.com/deeplearning/cudnn</li>
+      <li><code>ninja</code> manual &mdash; ninja-build.org/manual.html</li>
+      <li><code>ccache</code> + <code>sccache</code> docs &mdash; ccache.dev, github.com/mozilla/sccache</li>
+      <li><code>mold</code> linker &mdash; github.com/rui314/mold</li>
+      <li><code>ELF</code> spec (linux Standard Base) &mdash; refspecs.linuxfoundation.org</li>
+      <li><code>How to write shared libraries</code> &mdash; Ulrich Drepper &mdash; the deep reference on Linux .so internals</li>
+      <li><code>Linkers and Loaders</code> &mdash; John Levine &mdash; a classic, still relevant</li>
+      <li><code>GitHub Actions</code> docs &mdash; docs.github.com/actions</li>
+      <li><code>auditwheel + manylinux</code> tutorials &mdash; pypa.github.io/auditwheel</li>
+      <li><code>RAPIDS lifecycle docs</code> &mdash; docs.rapids.ai &mdash; analogous to what NVIDIA's PyTorch group does</li>
+    </ul>
+  </div>
+</footer>
+
+</body>
+</html>
