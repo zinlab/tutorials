@@ -1,0 +1,645 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Concepts & Mechanisms — Storage-Aware AI Workload Benchmarks</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2230; --fg:#e6edf3; --muted:#9aa5b1;
+    --accent:#58a6ff; --accent2:#7ee787; --warn:#ffa657; --line:#30363d; --code:#79c0ff;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--fg);
+       font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;line-height:1.65}
+  .layout{display:grid;grid-template-columns:280px 1fr;min-height:100vh}
+  nav{position:sticky;top:0;align-self:start;height:100vh;overflow-y:auto;
+      background:var(--panel);border-right:1px solid var(--line);padding:22px 16px}
+  nav h2{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:18px 0 8px}
+  nav a{display:block;color:var(--fg);text-decoration:none;padding:5px 10px;border-radius:7px;
+        font-size:14px;opacity:.85}
+  nav a:hover{background:var(--panel2);opacity:1;color:var(--accent)}
+  main{padding:40px 48px 120px;max-width:980px}
+  header.hero{border-bottom:1px solid var(--line);padding-bottom:22px;margin-bottom:30px}
+  header.hero h1{font-size:30px;margin:0 0 8px}
+  header.hero p{color:var(--muted);margin:0;max-width:70ch}
+  section{margin:40px 0;scroll-margin-top:20px}
+  section>h2{font-size:23px;color:var(--accent);border-left:4px solid var(--accent);
+             padding-left:12px;margin-bottom:6px}
+  .concept{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+           padding:20px 24px;margin:18px 0}
+  .concept h3{margin:0 0 10px;font-size:18px}
+  .concept h4{margin:16px 0 4px;font-size:14px;color:var(--accent2);text-transform:uppercase;
+              letter-spacing:.05em}
+  .why{border-left:3px solid var(--warn);background:rgba(255,166,87,.07);
+       padding:10px 14px;border-radius:0 8px 8px 0;margin-top:12px}
+  .why b{color:var(--warn)}
+  code{background:#21262d;padding:2px 6px;border-radius:5px;color:var(--code);font-size:.9em}
+  pre{background:#0b0f14;border:1px solid var(--line);border-radius:9px;padding:14px 16px;
+      overflow-x:auto;font-size:13px}
+  pre code{background:none;padding:0;color:#c9d1d9}
+  table{border-collapse:collapse;width:100%;margin:12px 0;font-size:14px}
+  th,td{border:1px solid var(--line);padding:7px 10px;text-align:left}
+  th{background:var(--panel2);color:var(--accent)}
+  .tag{display:inline-block;background:var(--panel2);color:var(--accent2);font-size:11px;
+       padding:2px 8px;border-radius:20px;margin-left:8px;vertical-align:middle}
+  a.up{color:var(--accent);text-decoration:none}
+  footer{color:var(--muted);font-size:13px;border-top:1px solid var(--line);padding-top:18px;margin-top:50px}
+  .kbd{font-family:monospace;background:#21262d;border:1px solid var(--line);border-bottom-width:2px;
+       border-radius:5px;padding:1px 6px;font-size:.85em}
+</style>
+</head>
+<body>
+<div class="layout">
+<nav>
+  <strong style="font-size:15px">📚 Concepts</strong>
+  <h2>Methodology</h2>
+  <a href="#benchmark">What a benchmark is</a>
+  <a href="#cv">σ/μ — coefficient of variation</a>
+  <a href="#roofline">Floors, ceilings &amp; roofline</a>
+  <a href="#coldwarm">Cold vs warm &amp; page cache</a>
+  <h2>Storage &amp; I/O</h2>
+  <a href="#nvme">NVMe &amp; queue depth</a>
+  <a href="#mmap">mmap</a>
+  <a href="#fio">fio &amp; dd</a>
+  <a href="#safetensors">safetensors</a>
+  <h2>Data movement</h2>
+  <a href="#pcie">PCIe &amp; the bounce buffer</a>
+  <a href="#pinned">Pinned memory &amp; async DMA</a>
+  <a href="#streams">CUDA streams &amp; overlap</a>
+  <a href="#hbm">GPU HBM &amp; the memory hierarchy</a>
+  <a href="#gds">GPUDirect Storage / cuFile</a>
+  <a href="#numa">NUMA</a>
+  <h2>Compute &amp; utilization</h2>
+  <a href="#mfu">MFU &amp; the 6N FLOP rule</a>
+  <a href="#precision">BF16 / FP8 / FP4</a>
+  <h2>Pipelines</h2>
+  <a href="#dataloader">PyTorch DataLoader</a>
+  <a href="#checkpoint">Checkpointing &amp; DCP</a>
+  <h2>Filesystems at scale</h2>
+  <a href="#lustre">Lustre, OST, MDS</a>
+  <a href="#weka">WEKA</a>
+  <h2>Systems &amp; tooling</h2>
+  <a href="#engines">vLLM &amp; SGLang</a>
+  <a href="#proxy">Proxy models</a>
+  <a href="#slurm">Slurm</a>
+  <a href="#nvtx">NVTX, nsys &amp; ncu</a>
+  <a href="#ci">CI for benchmarks</a>
+</nav>
+<main>
+<header class="hero">
+  <h1>Concepts & Mechanisms — Storage-Aware AI Workload Benchmarks</h1>
+  <p>The systematic background for the Storage-Aware AI Workload Benchmark Suite.
+  Each card explains <em>what</em> the thing is, <em>how</em> it works, <em>how</em> we
+  use it here, and — most importantly — <em>why it matters in MLOps / AI
+  performance</em>. Read top-to-bottom once, then use the sidebar as a reference.</p>
+</header>
+
+<!-- ===================== METHODOLOGY ===================== -->
+<section id="benchmark">
+  <h2>Methodology</h2>
+  <div class="concept">
+    <h3>What a benchmark actually is <span class="tag">Phase 0</span></h3>
+    <p>A benchmark is a <strong>controlled, repeatable measurement of a system under a
+    defined workload</strong>, designed so that the only thing that changes between
+    runs is the thing you're studying. It is not "run it once and read the number" —
+    that's an anecdote. A real benchmark controls the environment (cache state, CPU
+    governor, neighbour load), repeats N times, and reports a distribution.</p>
+    <h4>How to build one</h4>
+    <ol>
+      <li><strong>Define the metric</strong> precisely (e.g. "cold wall-clock to load 16&nbsp;GB
+      of weights into HBM", not "loading speed").</li>
+      <li><strong>Control inputs</strong>: fix the model, the file layout, the dtype; pin
+      versions; drop caches for cold runs.</li>
+      <li><strong>Warm up</strong>: discard the first run(s) so one-off costs (allocator
+      init, JIT, autotuning) don't pollute the steady-state number.</li>
+      <li><strong>Repeat</strong> (≥5 for loads, ≥100 steps for training) and report
+      <code>mean ± σ/μ</code>.</li>
+      <li><strong>Bracket with floors/ceilings</strong> so a number means something
+      (see roofline below).</li>
+    </ol>
+    <div class="why"><b>Why it matters:</b> infra teams make six-figure hardware and
+    config decisions off benchmark numbers. A benchmark you can't reproduce, or whose
+    noise you don't quantify, leads to chasing ghosts — "optimising" something that was
+    measurement jitter. Reproducibility is the entire value proposition.</div>
+  </div>
+</section>
+
+<section id="cv">
+  <div class="concept">
+    <h3>σ/μ — the coefficient of variation <span class="tag">his key metric</span></h3>
+    <p>The <strong>ratio sigma/avg</strong> = standard deviation ÷ mean. It is
+    dimensionless, so you can compare the run-to-run consistency of a 0.4&nbsp;s load
+    against a 90&nbsp;s training step on the same scale.</p>
+    <table>
+      <tr><th>σ/μ</th><th>Interpretation</th><th>Action</th></tr>
+      <tr><td>&lt; 5%</td><td>tight, trustworthy</td><td>a 10% change later is real signal</td></tr>
+      <tr><td>5–20%</td><td>noisy; small deltas suspect</td><td>increase N, isolate the box</td></tr>
+      <tr><td>&gt; 20%</td><td>the harness itself is unstable</td><td>fix the measurement before trusting any trend</td></tr>
+    </table>
+    <p>In <code>common/stats.py</code> this is <code>summarize().cv</code>, reported on
+    every result in the suite.</p>
+    <div class="why"><b>Why it matters:</b> trend detection across commits (did this PR
+    regress loading?) is only possible if your noise floor is below the effect size you
+    care about. σ/μ <em>is</em> that noise floor. We saw it spike to <strong>63%</strong>
+    at the <code>num_workers=2</code> transition in Phase 2 — the loader was sometimes
+    keeping up and sometimes not, a bistable regime — which is precisely the situation
+    where a single-run number would lie to you.</div>
+  </div>
+</section>
+
+<section id="roofline">
+  <div class="concept">
+    <h3>Floors, ceilings &amp; the roofline model</h3>
+    <p>Before optimising software, measure the hardware limits that bound it:</p>
+    <ul>
+      <li><strong>Storage ceiling</strong>: max GB/s the device delivers (measure with
+      <a class="up" href="#fio">fio</a>). No loader can exceed it.</li>
+      <li><strong>Compute ceiling</strong>: peak/achievable FLOPS (measure with
+      <code>gpu_peak.py</code>). No kernel can exceed it.</li>
+      <li><strong>Link ceiling</strong>: <a class="up" href="#pcie">PCIe</a> bandwidth for
+      host↔device transfers.</li>
+    </ul>
+    <p>The <strong>roofline model</strong> plots achievable performance vs arithmetic
+    intensity (FLOPs per byte): a sloped region where you're <em>memory-bound</em> and a
+    flat region where you're <em>compute-bound</em>. Knowing which side you're on tells
+    you what to fix.</p>
+    <div class="why"><b>Why it matters:</b> Phase 1 showed the naive loader already at
+    ~5.6 GB/s on a device that tops out near there — so "better loader code" buys almost
+    nothing; the win is a faster <em>tier</em> (GDS, NVMe RAID, WEKA). Measuring the floor
+    first stopped us from optimising the wrong layer.</div>
+  </div>
+</section>
+
+<section id="coldwarm">
+  <div class="concept">
+    <h3>Cold vs warm &amp; the Linux page cache</h3>
+    <p>When you read a file, Linux keeps its pages in the <strong>page cache</strong> (free
+    RAM). A second read is served from RAM at tens of GB/s — a <strong>warm</strong> read —
+    and tells you nothing about storage. A <strong>cold</strong> read (cache evicted) hits
+    the device and is what cold-start performance actually depends on.</p>
+    <h4>How to go cold</h4>
+    <pre><code># Privileged, system-wide:
+sudo sh -c 'echo 3 &gt; /proc/sys/vm/drop_caches'
+# Unprivileged, surgical (just this file) — what we default to:
+posix_fadvise(fd, 0, 0, POSIX_FADV_DONTNEED)</code></pre>
+    <p>Implemented in <code>common/io_utils.py::cold_clear()</code>.</p>
+    <div class="why"><b>Why it matters:</b> the #1 way storage benchmarks lie is by
+    accidentally measuring the page cache. In Phase 1 our cold reads were ~5.6 GB/s and warm
+    ~15 GB/s — a 2.7× gap. If we hadn't evicted between runs, we'd have reported the loader
+    as 3× faster than it is. <b>Watch out for tmpfs</b>: <code>/tmp</code> is often RAM —
+    writing checkpoints there fakes your write throughput entirely.</div>
+  </div>
+</section>
+
+<!-- ===================== STORAGE & IO ===================== -->
+<section id="nvme">
+  <h2>Storage &amp; I/O</h2>
+  <div class="concept">
+    <h3>NVMe &amp; queue depth</h3>
+    <p><strong>NVMe</strong> (Non-Volatile Memory express) is the protocol modern SSDs use
+    to talk to the CPU over PCIe, replacing the ancient AHCI/SATA path. Its superpower is
+    <strong>parallelism</strong>: up to 64K queues × 64K commands each, versus SATA's single
+    queue of 32. A consumer NVMe drive does ~5–7 GB/s sequential and ~1M random IOPS; a
+    datacenter NVMe more.</p>
+    <h4>Queue depth (iodepth)</h4>
+    <p>A single thread issuing one read at a time leaves the device idle while it waits.
+    Keeping many requests <em>in flight</em> (high queue depth) lets the SSD's internal
+    parallelism (multiple NAND dies) work — that's why <code>fio iodepth=16 numjobs=4</code>
+    and our multi-threaded loader extract more bandwidth than one sequential reader.</p>
+    <div class="why"><b>Why it matters:</b> this is exactly why Phase 1's Variant C beat the
+    naive loader (6.75 vs 5.57 GB/s): 8 threads reading different regions raised the effective
+    queue depth on the NVMe. On spinning disks the opposite holds (seeks kill you) — so the
+    right concurrency is a property of the <em>tier</em>, which is why you benchmark it.</div>
+  </div>
+</section>
+
+<section id="mmap">
+  <div class="concept">
+    <h3>mmap — memory-mapped files</h3>
+    <p><code>mmap()</code> maps a file's bytes directly into your process's virtual address
+    space. You get a pointer; reading through it triggers a <strong>page fault</strong> that
+    the kernel satisfies by paging in just the bytes you touched — lazily, on demand, with
+    no explicit <code>read()</code> call and no copy into a user buffer.</p>
+    <h4>How it works</h4>
+    <ol>
+      <li><code>mmap</code> sets up page-table entries pointing at (not-yet-loaded) file pages.</li>
+      <li>First access to a page → fault → kernel DMAs that page from storage into the page cache.</li>
+      <li>Subsequent accesses are plain memory loads; pages are shared across processes that map the same file.</li>
+    </ol>
+    <pre><code>import numpy as np
+mm = np.memmap("shard.bin", dtype=np.uint16, mode="r")  # nothing read yet
+seq = mm[start:start+2048]   # THIS triggers the page-in of just those bytes</code></pre>
+    <div class="why"><b>Why it matters:</b> (1) you can "open" a 50 GB dataset instantly and
+    read 2 KB sequences out of it without loading 50 GB into RAM — our <code>TokenShardDataset</code>
+    does exactly this. (2) safetensors uses mmap so weights load <em>zero-copy</em> on the CPU
+    side; the only real copy is the H2D transfer. (3) Multiple DataLoader workers mmapping the
+    same shard <em>share</em> the page cache instead of each loading their own copy. The gotcha:
+    open the memmap <em>inside</em> the worker (post-fork), not before — a mapped handle pickled
+    across <code>fork</code> is a classic source of bugs.</div>
+  </div>
+</section>
+
+<section id="fio">
+  <div class="concept">
+    <h3>fio &amp; dd — storage micro-benchmarks</h3>
+    <p><code>dd</code> is the quick-and-dirty sequential read/write timer.
+    <code>fio</code> (Flexible I/O tester) is the real instrument: it models access
+    patterns (seq/random, block size, queue depth, parallel jobs, O_DIRECT) and reports
+    bandwidth, IOPS and latency percentiles.</p>
+    <pre><code>[seq-read-1m]
+ioengine=libaio
+direct=1        ; bypass the page cache → measure the device
+bs=1M           ; block size
+iodepth=16      ; keep 16 IOs in flight
+numjobs=4       ; 4 parallel readers
+rw=read</code></pre>
+    <p><code>direct=1</code> is the key flag — without it you measure RAM. Used in
+    <code>tensor_loading/fs_bandwidth.py</code> and <code>seq-read-1m.fio</code>.</p>
+    <div class="why"><b>Why it matters:</b> fio gives you the storage ceiling in the access
+    pattern your real workload uses. "My NVMe does 7 GB/s" (seq) and "my loader does random
+    4K reads" can be a 50× difference — fio lets you measure the pattern that actually applies.</div>
+  </div>
+</section>
+
+<section id="safetensors">
+  <div class="concept">
+    <h3>safetensors — the industry weight format</h3>
+    <p>A dead-simple binary layout: <code>[8-byte little-endian header length]</code> +
+    <code>[JSON header]</code> + <code>[raw tensor bytes]</code>. The JSON maps each tensor
+    name → dtype, shape, and byte offsets <code>[begin, end)</code> into the data block.
+    Because offsets are explicit, you can <code>mmap</code> the file and slice any tensor
+    with zero copy. (Parsed by hand in <code>tensor_loading/loaders.py</code>.)</p>
+    <h4>Why it replaced pickle / <code>torch.save</code></h4>
+    <table>
+      <tr><th></th><th>pickle (.pt/.bin)</th><th>safetensors</th></tr>
+      <tr><td>Security</td><td>arbitrary code execution on load ⚠️</td><td>pure data, no code</td></tr>
+      <tr><td>Load</td><td>deserialize everything, single-threaded</td><td>mmap, zero-copy, lazy, partial</td></tr>
+      <tr><td>Layout</td><td>opaque object graph</td><td>explicit offsets → parallel/GDS reads</td></tr>
+      <tr><td>Cross-framework</td><td>Python/torch-specific</td><td>language-agnostic</td></tr>
+    </table>
+    <div class="why"><b>Why it matters:</b> Hugging Face, vLLM, SGLang and essentially the
+    whole open-weights ecosystem default to safetensors because (1) you can load untrusted
+    weights without RCE risk, and (2) the explicit offset table is what makes fast loaders —
+    multi-threaded, GDS, partial-shard — even <em>possible</em>. The format is the enabler for
+    everything in Phase 1.</div>
+  </div>
+</section>
+
+<!-- ===================== DATA MOVEMENT ===================== -->
+<section id="pcie">
+  <h2>Data movement</h2>
+  <div class="concept">
+    <h3>PCIe &amp; the hidden bounce buffer</h3>
+    <p>The GPU talks to the CPU/storage over <strong>PCIe</strong>. An RTX 5090 is PCIe 5.0
+    ×16 ≈ <strong>~64 GB/s</strong> each way. Host→Device (H2D) copies traverse this link.</p>
+    <p>DMA engines can only transfer from <em>page-locked</em> (pinned) memory. If you copy
+    from ordinary <strong>pageable</strong> host memory, the driver must first stage it
+    through a hidden internal pinned buffer — an <strong>extra CPU-side copy</strong> that
+    roughly halves effective bandwidth and serialises the transfer.</p>
+    <div class="why"><b>Why it matters:</b> H2D is on the critical path of every weight load
+    and every training batch. Understanding the link ceiling (~64 GB/s) vs storage (~6 GB/s)
+    tells you that for cold loads, <em>storage</em>, not PCIe, is the wall — but for warm/cached
+    loads PCIe becomes the wall, which is why warm numbers plateau in Phase 1.</div>
+  </div>
+</section>
+
+<section id="pinned">
+  <div class="concept">
+    <h3>Pinned (page-locked) memory &amp; async DMA</h3>
+    <p>Normal host allocations are <em>pageable</em> — the OS may swap them out, so their
+    physical address isn't stable, so a DMA engine can't target them. <strong>Pinned</strong>
+    memory (<code>cudaHostAlloc</code> / <code>torch.empty(..., pin_memory=True)</code>) is
+    locked to physical RAM. Two consequences: the copy needs no bounce-buffer staging, and it
+    can be <strong>asynchronous</strong> (<code>non_blocking=True</code>) — the CPU issues the
+    DMA and moves on while it runs.</p>
+    <pre><code>buf = torch.empty(shape, dtype=dt, pin_memory=True)   # page-locked
+buf.copy_(cpu_tensor)                                 # fill staging
+gpu_tensor.copy_(buf, non_blocking=True)              # true async DMA</code></pre>
+    <p>Pinned allocation is <em>expensive</em>, so production code reuses a small pool of
+    staging buffers (our Variant C double-buffers per thread). Pinning too much RAM starves
+    the OS.</p>
+    <div class="why"><b>Why it matters:</b> pinned + async is what lets you <em>overlap</em>
+    reading the next tensor with copying the current one to the GPU (Phase 1 Variant C) and
+    lets the DataLoader stage batches while the GPU computes (Phase 2, <code>pin_memory=True</code>
+    bought a few % MFU). It's also the residual cost in async checkpointing (Phase 3): pinning
+    the optimizer-state staging buffer is the next optimisation.</div>
+  </div>
+</section>
+
+<section id="streams">
+  <div class="concept">
+    <h3>CUDA streams &amp; overlap</h3>
+    <p>A <strong>stream</strong> is an ordered queue of GPU work. Operations in different
+    streams can run <em>concurrently</em> (subject to hardware: copy engines vs SM compute).
+    The default stream serialises everything; using multiple streams lets copies and kernels
+    overlap.</p>
+    <div class="why"><b>Why it matters:</b> Variant C gives each loader thread its own stream
+    so 8 H2D copies can be in flight and overlap the CPU-side reads. In NSight you literally
+    see the copy bands interleave — that overlap is the speedup. Remove streams
+    (<code>--no-streams</code>) and they serialise; the ablation makes the mechanism visible.</div>
+  </div>
+</section>
+
+<section id="hbm">
+  <div class="concept">
+    <h3>GPU HBM &amp; the memory hierarchy</h3>
+    <p><strong>HBM</strong> (High Bandwidth Memory) is the GPU's on-package DRAM — stacked dies
+    connected by a very wide bus. The RTX 5090 has 32 GB of GDDR7 at ~1.8 TB/s; datacenter
+    parts (H100/B200) use HBM3/3e at 3–8 TB/s. This is one to two <em>orders of magnitude</em>
+    faster than the PCIe link feeding it.</p>
+    <table>
+      <tr><th>Tier</th><th>Bandwidth (order)</th></tr>
+      <tr><td>GPU registers / SRAM</td><td>10s of TB/s</td></tr>
+      <tr><td>GPU HBM / GDDR</td><td>1–8 TB/s</td></tr>
+      <tr><td>PCIe 5.0 ×16</td><td>~64 GB/s</td></tr>
+      <tr><td>Local NVMe</td><td>~3–14 GB/s</td></tr>
+      <tr><td>Network / parallel FS</td><td>~1–100+ GB/s (aggregate)</td></tr>
+    </table>
+    <div class="why"><b>Why it matters:</b> the whole storage problem exists because each step
+    down this hierarchy is ~10–100× slower. Getting weights from NVMe (~6 GB/s) into HBM
+    (1.8 TB/s) is the bottleneck; once resident, the GPU flies. Memory-bound kernels (LayerNorm,
+    softmax) are limited by HBM bandwidth, not FLOPS — which is why MFU < 100% even on a perfect
+    pipeline.</div>
+  </div>
+</section>
+
+<section id="gds">
+  <div class="concept">
+    <h3>GPUDirect Storage (GDS), cuFile, kvikio, nvidia-fs</h3>
+    <p>Normally, NVMe→GPU goes NVMe → CPU bounce buffer (page cache / pinned) → PCIe → HBM.
+    <strong>GDS</strong> removes the CPU hop: a direct <strong>peer-to-peer</strong> DMA path
+    NVMe → PCIe → GPU HBM. The CPU sets up the transfer but the bytes never land in host RAM.</p>
+    <ul>
+      <li><strong>cuFile</strong> — the C API for GDS reads/writes.</li>
+      <li><strong>kvikio</strong> — RAPIDS Python bindings over cuFile (Variant D uses it).</li>
+      <li><strong>nvidia-fs</strong> — the kernel driver enabling the P2P path. Without it,
+      kvikio falls back to a "compat" mode (POSIX read + copy) that works but isn't true GDS.</li>
+    </ul>
+    <pre><code>from kvikio import CuFile
+with CuFile(path, "r") as f:
+    fut = f.pread(gpu_tensor, nbytes, file_offset=off)  # NVMe → HBM, bypass CPU
+    fut.get()</code></pre>
+    <div class="why"><b>Why it matters:</b> GDS saves the host-memory copy and frees CPU/DRAM
+    bandwidth — decisive at scale where you're loading TB of weights/data and the host can't
+    keep up, or where you simply don't have the RAM to bounce through. It needs the right
+    hardware/driver/FS path (local NVMe, or a GDS-aware FS like WEKA or Lustre+lnet), which is
+    why it's the "stretch" variant and why you <em>investigate what your cluster supports</em>
+    before assuming it.</div>
+  </div>
+</section>
+
+<section id="numa">
+  <div class="concept">
+    <h3>NUMA — Non-Uniform Memory Access</h3>
+    <p>Multi-socket servers split RAM into <strong>nodes</strong>, each "local" to one CPU
+    socket. Accessing your own node's memory is fast; reaching across the interconnect to
+    another node's memory is slower. PCIe devices (GPUs, NICs, NVMe) are also attached to a
+    specific socket.</p>
+    <div class="why"><b>Why it matters:</b> if your DataLoader workers or pinned buffers land
+    on a different NUMA node than the GPU's PCIe root, every H2D copy and every read crosses the
+    interconnect — adding latency and stealing cross-socket bandwidth, and inflating σ/μ as
+    placement varies run to run. On big hosts you pin processes with <code>numactl</code> /
+    <code>--cpu-bind</code> so workers, their memory, and the GPU share a socket. It's a common
+    hidden cause of "why is node 3 slower than node 1" in scaling studies.</div>
+  </div>
+</section>
+
+<!-- ===================== COMPUTE & UTIL ===================== -->
+<section id="mfu">
+  <h2>Compute &amp; utilization</h2>
+  <div class="concept">
+    <h3>MFU &amp; the 6N FLOP rule</h3>
+    <p><strong>MFU</strong> (Model FLOPs Utilization) = achieved FLOPS ÷ peak FLOPS. It answers
+    "what fraction of the GPU's compute am I actually using?". The achieved side uses the
+    standard estimate:</p>
+    <pre><code>flops_per_token = 6 * N + 12 * L * S * H      # N=params, L=layers, S=seq, H=hidden
+flops_per_step  = flops_per_token * batch * S
+TFLOPS          = flops_per_step / step_time / 1e12
+MFU             = TFLOPS / peak_TFLOPS</code></pre>
+    <p>The <strong>6N</strong> comes from: 2 FLOPs per param for the forward multiply-add, ~4
+    for the backward (grad w.r.t. input + weight). The <strong>+12·L·S·H</strong> term captures
+    the sequence-quadratic attention matmuls that 6N misses.</p>
+    <h4>Choosing "peak"</h4>
+    <p>Peak is accumulate-mode dependent. RTX 5090 BF16 ≈ 209.5 TFLOPS (FP32 accumulate) /
+    ~419 (FP16 accumulate). We instead use the <strong>measured achievable roofline</strong>
+    (<code>gpu_peak.py</code> → ~219 TFLOPS here) as the denominator — the honest "fraction of
+    what this box can actually deliver". A spec number that's too low yields the nonsensical
+    &gt;100% MFU.</p>
+    <div class="why"><b>Why it matters:</b> MFU is the headline efficiency number for any
+    training run. Low MFU + an idle GPU in NSight = you're input-bound, and the fix is the data
+    pipeline (Phase 2), not a bigger GPU. Real dense-transformer training lands ~40–55% MFU; our
+    GEMM-heavy proxy hit ~98% (it's almost pure matmul), which is itself the finding that data
+    loading wasn't the local bottleneck.</div>
+  </div>
+</section>
+
+<section id="precision">
+  <div class="concept">
+    <h3>BF16 / FP8 / FP4 — low precision on Blackwell</h3>
+    <p>Lower-precision formats halve memory and roughly double tensor-core throughput per step
+    down. <strong>BF16</strong> (8-bit exponent, 7-bit mantissa) is the training default — same
+    dynamic range as FP32, less precision, no loss scaling needed. <strong>FP8</strong>
+    (E4M3/E5M2) is used for inference and increasingly training on Hopper/Blackwell.
+    <strong>FP4</strong> (Blackwell) pushes inference throughput further (the 5090's headline
+    "AI TOPS" are FP4-with-sparsity numbers).</p>
+    <div class="why"><b>Why it matters:</b> the format sets both your memory footprint (a 16 GB
+    BF16 model is 8 GB in FP8) — directly the Phase 1 load size — and your peak FLOPS denominator
+    for MFU. Quoting MFU without stating the dtype/accumulate mode is meaningless. The 5090's
+    FP4/FP8 capability is why a 32 GB consumer card can serve surprisingly large models.</div>
+  </div>
+</section>
+
+<!-- ===================== PIPELINES ===================== -->
+<section id="dataloader">
+  <h2>Pipelines</h2>
+  <div class="concept">
+    <h3>PyTorch DataLoader internals</h3>
+    <table>
+      <tr><th>Knob</th><th>What it does</th></tr>
+      <tr><td><code>num_workers</code></td><td>subprocesses doing read+collate in parallel</td></tr>
+      <tr><td><code>prefetch_factor</code></td><td>batches each worker stages ahead of demand</td></tr>
+      <tr><td><code>pin_memory</code></td><td>collate into page-locked buffers → async H2D</td></tr>
+      <tr><td><code>persistent_workers</code></td><td>keep workers alive across epochs (skip respawn)</td></tr>
+    </table>
+    <p><code>num_workers</code> is the most-misset PyTorch parameter. Too few → the CPU can't
+    produce batches fast enough and the GPU idles (high data-wait). Too many → workers contend
+    for CPU cores and the shared FS, and it gets <em>worse</em>. The sweet spot is workload- and
+    host-specific — so you sweep it (Phase 2).</p>
+    <div class="why"><b>Why it matters:</b> our sweep found MFU climbing 11% → 65% as workers
+    went 1 → 8, then flat to 16 (diminishing returns) on a 12-core host. That heatmap is the
+    artifact MLOps teams paste into "recommended settings" docs — it directly converts to GPU-hours
+    saved across every training job on the cluster.</div>
+  </div>
+</section>
+
+<section id="checkpoint">
+  <div class="concept">
+    <h3>Checkpointing: sync, async, and DCP</h3>
+    <p>Checkpointing periodically writes model + optimizer state so a crashed/preempted job can
+    resume. The cost has two parts: the <strong>G2C copy</strong> (GPU→CPU snapshot) and the
+    <strong>disk write</strong>.</p>
+    <ul>
+      <li><strong>sync</strong>: <code>torch.save</code> inline — training freezes for copy + write.</li>
+      <li><strong>async</strong>: snapshot to pinned CPU, hand the write to a background thread;
+      training resumes after just the copy.</li>
+      <li><strong>DCP</strong> (<code>torch.distributed.checkpoint</code>): each rank writes its
+      <em>shard</em> in parallel — aggregate bandwidth scales with ranks.</li>
+    </ul>
+    <p>The right metric is the <strong>step-time delta on the checkpoint step</strong>, plus the
+    often-ignored <strong>background-write interference</strong> on the following steps.</p>
+    <div class="why"><b>Why it matters:</b> at scale you checkpoint every N steps for the whole
+    run; a multi-second sync stall × thousands of checkpoints × thousands of GPUs is enormous
+    waste. Phase 3 measured async cutting the stall ~66% (1310→440 ms) but adding ~89% slowdown
+    to the next steps — so async <em>spreads</em> the cost rather than erasing it, and the residual
+    G2C copy is the next target. <strong>MTTR</strong> (mean time to recovery, the resume side) often
+    dominates the true cost — that's <code>resume_bench.py</code>.</div>
+  </div>
+</section>
+
+<!-- ===================== FILESYSTEMS ===================== -->
+<section id="lustre">
+  <h2>Filesystems at scale</h2>
+  <div class="concept">
+    <h3>Lustre — OSTs, OSS, MDS, striping</h3>
+    <p>Lustre is the classic HPC parallel filesystem. A file's data is spread (<strong>striped</strong>)
+    across many <strong>OSTs</strong> (Object Storage Targets, backed by OSS servers); metadata
+    (names, permissions, layout) lives on the <strong>MDS</strong> (Metadata Server). Aggregate
+    bandwidth = sum over OSTs, so a widely-striped file read by many clients can hit hundreds of
+    GB/s.</p>
+    <pre><code>lfs df -h /scratch              # per-OST capacity/usage
+lfs getstripe &lt;file&gt;            # how is it striped?
+lfs setstripe -c -1 &lt;dir&gt;       # stripe new files across ALL OSTs</code></pre>
+    <div class="why"><b>Why it matters:</b> the Phase 2.5 scaling wall lives here. Add nodes all
+    reading one narrowly-striped dataset and you saturate a few OSTs while others idle, or you
+    hammer the single MDS with metadata ops (open/stat) — per-node throughput drops. Distributed
+    checkpointing (Phase 3.3) exploits the flip side: wide striping + parallel rank writes saturate
+    <em>aggregate</em> OST bandwidth. Knowing to check <code>lfs getstripe</code> is the difference
+    between "the FS is slow" and "the file is striped ×1".</div>
+  </div>
+</section>
+
+<section id="weka">
+  <div class="concept">
+    <h3>WEKA</h3>
+    <p>WEKA is a modern NVMe-native parallel/distributed filesystem popular in AI clusters
+    (including at NVIDIA scale). It pools NVMe across nodes into a single namespace, is built for
+    massive small-file + metadata throughput (the pain point for data loading), and supports
+    GPUDirect Storage so reads can land straight in HBM.</p>
+    <div class="why"><b>Why it matters:</b> the failure mode Lustre hits on metadata-heavy AI
+    workloads (millions of small shard reads, frequent opens) is what NVMe-native systems like WEKA
+    are engineered to avoid. When you frame a scaling finding, naming the tier (Lustre vs WEKA vs
+    local NVMe) is essential — the contention behaviour is completely different, and "what FS tier"
+    is the first question a storage team will ask.</div>
+  </div>
+</section>
+
+<!-- ===================== SYSTEMS & TOOLING ===================== -->
+<section id="engines">
+  <h2>Systems &amp; tooling</h2>
+  <div class="concept">
+    <h3>vLLM &amp; SGLang — inference engines</h3>
+    <p>Both are high-throughput LLM serving engines exposing an OpenAI-compatible API.</p>
+    <ul>
+      <li><strong>vLLM</strong>: introduced <strong>PagedAttention</strong> — managing the KV
+      cache in fixed-size pages like virtual memory, eliminating fragmentation and enabling high
+      batch concurrency. The de-facto throughput baseline.</li>
+      <li><strong>SGLang</strong>: adds <strong>RadixAttention</strong> (prefix-sharing of KV
+      cache via a radix tree) — big wins when many requests share prompts (few-shot, agents). Also
+      a fast structured-output / programming frontend.</li>
+    </ul>
+    <pre><code># vLLM
+python -m vllm.entrypoints.openai.api_server --model Qwen/Qwen3-8B --dtype bfloat16
+# SGLang
+python -m sglang.launch_server --model-path Qwen/Qwen3-8B</code></pre>
+    <p>We benchmark their <strong>cold-start</strong> (launch → ready → first token) in
+    <code>run_vllm.sh</code> / <code>run_sglang.sh</code>, because that startup is dominated by the
+    same weight-loading path as Phase 1.</p>
+    <div class="why"><b>Why it matters:</b> cold-start time = how fast an autoscaler can bring up
+    a new replica under load. It's mostly weight loading, so the Phase 1 loader work transfers
+    directly. Pinning engine versions matters: SGLang's loader changed between v0.5.6
+    (single-threaded) and v0.5.10 (multi-threaded) — exactly the kind of version-sensitive trend
+    that motivates the σ/μ + version-pinning discipline.</div>
+  </div>
+</section>
+
+<section id="proxy">
+  <div class="concept">
+    <h3>Proxy models (e.g. Nemotron-5-8B-proxy)</h3>
+    <p>A <strong>proxy model</strong> keeps realistic tensor <em>shapes</em> (hidden size, head
+    count, vocab — so kernel sizes and memory traffic match production) but strips the
+    <em>depth</em> (4 layers instead of 32–64). A step is short, so you collect hundreds of samples
+    in minutes. You're not training to convergence — you're stress-testing the <em>infrastructure</em>
+    around the model (data path, checkpoint path, collective comms).</p>
+    <div class="why"><b>Why it matters:</b> you can't iterate on storage/IO benchmarks if every
+    run needs a real 8B forward/backward. The proxy gives production-representative IO and memory
+    behaviour at a fraction of the wall-clock and GPU cost — it's the standard tool for isolating
+    an infra bottleneck from model compute. Our <code>proxy_model.py</code> (hidden=4096, 4 layers,
+    ~945M params) is exactly this.</div>
+  </div>
+</section>
+
+<section id="slurm">
+  <div class="concept">
+    <h3>Slurm — the cluster scheduler</h3>
+    <p>Slurm allocates nodes/GPUs and launches jobs. <code>sbatch script.sh</code> queues a batch
+    job (with <code>#SBATCH</code> resource directives); <code>srun</code> launches the parallel
+    tasks across the allocation and sets the env vars (<code>SLURM_PROCID</code>,
+    <code>SLURM_NTASKS</code>, <code>SLURM_LOCALID</code>…) that <code>common/slurm_utils.py</code>
+    reads to bootstrap <code>torch.distributed</code>.</p>
+    <div class="why"><b>Why it matters:</b> benchmarking from <code>sbatch</code> (not an
+    interactive shell) from day one means your numbers are reproducible by anyone with the script,
+    the scheduler captures the exact topology, and you measure the same path production training
+    uses (prolog, cgroups, NUMA binding, fabric). "Works in my interactive session" is not a
+    benchmark.</div>
+  </div>
+</section>
+
+<section id="nvtx">
+  <div class="concept">
+    <h3>NVTX, NSight Systems (nsys) &amp; NSight Compute (ncu)</h3>
+    <p><strong>NVTX</strong> ranges are named, coloured annotations you push onto the timeline
+    (<code>common/nvtx_helpers.py</code>). They turn an undifferentiated wall of kernels into a
+    readable story.</p>
+    <table>
+      <tr><th>Tool</th><th>Scope</th><th>Use it to…</th></tr>
+      <tr><td><code>nsys</code></td><td>whole-timeline (CPU+GPU, copies, NVTX)</td>
+          <td>find <em>where</em> time goes; spot GPU idle gaps, missing overlap, sync bubbles</td></tr>
+      <tr><td><code>ncu</code></td><td>single-kernel deep dive</td>
+          <td>find <em>why</em> a kernel is slow (occupancy, memory vs compute bound, stalls)</td></tr>
+    </table>
+    <pre><code>nsys profile -t cuda,nvtx,osrt -o trace python script.py   # timeline
+ncu --nvtx --set full --launch-count 20 -o k python script.py  # kernels (SLOW — scope it!)</code></pre>
+    <div class="why"><b>Why it matters:</b> profiling is how you move from "it feels slow" to a
+    falsifiable bottleneck. <code>nsys</code> answers the storage/pipeline questions in this project
+    (is the GPU idle waiting for data? does the async write overlap the next step?);
+    <code>ncu</code> answers the kernel-efficiency questions. <code>ncu</code> replays each kernel
+    and is brutally slow — always scope it with <code>--launch-count</code> / <code>--nvtx-include</code>.</div>
+  </div>
+</section>
+
+<section id="ci">
+  <div class="concept">
+    <h3>CI for benchmarks</h3>
+    <p>Continuous Integration usually means "run the tests on every commit". For an infra team it
+    also means <strong>run the benchmarks on every commit</strong> and fail/flag if a key metric
+    regresses beyond the noise floor. The <code>.gitlab-ci.yml</code> stub shows the stages: lint →
+    smoke (tiny model, asserts the pipeline runs) → benchmark (on a GPU runner) → publish dashboard.</p>
+    <div class="why"><b>Why it matters:</b> performance rots silently — a dependency bump, a kernel
+    regression, a config drift, and loading is 20% slower with no failing test to catch it.
+    Benchmark CI catches it at the commit that caused it. This only works if your σ/μ is below your
+    regression threshold (back to the coefficient of variation) — which is why "measure the noise"
+    and "detect regressions" are the same discipline.</div>
+  </div>
+</section>
+
+<footer>
+  Part of the Storage-Aware AI Workload Benchmark Suite. Open this file directly in any browser —
+  it is fully self-contained (no external assets). See <code>results/dashboard.html</code> for the
+  interactive results and each phase's <code>README.md</code> for run/profile instructions.
+</footer>
+</main>
+</div>
+</body>
+</html>

@@ -1,0 +1,1083 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Fusing evolve_implicit — A GPU Kernel Optimization &amp; Torch Packaging Field Guide</title>
+<style>
+  :root{
+    --bg:#17130e;            /* warm near-black */
+    --bg2:#1e1913;           /* panel */
+    --bg3:#241d16;           /* raised */
+    --code-bg:#120f0a;
+    --code-border:#2c241b;
+    --ink:#ece2d4;           /* warm cream text */
+    --ink-dim:#b6a791;
+    --ink-faint:#8b7c69;
+    --rust:#e4572e;          /* primary rust orange */
+    --rust-deep:#b7410e;
+    --gear:#ce422b;
+    --amber:#e0a13a;
+    --sage:#7bbf9e;
+    --sky:#6fb1c7;
+    --violet:#b69ad8;
+    --red:#d9595a;
+    --line:#332a20;
+    --radius:10px;
+    --mono:ui-monospace,"Cascadia Code","JetBrains Mono","Source Code Pro",Menlo,Consolas,monospace;
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font-family:var(--sans);line-height:1.65;font-size:16.5px;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--amber);text-decoration:none}
+  a:hover{color:var(--rust);text-decoration:underline}
+  .wrap{display:grid;grid-template-columns:288px minmax(0,1fr);gap:0;max-width:1320px;margin:0 auto}
+  /* ---- sidebar ---- */
+  aside{
+    position:sticky;top:0;align-self:start;height:100vh;overflow-y:auto;
+    border-right:1px solid var(--line);padding:26px 18px 60px;background:linear-gradient(180deg,#1a1510,#161109);
+  }
+  aside .brand{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+  aside .gearmark{width:30px;height:30px;flex:0 0 auto}
+  aside h2{font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:var(--rust);margin:0}
+  aside .sub{font-size:12.5px;color:var(--ink-faint);margin:0 0 18px}
+  nav a{display:block;color:var(--ink-dim);font-size:13.5px;padding:3px 10px;border-left:2px solid transparent;border-radius:0 4px 4px 0}
+  nav a:hover{color:var(--ink);background:#221b13;text-decoration:none}
+  nav a.active{color:var(--rust);border-left-color:var(--rust);background:#241a12}
+  nav .grp{margin-top:14px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);padding:0 10px}
+  nav a.l2{padding-left:24px;font-size:12.5px;color:var(--ink-faint)}
+  /* ---- content ---- */
+  main{padding:0 0 120px}
+  .hero{padding:64px 56px 40px;border-bottom:1px solid var(--line);background:
+     radial-gradient(900px 380px at 78% -8%,rgba(228,87,46,.16),transparent 60%),
+     radial-gradient(700px 300px at 0% 0%,rgba(183,65,14,.10),transparent 55%);}
+  .eyebrow{color:var(--rust);font-weight:700;letter-spacing:.18em;text-transform:uppercase;font-size:12.5px}
+  .hero h1{font-size:40px;line-height:1.12;margin:.35em 0 .25em;letter-spacing:-.01em}
+  .hero h1 .accent{color:var(--rust)}
+  .hero p.lead{font-size:18px;color:var(--ink-dim);max-width:60ch;margin:.4em 0 0}
+  .meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:22px}
+  .chip{font-family:var(--mono);font-size:12px;color:var(--ink-dim);background:var(--bg3);border:1px solid var(--line);
+        border-radius:999px;padding:4px 12px}
+  .chip b{color:var(--rust)}
+  section{padding:42px 56px;border-bottom:1px solid var(--line)}
+  section>h2{font-size:27px;margin:.1em 0 .5em;letter-spacing:-.01em;scroll-margin-top:18px}
+  section>h2 .n{color:var(--rust);font-family:var(--mono);font-size:18px;margin-right:12px;opacity:.85}
+  h3{font-size:19.5px;margin:1.6em 0 .4em;color:#fff;scroll-margin-top:18px}
+  h4{font-size:15.5px;margin:1.3em 0 .3em;color:var(--amber);letter-spacing:.01em}
+  p{margin:.6em 0}
+  .muted{color:var(--ink-dim)}
+  code{font-family:var(--mono);font-size:.88em;background:#241c14;color:#f0c9a8;border:1px solid var(--code-border);
+       padding:1px 6px;border-radius:5px}
+  pre{background:var(--code-bg);border:1px solid var(--code-border);border-radius:var(--radius);
+      overflow:auto;margin:1.1em 0;box-shadow:inset 0 0 0 1px rgba(255,255,255,.012)}
+  pre .filebar{display:flex;justify-content:space-between;align-items:center;background:#1b1610;
+       border-bottom:1px solid var(--code-border);padding:7px 14px;font-family:var(--mono);font-size:12px;color:var(--ink-faint)}
+  pre .filebar .lang{color:var(--rust)}
+  pre code{display:block;background:none;border:none;color:#d9cdbb;padding:15px 16px;font-size:13.1px;line-height:1.6}
+  .cmt{color:#7d6f5c;font-style:italic}
+  .kw{color:#e4825e}      /* keywords */
+  .ty{color:#e0a13a}      /* types */
+  .fn{color:#9fc3d6}      /* functions */
+  .str{color:#9ec995}     /* strings/literals */
+  .num{color:#cf9bd6}
+  /* callouts */
+  .box{border:1px solid var(--line);border-left-width:4px;border-radius:8px;padding:14px 18px;margin:1.2em 0;background:var(--bg2)}
+  .box .tag{font-weight:700;font-size:12px;letter-spacing:.1em;text-transform:uppercase;display:block;margin-bottom:4px}
+  .box p:first-of-type{margin-top:0}.box p:last-child{margin-bottom:0}
+  .box.insight{border-left-color:var(--rust)}.box.insight .tag{color:var(--rust)}
+  .box.note{border-left-color:var(--sky)}.box.note .tag{color:var(--sky)}
+  .box.sci{border-left-color:var(--violet)}.box.sci .tag{color:var(--violet)}
+  .box.warn{border-left-color:var(--amber)}.box.warn .tag{color:var(--amber)}
+  .box.pitfall{border-left-color:var(--red)}.box.pitfall .tag{color:var(--red)}
+  /* tables */
+  table{border-collapse:collapse;width:100%;margin:1.2em 0;font-size:14px}
+  th,td{border:1px solid var(--line);padding:8px 12px;text-align:left;vertical-align:top}
+  th{background:#211a12;color:var(--amber);font-weight:600}
+  tr:nth-child(even) td{background:#1b1610}
+  td.num,th.num{text-align:right;font-family:var(--mono)}
+  .win{color:var(--sage);font-weight:600}.lose{color:var(--red);font-weight:600}
+  /* misc */
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:900px){.grid2{grid-template-columns:1fr}}
+  figure{margin:1.4em 0;text-align:center}
+  figure svg{max-width:100%;height:auto}
+  figcaption{color:var(--ink-faint);font-size:13px;margin-top:8px}
+  .kbd{font-family:var(--mono);font-size:.85em;background:#2a2118;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:1px 6px;color:#f0c9a8}
+  ul,ol{padding-left:1.3em}li{margin:.3em 0}
+  .lead-num{font-family:var(--mono);color:var(--rust)}
+  hr{border:none;border-top:1px solid var(--line);margin:2em 0}
+  .toc-top{font-size:12px;color:var(--ink-faint);margin-top:30px}
+  .footer{padding:34px 56px;color:var(--ink-faint);font-size:13px}
+  .step{counter-reset:none}
+  .pill{display:inline-block;font-family:var(--mono);font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid var(--line);color:var(--ink-dim);background:var(--bg3)}
+  .big{font-size:15px}
+  details{border:1px solid var(--line);border-radius:8px;padding:8px 14px;margin:1em 0;background:var(--bg2)}
+  summary{cursor:pointer;color:var(--amber);font-weight:600}
+  @media(max-width:980px){
+    .wrap{grid-template-columns:1fr}
+    aside{position:static;height:auto;border-right:none;border-bottom:1px solid var(--line)}
+    .hero,section,.footer{padding-left:24px;padding-right:24px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+<aside>
+  <div class="brand">
+    <svg class="gearmark" viewBox="0 0 100 100" aria-hidden="true">
+      <circle cx="50" cy="50" r="46" fill="none" stroke="#ce422b" stroke-width="6"/>
+      <g fill="#ce422b">
+        <circle cx="50" cy="50" r="14" fill="none" stroke="#ce422b" stroke-width="6"/>
+        <g>
+          <rect x="46" y="2" width="8" height="18" rx="2"/><rect x="46" y="80" width="8" height="18" rx="2"/>
+          <rect x="2" y="46" width="18" height="8" rx="2"/><rect x="80" y="46" width="18" height="8" rx="2"/>
+        </g>
+        <g transform="rotate(45 50 50)">
+          <rect x="46" y="2" width="8" height="18" rx="2"/><rect x="46" y="80" width="8" height="18" rx="2"/>
+          <rect x="2" y="46" width="18" height="8" rx="2"/><rect x="80" y="46" width="18" height="8" rx="2"/>
+        </g>
+      </g>
+    </svg>
+    <div><h2>Fused Kinetics</h2></div>
+  </div>
+  <p class="sub">A GPU kernel-fusion case study &amp; a Torch/CUDA packaging field guide</p>
+  <nav id="toc">
+    <div class="grp">Part I — The optimization</div>
+    <a href="#tldr">TL;DR &amp; results</a>
+    <a href="#science">1 · The science</a>
+    <a href="#math" class="l2">1.1 The linear system</a>
+    <a href="#dims" class="l2">1.2 Dimensions</a>
+    <a href="#profile">2 · Finding the bottleneck</a>
+    <a href="#gemm-mystery" class="l2">2.1 The 19-launch GEMM</a>
+    <a href="#attribution" class="l2">2.2 Init vs per-cycle</a>
+    <a href="#whyslow">3 · Why tiny batched LA is slow</a>
+    <a href="#idea">4 · The idea: fuse + map</a>
+    <a href="#impl">5 · Implementation</a>
+    <a href="#impl-arch" class="l2">5.1 Architecture</a>
+    <a href="#impl-iter" class="l2">5.2 TensorIterator</a>
+    <a href="#impl-cell" class="l2">5.3 The per-cell kernel</a>
+    <a href="#impl-solve" class="l2">5.4 dsolve_lu</a>
+    <a href="#impl-scratch" class="l2">5.5 Scratch memory</a>
+    <a href="#decisions">6 · The decision tree</a>
+    <a href="#validation">7 · Validation</a>
+    <a href="#results">8 · Results in depth</a>
+    <div class="grp">Part II — Generalize</div>
+    <a href="#generalize">9 · The reusable recipe</a>
+    <a href="#assumptions" class="l2">9.1 Assumptions</a>
+    <a href="#winlose" class="l2">9.2 When it wins / loses</a>
+    <a href="#perfmodel" class="l2">9.3 Performance model</a>
+    <a href="#limits" class="l2">9.4 Limitations</a>
+    <div class="grp">Part III — Build &amp; ABI</div>
+    <a href="#caveat">10 · The build caveat</a>
+    <a href="#abi" class="l2">10.1 ABI &amp; mangling</a>
+    <a href="#dispatch" class="l2">10.2 ATen DispatchStub</a>
+    <a href="#avx" class="l2">10.3 Torch &amp; AVX</a>
+    <a href="#leak" class="l2">10.4 How it leaked</a>
+    <a href="#debug" class="l2">10.5 The debugging trail</a>
+    <a href="#thefix" class="l2">10.6 The fix</a>
+    <a href="#packaging" class="l2">10.7 Packaging guide</a>
+    <div class="grp">Appendix</div>
+    <a href="#related">11 · Related topics</a>
+    <a href="#glossary">12 · Glossary</a>
+    <a href="#filemap">13 · File &amp; command map</a>
+    <p class="toc-top"><a href="#top">↑ back to top</a></p>
+  </nav>
+</aside>
+
+<main id="top">
+  <div class="hero">
+    <div class="eyebrow">GPU Performance · CUDA · PyTorch C++ · Chemical Kinetics</div>
+    <h1>Fusing <span class="accent">evolve_implicit</span><br/>into a per-cell kernel</h1>
+    <p class="lead">How one batched matrix multiply that PyTorch quietly split into 19 GPU launches per timestep
+      became a single fused kernel — and the Torch/AVX ABI rabbit hole that nearly broke the build. A worked
+      case study, a transferable recipe, and a packaging field guide.</p>
+    <div class="meta">
+      <span class="chip">model: <b>Jupiter CRM</b> 100³</span>
+      <span class="chip">device: <b>RTX 5090</b></span>
+      <span class="chip">per-cycle GPU <b>250.9 → 192.0 ms</b></span>
+      <span class="chip">kinetics solve <b>~4.2×</b></span>
+      <span class="chip">numerics <b>~1e-11 rel</b></span>
+    </div>
+  </div>
+
+  <!-- ============ TL;DR ============ -->
+  <section id="tldr">
+    <h2><span class="n">§0</span>TL;DR &amp; results</h2>
+    <p>The Jupiter cloud-resolving simulation (<code>run_jupiter_crm.py -c jupiter_crm_100.yaml</code>)
+       spent <b>~24% of every timestep</b> inside one helper, <code>kintera::evolve_implicit</code>, that
+       advances cloud chemistry implicitly. Profiling showed the cost was not really "matrix math" — it was
+       the <em>shape</em> of the math: a multiply of ~1.2&nbsp;million tiny <span class="num">8×8</span>-ish
+       matrices, expressed as a PyTorch batched <code>matmul</code> + <code>linalg_solve</code>, which cuBLAS
+       executes as dozens of poorly-utilized launches.</p>
+    <p>Replacing it with a single hand-written kernel — <b>one GPU thread per grid cell</b>, each building and
+       solving its own little linear system in scratch memory — removed the GEMM and the batched LU entirely.</p>
+    <table>
+      <thead><tr><th>Metric (100³, RTX 5090)</th><th class="num">Before</th><th class="num">After</th><th class="num">Δ</th></tr></thead>
+      <tbody>
+        <tr><td>GPU time / timestep</td><td class="num">250.9 ms</td><td class="num">192.0 ms</td><td class="num win">1.31×</td></tr>
+        <tr><td>Implicit kinetics solve / cycle</td><td class="num">70.7 ms</td><td class="num">~17 ms</td><td class="num win">~4.2×</td></tr>
+        <tr><td><code>gemmSN_TN</code> (batched GEMM)</td><td class="num">576 ms</td><td class="num">gone</td><td class="num win">—</td></tr>
+        <tr><td><code>getrf</code>+<code>trsm</code> (batched LU)</td><td class="num">131 ms</td><td class="num">gone</td><td class="num win">—</td></tr>
+        <tr><td>numerical agreement vs. original</td><td class="num" colspan="2">~1e-11 relative; CPU≡CUDA to 1e-17</td><td class="num win">bit-close</td></tr>
+      </tbody>
+    </table>
+    <div class="box insight"><span class="tag">The one-sentence lesson</span>
+      <p>When you find yourself doing <b>many independent, tiny</b> linear-algebra problems, a general BLAS/LAPACK
+        library is the wrong tool: give each problem <b>one thread</b> and solve it in registers/scratch. The
+        speed-up comes from <em>parallel granularity</em>, not from cleverer arithmetic.</p>
+    </div>
+  </section>
+
+  <!-- ============ 1 SCIENCE ============ -->
+  <section id="science">
+    <h2><span class="n">§1</span>The science: implicit cloud chemistry</h2>
+    <p>The Jupiter CRM resolves convecting weather on a 100×100×100 grid. At each cell it tracks a handful of
+      chemical <em>species</em> — the dry H₂/He background plus volatiles and their condensates:
+      H₂O, NH₃, H₂S and the cloud phases H₂O(l), H₂O(l,p), NH₃(s), NH₃(s,p), NH₄SH(s). They interconvert through
+      <em>reactions</em>: nucleation, growth/precipitation, and evaporation (one of them, NH₃ + H₂S ⇌ NH₄SH(s),
+      is reversible).</p>
+
+    <h3 id="math">1.1 Why <em>implicit</em>, and the linear system it produces</h3>
+    <p>Let <code>c</code> be the vector of species concentrations and <code>r(c)</code> the vector of reaction
+      rates. The stoichiometric matrix <code>S</code> turns reaction rates into species production, so the
+      chemistry ODE is</p>
+    <pre><code>      dc/dt = S · r(c)            S : (nspecies × nreaction),  r : (nreaction)</code></pre>
+    <p>Cloud chemistry is <b>stiff</b>: nucleation and evaporation have timescales far shorter than the fluid
+      timestep <code>dt</code>. An explicit update (<code>c += dt·S·r</code>) would demand absurdly small steps
+      to stay stable. The cure is an <b>implicit (backward) Euler</b> step, which evaluates the rate at the
+      <em>new</em> time:</p>
+    <pre><code>      cⁿ⁺¹ = cⁿ + dt · S · r(cⁿ⁺¹)</code></pre>
+    <p>That is nonlinear in the unknown. Linearizing <code>r</code> about <code>cⁿ</code> with the reaction-space
+      Jacobian <code>J = ∂r/∂c</code> and writing the update as <code>Δc = cⁿ⁺¹ − cⁿ</code> gives a linear system
+      for each cell:</p>
+    <pre><code>      (I − dt · S·J) · Δc = dt · S · r        ⟺        ( I/dt − S·J ) · Δc = S · r</code></pre>
+    <div class="box sci"><span class="tag">Science note — what each operator <em>is</em></span>
+      <p><b>S·J</b> maps a concentration perturbation through the reaction network back into species space — it
+        is the chemical "feedback" matrix (nspecies × nspecies). <b>I/dt</b> is the inertia of the timestep:
+        large <code>1/dt</code> makes the system <b>diagonally dominant</b> and well-conditioned, which (foreshadowing)
+        is exactly why a simple solver is safe here. <b>S·r</b> is the explicit tendency we are implicitly correcting.</p>
+    </div>
+    <p>This is precisely what <code>evolve_implicit(rate, stoich, jacobian, dt)</code> computes. The original
+      PyTorch implementation reads almost like the math:</p>
+    <pre><div class="filebar"><span>kintera/src/kinetics/evolve_implicit.hpp <span class="muted">(original)</span></span><span class="lang">C++ / libtorch</span></div><code><span class="ty">auto</span> SJ = stoich.<span class="fn">matmul</span>(jacobian);                <span class="cmt">// (…, nsp, nsp)   batched over cells</span>
+<span class="ty">auto</span> SR = stoich.<span class="fn">matmul</span>(rate.<span class="fn">unsqueeze</span>(-1)).<span class="fn">squeeze</span>(-1);
+<span class="ty">auto</span> A  = eye / dt - SJ;
+<span class="kw">try</span> {
+  <span class="kw">return</span> torch::<span class="fn">linalg_solve</span>(A, SR.<span class="fn">unsqueeze</span>(-1)).<span class="fn">squeeze</span>(-1);   <span class="cmt">// batched LU</span>
+} <span class="kw">catch</span> (<span class="kw">const</span> c10::Error&amp;) {
+  <span class="kw">return</span> std::<span class="fn">get</span>&lt;0&gt;(torch::<span class="fn">linalg_lstsq</span>(A, SR.<span class="fn">unsqueeze</span>(-1))).<span class="fn">squeeze</span>(-1); <span class="cmt">// SVD fallback</span>
+}</code></pre>
+    <p>Beautiful, terse, correct — and, at production scale, a performance trap. The whole report is about
+      <em>why</em>, and what to do instead.</p>
+
+    <h3 id="dims">1.2 The dimensions that matter</h3>
+    <table>
+      <thead><tr><th>Quantity</th><th>Symbol</th><th class="num">Jupiter CRM value</th><th>Comment</th></tr></thead>
+      <tbody>
+        <tr><td>interior grid</td><td>—</td><td class="num">100 × 100 × 100</td><td>1,000,000 cells</td></tr>
+        <tr><td>cells incl. 3 ghost layers</td><td><code>ncell</code></td><td class="num">106³ = 1,191,016</td><td>the batch size — <b>remember this number</b></td></tr>
+        <tr><td>kinetics species</td><td><code>nspecies</code></td><td class="num">~8</td><td>excludes the inert dry background</td></tr>
+        <tr><td>reactions (augmented)</td><td><code>nreaction</code></td><td class="num">~10</td><td>reversible reactions add a column</td></tr>
+        <tr><td>system per cell</td><td><code>A</code></td><td class="num">~8 × 8</td><td>tiny &amp; dense</td></tr>
+        <tr><td>timesteps profiled</td><td>—</td><td class="num">10 cycles</td><td>plus a one-time init phase</td></tr>
+      </tbody>
+    </table>
+    <div class="box insight"><span class="tag">The crux in one line</span>
+      <p>We must solve <b>1.19 million</b> dense linear systems of size <b>~8×8</b>, <b>every timestep</b>. The
+        matrices are minuscule; the batch is enormous. That ratio dictates everything that follows.</p>
+    </div>
+  </section>
+
+  <!-- ============ 2 PROFILE ============ -->
+  <section id="profile">
+    <h2><span class="n">§2</span>Finding the bottleneck (profiling honestly)</h2>
+    <p>Optimization without measurement is folklore. The workflow used two NVIDIA tools:</p>
+    <ul>
+      <li><b>Nsight Systems</b> (<code>nsys</code>) — a <em>timeline</em>: which kernels ran, when, how long,
+        how they interleave with CPU/launches. Best for "where does wall-clock go?"</li>
+      <li><b>Nsight Compute</b> (<code>ncu</code>) — a <em>microscope</em> on a single kernel: occupancy,
+        memory vs compute throughput, registers, stalls. Best for "why is <em>this</em> kernel slow?"</li>
+    </ul>
+    <p>Exporting the <code>nsys</code> report to SQLite and summing kernel durations gave the per-cycle ranking.
+      Two non-elementwise items dominated and both traced to chemistry:</p>
+    <table>
+      <thead><tr><th>Kernel</th><th class="num">launches</th><th class="num">total</th><th>identity</th></tr></thead>
+      <tbody>
+        <tr><td><code>gemmSN_TN_kernel</code></td><td class="num">190</td><td class="num">576 ms</td><td>cuBLAS batched GEMM = <code>stoich.matmul(jacobian)</code></td></tr>
+        <tr><td><code>batched_svd_…jacobi</code></td><td class="num">790</td><td class="num">388 ms</td><td>cuSOLVER batched SVD — <b>init only</b> (see §2.2)</td></tr>
+        <tr><td><code>getrf_semiwarp</code>, <code>trsm_batch</code></td><td class="num">10 / 380</td><td class="num">131 ms</td><td>cuBLAS batched LU = <code>linalg_solve</code></td></tr>
+      </tbody>
+    </table>
+
+    <h3 id="gemm-mystery">2.1 The mystery of the 19-launch matrix multiply</h3>
+    <p>576&nbsp;ms over 190 launches — but the code calls <code>matmul</code> <em>once</em> per timestep. Where do
+      190 launches come from? Looking at one timestep window in the timeline, there are exactly <b>18 launches of
+      a 65,535-wide kernel + 1 launch of an 11,386-wide kernel</b>, back-to-back, immediately followed by the LU
+      solve. The arithmetic is the giveaway:</p>
+    <pre><code>      18 × 65535  +  1 × 11386  =  1,191,016  =  106³  =  ncell</code></pre>
+    <div class="box note"><span class="tag">What's going on</span>
+      <p>A CUDA grid's <code>z</code> dimension is capped at <b>65,535</b> blocks. cuBLAS maps the <em>batch</em>
+        dimension of a batched GEMM onto <code>gridDim.z</code>. With 1.19M matrices in the batch, it cannot launch
+        them in one grid, so it <b>chops the batch into ~19 sequential kernel launches</b>. So the "190 GEMM
+        launches over 10 cycles" is really <b>one logical matmul per cycle</b>, shredded by a hardware limit. That
+        single matmul is <code>SJ = stoich.matmul(jacobian)</code>.</p>
+    </div>
+    <figure>
+      <svg viewBox="0 0 760 220" font-family="var(--mono)" font-size="12">
+        <rect x="0" y="0" width="760" height="220" fill="none"/>
+        <text x="20" y="26" fill="#ece2d4" font-size="13">One logical op:  stoich.matmul(jacobian)  — batch = 106³ = 1,191,016</text>
+        <rect x="20" y="40" width="500" height="34" rx="6" fill="#241d16" stroke="#e4572e"/>
+        <text x="270" y="62" fill="#f0c9a8" text-anchor="middle">torch.matmul  (one call)</text>
+        <path d="M270 74 L270 96" stroke="#8b7c69" stroke-width="1.5" marker-end="url(#a)"/>
+        <defs><marker id="a" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="#8b7c69"/></marker></defs>
+        <text x="20" y="116" fill="#b6a791">cuBLAS expands to 19 sequential launches (gridDim.z ≤ 65535):</text>
+        <g>
+          <rect x="20"  y="128" width="40" height="60" rx="4" fill="#2a2118" stroke="#b7410e"/>
+          <rect x="64"  y="128" width="40" height="60" rx="4" fill="#2a2118" stroke="#b7410e"/>
+          <rect x="108" y="128" width="40" height="60" rx="4" fill="#2a2118" stroke="#b7410e"/>
+          <text x="172" y="162" fill="#8b7c69">·  ·  ·  ·  ·  (×18 @ 65,535)</text>
+          <rect x="360" y="128" width="40" height="60" rx="4" fill="#2a2118" stroke="#b7410e"/>
+          <rect x="430" y="128" width="60" height="60" rx="4" fill="#1b1610" stroke="#e0a13a"/>
+          <text x="460" y="150" fill="#e0a13a" text-anchor="middle">+1</text>
+          <text x="460" y="166" fill="#8b7c69" text-anchor="middle" font-size="10">11,386</text>
+        </g>
+        <text x="540" y="150" fill="#d9595a">↳ then getrf + trsm</text>
+        <text x="540" y="168" fill="#8b7c69" font-size="11">(the batched LU solve)</text>
+      </svg>
+      <figcaption>One <code>matmul</code> → 19 launches, because the batch (106³) overflows the grid-Z cap of 65,535.</figcaption>
+    </figure>
+
+    <h3 id="attribution">2.2 The honest part: separating init from steady state</h3>
+    <p>The biggest single kernel by name was actually the <code>batched_svd</code> at 388&nbsp;ms — and it would
+      have been tempting to "optimize" it. But a timeline check showed <b>every SVD launch occurs before the very
+      first GEMM</b>, i.e. before timestep&nbsp;1. It belongs to the one-time pseudo-adiabat <em>initialization</em>
+      (<code>linalg_pinv</code> while building the starting atmosphere), not the per-cycle loop. Spending effort
+      there would speed up startup once and help steady-state throughput <em>not at all</em>.</p>
+    <div class="box warn"><span class="tag">Pitfall avoided</span>
+      <p>"Biggest bar in the profile" ≠ "biggest recurring cost." Always attribute a kernel to a <b>phase</b>
+        (init / per-step / teardown). A 388&nbsp;ms one-time cost is noise across a multi-thousand-step run; a
+        70&nbsp;ms/step cost is the whole ballgame. The GEMM + LU were the real target precisely because they
+        repeat every cycle.</p>
+    </div>
+  </section>
+
+  <!-- ============ 3 WHY SLOW ============ -->
+  <section id="whyslow">
+    <h2><span class="n">§3</span>Why tiny batched GEMM/LU is slow</h2>
+    <p>The system is small (≈1.4 GFLOP of actual arithmetic per timestep) yet took ~70&nbsp;ms — under 0.02 TFLOP/s
+      on a card rated for tens of TFLOP/s FP64. The inefficiency is structural, not arithmetic:</p>
+    <div class="grid2">
+      <div class="box note"><span class="tag">Arithmetic intensity is tiny</span>
+        <p>Each 8×8×10 matrix does ~640 multiply-adds but reads/writes ~150 doubles. The op is
+          <b>memory-bound</b>: you move a lot of bytes to do almost no math. BLAS GEMM kernels are tuned for the
+          opposite regime (large M,N,K, data reused many times).</p></div>
+      <div class="box note"><span class="tag">Occupancy &amp; tiling collapse</span>
+        <p>A GEMM kernel tiles M×N and streams K. With M=N≈8, K≈10 there is nothing to tile — most of a warp's
+          lanes and most of the shared-memory staging sit idle. Batched GEMM amortizes this poorly when each
+          matrix is sub-tile sized.</p></div>
+      <div class="box note"><span class="tag">Launch &amp; sync overhead</span>
+        <p>Splitting into 19 launches means 19 grid launches, 19 tails, and a serialized dependency into the LU.
+          The fixed per-launch overhead becomes a real fraction of a sub-millisecond kernel.</p></div>
+      <div class="box note"><span class="tag">LAPACK batched LU is general</span>
+        <p><code>getrf</code>/<code>trsm</code> carry pivoting bookkeeping, info arrays, and host round-trips
+          designed for arbitrary sizes. For an 8×8 that never goes singular, that machinery is pure overhead.</p></div>
+    </div>
+    <div class="box insight"><span class="tag">Reframing</span>
+      <p>The problem is not "make the GEMM faster." It is "<b>stop expressing 1.19M independent 8×8 solves as
+        library calls.</b>" The data is embarrassingly parallel across cells; the right unit of work is
+        <b>one cell per thread</b>, where an 8×8 build-and-solve lives entirely in fast per-thread memory and
+        every one of the GPU's thousands of lanes is doing useful work.</p>
+    </div>
+  </section>
+
+  <!-- ============ 4 IDEA ============ -->
+  <section id="idea">
+    <h2><span class="n">§4</span>The idea: kernel fusion + the map pattern</h2>
+    <p>Two classic ideas combine here.</p>
+    <h4>Kernel fusion</h4>
+    <p>The original path materializes large intermediate tensors and crosses the GPU multiple times:
+      <code>SJ</code> (1.19M×8×8 doubles ≈ 0.6&nbsp;GB written then re-read), then <code>A</code>, then the LU's
+      internal buffers. <b>Fusion</b> means computing <code>A = I/dt − S·J</code>, the right-hand side
+      <code>S·r</code>, and the solve <em>without ever writing the intermediates to global memory</em> — they
+      live and die inside one thread's scratch.</p>
+    <h4>The map pattern (data parallelism by cell)</h4>
+    <p>Each cell's solve is independent of every other cell's. That is a textbook <b>map</b>: apply the same
+      function to every element. The natural GPU expression is one thread (or small group) per element. With
+      1.19M cells we launch 1.19M threads — saturating all 170 SMs of an RTX 5090 with light, uniform work.</p>
+    <figure>
+      <svg viewBox="0 0 760 250" font-family="var(--mono)" font-size="12">
+        <text x="20" y="22" fill="#ece2d4" font-size="13">Before: 3 global-memory passes + library calls</text>
+        <rect x="20" y="34" width="150" height="30" rx="5" fill="#241d16" stroke="#b7410e"/><text x="95" y="54" text-anchor="middle" fill="#f0c9a8">matmul → SJ</text>
+        <rect x="190" y="34" width="150" height="30" rx="5" fill="#241d16" stroke="#b7410e"/><text x="265" y="54" text-anchor="middle" fill="#f0c9a8">I/dt − SJ → A</text>
+        <rect x="360" y="34" width="170" height="30" rx="5" fill="#241d16" stroke="#b7410e"/><text x="445" y="54" text-anchor="middle" fill="#f0c9a8">linalg_solve → Δc</text>
+        <path d="M170 49 L188 49" stroke="#8b7c69" marker-end="url(#b)"/><path d="M340 49 L358 49" stroke="#8b7c69" marker-end="url(#b)"/>
+        <defs><marker id="b" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="#8b7c69"/></marker></defs>
+        <text x="545" y="54" fill="#d9595a" font-size="11">~0.6 GB written&amp;reread</text>
+
+        <text x="20" y="120" fill="#ece2d4" font-size="13">After: one kernel, 1.19M threads, all in scratch</text>
+        <rect x="20" y="134" width="510" height="86" rx="8" fill="#1b1610" stroke="#e4572e"/>
+        <text x="38" y="156" fill="#e4572e">evolve_implicit_cell  (per thread / cell)</text>
+        <text x="38" y="178" fill="#d9cdbb">build A &amp; SR  →  Gaussian elimination  →  write Δc</text>
+        <text x="38" y="200" fill="#8b7c69" font-size="11">A, SR, pivots never touch global memory</text>
+        <g fill="#2a2118" stroke="#7bbf9e">
+          <rect x="560" y="134" width="26" height="26" rx="3"/><rect x="592" y="134" width="26" height="26" rx="3"/>
+          <rect x="624" y="134" width="26" height="26" rx="3"/><rect x="560" y="166" width="26" height="26" rx="3"/>
+          <rect x="592" y="166" width="26" height="26" rx="3"/><rect x="624" y="166" width="26" height="26" rx="3"/>
+        </g>
+        <text x="660" y="166" fill="#7bbf9e" font-size="11">×1.19M</text>
+        <text x="660" y="182" fill="#8b7c69" font-size="11">threads</text>
+      </svg>
+      <figcaption>Fusion removes the intermediate tensors and the library round-trips; the map removes the grid-Z bottleneck.</figcaption>
+    </figure>
+    <div class="box note"><span class="tag">Provenance</span>
+      <p>This is the same move that earlier sped up the fluid solver in this codebase (the "vic" implicit
+        block-tridiagonal solve): replace batched library calls over many tiny systems with a custom per-cell
+        kernel. The recipe is reusable — §9 distills it.</p>
+    </div>
+  </section>
+
+  <!-- ============ 5 IMPLEMENTATION ============ -->
+  <section id="impl">
+    <h2><span class="n">§5</span>Implementation, in coding detail</h2>
+
+    <h3 id="impl-arch">5.1 Architecture: dispatch + device function</h3>
+    <p>libtorch's idiom for "same op, different backends" is a <b>DispatchStub</b>: declare a typed function
+      pointer, register a CPU and a CUDA implementation, and call through a thin stub that picks the right one at
+      runtime by device. We mirror the existing <code>thermo_dispatch</code> in the codebase. Four pieces:</p>
+    <pre><div class="filebar"><span>evolve_implicit_dispatch.hpp — the stub declaration</span><span class="lang">C++</span></div><code><span class="kw">namespace</span> at::native {
+  <span class="kw">using</span> evolve_implicit_fn = <span class="kw">void</span> (*)(at::TensorIterator&amp; iter,
+                                      at::Tensor <span class="kw">const</span>&amp; stoich, <span class="kw">double</span> dt);
+  <span class="fn">DECLARE_DISPATCH</span>(evolve_implicit_fn, call_evolve_implicit);
+}</code></pre>
+    <p>The actual numerical work lives in a header-only <b>device function</b>, <code>evolve_implicit_cell</code>,
+      marked <code>DISPATCH_MACRO</code> (which expands to <code>__host__ __device__</code> under CUDA, nothing on
+      CPU). Writing the math once, compilable for both backends, is how we keep <b>a single source of truth</b>
+      and guarantee CPU≡GPU behavior.</p>
+
+    <h3 id="impl-iter">5.2 Feeding it: a squashed TensorIterator</h3>
+    <p>The three operands have different last dimensions — <code>rate</code> is <code>(…, nreaction)</code>,
+      <code>jacobian</code> is <code>(…, nreaction, nspecies)</code>, output <code>delta</code> is
+      <code>(…, nspecies)</code>. We flatten the jacobian's trailing pair, then build a
+      <code>TensorIterator</code> that iterates over <em>cells</em> and <b>squashes the trailing dimension</b>,
+      so each thread receives a base pointer to its cell's contiguous block:</p>
+    <pre><div class="filebar"><span>evolve_implicit_dispatch.cpp — the host entry (out-of-line; see §10)</span><span class="lang">C++</span></div><code>torch::Tensor <span class="fn">evolve_implicit</span>(torch::Tensor rate, torch::Tensor stoich,
+                              torch::Tensor jacobian, <span class="kw">double</span> dt) {
+  <span class="ty">auto</span> nspecies = stoich.<span class="fn">size</span>(0);
+  <span class="ty">auto</span> rate_c   = rate.<span class="fn">contiguous</span>();
+  <span class="ty">auto</span> jac2d    = jacobian.<span class="fn">contiguous</span>().<span class="fn">flatten</span>(-2, -1);  <span class="cmt">// (…, nrxn*nsp)</span>
+  <span class="ty">auto</span> stoich_c = stoich.<span class="fn">contiguous</span>();
+
+  <span class="ty">auto</span> out_sizes = rate_c.<span class="fn">sizes</span>().<span class="fn">vec</span>();
+  out_sizes.<span class="fn">back</span>() = nspecies;
+  <span class="ty">auto</span> delta = torch::<span class="fn">empty</span>(out_sizes, rate_c.<span class="fn">options</span>());
+
+  <span class="ty">auto</span> iter = at::<span class="fn">TensorIteratorConfig</span>()
+      .<span class="fn">resize_outputs</span>(<span class="kw">false</span>)
+      .<span class="fn">check_all_same_dtype</span>(<span class="kw">false</span>)
+      .<span class="fn">declare_static_shape</span>(delta.<span class="fn">sizes</span>(), <span class="cmt">/*squash_dims=*/</span>{delta.<span class="fn">dim</span>() - 1})
+      .<span class="fn">add_output</span>(delta)
+      .<span class="fn">add_input</span>(rate_c)
+      .<span class="fn">add_input</span>(jac2d)
+      .<span class="fn">build</span>();
+
+  at::native::<span class="fn">call_evolve_implicit</span>(rate_c.<span class="fn">device</span>().<span class="fn">type</span>(), iter, stoich_c, dt);
+  <span class="kw">return</span> delta;
+}</code></pre>
+    <p>The CUDA launcher uses the project's <code>gpu_mem_kernel&lt;Threads, Arity&gt;</code> helper, which hands
+      every thread a private slice of dynamic shared memory (<code>work</code>) for scratch:</p>
+    <pre><div class="filebar"><span>evolve_implicit_dispatch.cu — the CUDA launcher</span><span class="lang">CUDA C++</span></div><code><span class="fn">AT_DISPATCH_FLOATING_TYPES</span>(iter.<span class="fn">dtype</span>(), <span class="str">"call_evolve_implicit_cuda"</span>, [&amp;] {
+  <span class="kw">int</span> nspecies  = ensure_nonempty_size(stoich, 0);
+  <span class="kw">int</span> nreaction = ensure_nonempty_size(stoich, 1);
+  <span class="ty">auto</span> stoich_ptr = stoich.<span class="fn">data_ptr</span>&lt;scalar_t&gt;();
+  scalar_t inv_dt   = scalar_t(1.0 / dt);
+  <span class="kw">int</span> mem = <span class="fn">evolve_implicit_space</span>&lt;scalar_t&gt;(nspecies, nreaction);
+
+  native::<span class="fn">gpu_mem_kernel</span>&lt;32, 3&gt;(iter, mem,
+    [=] <span class="ty">GPU_LAMBDA</span>(<span class="kw">char</span>* <span class="kw">const</span> data[3], <span class="kw">unsigned</span> strides[3], <span class="kw">char</span>* work) {
+      <span class="ty">auto</span> delta = <span class="kw">reinterpret_cast</span>&lt;scalar_t*&gt;(data[0] + strides[0]);
+      <span class="ty">auto</span> rate  = <span class="kw">reinterpret_cast</span>&lt;scalar_t*&gt;(data[1] + strides[1]);
+      <span class="ty">auto</span> jac   = <span class="kw">reinterpret_cast</span>&lt;scalar_t*&gt;(data[2] + strides[2]);
+      <span class="fn">evolve_implicit_cell</span>(delta, rate, jac, stoich_ptr,
+                           nspecies, nreaction, inv_dt, work);
+    });
+});</code></pre>
+
+    <h3 id="impl-cell">5.3 The per-cell kernel</h3>
+    <p>This is the heart. Per cell: build <code>A</code> and the right-hand side <code>sr</code> from the shared
+      constant <code>stoich</code>, the cell's <code>jac</code> and <code>rate</code>; then solve. We reuse the
+      codebase's tiny dense primitives <code>mmdot</code> (matrix·matrix) and <code>mvdot</code> (matrix·vector).</p>
+    <pre><div class="filebar"><span>evolve_implicit_impl.h — evolve_implicit_cell</span><span class="lang">C++ (host+device)</span></div><code><span class="kw">template</span> &lt;<span class="kw">typename</span> T&gt;
+<span class="ty">DISPATCH_MACRO</span> <span class="kw">void</span> <span class="fn">evolve_implicit_cell</span>(T* delta, <span class="kw">const</span> T* rate, <span class="kw">const</span> T* jac,
+                                         <span class="kw">const</span> T* stoich, <span class="kw">int</span> nspecies,
+                                         <span class="kw">int</span> nreaction, T inv_dt, <span class="kw">char</span>* work) {
+  <span class="kw">char</span>* cur = work;
+  T* A   = <span class="fn">alloc_from</span>&lt;T&gt;(cur, nspecies * nspecies);  <span class="cmt">// kept for the singular fallback</span>
+  T* Alu = <span class="fn">alloc_from</span>&lt;T&gt;(cur, nspecies * nspecies);  <span class="cmt">// destroyed by the LU solve</span>
+  T* sr  = <span class="fn">alloc_from</span>&lt;T&gt;(cur, nspecies);             <span class="cmt">// rhs, kept</span>
+  T* x   = <span class="fn">alloc_from</span>&lt;T&gt;(cur, nspecies);             <span class="cmt">// rhs → solution</span>
+  <span class="kw">char</span>* pw = cur;                                   <span class="cmt">// remaining = psolve workspace</span>
+
+  <span class="cmt">// A = S·J  (then turned into I/dt − S·J below);   sr = S·rate</span>
+  <span class="fn">mmdot</span>(A, stoich, jac, nspecies, nreaction, nspecies);
+  <span class="fn">mvdot</span>(sr, stoich, rate, nspecies, nreaction);
+  <span class="kw">for</span> (<span class="kw">int</span> i = 0; i &lt; nspecies; ++i)
+    <span class="kw">for</span> (<span class="kw">int</span> k = 0; k &lt; nspecies; ++k)
+      A[i*nspecies + k] = (i == k ? inv_dt : T(0)) - A[i*nspecies + k];
+
+  <span class="cmt">// primary path: dense LU with partial pivoting on a destroyable copy</span>
+  <span class="kw">for</span> (<span class="kw">int</span> t = 0; t &lt; nspecies*nspecies; ++t) Alu[t] = A[t];
+  <span class="kw">for</span> (<span class="kw">int</span> t = 0; t &lt; nspecies; ++t)          x[t]  = sr[t];
+
+  <span class="kw">if</span> (!<span class="fn">dsolve_lu</span>(Alu, x, nspecies)) {
+    <span class="cmt">// rare singular cell: minimum-norm least-squares via pseudo-inverse,</span>
+    <span class="cmt">// matching the original linalg_lstsq fallback — but per cell, no full-batch SVD.</span>
+    <span class="kw">for</span> (<span class="kw">int</span> t = 0; t &lt; nspecies; ++t) x[t] = sr[t];
+    <span class="fn">psolve</span>(x, A, nspecies, pw);
+  }
+  <span class="kw">for</span> (<span class="kw">int</span> t = 0; t &lt; nspecies; ++t) delta[t] = x[t];
+}</code></pre>
+    <div class="box sci"><span class="tag">Reading the indexing</span>
+      <p>Everything is row-major and flat. <code>stoich[i*nreaction + r]</code> is S(species&nbsp;i, reaction&nbsp;r);
+        <code>jac[r*nspecies + k]</code> is J(reaction&nbsp;r, species&nbsp;k). The product
+        <code>A(i,k)=Σ_r S(i,r)·J(r,k)</code> is exactly <code>mmdot</code>. Subtracting from <code>I/dt</code>
+        is a single diagonal touch. This is the entire "GEMM" — done by one thread, in scratch, for its one cell.</p>
+    </div>
+
+    <h3 id="impl-solve">5.4 The solver: dsolve_lu</h3>
+    <p>For an 8×8 dense system that the <code>I/dt</code> term keeps well-conditioned, the right solver is the
+      simplest stable one: <b>Gaussian elimination with partial pivoting</b> — the same algorithm cuBLAS
+      <code>getrf</code>/<code>getrs</code> use, so results match to rounding.</p>
+    <pre><div class="filebar"><span>math/core.h — dsolve_lu (new)</span><span class="lang">C++ (host+device)</span></div><code><span class="kw">template</span> &lt;<span class="kw">typename</span> T&gt;
+<span class="ty">DISPATCH_MACRO</span> <span class="kw">bool</span> <span class="fn">dsolve_lu</span>(T* A, T* b, <span class="kw">int</span> n) {        <span class="cmt">// A,b destroyed; b ← solution</span>
+  <span class="kw">for</span> (<span class="kw">int</span> k = 0; k &lt; n; ++k) {
+    <span class="kw">int</span> piv = k; T maxv = <span class="fn">fabs</span>(A[k*n + k]);          <span class="cmt">// partial pivot: largest |col|</span>
+    <span class="kw">for</span> (<span class="kw">int</span> i = k+1; i &lt; n; ++i) {
+      T v = <span class="fn">fabs</span>(A[i*n + k]); <span class="kw">if</span> (v &gt; maxv) { maxv = v; piv = i; }
+    }
+    <span class="kw">if</span> (maxv == 0.0) <span class="kw">return</span> <span class="kw">false</span>;                 <span class="cmt">// exactly singular → caller falls back</span>
+    <span class="kw">if</span> (piv != k) { <span class="cmt">/* swap rows piv,k in A and b */</span> }
+    T akk = A[k*n + k];
+    <span class="kw">for</span> (<span class="kw">int</span> i = k+1; i &lt; n; ++i) {              <span class="cmt">// eliminate below pivot</span>
+      T f = A[i*n + k] / akk;
+      <span class="kw">for</span> (<span class="kw">int</span> j = k+1; j &lt; n; ++j) A[i*n + j] -= f * A[k*n + j];
+      b[i] -= f * b[k];
+    }
+  }
+  <span class="kw">for</span> (<span class="kw">int</span> i = n-1; i &gt;= 0; --i) {                 <span class="cmt">// back substitution</span>
+    T s = b[i];
+    <span class="kw">for</span> (<span class="kw">int</span> j = i+1; j &lt; n; ++j) s -= A[i*n + j] * b[j];
+    b[i] = s / A[i*n + i];
+  }
+  <span class="kw">return</span> <span class="kw">true</span>;
+}</code></pre>
+    <div class="box note"><span class="tag">Why an exact-zero singularity test</span>
+      <p>cuBLAS <code>getrf</code> reports failure only on an <em>exact</em> zero pivot; near-singular matrices
+        still "succeed" (with large round-off). To match the original behavior bit-for-bit on the common path, we
+        use the same threshold. In the real run the fallback <b>never fires</b> (the <code>I/dt</code> term keeps
+        every cell non-singular), so it is purely a safety net.</p>
+    </div>
+
+    <h3 id="impl-scratch">5.5 Scratch memory: the layout and the sizing function</h3>
+    <p>Each thread needs space for <code>A</code>, the destroyable copy <code>Alu</code>, the kept rhs
+      <code>sr</code>, the working solution <code>x</code>, and — only if a cell is singular — the
+      pseudo-inverse workspace. A small sizing function carves it deterministically (matching the existing
+      <code>equilibrate_*_space</code> convention):</p>
+    <pre><div class="filebar"><span>evolve_implicit_impl.h — evolve_implicit_space</span><span class="lang">C++</span></div><code><span class="kw">template</span> &lt;<span class="kw">typename</span> T&gt;
+size_t <span class="fn">evolve_implicit_space</span>(<span class="kw">int</span> nspecies, <span class="kw">int</span> nreaction) {
+  size_t bytes = 0;
+  <span class="ty">auto</span> bump = [&amp;](size_t align, size_t nb){ bytes = <span class="fn">align_up</span>(bytes, align) + nb; };
+  <span class="fn">bump</span>(<span class="kw">alignof</span>(T), nspecies*nspecies*<span class="kw">sizeof</span>(T));  <span class="cmt">// A</span>
+  <span class="fn">bump</span>(<span class="kw">alignof</span>(T), nspecies*nspecies*<span class="kw">sizeof</span>(T));  <span class="cmt">// Alu</span>
+  <span class="fn">bump</span>(<span class="kw">alignof</span>(T), nspecies*<span class="kw">sizeof</span>(T));            <span class="cmt">// sr</span>
+  <span class="fn">bump</span>(<span class="kw">alignof</span>(T), nspecies*<span class="kw">sizeof</span>(T));            <span class="cmt">// x</span>
+  <span class="kw">return</span> bytes + <span class="fn">psolve_space</span>&lt;T&gt;(nspecies);         <span class="cmt">// pseudo-inverse fallback</span>
+}</code></pre>
+    <figure>
+      <svg viewBox="0 0 720 90" font-family="var(--mono)" font-size="11">
+        <text x="10" y="16" fill="#b6a791">per-thread scratch  (≈ 2.4 KB for n=8 doubles)</text>
+        <g>
+          <rect x="10"  y="26" width="140" height="40" fill="#241d16" stroke="#e4572e"/><text x="80"  y="51" text-anchor="middle" fill="#f0c9a8">A  (n²)</text>
+          <rect x="150" y="26" width="140" height="40" fill="#241d16" stroke="#b7410e"/><text x="220" y="51" text-anchor="middle" fill="#f0c9a8">Alu (n²)</text>
+          <rect x="290" y="26" width="50"  height="40" fill="#241d16" stroke="#e0a13a"/><text x="315" y="51" text-anchor="middle" fill="#f0c9a8">sr</text>
+          <rect x="340" y="26" width="50"  height="40" fill="#241d16" stroke="#e0a13a"/><text x="365" y="51" text-anchor="middle" fill="#f0c9a8">x</text>
+          <rect x="390" y="26" width="320" height="40" fill="#1b1610" stroke="#8b7c69" stroke-dasharray="4 3"/><text x="550" y="51" text-anchor="middle" fill="#8b7c69">psolve workspace (rarely touched)</text>
+        </g>
+      </svg>
+      <figcaption>Scratch layout. The dashed pseudo-inverse region is the dominant consumer and the occupancy
+        bottleneck (see §8 &amp; §9.4).</figcaption>
+    </figure>
+    <p>A <b>CPU registration</b> mirrors the launcher with <code>iter.for_each</code> and a stack buffer, calling
+      the <em>same</em> <code>evolve_implicit_cell</code> — so CPU and CUDA are guaranteed to agree, and the CPU
+      path doubles as the validation oracle.</p>
+  </section>
+
+  <!-- ============ 6 DECISIONS ============ -->
+  <section id="decisions">
+    <h2><span class="n">§6</span>The decision tree</h2>
+    <p>Several forks shaped the design. Each is a transferable judgment call.</p>
+    <figure>
+      <svg viewBox="0 0 760 360" font-family="var(--sans)" font-size="12.5">
+        <defs><marker id="c" markerWidth="9" markerHeight="9" refX="5" refY="4.5" orient="auto"><path d="M0 0 L9 4.5 L0 9 z" fill="#8b7c69"/></marker></defs>
+        <g fill="#241d16" stroke="#e4572e"><rect x="270" y="10" width="220" height="40" rx="8"/></g>
+        <text x="380" y="35" text-anchor="middle" fill="#f0c9a8">Many tiny independent systems?</text>
+
+        <path d="M380 50 L380 78" stroke="#8b7c69" marker-end="url(#c)"/>
+        <g fill="#1b1610" stroke="#b7410e"><rect x="250" y="78" width="260" height="40" rx="8"/></g>
+        <text x="380" y="103" text-anchor="middle" fill="#f0c9a8">Is the GPU already saturated by the batch?</text>
+
+        <text x="150" y="150" fill="#7bbf9e">YES — batch huge (our case)</text>
+        <path d="M300 118 L210 150" stroke="#8b7c69" marker-end="url(#c)"/>
+        <text x="600" y="150" fill="#d9595a" text-anchor="end">NO — few systems</text>
+        <path d="M455 118 L560 150" stroke="#8b7c69" marker-end="url(#c)"/>
+
+        <g fill="#1b1610" stroke="#7bbf9e"><rect x="40" y="160" width="300" height="44" rx="8"/></g>
+        <text x="190" y="180" text-anchor="middle" fill="#d9cdbb">1 thread / system,</text>
+        <text x="190" y="197" text-anchor="middle" fill="#d9cdbb">serial solve in scratch  ✓ chosen</text>
+
+        <g fill="#1b1610" stroke="#d9595a"><rect x="430" y="160" width="300" height="44" rx="8"/></g>
+        <text x="580" y="180" text-anchor="middle" fill="#d9cdbb">parallelize within a system</text>
+        <text x="580" y="197" text-anchor="middle" fill="#8b7c69">(PCR / cooperative) — backfires here</text>
+
+        <path d="M190 204 L190 232" stroke="#8b7c69" marker-end="url(#c)"/>
+        <g fill="#241d16" stroke="#e0a13a"><rect x="40" y="232" width="300" height="40" rx="8"/></g>
+        <text x="190" y="257" text-anchor="middle" fill="#f0c9a8">Well-conditioned? (I/dt term)</text>
+        <path d="M120 272 L120 300" stroke="#8b7c69" marker-end="url(#c)"/>
+        <path d="M260 272 L260 300" stroke="#8b7c69" marker-end="url(#c)"/>
+        <g fill="#1b1610" stroke="#7bbf9e"><rect x="30" y="300" width="180" height="40" rx="8"/></g>
+        <text x="120" y="325" text-anchor="middle" fill="#d9cdbb">GE + partial pivot ✓</text>
+        <g fill="#1b1610" stroke="#8b7c69"><rect x="220" y="300" width="200" height="40" rx="8"/></g>
+        <text x="320" y="320" text-anchor="middle" fill="#d9cdbb">singular? → psolve</text>
+        <text x="320" y="335" text-anchor="middle" fill="#8b7c69" font-size="10">(pinv = min-norm lstsq)</text>
+      </svg>
+      <figcaption>The decision tree. The right branch is a real cautionary tale — see the box below.</figcaption>
+    </figure>
+    <div class="grid2">
+      <div class="box pitfall"><span class="tag">Cautionary tale — PCR backfired</span>
+        <p>An earlier sibling effort (the fluid solver) tried <b>Parallel Cyclic Reduction</b> to parallelize
+          <em>inside</em> each system. On a small grid it was 2.7× faster; at production scale it was <b>2.35×
+          slower</b>. Reason: when you already have millions of independent systems, the GPU is saturated by the
+          simple "one-thread-each" map. PCR does ~7× more total work (O(N log N) vs O(N)) to win latency you no
+          longer need. <b>Match the parallelism you add to the parallelism you lack.</b></p></div>
+      <div class="box insight"><span class="tag">Bit-close, not bit-exact</span>
+        <p>There is no way to reorder a matrix solve and keep every bit (floating-point is non-associative). We
+          targeted <b>bit-close</b> (~1e-11 relative) and validated rigorously, rather than chasing an impossible
+          bit-exact goal. Knowing which guarantee is achievable — and acceptable — is part of the design.</p></div>
+    </div>
+    <h4>Other forks</h4>
+    <ul>
+      <li><b>psolve (pinv) vs. Tikhonov for the singular fallback.</b> psolve reproduces the original
+        <code>lstsq</code> minimum-norm semantics exactly; Tikhonov would be cheaper on scratch. Since the
+        fallback never fires in this run, correctness-fidelity won — but it costs occupancy (§9.4).</li>
+      <li><b>Unify CPU+CUDA on one cell function vs. keep torch on CPU.</b> Unifying gives a single source of
+        truth and a free oracle; the small CPU numeric shift is covered by the test suite. Chosen.</li>
+      <li><b>Out-of-line vs. inline definition.</b> Forced by the ABI saga in §10 — a decision that looks like
+        style but is really about which binary a symbol lands in.</li>
+    </ul>
+  </section>
+
+  <!-- ============ 7 VALIDATION ============ -->
+  <section id="validation">
+    <h2><span class="n">§7</span>Validation: a correctness ladder</h2>
+    <p>Performance work earns trust only with proof it didn't change the answer. Five rungs, cheap to expensive:</p>
+    <ol>
+      <li><b>Unit tests</b> — <code>test_kinetics</code> (the <code>evolve_implicit</code> case): pass on
+        cpu/cuda × float/double.</li>
+      <li><b>CPU ≡ CUDA</b> — same inputs through both registrations agree to <b>~1e-17</b> (machine epsilon):
+        proves determinism and a race-free kernel.</li>
+      <li><b>Fused ≡ original formula</b> — compare against a literal <code>linalg_solve(I/dt−S·J, S·r)</code> on
+        random prod-shaped inputs: <b>~1e-11 relative</b> (GE vs cuBLAS-LU rounding). This is the key numeric check.</li>
+      <li><b>Stiff chemistry end-to-end</b> — the Chapman-cycle time-marching test (24 cases incl. reversible
+        reactions, which stress conditioning) converges to identical final states.</li>
+      <li><b>Full simulation</b> — a capped Jupiter CRM run completes with no NaNs, mass conserved, energy rising
+        from the prescribed heating; deterministic across repeats.</li>
+    </ol>
+    <div class="box warn"><span class="tag">A subtlety worth stating</span>
+      <p>The driver adds an <em>unseeded</em> random perturbation to the initial wind field, so absolute
+        mass/energy cannot bit-match a previous run regardless of code changes. That is why rung 3 (a controlled
+        comparison against the original formula on identical inputs) is the load-bearing numeric test — not
+        "diff the run logs."</p>
+    </div>
+  </section>
+
+  <!-- ============ 8 RESULTS ============ -->
+  <section id="results">
+    <h2><span class="n">§8</span>Results, examined</h2>
+    <p>Both profiles span init + 10 cycles. After the change, the chemistry GEMM and batched LU are <b>absent</b>
+      from the timeline, replaced by one fused kernel:</p>
+    <table>
+      <thead><tr><th>Region</th><th class="num">Before</th><th class="num">After</th><th>Note</th></tr></thead>
+      <tbody>
+        <tr><td>Init (pseudo-adiabat, batched SVD)</td><td class="num">2225 ms</td><td class="num">2228 ms</td><td>unchanged — correctly left alone (§2.2)</td></tr>
+        <tr><td>Per-cycle GPU time</td><td class="num">250.9 ms</td><td class="num">192.0 ms</td><td class="win">−23%, 1.31×</td></tr>
+        <tr><td>Implicit kinetics LA / cycle</td><td class="num">70.7 ms</td><td class="num">~17 ms</td><td class="win">~4.2×</td></tr>
+      </tbody>
+    </table>
+    <div class="box note"><span class="tag">Why the clean-room microbenchmark "only" shows 1.3×</span>
+      <p>Benchmarking the operation on a tidy contiguous tensor gives old=23&nbsp;ms, new=17.6&nbsp;ms (1.3×). The
+        real run shows ~4× because the production tensor layout triggers cuBLAS's pathological 19-launch split,
+        which the clean tensor avoids. <b>Lesson:</b> microbenchmarks can flatter the baseline; trust the in-situ
+        profile for the real verdict.</p>
+    </div>
+    <div class="box insight"><span class="tag">Headroom: the kernel is occupancy-limited</span>
+      <p>17&nbsp;ms is far above the ~0.6&nbsp;ms memory-bound floor for this data volume. The cause is the scratch:
+        ~2.4&nbsp;KB/thread × 32 threads/block ≈ 78&nbsp;KB shared/block caps occupancy near 5%. The biggest lever
+        left is shrinking per-thread scratch — chiefly the rarely-used pseudo-inverse workspace — to let far more
+        warps hide latency. A clear, deliberate follow-up (see §9.4).</p>
+    </div>
+  </section>
+
+  <!-- ============ 9 GENERALIZE ============ -->
+  <section id="generalize">
+    <h2><span class="n">§9</span>Generalizing the technique</h2>
+    <p>This pattern — call it <b>"batched-tiny → fused per-element kernel"</b> — recurs across scientific GPU
+      codes far beyond chemistry. Here is the reusable form.</p>
+    <h4>The recipe</h4>
+    <ol>
+      <li><b>Recognize the shape.</b> Profile shows time in batched GEMM / batched LU / batched SVD with a
+        <em>huge batch</em> and <em>tiny per-element matrices</em>. A tell-tale sign: a library op fragmenting
+        into many launches (the grid-Z cap), or low occupancy / low arithmetic intensity in <code>ncu</code>.</li>
+      <li><b>Confirm independence.</b> Each element's computation must not depend on its neighbors (a map). If
+        there's coupling, this still works per <em>group</em> but needs care.</li>
+      <li><b>Write one device function</b> that does the whole per-element computation in scratch — assemble,
+        transform, solve — with no global intermediates. Make it <code>__host__ __device__</code> so a CPU
+        registration shares the code.</li>
+      <li><b>Launch one thread (or small cooperative group) per element.</b></li>
+      <li><b>Pick the in-thread algorithm by conditioning &amp; size</b>, not by habit (GE for small/dominant;
+        a fallback for the rare degenerate case).</li>
+      <li><b>Validate on the correctness ladder</b> (§7); accept bit-close.</li>
+    </ol>
+
+    <h3 id="assumptions">9.1 Assumptions that must hold</h3>
+    <ul>
+      <li><b>Many elements</b> — enough to fill the GPU (tens of thousands+). With few elements, see §9.2.</li>
+      <li><b>Small per-element state</b> — it must fit in registers/scratch (roughly ≤ a few dozen × a few dozen).
+        Beyond that, scratch pressure destroys occupancy and a library may win again.</li>
+      <li><b>A shared, constant operand is a bonus</b> — here <code>stoich</code> is the same for every cell, so
+        it streams from cache, not per-cell memory.</li>
+      <li><b>Uniform work</b> — if some elements need wildly more work (data-dependent iteration counts), warp
+        divergence erodes the gain.</li>
+    </ul>
+
+    <h3 id="winlose">9.2 When it wins, when it loses</h3>
+    <table>
+      <thead><tr><th>Situation</th><th>Verdict</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>10⁵–10⁷ tiny independent solves</td><td class="win">big win</td><td>map saturates the GPU; no library overhead; no global intermediates</td></tr>
+        <tr><td>A few large dense solves</td><td class="lose">use the library</td><td>cuBLAS/cuSOLVER tiling shines; a per-thread serial solve would be glacial</td></tr>
+        <tr><td>Few systems, each large &amp; latency-critical</td><td>parallelize <em>within</em></td><td>cooperative / PCR-style — the only time intra-system parallelism pays</td></tr>
+        <tr><td>Per-element matrices &gt; ~32×32</td><td class="lose">reconsider</td><td>scratch/occupancy collapses; revisit batched library or a blocked scheme</td></tr>
+        <tr><td>Strong element-to-element coupling</td><td>group, don't map</td><td>it's a stencil/graph problem, not a map</td></tr>
+      </tbody>
+    </table>
+    <div class="box pitfall"><span class="tag">The trap to internalize</span>
+      <p>"More parallelism is always better" is false. PCR added intra-system parallelism the workload didn't
+        need and lost 2.35×. The question is never "can I parallelize this further?" but "<b>is the GPU already
+        full?</b>" If yes, reduce work, don't add it.</p>
+    </div>
+
+    <h3 id="perfmodel">9.3 A back-of-envelope performance model</h3>
+    <p>Predict before you optimize:</p>
+    <ul>
+      <li><b>Memory floor</b> = bytes touched ÷ bandwidth. Here ≈ (read jac 762&nbsp;MB + rate 95&nbsp;MB + write
+        Δ 76&nbsp;MB) ÷ ~1.5&nbsp;TB/s ≈ <b>0.6&nbsp;ms</b>. That is the best achievable; 17&nbsp;ms means we're
+        ~28× off the floor and the lever is occupancy, not arithmetic.</li>
+      <li><b>Compute floor</b> = FLOPs ÷ FP64 rate. ~1.4 GFLOP ÷ tens of TFLOP/s ≈ tens of µs — negligible. So
+        this kernel is <b>memory/occupancy bound</b>, never compute bound. Optimize accordingly.</li>
+      <li><b>Occupancy gate</b> = limited by registers <em>and</em> shared memory per thread. If a scratch-heavy
+        kernel is far from its memory floor, shrink scratch first.</li>
+    </ul>
+
+    <h3 id="limits">9.4 Limitations &amp; honest caveats</h3>
+    <ul>
+      <li><b>Not bit-exact</b> — acceptable here, possibly not for a regression suite that hashes outputs.</li>
+      <li><b>Occupancy-limited as written</b> — the pinv fallback workspace inflates per-thread scratch to ~78&nbsp;KB/block.
+        Dropping it from the hot path (Tikhonov fallback, or bounded local arrays + more threads/block) is the
+        next several-fold win, at the cost of changing rare-singular semantics.</li>
+      <li><b>Hard-coded smallness</b> — the approach silently assumes the per-element matrix stays tiny. If a
+        future config adds many species, revisit the scratch budget and the GE choice.</li>
+      <li><b>Maintenance cost</b> — you now own a numerical kernel that a library used to own. Worth it only when
+        the speed-up is real and the math is stable (it is here).</li>
+    </ul>
+  </section>
+
+  <!-- ============ 10 BUILD CAVEAT ============ -->
+  <section id="caveat">
+    <h2><span class="n">§10</span>The build caveat: a Torch / AVX / ABI field guide</h2>
+    <p>The optimization was the easy half. Getting the rebuilt extension to <em>import</em> exposed a deep,
+      instructive trap in mixed C++/CUDA/PyTorch packaging. This chapter is a standalone tutorial: even if you
+      never touch chemistry, you will meet this.</p>
+    <div class="box pitfall"><span class="tag">The symptom</span>
+      <pre style="margin:6px 0"><code>ImportError: …/kintera.cpython-311-x86_64-linux-gnu.so: undefined symbol:
+  _ZN2at6native16DispatchStubImpl12get_call_ptrEN3c1010DeviceTypeEPv</code></pre>
+      <p>The module compiled and linked fine, then failed at <code>import</code> on a missing PyTorch symbol —
+        one that demonstrably <em>exists</em> in the installed <code>libtorch_cpu.so</code>.</p>
+    </div>
+
+    <h3 id="abi">10.1 First principles: what an ABI is, and name mangling</h3>
+    <p>The <b>API</b> is the source-level contract (function names, signatures). The <b>ABI</b> (Application
+      Binary Interface) is the <em>binary</em> contract: how names are encoded into symbols, how arguments are
+      passed, how structs are laid out. Two object files link only if their ABIs agree.</p>
+    <p>C++ encodes types into symbol names — <b>name mangling</b> — so overloads stay distinct. Decode with
+      <code>c++filt</code>:</p>
+    <pre><code>_ZN2at6native16DispatchStubImpl12get_call_ptrEN3c1010DeviceTypeEPv
+   └─ at::native::DispatchStubImpl::get_call_ptr(c10::DeviceType, void*)        <span class="cmt">// 2 args</span>
+
+_ZN2at6native16DispatchStubImpl12get_call_ptrEN3c1010DeviceTypeEPvS4_S4_
+   └─ at::native::DispatchStubImpl::get_call_ptr(c10::DeviceType, void*, void*, void*)  <span class="cmt">// 4 args</span></code></pre>
+    <div class="box insight"><span class="tag">The whole bug in one observation</span>
+      <p>The same function name <code>get_call_ptr</code> exists with <b>two different arities</b>. The module
+        asked the linker for the <b>2-argument</b> version; <code>libtorch_cpu.so</code> only provides the
+        <b>4-argument</b> version. Different mangled names ⇒ "undefined symbol." The question becomes: <em>why did
+        two parts of the same build disagree on how many arguments this function takes?</em></p>
+    </div>
+
+    <h3 id="dispatch">10.2 The mechanism: ATen's DispatchStub</h3>
+    <p>PyTorch routes a backend-agnostic op to a CPU or CUDA kernel via a <code>DispatchStub</code>. Calling the
+      stub invokes a templated, header-inlined <code>operator()</code> that calls into
+      <code>DispatchStubImpl::get_call_ptr</code> to fetch the right function pointer. <b>Our new code uses this
+      mechanism</b> (the <code>call_evolve_implicit</code> stub from §5.1). So any translation unit that calls our
+      stub emits a reference to <code>get_call_ptr</code>.</p>
+
+    <h3 id="avx">10.3 Torch &amp; AVX: runtime CPU-feature dispatch</h3>
+    <p>PyTorch ships <em>one</em> binary that runs on many CPUs, so it compiles hot CPU kernels several times — a
+      baseline build, an AVX2 build, an AVX-512 build — and picks the best at <em>runtime</em>. That choice is the
+      extra arguments to <code>get_call_ptr</code>: one function pointer per compiled capability. The arity is
+      gated by preprocessor macros in the very header you compile against:</p>
+    <pre><div class="filebar"><span>ATen/native/DispatchStub.h (paraphrased)</span><span class="lang">C++ header</span></div><code>  <span class="kw">void</span>* <span class="fn">get_call_ptr</span>(
+      c10::DeviceType device_type
+      , <span class="kw">void</span>* DEFAULT
+  <span class="cmt">#ifdef HAVE_AVX512_CPU_DEFINITION</span>
+      , <span class="kw">void</span>* AVX512
+  <span class="cmt">#endif</span>
+  <span class="cmt">#ifdef HAVE_AVX2_CPU_DEFINITION</span>
+      , <span class="kw">void</span>* AVX2
+  <span class="cmt">#endif</span>
+      <span class="cmt">/* … VSX, ZVECTOR, SVE256 … */</span> );</code></pre>
+    <div class="box note"><span class="tag">So the arity is configuration, not code</span>
+      <p>With both AVX macros defined ⇒ <b>4 args</b> (DEFAULT + AVX512 + AVX2). With neither ⇒ <b>2 args</b>. The
+        installed <code>libtorch_cpu.so</code> (torch 2.10+cu128) was built <em>with</em> them ⇒ it exports the
+        4-arg symbol. Any consumer that includes this header <b>must define the same macros</b> or it will
+        reference a phantom 2-arg symbol.</p>
+    </div>
+
+    <h3 id="leak">10.4 How the symbol leaked into the Python module</h3>
+    <p>This package builds in two stages with two systems — and they disagreed:</p>
+    <ul>
+      <li>The C++ <b>libraries</b> are built by <b>CMake</b>. CMake's <code>find_package(Torch)</code> (via Caffe2)
+        propagates <code>-DHAVE_AVX512_CPU_DEFINITION -DHAVE_AVX2_CPU_DEFINITION</code> automatically ⇒ the libs
+        correctly reference the 4-arg symbol.</li>
+      <li>The pybind <b>module</b> (<code>python/csrc/*.cpp</code>) is built by <b>setuptools</b> via
+        <code>torch.utils.cpp_extension</code>, which <em>did not</em> pass those macros ⇒ it referenced the 2-arg
+        symbol.</li>
+    </ul>
+    <p>But why did the module reference <code>get_call_ptr</code> <em>at all</em>? Because <code>evolve_implicit</code>
+      was an <b>inline</b> function in a header, and the binding takes its address:</p>
+    <pre><code>m.<span class="fn">def</span>(<span class="str">"evolve_implicit"</span>, &amp;kintera::evolve_implicit);   <span class="cmt">// forces the inline body into kintera.o</span></code></pre>
+    <p>Taking the address of an inline function forces the compiler to emit its body <em>in that translation
+      unit</em>. That body calls the dispatch stub → emits a <code>get_call_ptr</code> reference → into the
+      module, compiled without the AVX macros → 2-arg → unresolved. A symbol probe confirmed it precisely:</p>
+    <pre><code>$ <span class="kw">for</span> o <span class="kw">in</span> build/.../python/csrc/*.o; <span class="kw">do</span> echo "$o: $(nm $o | grep -c get_call_ptr)"; <span class="kw">done</span>
+  kintera.o:        <span class="num">1</span>      <span class="cmt">← the only object referencing it — and only via the inline body</span>
+  pykinetics.o:     <span class="num">0</span>
+  pythermo.o:       <span class="num">0</span>   …</code></pre>
+    <div class="box insight"><span class="tag">Root cause, stated plainly</span>
+      <p>The caveat was <b>introduced by this change</b>: moving <code>evolve_implicit</code> onto the DispatchStub
+        mechanism, while it lived <em>inline</em> in a header consumed by the module, dragged a macro-gated Torch
+        symbol into a binary built without the matching macros.</p>
+    </div>
+
+    <h3 id="debug">10.5 The debugging trail (and the dead ends)</h3>
+    <p>Worth walking through, because each dead end teaches a packaging fact:</p>
+    <ol>
+      <li><b>Read the symbol, don't guess.</b> <code>nm -D --defined-only libtorch_cpu.so | c++filt | grep get_call_ptr</code>
+        showed torch defines only the 4-arg; <code>nm -D module.so</code> showed it wants the 2-arg. The mismatch
+        is now concrete, not mysterious.</li>
+      <li><b>Dead end — "stale object files."</b> Hypothesis: old <code>.o</code> from a previous torch. Forced a
+        clean recompile of all <code>csrc</code> → still 2-arg. So it's not staleness; it's the compile
+        <em>flags</em>.</li>
+      <li><b>Found the gate.</b> Inspecting <code>DispatchStub.h</code> revealed the <code>#ifdef HAVE_AVX…</code>
+        arity switch. Now the fix space is clear: make the module's macros match torch's.</li>
+      <li><b>Workaround — inject the macros.</b> <code>CFLAGS="-DHAVE_AVX512_CPU_DEFINITION -DHAVE_AVX2_CPU_DEFINITION"</code>.
+        It works, but it's machine-specific (wrong on a non-AVX-512 host) and edits the build env.</li>
+      <li><b>Dead end — distutils didn't rebuild.</b> <code>setup.py build_ext</code> skipped recompiling because
+        <b>distutils tracks <code>.cpp</code> timestamps, not header dependencies</b>. Editing only the header
+        changed nothing. You must <code>touch</code> the <code>.cpp</code> or delete the output <code>.so</code>
+        and <code>.o</code> to force it. (A genuinely surprising, very common footgun.)</li>
+      <li><b>The clean fix.</b> Rather than patch flags, remove the <em>need</em> for them — see §10.6.</li>
+    </ol>
+    <div class="box warn"><span class="tag">Tooling reflexes worth keeping</span>
+      <p><span class="kbd">nm -D file.so</span> list dynamic symbols · <span class="kbd">nm … | c++filt</span> demangle ·
+        <span class="kbd">U</span> = undefined (needed) · <span class="kbd">T</span> = defined (provided) ·
+        <span class="kbd">ldd</span> shared-lib resolution · <span class="kbd">readelf -d</span> rpath/needed.
+        When a dynamic-link error appears, <b>read the symbols</b>; the answer is almost always literally printed.</p>
+    </div>
+
+    <h3 id="thefix">10.6 The fix: move the definition out-of-line</h3>
+    <p>The leak happened because the dispatch-calling code was compiled <em>into the module</em>. So compile it
+      into the <b>library</b> instead. We changed <code>evolve_implicit</code> from an inline header function to a
+      declaration + an out-of-line definition in <code>evolve_implicit_dispatch.cpp</code> (which the CMake build
+      compiles <em>with</em> the AVX macros). Now the module only references the high-level
+      <code>evolve_implicit</code> symbol — exported by the library — and the macro-gated
+      <code>get_call_ptr</code> reference never enters the module:</p>
+    <pre><div class="filebar"><span>evolve_implicit.hpp — header now declares only</span><span class="lang">C++</span></div><code><span class="cmt">// Defined out-of-line in evolve_implicit_dispatch.cpp (NOT inline): it calls a</span>
+<span class="cmt">// DECLARE_DISPATCH stub whose get_call_ptr arity is gated by torch's AVX macros.</span>
+<span class="cmt">// Keeping the definition in the library (built WITH those macros via Caffe2)</span>
+<span class="cmt">// keeps that reference out of downstream consumers built without them.</span>
+torch::Tensor <span class="fn">evolve_implicit</span>(torch::Tensor rate, torch::Tensor stoich,
+                              torch::Tensor jacobian, <span class="kw">double</span> dt);</code></pre>
+    <p>Verification — the module's reference count went to <b>zero</b>, and it imports built with the unmodified
+      <code>setup.py</code> (no macro injection):</p>
+    <pre><code>$ nm -D module.so | grep -c get_call_ptr
+  <span class="num">0</span>      <span class="cmt">← nothing to resolve ⇒ AVX macro arity is now irrelevant to the module</span></code></pre>
+    <div class="box insight"><span class="tag">The durable principle</span>
+      <p><b>Macro-gated or backend-specific symbols belong in the binary that's compiled with the matching
+        flags.</b> Keep them out of headers that downstream, differently-configured consumers compile. Inline +
+        address-of is the classic way to accidentally smear such a symbol across binaries.</p>
+    </div>
+
+    <h3 id="packaging">10.7 A general guide: building packages on top of Torch</h3>
+    <ul>
+      <li><b>Prefer one build system.</b> Mixing CMake (libs) and setuptools (extension) means two places to keep
+        torch flags consistent. If you must mix, deliberately propagate the same defines, std version, and ABI
+        flags to both (e.g. <code>_GLIBCXX_USE_CXX11_ABI</code>, the AVX macros, <code>-std=c++17</code>).</li>
+      <li><b>Let the library own torch-coupled code.</b> Header-only code that touches ATen internals (dispatch,
+        TensorIterator guts) is fragile across consumers. Expose a narrow, stable, out-of-line API; keep torch
+        internals behind the library boundary.</li>
+      <li><b>Match the ABI of the torch you link.</b> The pre-CXX11 vs CXX11 string ABI and the CPU-capability
+        macros must match the installed wheel. Read them from <code>torch.__config__.show()</code> /
+        <code>torch.utils.cpp_extension</code> rather than hard-coding.</li>
+      <li><b>Know your build's dependency tracking.</b> distutils/setuptools track source timestamps, not headers.
+        CMake with <code>CONFIGURE_DEPENDS</code> tracks files but globs need reconfigure. When a header change
+        "does nothing," force the rebuild.</li>
+      <li><b>Mind <code>rpath</code> and editable installs.</b> A module's <code>$ORIGIN/lib</code> rpath must point
+        at the actual libs; a failed <code>pip install</code> can leave you in a half-uninstalled or
+        editable-redirected state where <code>import</code> resolves somewhere surprising. Verify with
+        <code>python -c "import pkg, os; print(os.path.dirname(pkg.__file__))"</code>.</li>
+      <li><b>Reach for <code>nm</code>/<code>c++filt</code>/<code>ldd</code> early.</b> "undefined symbol" at import
+        is a dynamic-link fact, not a Python bug — the binaries will tell you exactly what disagrees.</li>
+    </ul>
+  </section>
+
+  <!-- ============ 11 RELATED ============ -->
+  <section id="related">
+    <h2><span class="n">§11</span>Related topics worth your time</h2>
+    <div class="grid2">
+      <div class="box note"><span class="tag">Occupancy, registers &amp; shared memory</span>
+        <p>The ceiling on resident warps per SM, set by registers/thread and shared-mem/block. Latency-bound
+          kernels live or die by it. Tools: <code>ncu</code>'s occupancy section, the CUDA occupancy calculator.
+          Our §8 headroom is entirely an occupancy story.</p></div>
+      <div class="box note"><span class="tag">Opt-in dynamic shared memory</span>
+        <p>Past ~48&nbsp;KB/block you must opt in via <code>cudaFuncSetAttribute(MaxDynamicSharedMemorySize)</code>.
+          The codebase's <code>gpu_mem_kernel</code> handles this; it's why 78&nbsp;KB/block even runs on the 5090.</p></div>
+      <div class="box note"><span class="tag">CUDA Graphs for launch-bound loops</span>
+        <p>When per-step time is dominated by many small launches + syncs (the broader Jupiter CRM picture), a CUDA
+          Graph records the launch sequence once and replays it, cutting CPU-side launch overhead. Complementary to
+          fusion.</p></div>
+      <div class="box note"><span class="tag">Numerical stability: GE vs SVD</span>
+        <p>Partial-pivot GE is backward-stable for well-conditioned systems; SVD/pinv is the robust choice for
+          rank-deficient ones (and gives minimum-norm solutions). Choosing per-conditioning — fast path + robust
+          fallback — is a recurring pattern.</p></div>
+      <div class="box note"><span class="tag">Batched solver libraries</span>
+        <p>cuSOLVER/cuBLAS batched APIs and MAGMA exist precisely for "many small matrices" — but they're tuned
+          for medium sizes and add host bookkeeping. For the <em>tiny</em>-and-<em>many</em> extreme, a custom
+          kernel still wins, as here.</p></div>
+      <div class="box note"><span class="tag">Companion case: the implicit fluid solver</span>
+        <p>The same fission/fusion logic was applied to the block-tridiagonal "vic" solve in this codebase
+          (assemble / solve / redistribute split into per-cell kernels) — including the PCR negative result that
+          informs §9.2. Cross-reading the two makes the principles stick.</p></div>
+    </div>
+  </section>
+
+  <!-- ============ 12 GLOSSARY ============ -->
+  <section id="glossary">
+    <h2><span class="n">§12</span>Glossary</h2>
+    <table>
+      <tbody>
+        <tr><td><b>Stoichiometric matrix (S)</b></td><td>Maps reaction rates to species production/consumption.</td></tr>
+        <tr><td><b>Implicit Euler</b></td><td>Time integrator evaluating rates at the new time; stable for stiff systems.</td></tr>
+        <tr><td><b>Stiff system</b></td><td>ODE with widely separated timescales; needs implicit methods for sane step sizes.</td></tr>
+        <tr><td><b>Batched GEMM</b></td><td>Many independent matrix multiplies in one library call.</td></tr>
+        <tr><td><b>grid-Z cap</b></td><td>CUDA limit of 65,535 blocks in the z-dimension; forces batch splitting.</td></tr>
+        <tr><td><b>Kernel fusion</b></td><td>Merging several ops into one kernel to avoid global-memory round-trips.</td></tr>
+        <tr><td><b>Map pattern</b></td><td>Apply the same independent function to every element — embarrassingly parallel.</td></tr>
+        <tr><td><b>Occupancy</b></td><td>Fraction of an SM's max warps actually resident; key for hiding latency.</td></tr>
+        <tr><td><b>PCR</b></td><td>Parallel Cyclic Reduction — parallelizes <em>within</em> a tridiagonal system.</td></tr>
+        <tr><td><b>DispatchStub</b></td><td>ATen mechanism selecting a CPU/CUDA kernel at runtime by device.</td></tr>
+        <tr><td><b>ABI</b></td><td>Binary contract: symbol mangling, calling convention, struct layout.</td></tr>
+        <tr><td><b>Name mangling</b></td><td>Encoding C++ types into linker symbol names; decode with <code>c++filt</code>.</td></tr>
+        <tr><td><b>AVX capability dispatch</b></td><td>Torch compiles CPU kernels per SIMD level and picks at runtime.</td></tr>
+        <tr><td><b>rpath</b></td><td>Embedded search path a binary uses to find its shared libraries.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ============ 13 FILE MAP ============ -->
+  <section id="filemap">
+    <h2><span class="n">§13</span>File &amp; command map</h2>
+    <h4>Files changed (in <code>kintera</code>)</h4>
+    <table>
+      <thead><tr><th>File</th><th>Role</th></tr></thead>
+      <tbody>
+        <tr><td><code>src/math/core.h</code></td><td>new <code>dsolve_lu</code> (GE + partial pivot)</td></tr>
+        <tr><td><code>src/kinetics/evolve_implicit_impl.h</code></td><td>new <code>evolve_implicit_cell</code> + <code>evolve_implicit_space</code></td></tr>
+        <tr><td><code>src/kinetics/evolve_implicit_dispatch.hpp</code></td><td>the DispatchStub declaration</td></tr>
+        <tr><td><code>src/kinetics/evolve_implicit_dispatch.cpp</code></td><td>CPU launcher + out-of-line <code>evolve_implicit</code> host entry</td></tr>
+        <tr><td><code>src/kinetics/evolve_implicit_dispatch.cu</code></td><td>CUDA launcher (<code>gpu_mem_kernel</code>)</td></tr>
+        <tr><td><code>src/kinetics/evolve_implicit.hpp</code></td><td>now a declaration (was inline) — the ABI fix</td></tr>
+        <tr><td><code>src/CMakeLists.txt</code></td><td>added <code>kinetics/*.cu</code> to the CUDA glob</td></tr>
+      </tbody>
+    </table>
+    <h4>Commands that mattered</h4>
+    <pre><code><span class="cmt"># incremental library build (correct AVX macros via Caffe2)</span>
+cmake --build build --target kintera_release kintera_cuda_release -j
+
+<span class="cmt"># force the extension to actually recompile after a header-only change</span>
+touch python/csrc/kintera.cpp python/csrc/pykinetics.cpp
+python setup.py build_ext
+
+<span class="cmt"># the symbol probes that cracked the ABI mystery</span>
+nm -D libtorch_cpu.so | c++filt | grep get_call_ptr
+nm -D kintera.cpython-*.so | grep -c get_call_ptr     <span class="cmt"># goal: 0</span>
+
+<span class="cmt"># C++ correctness (run from kintera/tests, needs jupiter.yaml in cwd)</span>
+./build/tests/test_kinetics.release --gtest_filter='*evolve_implicit*'
+./build/tests/test_chapman_cycle.release</code></pre>
+  </section>
+
+  <div class="footer">
+    <p>Generated as a self-contained artifact — no external fonts, scripts, or stylesheets; open it locally and
+      the aesthetics travel with it. Theme: a Rust-inspired warm dark palette (gear &amp; rust-orange).</p>
+    <p>Companion reading in this workspace: <code>vic_solver_optimization.html</code> (the fluid-solver sibling of this story).</p>
+  </div>
+</main>
+</div>
+
+<script>
+/* lightweight scroll-spy for the sidebar TOC; no external deps */
+(function(){
+  var links = Array.prototype.slice.call(document.querySelectorAll('#toc a[href^="#"]'));
+  var map = {};
+  links.forEach(function(a){ var id=a.getAttribute('href').slice(1); var el=document.getElementById(id); if(el) map[id]=a; });
+  var ids = Object.keys(map);
+  function onScroll(){
+    var best=null, bestTop=-1e9, y=window.scrollY+120;
+    ids.forEach(function(id){
+      var el=document.getElementById(id); if(!el) return;
+      var t=el.getBoundingClientRect().top+window.scrollY;
+      if(t<=y && t>bestTop){bestTop=t;best=id;}
+    });
+    links.forEach(function(a){a.classList.remove('active');});
+    if(best && map[best]) map[best].classList.add('active');
+  }
+  document.addEventListener('scroll', onScroll, {passive:true});
+  window.addEventListener('resize', onScroll);
+  onScroll();
+})();
+</script>
+</body>
+</html>
