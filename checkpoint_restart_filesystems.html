@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Checkpoint &amp; Restart Across File Systems — A Field Guide for Distributed Simulations</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,300..900,0..100,0..1;1,9..144,300..900,0..100,0..1&family=Source+Serif+4:ital,opsz,wght@0,8..60,300..700;1,8..60,300..700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --paper: #f7f4ec; --paper-2: #efeadc; --paper-3: #e6dfca;
+  --ink: #1a1612; --ink-soft: #3d3830; --ink-faint: #7a7468;
+  --rule: #c4bba5; --rule-soft: #ddd5bc;
+  --oxblood: #9d2818; --oxblood-deep: #6e1a0e;
+  --teal: #2a6066; --teal-deep: #163c41;
+  --ochre: #b08020; --moss: #5e6f3a;
+  --code-bg: #1a1d22; --code-ink: #e8e3d4;
+  --maxw: 1020px;
+}
+*{ box-sizing: border-box; }
+html{ scroll-behavior: smooth; }
+body{
+  margin: 0; background: var(--paper); color: var(--ink);
+  font-family: 'Source Serif 4', Georgia, serif;
+  font-variation-settings: "opsz" 16;
+  font-size: 17px; line-height: 1.62;
+  -webkit-font-smoothing: antialiased;
+}
+body::before{
+  content: ""; position: fixed; inset: 0;
+  background-image: radial-gradient(rgba(80,55,20,0.03) 1px, transparent 1px);
+  background-size: 4px 4px; pointer-events: none; z-index: 1;
+  mix-blend-mode: multiply;
+}
+header, main, footer{ position: relative; z-index: 2; }
+header{
+  max-width: var(--maxw); margin: 0 auto;
+  padding: 80px 32px 56px;
+  border-bottom: 4px solid var(--ink); position: relative;
+}
+header::after{
+  content: ""; display: block; position: absolute;
+  bottom: -10px; left: 32px; right: 32px; height: 1px; background: var(--ink);
+}
+.kicker{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; letter-spacing: .28em; text-transform: uppercase;
+  color: var(--oxblood); margin-bottom: 32px;
+  display: flex; align-items: center; gap: 16px;
+}
+.kicker::before{ content: "\2B25"; color: var(--ochre); }
+.kicker::after{
+  content: ""; flex: 1; height: 2px;
+  background: linear-gradient(to right, var(--rule) 0%, var(--rule) 30%, transparent 100%);
+}
+h1{
+  font-family: 'Fraunces', serif;
+  font-variation-settings: "opsz" 144, "SOFT" 100, "WONK" 1;
+  font-weight: 500; font-size: clamp(44px, 8vw, 88px);
+  line-height: 0.94; letter-spacing: -0.025em;
+  margin: 0 0 24px; color: var(--ink);
+}
+h1 .ital{ font-style: italic; font-weight: 400; color: var(--oxblood); }
+.deck{
+  font-family: 'Source Serif 4', serif;
+  font-variation-settings: "opsz" 32;
+  font-size: 21px; font-style: italic; color: var(--ink-soft);
+  max-width: 760px; line-height: 1.45; margin-top: 20px;
+}
+.meta-row{
+  margin-top: 36px; display: flex; gap: 32px; flex-wrap: wrap;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11.5px; color: var(--ink-faint); letter-spacing: .04em;
+}
+.meta-row .m b{ color: var(--ink); font-weight: 600; }
+.toc{
+  margin-top: 48px; border: 2px solid var(--ink); background: var(--paper-2);
+  padding: 26px 30px; position: relative;
+}
+.toc::before{
+  content: "Index"; position: absolute; top: -12px; left: 24px;
+  background: var(--paper); padding: 0 10px;
+  font-family: 'Fraunces', serif; font-style: italic;
+  font-size: 16px; color: var(--ink);
+}
+.toc-grid{ display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px 36px; }
+@media (max-width: 760px){ .toc-grid{ grid-template-columns: 1fr; } }
+.toc-grid a{
+  color: var(--ink-soft); text-decoration: none;
+  font-size: 14.5px; padding: 5px 0; display: flex; gap: 14px;
+  border-bottom: 1px solid transparent; transition: all .15s;
+  font-family: 'Source Serif 4', serif;
+}
+.toc-grid a:hover{ color: var(--oxblood); border-color: var(--rule); }
+.toc-grid a .n{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; color: var(--oxblood); min-width: 30px; font-weight: 600;
+}
+main{ max-width: var(--maxw); margin: 0 auto; padding: 48px 32px 80px; }
+.part{
+  margin-top: 90px; padding-top: 48px;
+  border-top: 4px solid var(--ink); position: relative;
+}
+.part::after{
+  content: ""; position: absolute; top: 8px; left: 0; right: 0;
+  height: 1px; background: var(--ink);
+}
+.part:first-child{ margin-top: 32px; border-top: none; padding-top: 0; }
+.part:first-child::after{ display: none; }
+.part-label{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; letter-spacing: .28em; color: var(--oxblood);
+  text-transform: uppercase; margin-bottom: 12px; font-weight: 600;
+}
+.part-title{
+  font-family: 'Fraunces', serif;
+  font-variation-settings: "opsz" 96;
+  font-weight: 500; font-size: 48px; line-height: 1.0;
+  letter-spacing: -0.015em; margin: 0 0 14px; color: var(--ink);
+}
+.part-title .ital{ font-style: italic; color: var(--oxblood); font-weight: 400; }
+.part-intro{
+  color: var(--ink-soft); font-size: 18px; max-width: 720px;
+  margin-bottom: 36px; font-style: italic;
+  font-family: 'Source Serif 4', serif;
+  font-variation-settings: "opsz" 24; line-height: 1.55;
+}
+section.chapter{ margin-top: 48px; }
+h2{
+  font-family: 'Fraunces', serif;
+  font-variation-settings: "opsz" 48;
+  font-weight: 500; font-size: 30px; line-height: 1.18;
+  letter-spacing: -0.01em; margin: 0 0 14px; color: var(--ink);
+  display: flex; align-items: baseline; gap: 18px;
+}
+h2 .ch-num{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px; color: var(--oxblood); letter-spacing: .15em;
+  font-weight: 600; flex-shrink: 0;
+}
+h3{
+  font-family: 'Fraunces', serif;
+  font-variation-settings: "opsz" 32;
+  font-weight: 600; font-size: 20px; margin: 28px 0 10px;
+  color: var(--ink); letter-spacing: -0.005em;
+}
+h4{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; letter-spacing: .2em; text-transform: uppercase;
+  color: var(--teal); margin: 22px 0 8px; font-weight: 600;
+}
+p{ margin: 12px 0; }
+p code, li code, td code{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: .82em; background: var(--paper-3); color: var(--oxblood-deep);
+  padding: 1px 6px; border-radius: 2px;
+}
+ul, ol{ padding-left: 1.4em; }
+li{ margin: 6px 0; }
+ul.tight li{ margin: 3px 0; }
+ul.dash{ list-style: none; padding-left: 0; }
+ul.dash li{ position: relative; padding-left: 26px; }
+ul.dash li::before{
+  content: "\2014"; position: absolute; left: 0;
+  color: var(--oxblood); font-weight: 600;
+}
+pre{
+  background: var(--code-bg); border: 1px solid #2a2e35;
+  padding: 16px 20px; overflow-x: auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12.5px; line-height: 1.6;
+  color: var(--code-ink); margin: 18px 0;
+  position: relative; border-radius: 2px;
+}
+pre .com{ color: #7e8a78; font-style: italic; }
+pre .kw{  color: #d9b88a; }
+pre .ty{  color: #88c5b4; }
+pre .str{ color: #e09678; }
+pre .num{ color: #c8a4d8; }
+pre .fn{  color: #84b5d4; }
+pre .pp{  color: #d8b070; }
+pre::before{
+  content: attr(data-lang); position: absolute; top: 6px; right: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9.5px; letter-spacing: .18em;
+  color: #5a6258; text-transform: uppercase;
+}
+.code-caption{
+  font-family: 'Source Serif 4', serif; font-style: italic;
+  font-size: 14.5px; color: var(--ink-faint);
+  margin: -10px 0 18px; padding-left: 6px;
+}
+.callout{
+  margin: 22px 0; padding: 16px 22px;
+  border-left: 4px solid var(--teal); background: var(--paper-2);
+  font-size: 15.5px; line-height: 1.6;
+}
+.callout.warn{ border-color: var(--ochre); }
+.callout.danger{ border-color: var(--oxblood); }
+.callout.tip{ border-color: var(--moss); }
+.callout h5{
+  margin: 0 0 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px; letter-spacing: .22em; text-transform: uppercase;
+  color: var(--teal); font-weight: 700;
+}
+.callout.warn h5{ color: var(--ochre); }
+.callout.danger h5{ color: var(--oxblood); }
+.callout.tip h5{ color: var(--moss); }
+.callout p:first-child{ margin-top: 0; }
+.callout p:last-child{ margin-bottom: 0; }
+.callout pre{ margin: 8px 0 4px; }
+.tbl{ width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 14px; }
+.tbl th, .tbl td{
+  text-align: left; padding: 10px 14px; vertical-align: top;
+  border-bottom: 1px solid var(--rule);
+}
+.tbl th{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--oxblood); font-weight: 700;
+  border-bottom: 2px solid var(--oxblood);
+}
+.tbl th.r{ text-align: right; }
+.tbl tr:hover td{ background: var(--paper-2); }
+.tbl td:first-child{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px; color: var(--ink); font-weight: 600; width: 22%;
+}
+.tbl td.r{ text-align: right; font-family: 'JetBrains Mono', monospace; font-size: 12.5px; color: var(--ink-soft); }
+.tbl td.wide:first-child{ width: auto; }
+.win{ color: var(--moss); font-weight: 700; }
+.lose{ color: var(--oxblood); font-weight: 700; }
+.twocol{ display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 22px 0; }
+@media (max-width: 760px){ .twocol{ grid-template-columns: 1fr; } }
+.twocol .col{ background: var(--paper-2); border: 1px solid var(--rule); padding: 18px 20px; }
+.twocol .col h5{
+  margin: 0 0 10px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; letter-spacing: .18em; text-transform: uppercase;
+  color: var(--teal); font-weight: 700;
+}
+.twocol .col.bad h5{ color: var(--oxblood); }
+.twocol .col.good h5{ color: var(--moss); }
+.twocol .col p{ margin: 8px 0; font-size: 14.5px; }
+.diagram{
+  background: var(--paper-2); border: 1px solid var(--rule);
+  padding: 22px 24px; margin: 22px 0;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px; line-height: 1.55; color: var(--ink-soft);
+  white-space: pre; overflow-x: auto;
+}
+.pull{
+  font-family: 'Fraunces', serif;
+  font-variation-settings: "opsz" 72;
+  font-style: italic; font-weight: 400;
+  font-size: 26px; line-height: 1.32;
+  color: var(--oxblood); margin: 36px 0;
+  padding: 0 0 0 32px; border-left: 3px solid var(--oxblood);
+}
+.idea{
+  margin: 24px 0; border: 2px solid var(--ink);
+  background: var(--paper); padding: 20px 24px; position: relative;
+}
+.idea::before{
+  content: "Key idea"; position: absolute; top: -10px; left: 20px;
+  background: var(--paper); padding: 0 10px;
+  font-family: 'Fraunces', serif; font-style: italic;
+  font-size: 14px; color: var(--ink);
+}
+.idea p{ margin: 6px 0; font-size: 15.5px; }
+.idea p:first-child{ margin-top: 6px; }
+.idea p:last-child{ margin-bottom: 0; }
+.rule-sep{ height: 1px; background: var(--rule); margin: 56px 0; position: relative; }
+.rule-sep::after{
+  content: "\00A7"; position: absolute;
+  top: 50%; left: 50%; transform: translate(-50%, -50%);
+  background: var(--paper); color: var(--oxblood);
+  padding: 0 18px;
+  font-family: 'Fraunces', serif; font-style: italic; font-size: 18px;
+}
+footer{
+  max-width: var(--maxw); margin: 0 auto; padding: 56px 32px 80px;
+  border-top: 4px solid var(--ink); color: var(--ink-soft);
+  font-size: 14.5px; position: relative;
+}
+footer::after{
+  content: ""; position: absolute; top: 8px; left: 32px; right: 32px;
+  height: 1px; background: var(--ink);
+}
+footer h4{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; letter-spacing: .22em;
+  color: var(--oxblood); margin: 0 0 14px; font-weight: 700;
+}
+footer .resources{ columns: 2; column-gap: 36px; }
+@media (max-width: 680px){ footer .resources{ columns: 1; } }
+footer ul{ list-style: none; padding: 0; margin: 0; }
+footer li{ padding: 5px 0; font-size: 14px; break-inside: avoid; }
+footer li code{ color: var(--oxblood); background: transparent; padding: 0; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="kicker">HPC I/O &middot; checkpoint/restart &middot; Lustre &amp; GPFS &middot; Slurm preemption</div>
+  <h1>Checkpoint &amp; restart<br>across <span class="ital">file systems</span></h1>
+  <p class="deck">
+    A long simulation on a shared cluster is a bet against the wall-clock limit, a flaky node, and a 60-day purge. Winning the bet is less about <em>writing state</em> than about <em>publishing it atomically</em>, laying it out to match the file system's parallelism, and resuming as if nothing happened. A field guide &mdash; grounded in <code>snapy</code>'s restart path &mdash; to the concept, the implementation, the file-system tuning, and the generalization.
+  </p>
+  <div class="meta-row">
+    <span class="m"><b>System</b> snapy climate model</span>
+    <span class="m"><b>Targets</b> GPFS (Great Lakes) &middot; Lustre (Perlmutter)</span>
+    <span class="m"><b>Launch</b> torchrun + Slurm</span>
+    <span class="m"><b>Guarantee</b> bit-for-bit resume</span>
+    <span class="m"><b>Validation</b> 3 restart suites green</span>
+  </div>
+  <div class="toc">
+    <div class="toc-grid">
+      <a href="#c00"><span class="n">&sect;00</span><span>Synopsis &amp; what we shipped</span></a>
+      <a href="#c01"><span class="n">&sect;01</span><span>The problem: betting against the wall clock</span></a>
+      <a href="#c02"><span class="n">&sect;02</span><span>Anatomy of a checkpoint</span></a>
+      <a href="#c03"><span class="n">&sect;03</span><span>The file-system landscape</span></a>
+      <a href="#c04"><span class="n">&sect;04</span><span>Strategy: the five decisions</span></a>
+      <a href="#c05"><span class="n">&sect;05</span><span>Impl: file-per-rank vs. bundle</span></a>
+      <a href="#c06"><span class="n">&sect;06</span><span>Impl: atomic publish</span></a>
+      <a href="#c07"><span class="n">&sect;07</span><span>Impl: idempotent resume</span></a>
+      <a href="#c08"><span class="n">&sect;08</span><span>Per-file-system tuning</span></a>
+      <a href="#c09"><span class="n">&sect;09</span><span>Slurm orchestration &amp; auto-resubmit</span></a>
+      <a href="#c10"><span class="n">&sect;10</span><span>Common issues &amp; failure modes</span></a>
+      <a href="#c11"><span class="n">&sect;11</span><span>Debugging approaches</span></a>
+      <a href="#c12"><span class="n">&sect;12</span><span>The decision tree</span></a>
+      <a href="#c13"><span class="n">&sect;13</span><span>Generalizing the pattern</span></a>
+      <a href="#c14"><span class="n">&sect;14</span><span>Validation</span></a>
+      <a href="#c15"><span class="n">&sect;15</span><span>Glossary &amp; file map</span></a>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<!-- ===================== PART I ===================== -->
+<div class="part" id="p1">
+  <div class="part-label">Part I</div>
+  <h2 class="part-title">The <span class="ital">problem</span> &amp; the concept</h2>
+  <p class="part-intro">What state is, why it must be saved, and why the file system underneath turns a one-line feature into a design problem with three good answers and a dozen sharp edges.</p>
+
+  <section class="chapter" id="c00">
+    <h2><span class="ch-num">&sect;00</span>Synopsis &amp; what we shipped</h2>
+    <p>Running the Straka density-current case (and larger) on a Slurm cluster, we need to save state periodically so a job killed by the wall-clock limit, a preemption, or a node failure can resume from the last good point rather than from <code>t&nbsp;=&nbsp;0</code>. <code>snapy</code> already had a working restart path; the work here hardened it for <em>scale</em> and for <em>different file systems</em>.</p>
+    <table class="tbl">
+      <thead><tr><th>Change</th><th class="wide">What &amp; why</th><th>FS payoff</th></tr></thead>
+      <tbody>
+        <tr><td>combine: false</td><td>file-per-rank restart dumps &mdash; no cross-rank barrier, no serial root-rank bundling</td><td class="win">parallel on Lustre/GPFS</td></tr>
+        <tr><td>atomic publish</td><td>write to <code>.tmp</code>, then <code>rename()</code> over the destination</td><td class="win">crash-safe last good ckpt</td></tr>
+        <tr><td>per-rank resume</td><td>each rank rewrites the <code>.block&lt;N&gt;.</code> token to its own rank and loads its own file</td><td class="win">pass any one file to <code>--restart</code></td></tr>
+        <tr><td>signal path (pre-existing)</td><td><code>SIGTERM</code> &rarr; cross-rank flag &rarr; forced final checkpoint at the next safe step</td><td>graceful preemption</td></tr>
+      </tbody>
+    </table>
+    <div class="idea">
+      <p>A checkpoint is not &ldquo;write the arrays to disk.&rdquo; It is a <strong>transaction</strong>: capture a consistent state, <strong>publish it atomically</strong>, lay it out to match the storage's parallelism, and make the resume <strong>idempotent</strong>. Get those four right and the file system is just a tuning knob; get any wrong and you lose runs to silent corruption, purges, or hangs.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c01">
+    <h2><span class="ch-num">&sect;01</span>The problem: betting against the wall clock</h2>
+    <p>A production CRM run can take days. The cluster gives you, at most, a 24&ndash;48&nbsp;h job slot, reserves the right to <strong>preempt</strong> you for a higher-priority job, and runs on hardware where a single node fault ends the whole MPI world. Three distinct adversaries:</p>
+    <ul class="dash">
+      <li><strong>The wall-clock limit.</strong> Predictable. Slurm sends <code>SIGTERM</code>, waits a grace period, then <code>SIGKILL</code>. If you catch the signal you can flush a final checkpoint on the way out.</li>
+      <li><strong>Preemption / requeue.</strong> Same signal mechanism, unpredictable timing. The defense is identical: a signal-driven final write, plus a periodic checkpoint stream as backstop.</li>
+      <li><strong>The hard crash.</strong> <code>SIGKILL</code>, OOM, ECC error, network partition, NFS hiccup. No warning, no graceful flush. Your <em>only</em> defense is the most recent periodic checkpoint &mdash; and that it is not half-written.</li>
+    </ul>
+    <p>So the requirement is two-layered: a <strong>periodic</strong> checkpoint on a sim-time cadence (survives hard crashes) and a <strong>signal-triggered final</strong> checkpoint (survives graceful preemption with the least lost work). Both must produce a file that is either <em>complete</em> or <em>absent</em> &mdash; never truncated.</p>
+    <div class="callout danger">
+      <h5>The corruption trap</h5>
+      <p>The naive implementation writes directly to <code>run.00007.restart</code>. If the job is killed mid-write &mdash; precisely the scenario checkpoints exist for &mdash; you now have a truncated file <em>and</em> you may have deleted the previous good one to make room. The single most important property of a checkpoint is that a kill at any instant leaves the last good state intact.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c02">
+    <h2><span class="ch-num">&sect;02</span>Anatomy of a checkpoint</h2>
+    <p>What actually needs to be on disk to resume bit-for-bit? In <code>snapy</code> the restart record is the conserved state plus enough bookkeeping to continue the run and its output schedule without a seam.</p>
+    <table class="tbl">
+      <thead><tr><th>Field</th><th class="wide">Role on resume</th></tr></thead>
+      <tbody>
+        <tr><td>hydro_u</td><td>conserved hydro variables &mdash; the actual physical state</td></tr>
+        <tr><td>scalar_s</td><td>conserved passive-scalar state (when present)</td></tr>
+        <tr><td>last_time</td><td>simulation time to resume from</td></tr>
+        <tr><td>last_cycle</td><td>cycle index &mdash; so <code>nlim</code>-based runs don't take an extra step</td></tr>
+        <tr><td>file_number</td><td>per-output-stream counter &mdash; so NetCDF frames keep numbering, no clobber</td></tr>
+        <tr><td>next_time</td><td>per-output-stream next-write time &mdash; so the cadence resumes cleanly</td></tr>
+      </tbody>
+    </table>
+    <p>Each rank's record is a tensor map serialized by <code>kintera::save_tensors</code>. The question that drives everything downstream is <em>how those per-rank records are arranged on disk</em>.</p>
+
+    <h3>Two layouts: bundle vs. file-per-rank</h3>
+    <div class="twocol">
+      <div class="col bad"><h5>Combined (bundle)</h5><p>Every rank writes a <code>.part</code>; the root rank waits on a barrier, globs them, concatenates into one <code>run.NNNNN.restart</code> bundle, deletes the parts. <strong>One file per checkpoint</strong> &mdash; tidy, few inodes, easy to archive.</p><p class="lose">But: a barrier + a single-stream serial copy on one rank. That throttles the whole FS to one writer.</p></div>
+      <div class="col good"><h5>File-per-rank (uncombined)</h5><p>Every rank writes its own <code>run.block&lt;rank&gt;.NNNNN.restart</code> directly. <strong>N files per checkpoint</strong>, no barrier, no root bottleneck.</p><p class="win">Each writer hits storage independently &mdash; the canonical parallel-I/O pattern. The cost is more inodes and a many-file listing.</p></div>
+    </div>
+    <div class="diagram">COMBINED                              FILE-PER-RANK
+rank0 ─┐ .part                        rank0 ──► run.block0.00007.restart
+rank1 ─┤ .part   ╮ barrier            rank1 ──► run.block1.00007.restart
+rank2 ─┤ .part   ├─► root: glob+cat   rank2 ──► run.block2.00007.restart
+rank3 ─┘ .part   ╯   ──► 1 bundle     rank3 ──► run.block3.00007.restart
+        ▲ serial, one writer                  ▲ N independent writers</div>
+    <p>The choice is not stylistic &mdash; &sect;03 shows it is dictated by the file system. The contribution of this work was to make it a <code>combine:&nbsp;true|false</code> switch instead of a hard-wired <code>true</code>.</p>
+  </section>
+
+  <section class="chapter" id="c03">
+    <h2><span class="ch-num">&sect;03</span>The file-system landscape</h2>
+    <p>A &ldquo;parallel scratch file system&rdquo; is not one thing. The two you will actually meet &mdash; GPFS at U-M Great Lakes, Lustre at NERSC Perlmutter &mdash; differ in ways that flip the right answer to &sect;02.</p>
+    <table class="tbl">
+      <thead><tr><th>Tier</th><th>Tech</th><th class="r">Speed</th><th class="r">Quota</th><th class="wide">Retention</th></tr></thead>
+      <tbody>
+        <tr><td>GL /scratch</td><td>GPFS (Spectrum Scale)</td><td class="r">&gt;7 GB/s</td><td class="r">10 TB</td><td>purge 60 d unaccessed; not backed up</td></tr>
+        <tr><td>GL Turbo</td><td>NFS-ish, persistent</td><td class="r">high</td><td class="r">by buy</td><td>retained, resilient</td></tr>
+        <tr><td>PM $PSCRATCH</td><td>all-flash Lustre</td><td class="r win">~7 TB/s</td><td class="r">20 TB</td><td>purge ~8 wk; not backed up</td></tr>
+        <tr><td>PM CFS</td><td>GPFS</td><td class="r">high</td><td class="r">20 TB</td><td>persistent (project)</td></tr>
+        <tr><td>PM HPSS</td><td>tape archive</td><td class="r">latency</td><td class="r">huge</td><td>cold, long-term</td></tr>
+        <tr><td>$HOME (both)</td><td>NFS/GPFS</td><td class="r lose">modest</td><td class="r lose">40&ndash;80 GB</td><td>backed up &mdash; code only</td></tr>
+      </tbody>
+    </table>
+    <div class="callout warn">
+      <h5>The detail that flips the design &mdash; Lustre default striping</h5>
+      <p>On Perlmutter, <strong>files are striped across a single OST by default</strong> (out of 370). A monolithic bundle written by one root rank to one un-striped file therefore targets <em>one</em> server out of 370 &mdash; you would get a few GB/s out of a multi-TB/s file system. On Lustre the combined-bundle layout is an <em>anti-pattern</em> unless you explicitly stripe the file wide. File-per-rank is the native fast path.</p>
+    </div>
+    <p>Two more facts that the implementation has to respect:</p>
+    <ul class="dash">
+      <li><strong>Where files land is the process CWD.</strong> <code>snapy</code>'s <code>output_dir</code> defaults to <code>"."</code> &mdash; nothing routes output to scratch automatically. You must <code>cd</code> into the scratch run directory before launching, or the run writes wherever <code>sbatch</code> started it (often <code>$HOME</code>, the worst place).</li>
+      <li><strong>The combine step needs a shared FS.</strong> The root rank globs every rank's <code>.part</code>. On multiple nodes those parts must be visible to the root &mdash; i.e. on a globally-mounted parallel FS, never node-local <code>/tmp</code>. File-per-rank reads back per-rank on resume, so it has the same shared-FS requirement, but no barrier to stall on.</li>
+    </ul>
+  </section>
+</div>
+
+<!-- ===================== PART II ===================== -->
+<div class="part" id="p2">
+  <div class="part-label">Part II</div>
+  <h2 class="part-title">Strategy &amp; <span class="ital">implementation</span></h2>
+  <p class="part-intro">The five decisions that define a checkpoint regime, the code that implements them in <code>snapy</code>, and the per-file-system tuning that makes them fast.</p>
+
+  <section class="chapter" id="c04">
+    <h2><span class="ch-num">&sect;04</span>Strategy: the five decisions</h2>
+    <p>Every checkpoint design answers the same five questions. Naming them explicitly turns &ldquo;add checkpointing&rdquo; into a tractable checklist.</p>
+    <table class="tbl">
+      <thead><tr><th>Decision</th><th class="wide">The question</th><th>snapy answer</th></tr></thead>
+      <tbody>
+        <tr><td>1 &middot; Cadence</td><td>How often? In sim-time or wall-time?</td><td>restart <code>dt</code> (sim-seconds) + final on signal</td></tr>
+        <tr><td>2 &middot; Layout</td><td>One bundle, or file-per-writer?</td><td><code>combine</code> switch, FS-driven (&sect;05)</td></tr>
+        <tr><td>3 &middot; Atomicity</td><td>What does a mid-write kill leave behind?</td><td>temp + <code>rename</code> (&sect;06)</td></tr>
+        <tr><td>4 &middot; Resume</td><td>Self-describing &amp; idempotent?</td><td>state carries time/cycle/counters (&sect;07)</td></tr>
+        <tr><td>5 &middot; Retention</td><td>Keep how many? Archive where?</td><td>keep-last-N + copy keepers off scratch</td></tr>
+      </tbody>
+    </table>
+    <p class="pull">Cadence is a sim-time number; retention is a wall-time-and-quota policy; atomicity is a correctness invariant. Conflating them is the root of most checkpoint bugs.</p>
+    <div class="callout tip">
+      <h5>Sizing the cadence</h5>
+      <p>Pick the restart <code>dt</code> so that <em>checkpoint write time &laquo; checkpoint interval</em>. A useful rule: lose at most one checkpoint interval of work to a hard crash, and spend at most a few percent of run time writing. If a full-state write takes <code>T_w</code> and you tolerate overhead <code>f</code>, then interval &ge; <code>T_w / f</code>. The signal-driven final write is the safety net that lets you make the periodic cadence coarse.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c05">
+    <h2><span class="ch-num">&sect;05</span>Implementation &mdash; file-per-rank vs. bundle</h2>
+    <p>The combined path was hard-wired. The fix respects the YAML <code>combine</code> option (default <code>true</code>, so nothing changes for existing runs) and branches the write:</p>
+<pre data-lang="C++ — src/output/restart.cpp"><span class="com">// build the shared stem: &lt;output_dir&gt;/&lt;basename&gt;.&lt;blockid&gt;.&lt;file_number|final&gt;</span>
+<span class="ty">std::string</span> stem = output_dir + <span class="str">"/"</span> + basename + <span class="str">"."</span> + blockid + <span class="str">"."</span> +
+                   (final_write ? <span class="str">"final"</span> : number);
+
+<span class="kw">if</span> (options-&gt;<span class="fn">combine</span>()) {
+  <span class="com">// Each rank writes a per-block ".part"; the root rank bundles all</span>
+  <span class="com">// parts into one combined ".restart" file.</span>
+  <span class="fn">save_tensors_atomic</span>(out_vars, stem + <span class="str">".part"</span>);
+  <span class="fn">combine_blocks</span>(pmb, final_write);
+} <span class="kw">else</span> {
+  <span class="com">// File-per-rank: each rank writes its own ".restart" directly, with no</span>
+  <span class="com">// cross-rank barrier or serial bundling. On restart every rank loads</span>
+  <span class="com">// its own file (the block id is rewritten to the local rank).</span>
+  <span class="fn">save_tensors_atomic</span>(out_vars, stem + <span class="str">".restart"</span>);
+}</pre>
+    <p class="code-caption">The block id is the <em>global</em> block rank (<code>proc_rank &times; blocks_per_process + local_block</code>), so per-rank filenames never collide &mdash; even with several blocks per process.</p>
+    <p>Turning it on is one line of YAML:</p>
+<pre data-lang="YAML — straka.yaml"><span class="kw">outputs:</span>
+  - <span class="kw">type:</span> restart
+    <span class="kw">dt:</span> <span class="num">300.</span>           <span class="com"># sim-seconds between checkpoints</span>
+    <span class="kw">combine:</span> <span class="num">false</span>     <span class="com"># file-per-rank — recommended for large Lustre/GPFS runs</span></pre>
+    <div class="callout tip">
+      <h5>When to pick which</h5>
+      <p><strong>combine: false</strong> for frequent, in-run checkpoints at scale &mdash; especially on Lustre, where it is the only way to use more than one OST without manual striping. <strong>combine: true</strong> for the occasional archival snapshot you will copy to CFS/Turbo/HPSS, where one tidy file beats thousands of inodes. A common regime: uncombined periodic stream + a combined final.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c06">
+    <h2><span class="ch-num">&sect;06</span>Implementation &mdash; atomic publish</h2>
+    <p>The correctness invariant from &sect;01. Every write goes to a temporary name, then a single <code>rename()</code> publishes it. POSIX <code>rename</code> within one file system is atomic and <em>replaces</em> the destination in one step &mdash; so the previous good checkpoint survives until the new one is fully on disk.</p>
+<pre data-lang="C++ — src/output/restart.cpp"><span class="com">// Write tensors to a temp file and atomically rename into place, so a crash</span>
+<span class="com">// mid-write can never corrupt an existing restart file.</span>
+<span class="kw">void</span> <span class="fn">save_tensors_atomic</span>(Variables <span class="kw">const</span>&amp; vars, <span class="ty">std::string</span> <span class="kw">const</span>&amp; final_path) {
+  <span class="ty">std::string</span> tmp_path = final_path + <span class="str">".tmp"</span>;
+  kintera::<span class="fn">save_tensors</span>(vars, tmp_path);          <span class="com">// 1. whole file to a temp name</span>
+  <span class="ty">std::error_code</span> ec;
+  std::filesystem::<span class="fn">rename</span>(tmp_path, final_path, ec);  <span class="com">// 2. atomic publish (same FS)</span>
+  <span class="kw">if</span> (ec) {
+    std::filesystem::<span class="fn">remove</span>(tmp_path);                  <span class="com">// clean up; never leave a torn file</span>
+    <span class="kw">throw</span> std::<span class="fn">runtime_error</span>(<span class="str">"Failed to finalize restart file '"</span> + final_path + <span class="str">"'"</span>);
+  }
+}</pre>
+    <p>The same discipline fixes the bundle path. The old code did <code>remove(outfile)</code> <em>before</em> writing the new bundle &mdash; a window where a crash left you with neither. The new code bundles into a temp and renames, and never deletes the previous bundle first:</p>
+<pre data-lang="C++ — src/output/combine_restart.cpp"><span class="kw">if</span> (file_list.<span class="fn">size</span>() == <span class="num">1</span>) {
+  err = std::<span class="fn">rename</span>(file_list.<span class="fn">front</span>().<span class="fn">c_str</span>(), outfile.<span class="fn">c_str</span>());   <span class="com">// atomic replace</span>
+} <span class="kw">else</span> {
+  <span class="ty">std::string</span> tmp = outfile + <span class="str">".tmp"</span>;
+  err = <span class="fn">make_restart_bundle</span>(tmp, file_list);                  <span class="com">// build under temp name</span>
+  <span class="kw">if</span> (err == <span class="num">0</span>) {
+    std::filesystem::<span class="fn">rename</span>(tmp, outfile, rn_ec);              <span class="com">// then atomic publish</span>
+    <span class="kw">if</span> (rn_ec) { std::filesystem::<span class="fn">remove</span>(tmp); err = -<span class="num">1</span>; }
+  }
+}</pre>
+    <div class="callout danger">
+      <h5>Atomicity is per-file, not per-checkpoint</h5>
+      <p><code>rename</code> makes each <em>file</em> appear atomically. In file-per-rank mode a checkpoint is <strong>N</strong> files, and a kill can land between rank 3's and rank 4's rename &mdash; leaving a checkpoint number that is complete for some ranks, missing for others. The loader fails fast on a missing file, so you simply fall back to the previous fully-complete number. If you need all-or-nothing across ranks, gate the resume on a tiny <code>DONE.NNNNN</code> sentinel that the root writes only after a barrier confirming every rank renamed.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c07">
+    <h2><span class="ch-num">&sect;07</span>Implementation &mdash; idempotent resume</h2>
+    <p>Resume must be a no-seam continuation. Two pieces: the state is <strong>self-describing</strong> (&sect;02 &mdash; it carries time, cycle, and the output counters), and each rank loads <strong>its own</strong> file. The latter is the only subtlety added by file-per-rank: the user passes <em>one</em> path to <code>--restart</code>, and every rank rewrites the block-id token to its own global rank.</p>
+<pre data-lang="C++ — src/input/read_restart_file.cpp"><span class="com">// Rewrite ".block&lt;N&gt;." in the filename to this rank's id, so each rank loads</span>
+<span class="com">// its own file. Bundles / single dumps (no token) are returned unchanged.</span>
+<span class="ty">std::string</span> <span class="fn">restart_path_for_rank</span>(<span class="ty">std::string</span> <span class="kw">const</span>&amp; path, <span class="ty">int</span> block_rank) {
+  fs::path p(path);
+  <span class="ty">std::string</span> f = p.<span class="fn">filename</span>().<span class="fn">string</span>();
+  <span class="ty">size_t</span> pos = f.<span class="fn">find</span>(<span class="str">".block"</span>);
+  <span class="kw">if</span> (pos == <span class="ty">std::string</span>::npos) <span class="kw">return</span> path;            <span class="com">// bundle / single — unchanged</span>
+  <span class="com">// ... scan the digit run after ".block", require a trailing '.' ...</span>
+  p.<span class="fn">replace_filename</span>(prefix + std::<span class="fn">to_string</span>(block_rank) + suffix);
+  <span class="kw">return</span> p.<span class="fn">string</span>();
+}</pre>
+    <p>The mesh wires this in before resolving the path, so the existing &ldquo;rebase relative to <code>output_dir</code>&rdquo; logic works per-rank:</p>
+<pre data-lang="C++ — src/mesh/meshblock.cpp"><span class="ty">double</span> MeshBlockImpl::<span class="fn">_init_from_restart</span>(Variables&amp; vars, <span class="ty">std::string</span> fname) {
+  <span class="com">// For file-per-rank dumps, resolve to this block's own file.</span>
+  fname = <span class="fn">restart_path_for_rank</span>(fname, options-&gt;<span class="fn">layout</span>()-&gt;<span class="fn">rank</span>());
+  <span class="com">// ... load_restart() then restores hydro_u, last_time, last_cycle,</span>
+  <span class="com">//     file_number[], next_time[] — the output schedule resumes seamlessly.</span>
+}</pre>
+    <div class="callout warn">
+      <h5>Decomposition is part of the contract</h5>
+      <p>Records are keyed by global block rank. You <strong>cannot reshape</strong> the run from a checkpoint &mdash; the resume must use the same <code>nproc</code>, <code>nb2</code>/<code>nb3</code>, and <code>blocks_per_process</code>. To change decomposition you need an explicit repartition/remap step (read all blocks, redistribute, rewrite) &mdash; a separate tool, not the hot restart path.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c08">
+    <h2><span class="ch-num">&sect;08</span>Per-file-system tuning</h2>
+    <p>The same binary, tuned for each storage tier. The knobs are striping (Lustre), file count (GPFS), and staging (node-local / burst).</p>
+
+    <h3>Lustre (Perlmutter $PSCRATCH)</h3>
+    <p>Striping is <em>the</em> knob. Set it on the run directory <em>before</em> writing &mdash; new files inherit the directory's layout. Use file-per-rank so each writer lands on its own OST(s); if you keep a combined bundle, stripe it wide so the single file spans many OSTs.</p>
+<pre data-lang="bash"><span class="com"># per-rank files: 1 stripe each is correct — they parallelize across ranks</span>
+lfs setstripe -c <span class="num">1</span> <span class="str">"$PSCRATCH/run"</span>
+<span class="com"># OR a combined bundle: spread the single file across many OSTs</span>
+lfs setstripe -c <span class="num">72</span> -S <span class="num">16M</span> <span class="str">"$PSCRATCH/run"</span>      <span class="com"># 72 OSTs, 16 MiB stripe</span>
+lfs getstripe <span class="str">"$PSCRATCH/run"</span>                    <span class="com"># verify the layout took</span>
+lfs df -h | grep -i full                       <span class="com"># are any OSTs near full? (skew)</span></pre>
+
+    <h3>GPFS (Great Lakes /scratch)</h3>
+    <p>No user-facing striping; the FS handles block placement. The lever is <strong>file count</strong> and the serial-combine bottleneck. File-per-rank parallelizes the writers but creates many inodes &mdash; fine at moderate rank counts. At very high rank counts, the single-root-rank bundle is the bottleneck on <em>both</em> Lustre and GPFS; prefer uncombined and combine only for archival.</p>
+
+    <h3>Node-local &amp; burst tiers</h3>
+    <p>Node-local NVMe (<code>/tmp</code>) and burst buffers (Great Lakes IME, &gt;80&nbsp;GB/s) are the fastest tier &mdash; but node-local is <em>not shared</em>, so it breaks both the combine glob and the per-rank cross-node resume. Use it only as a write-through stage that you flush to shared scratch:</p>
+<pre data-lang="bash"><span class="com"># single-node only, or with an explicit gather step:</span>
+<span class="com"># 1. write checkpoints to node-local NVMe (fast)   2. rsync to shared scratch (durable)</span>
+export OUTPUT_DIR=<span class="str">"$SLURM_TMPDIR"</span>          <span class="com"># node-local — single node runs</span>
+trap <span class="str">'rsync -a "$SLURM_TMPDIR"/*.restart "$PSCRATCH/run/"'</span> EXIT</pre>
+    <div class="callout warn">
+      <h5>Retention vs. the purge</h5>
+      <p>Scratch purges unaccessed files (GL 60 d, PM ~8 wk) and is not backed up. A long campaign's old checkpoints will silently vanish. Keep only the last <em>N</em> on scratch and archive keepers to a persistent tier:</p>
+<pre data-lang="bash"><span class="com"># keep the newest 2 numbered checkpoints; archive every 10th to persistent storage</span>
+ls -t run.*.restart | tail -n +<span class="num">3</span> | xargs -r rm -f
+cp run.00010.restart <span class="str">"$CFS/myproj/archive/"</span>   <span class="com"># PM: CFS  |  GL: Turbo</span></pre>
+    </div>
+  </section>
+
+  <section class="chapter" id="c09">
+    <h2><span class="ch-num">&sect;09</span>Slurm orchestration &amp; auto-resubmit</h2>
+    <p>The signal path is already wired in <code>snapy</code>: a caught <code>SIGTERM</code> sets a flag, <code>check_redo</code> does a cross-rank MAX-allreduce on it, and a positive result breaks the time loop so <code>finalize</code> forces a final checkpoint regardless of the <code>dt</code> schedule. Slurm just needs to deliver the signal early enough, and the script needs to resume from the newest file.</p>
+<pre data-lang="bash — submit.sh"><span class="pp">#!/bin/bash</span>
+<span class="pp">#SBATCH --time=24:00:00</span>
+<span class="pp">#SBATCH --signal=B:TERM@180</span>      <span class="com"># SIGTERM 180 s before the wall limit</span>
+<span class="pp">#SBATCH --requeue</span>               <span class="com"># let Slurm requeue on preemption</span>
+
+RUNDIR=<span class="str">"$SCRATCH/straka_run"</span>      <span class="com"># shared parallel FS, visible to all nodes</span>
+mkdir -p <span class="str">"$RUNDIR"</span>; cd <span class="str">"$RUNDIR"</span>
+cp <span class="str">"$SLURM_SUBMIT_DIR/straka.yaml"</span> .
+lfs setstripe -c <span class="num">1</span> . <span class="num">2</span>&gt;/dev/null || <span class="kw">true</span>   <span class="com"># Lustre: per-rank files, 1 OST each</span>
+
+<span class="com"># newest checkpoint, if any — works for bundle or per-rank (mtime order)</span>
+RESTART=$(ls -t straka.*.restart <span class="num">2</span>&gt;/dev/null | head -<span class="num">1</span>)
+
+torchrun --no-python --nproc-per-node=$SLURM_GPUS_ON_NODE \
+  <span class="str">"$SLURM_SUBMIT_DIR/build/bin/straka.release"</span> ./straka.yaml \
+  ${RESTART:+--restart <span class="str">"$RESTART"</span>}
+
+<span class="com"># resubmit until the run reports completion (a DONE marker / tlim check)</span>
+<span class="kw">if</span> [ ! -f DONE ]; <span class="kw">then</span> sbatch <span class="str">"$SLURM_SUBMIT_DIR/submit.sh"</span>; <span class="kw">fi</span></pre>
+    <div class="callout tip">
+      <h5>Two signal-routing gotchas</h5>
+      <p><strong>(1)</strong> <code>--signal=B:TERM@180</code> sends to the <em>batch shell</em>; because <code>torchrun</code> is the foreground child it receives and forwards the signal. If you wrap the launch in <code>srun</code>, drop the <code>B:</code> (<code>--signal=TERM@180</code>) so every task gets it. <strong>(2)</strong> The grace period (180 s) must exceed &ldquo;finish current cycle + write + any combine + barrier.&rdquo; Size it up for large grids; the periodic stream is the backstop if the grace window is ever too short.</p>
+    </div>
+  </section>
+</div>
+
+<!-- ===================== PART III ===================== -->
+<div class="part" id="p3">
+  <div class="part-label">Part III</div>
+  <h2 class="part-title">Operating &amp; <span class="ital">generalizing</span></h2>
+  <p class="part-intro">The failure modes you will actually hit, how to debug them, a decision tree to pick a regime, and the abstract pattern that carries this design to any distributed workload.</p>
+
+  <section class="chapter" id="c10">
+    <h2><span class="ch-num">&sect;10</span>Common issues &amp; failure modes</h2>
+    <table class="tbl">
+      <thead><tr><th>Symptom</th><th class="wide">Root cause</th><th>Fix</th></tr></thead>
+      <tbody>
+        <tr><td>truncated / unloadable ckpt</td><td>killed mid-write, non-atomic publish</td><td>temp+rename (&sect;06); fall back to prior number</td></tr>
+        <tr><td>"no matching block in bundle"</td><td>decomposition changed since the dump</td><td>resume with identical nproc / nb / bpp</td></tr>
+        <tr><td>combine hangs forever</td><td>a rank died before the barrier</td><td>check all ranks reached the write; use per-rank to drop the barrier</td></tr>
+        <tr><td>checkpoints painfully slow (Lustre)</td><td>single-OST bundle, one writer</td><td>combine:false + <code>lfs setstripe</code> (&sect;08)</td></tr>
+        <tr><td>files vanished overnight</td><td>scratch purge (60 d / 8 wk)</td><td>archive keepers to CFS/Turbo/HPSS</td></tr>
+        <tr><td>quota exceeded mid-run</td><td>no rotation — files accumulate</td><td>keep-last-N cleanup (&sect;08)</td></tr>
+        <tr><td>output landed in $HOME</td><td>output_dir = CWD, launched from home</td><td><code>cd "$SCRATCH/run"</code> before launch</td></tr>
+        <tr><td>exit 127 on resume</td><td>stale binary / missing shared lib</td><td><code>ldd</code> the exe; rebuild against current deps</td></tr>
+        <tr><td>partial-rank ckpt number</td><td>kill between per-rank renames</td><td>fall back; or DONE-sentinel after barrier (&sect;06)</td></tr>
+        <tr><td>resume "off by one" cycle/frame</td><td>counters not in the record</td><td>store last_cycle / file_number / next_time (&sect;02)</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="chapter" id="c11">
+    <h2><span class="ch-num">&sect;11</span>Debugging approaches</h2>
+    <p>Checkpoint bugs hide on disk and in the launcher, not in the solver. The first moves are filesystem forensics.</p>
+<pre data-lang="bash"><span class="com"># 1. What's actually there, newest first, with sizes (spot a torn/short file)</span>
+ls -lat --time-style=long-iso *.restart *.part *.tmp <span class="num">2</span>&gt;/dev/null
+<span class="com">#    Leftover *.tmp or *.part  ==  a crash mid-write. The .restart is your truth.</span>
+
+<span class="com"># 2. Is the bundle / per-rank file complete &amp; loadable? Inspect from Python.</span>
+python -c <span class="str">"import kintera, sys; d=kintera.load_tensors(sys.argv[1]); \
+print({k: tuple(v.shape) for k,v in d.items()}); \
+print('time', float(d['last_time']), 'cycle', int(d['last_cycle']))"</span> run.final.restart
+
+<span class="com"># 3. Lustre layout &amp; OST skew (slow or ENOSPC despite quota)</span>
+lfs getstripe run.00007.restart        <span class="com"># how many OSTs is this file on?</span>
+lfs df -h | sort -k5 -h | tail          <span class="com"># any single OST near 100%?</span>
+
+<span class="com"># 4. Launcher / environment faults (exit 127, 'not found')</span>
+ldd build/bin/straka.release | grep -i 'not found'
+echo <span class="str">"$PWD"</span>; df -h .                     <span class="com"># am I even on scratch? quota left?</span>
+
+<span class="com"># 5. The ground truth: does a restart reproduce the uninterrupted run?</span>
+ctest -R restart                        <span class="com"># bit-for-bit resume equivalence (&sect;14)</span></pre>
+    <div class="callout tip">
+      <h5>Debugging mindset &mdash; bisect the transaction</h5>
+      <p>A checkpoint is capture &rarr; publish &rarr; resume. Localize the failure to one stage: <em>Did it write?</em> (ls/sizes) &rarr; <em>Is the file complete?</em> (load it) &rarr; <em>Does resume read the right file?</em> (per-rank path rewrite, decomposition) &rarr; <em>Does it continue seamlessly?</em> (counters, bit-for-bit test). Each stage has a distinct probe; don't jump to the solver.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c12">
+    <h2><span class="ch-num">&sect;12</span>The decision tree</h2>
+    <p>From a cold start, how to choose a regime. Read top to bottom.</p>
+<div class="diagram">START
+ │
+ ├─ Is output_dir on a SHARED parallel FS (visible to all nodes)?
+ │     NO  ──► fix first: cd into $SCRATCH/$PSCRATCH run dir. (node-local = single-node only)
+ │     YES ▼
+ │
+ ├─ Multi-node run?
+ │     NO (single node) ──► bundle OR per-rank both fine; node-local NVMe ok as a stage
+ │     YES ▼
+ │
+ ├─ File system?
+ │     LUSTRE ──► combine:false  (+ lfs setstripe -c 1 on the dir)
+ │     │           └─ must keep a bundle? lfs setstripe -c 48..72 on the file
+ │     GPFS  ──► combine:false at high rank counts; bundle ok at modest scale
+ │     ▼
+ │
+ ├─ Checkpoint frequency?
+ │     FREQUENT (in-run safety) ──► periodic restart dt, coarse enough that T_write << dt
+ │     RARE (archival snapshot)  ──► combine:true, then copy to CFS/Turbo/HPSS
+ │     ▼
+ │
+ ├─ Preemption / wall-limit risk?
+ │     YES ──► #SBATCH --signal=B:TERM@grace  +  --requeue  +  auto-resubmit
+ │     ▼
+ │
+ └─ Retention: keep-last-N on scratch (beat the purge + quota) ; archive keepers off scratch
+       └─► VALIDATE: ctest -R restart  (resume must reproduce the run bit-for-bit)</div>
+  </section>
+
+  <section class="chapter" id="c13">
+    <h2><span class="ch-num">&sect;13</span>Generalizing the pattern</h2>
+    <p>Strip away <code>snapy</code> and the design is a domain-independent recipe. It applies verbatim to any distributed simulation, and almost verbatim to large-model training. Seven invariants:</p>
+    <table class="tbl">
+      <thead><tr><th>Invariant</th><th class="wide">The general principle</th></tr></thead>
+      <tbody>
+        <tr><td>1 &middot; Separate capture from publish</td><td>Serialize state to a temp object, then make it visible in one atomic step (<code>rename</code>, object-store PUT, a manifest commit). The visible name is always complete.</td></tr>
+        <tr><td>2 &middot; Layout follows parallelism</td><td>One object per independent writer is the native fast path on parallel FS; a single shared object needs explicit striping/sharding or it serializes.</td></tr>
+        <tr><td>3 &middot; Self-describing state</td><td>The checkpoint carries everything resume needs &mdash; logical clock (time/step), and any scheduler counters &mdash; so continuation has no seam and no external metadata to drift.</td></tr>
+        <tr><td>4 &middot; Idempotent, addressable resume</td><td>Each worker can find &amp; load <em>its own</em> shard from a single handle; re-running resume yields the same state.</td></tr>
+        <tr><td>5 &middot; Signal-driven flush</td><td>Catch the preemption signal, reach the next consistent point, flush once. Decouple from the periodic cadence.</td></tr>
+        <tr><td>6 &middot; Cadence &ne; retention</td><td>How often you write (work-loss budget) is independent of how many you keep (quota/purge) and where they live (tiering).</td></tr>
+        <tr><td>7 &middot; Validate by equivalence</td><td>The acceptance test is &ldquo;resume reproduces the uninterrupted run&rdquo; &mdash; bit-for-bit if deterministic, within tolerance otherwise.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>The abstract interface</h3>
+    <p>Any checkpointable distributed component can expose four methods; everything above is policy layered on top of them:</p>
+<pre data-lang="python — the general shape"><span class="kw">class</span> <span class="ty">Checkpointable</span>(Protocol):
+    <span class="kw">def</span> <span class="fn">state_dict</span>(self) -&gt; <span class="ty">dict</span>: ...               <span class="com"># 1. capture (+ logical clock, counters)</span>
+    <span class="kw">def</span> <span class="fn">load_state_dict</span>(self, s: <span class="ty">dict</span>) -&gt; <span class="ty">None</span>: ...   <span class="com"># 3,4. idempotent resume</span>
+
+<span class="kw">def</span> <span class="fn">save</span>(obj, step, dir, rank):
+    tmp   = <span class="fn">f</span><span class="str">"{dir}/ckpt.step{step}.rank{rank}.tmp"</span>     <span class="com"># 2. one object per writer</span>
+    final = <span class="fn">f</span><span class="str">"{dir}/ckpt.step{step}.rank{rank}"</span>
+    <span class="fn">serialize</span>(obj.<span class="fn">state_dict</span>(), tmp)
+    os.<span class="fn">replace</span>(tmp, final)                          <span class="com"># 1. atomic publish (os.replace == rename)</span>
+
+<span class="kw">def</span> <span class="fn">resume_path</span>(handle, rank):                       <span class="com"># 4. rank finds its own shard</span>
+    <span class="kw">return</span> handle.<span class="fn">replace</span>(<span class="str">"rankANY"</span>, <span class="fn">f</span><span class="str">"rank{rank}"</span>)</pre>
+    <div class="callout tip">
+      <h5>Where you've already seen this</h5>
+      <p><strong>PyTorch Distributed Checkpoint (DCP)</strong> is exactly invariants 1&ndash;4: sharded per-rank writes, a committed metadata manifest (the atomic publish), and reshardable load. <strong>MPI-IO / ADIOS2 / HDF5</strong> give one-file-per-rank vs. shared-file-with-collective-I/O &mdash; invariant 2 again. <strong>DMTCP / CRIU</strong> generalize capture to whole-process images. The lesson transfers: the file system, not the math, decides the layout; atomicity and idempotent resume are non-negotiable everywhere.</p>
+    </div>
+    <h3>What changes per domain</h3>
+    <ul class="dash">
+      <li><strong>Determinism.</strong> CFD with fixed arithmetic resumes bit-for-bit (invariant 7 is strict). ML training with async ops resumes within tolerance &mdash; and must also checkpoint RNG state and optimizer/scheduler state, the ML analogue of <code>file_number</code>/<code>next_time</code>.</li>
+      <li><strong>Resharding.</strong> Simulations usually pin decomposition (invariant 4 is &ldquo;same shape&rdquo;). DCP and elastic training relax it with a resharding load &mdash; worth the complexity only when you genuinely change world size.</li>
+      <li><strong>Storage target.</strong> POSIX <code>rename</code> on Lustre/GPFS; a manifest-commit on object stores (S3 has no atomic rename &mdash; you commit by writing a small pointer object last). The invariant &ldquo;publish in one step&rdquo; holds; the mechanism differs.</li>
+    </ul>
+  </section>
+
+  <section class="chapter" id="c14">
+    <h2><span class="ch-num">&sect;14</span>Validation</h2>
+    <p>The acceptance test for any checkpoint change is invariant 7: a restarted run must reproduce the uninterrupted run. Three suites cover both layouts; all green after the changes.</p>
+    <table class="tbl">
+      <thead><tr><th>Suite</th><th class="wide">Covers</th><th>Result</th></tr></thead>
+      <tbody>
+        <tr><td>run_restart_uncombined</td><td><strong>new</strong> file-per-rank path (straka, 2 blocks): per-rank files written, resume from one of them</td><td class="win">exit 0 &mdash; NetCDF bit-for-bit</td></tr>
+        <tr><td>run_restart_cycle_limit</td><td>combined path + cycle/time resume (exercises atomic write)</td><td class="win">mass/energy match to 1e-12</td></tr>
+        <tr><td>run_restart_multiblock</td><td>combined path, straka + shallow_xy + shallow_splash</td><td class="win">exit 0 &mdash; NetCDF bit-for-bit</td></tr>
+      </tbody>
+    </table>
+<pre data-lang="bash"><span class="com"># run all restart suites against a built tree</span>
+python tests/run_restart_uncombined.py --build-dir build --build-type release
+python tests/run_restart_cycle_limit.py --build-dir build --build-type release
+python tests/run_restart_multiblock.py  --build-dir build --build-type release
+<span class="com"># or via ctest by label</span>
+ctest -R restart --output-on-failure</pre>
+    <div class="callout warn">
+      <h5>Cross-repo note</h5>
+      <p>The default behavior is unchanged: <code>combine</code> defaults to <code>true</code>, existing restart files load as before, and the per-rank path rewrite only triggers on filenames containing <code>.block&lt;digits&gt;.</code> &mdash; which only uncombined dumps emit. No change to <code>kintera</code>'s serialization format, so stored checkpoints remain loadable.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c15">
+    <h2><span class="ch-num">&sect;15</span>Glossary &amp; file map</h2>
+    <table class="tbl">
+      <tbody>
+        <tr><td>Checkpoint</td><td>A consistent, resumable snapshot of simulation state plus the bookkeeping to continue.</td></tr>
+        <tr><td>Atomic publish</td><td>Making a fully-written file visible in one indivisible step (POSIX <code>rename</code>); a kill leaves the old or new state, never a torn one.</td></tr>
+        <tr><td>Combine / bundle</td><td>Root rank concatenates per-block <code>.part</code> files into one <code>.restart</code>; few inodes, one serial writer.</td></tr>
+        <tr><td>File-per-rank</td><td>Each rank writes its own <code>.restart</code>; parallel, more inodes; the native Lustre fast path.</td></tr>
+        <tr><td>OST / striping</td><td>Lustre Object Storage Target; striping spreads one file across many OSTs for parallel bandwidth.</td></tr>
+        <tr><td>GPFS / Spectrum Scale</td><td>IBM parallel FS (Great Lakes scratch); manages block placement itself &mdash; no user striping.</td></tr>
+        <tr><td>Purge horizon</td><td>Scratch deletes files unaccessed beyond a window (GL 60 d, PM ~8 wk); scratch is not backed up.</td></tr>
+        <tr><td>Idempotent resume</td><td>Loading a checkpoint yields the same continuation every time; each worker addresses its own shard.</td></tr>
+        <tr><td>DCP</td><td>PyTorch Distributed Checkpoint &mdash; sharded, manifest-committed, reshardable; the ML analogue of this design.</td></tr>
+      </tbody>
+    </table>
+    <h4>Files touched (in snapy/)</h4>
+    <table class="tbl">
+      <thead><tr><th>File</th><th class="wide">Role</th></tr></thead>
+      <tbody>
+        <tr><td>src/output/restart.cpp</td><td><code>save_tensors_atomic</code> + the <code>combine</code> branch (bundle vs. per-rank)</td></tr>
+        <tr><td>src/output/combine_restart.cpp</td><td>atomic temp+rename for the bundle path; dropped the premature delete</td></tr>
+        <tr><td>src/input/read_restart_file.{hpp,cpp}</td><td><code>restart_path_for_rank</code> &mdash; per-rank path rewrite</td></tr>
+        <tr><td>src/mesh/meshblock.cpp</td><td>wires the path rewrite into <code>_init_from_restart</code></td></tr>
+        <tr><td>examples/straka.yaml</td><td>documents <code>combine</code> + <code>lfs setstripe</code> guidance</td></tr>
+        <tr><td>tests/run_restart_uncombined.py</td><td>new suite for the file-per-rank path</td></tr>
+      </tbody>
+    </table>
+  </section>
+</div>
+
+</main>
+
+<footer>
+  <h4>Colophon &amp; further reading</h4>
+  <div class="resources">
+    <ul>
+      <li><strong>Companions</strong> &mdash; <code>vic_solver_optimization.html</code> and <code>evolve_implicit_optimization.html</code>: the GPU-kernel side of the same model.</li>
+      <li><strong>U-M Great Lakes</strong> &mdash; ARC scratch (GPFS, &gt;7 GB/s, 10 TB, 60-day purge), Turbo, IME burst buffer.</li>
+      <li><strong>NERSC Perlmutter</strong> &mdash; <code>$PSCRATCH</code> all-flash Lustre (44 PB, ~7 TB/s, single-OST default stripe), CFS, HPSS.</li>
+      <li><strong>Reading</strong> &mdash; Lustre striping &amp; <code>lfs</code>; GPFS/Spectrum Scale; Slurm <code>--signal</code> &amp; <code>--requeue</code>.</li>
+      <li><strong>Reading</strong> &mdash; PyTorch Distributed Checkpoint; MPI-IO / ADIOS2 / parallel HDF5; DMTCP / CRIU.</li>
+      <li><strong>Self-contained</strong> &mdash; layout, colour, and structure are inline; display fonts load from Google Fonts and degrade to serif/mono offline.</li>
+    </ul>
+  </div>
+</footer>
+
+</body>
+</html>
