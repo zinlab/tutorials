@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Splitting the VIC Implicit Solver — Parallelism-Aware Kernel Fission</title>
+<style>
+  :root{
+    --bg:#17130e;--bg2:#1e1913;--bg3:#241d16;--code-bg:#120f0a;--code-border:#2c241b;
+    --ink:#ece2d4;--ink-dim:#b6a791;--ink-faint:#8b7c69;
+    --rust:#e4572e;--rust-deep:#b7410e;--gear:#ce422b;--amber:#e0a13a;
+    --sage:#7bbf9e;--sky:#6fb1c7;--violet:#b69ad8;--red:#d9595a;
+    --line:#332a20;--radius:10px;
+    --mono:ui-monospace,"Cascadia Code","JetBrains Mono","Source Code Pro",Menlo,Consolas,monospace;
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.65;font-size:16.5px;-webkit-font-smoothing:antialiased}
+  a{color:var(--amber);text-decoration:none}a:hover{color:var(--rust);text-decoration:underline}
+  .wrap{display:grid;grid-template-columns:288px minmax(0,1fr);gap:0;max-width:1320px;margin:0 auto}
+  aside{position:sticky;top:0;align-self:start;height:100vh;overflow-y:auto;border-right:1px solid var(--line);padding:26px 18px 60px;background:linear-gradient(180deg,#1a1510,#161109)}
+  aside .brand{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+  aside .gearmark{width:30px;height:30px;flex:0 0 auto}
+  aside h2{font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:var(--rust);margin:0}
+  aside .sub{font-size:12.5px;color:var(--ink-faint);margin:0 0 18px}
+  nav a{display:block;color:var(--ink-dim);font-size:13.5px;padding:3px 10px;border-left:2px solid transparent;border-radius:0 4px 4px 0}
+  nav a:hover{color:var(--ink);background:#221b13;text-decoration:none}
+  nav a.active{color:var(--rust);border-left-color:var(--rust);background:#241a12}
+  nav .grp{margin-top:14px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);padding:0 10px}
+  nav a.l2{padding-left:24px;font-size:12.5px;color:var(--ink-faint)}
+  main{padding:0 0 120px}
+  .hero{padding:64px 56px 40px;border-bottom:1px solid var(--line);background:radial-gradient(900px 380px at 78% -8%,rgba(228,87,46,.16),transparent 60%),radial-gradient(700px 300px at 0% 0%,rgba(183,65,14,.10),transparent 55%)}
+  .eyebrow{color:var(--rust);font-weight:700;letter-spacing:.18em;text-transform:uppercase;font-size:12.5px}
+  .hero h1{font-size:40px;line-height:1.12;margin:.35em 0 .25em;letter-spacing:-.01em}
+  .hero h1 .accent{color:var(--rust)}
+  .hero p.lead{font-size:18px;color:var(--ink-dim);max-width:62ch;margin:.4em 0 0}
+  .meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:22px}
+  .chip{font-family:var(--mono);font-size:12px;color:var(--ink-dim);background:var(--bg3);border:1px solid var(--line);border-radius:999px;padding:4px 12px}
+  .chip b{color:var(--rust)}
+  section{padding:42px 56px;border-bottom:1px solid var(--line)}
+  section>h2{font-size:27px;margin:.1em 0 .5em;letter-spacing:-.01em;scroll-margin-top:18px}
+  section>h2 .n{color:var(--rust);font-family:var(--mono);font-size:18px;margin-right:12px;opacity:.85}
+  h3{font-size:19.5px;margin:1.6em 0 .4em;color:#fff;scroll-margin-top:18px}
+  h4{font-size:15.5px;margin:1.3em 0 .3em;color:var(--amber)}
+  p{margin:.6em 0}.muted{color:var(--ink-dim)}
+  code{font-family:var(--mono);font-size:.88em;background:#241c14;color:#f0c9a8;border:1px solid var(--code-border);padding:1px 6px;border-radius:5px}
+  pre{background:var(--code-bg);border:1px solid var(--code-border);border-radius:var(--radius);overflow:auto;margin:1.1em 0}
+  pre .filebar{display:flex;justify-content:space-between;align-items:center;background:#1b1610;border-bottom:1px solid var(--code-border);padding:7px 14px;font-family:var(--mono);font-size:12px;color:var(--ink-faint)}
+  pre .filebar .lang{color:var(--rust)}
+  pre code{display:block;background:none;border:none;color:#d9cdbb;padding:15px 16px;font-size:13.1px;line-height:1.6}
+  .cmt{color:#7d6f5c;font-style:italic}.kw{color:#e4825e}.ty{color:#e0a13a}.fn{color:#9fc3d6}.str{color:#9ec995}.num{color:#cf9bd6}
+  .box{border:1px solid var(--line);border-left-width:4px;border-radius:8px;padding:14px 18px;margin:1.2em 0;background:var(--bg2)}
+  .box .tag{font-weight:700;font-size:12px;letter-spacing:.1em;text-transform:uppercase;display:block;margin-bottom:4px}
+  .box p:first-of-type{margin-top:0}.box p:last-child{margin-bottom:0}
+  .box.insight{border-left-color:var(--rust)}.box.insight .tag{color:var(--rust)}
+  .box.note{border-left-color:var(--sky)}.box.note .tag{color:var(--sky)}
+  .box.sci{border-left-color:var(--violet)}.box.sci .tag{color:var(--violet)}
+  .box.warn{border-left-color:var(--amber)}.box.warn .tag{color:var(--amber)}
+  .box.pitfall{border-left-color:var(--red)}.box.pitfall .tag{color:var(--red)}
+  table{border-collapse:collapse;width:100%;margin:1.2em 0;font-size:14px}
+  th,td{border:1px solid var(--line);padding:8px 12px;text-align:left;vertical-align:top}
+  th{background:#211a12;color:var(--amber);font-weight:600}
+  tr:nth-child(even) td{background:#1b1610}
+  td.num,th.num{text-align:right;font-family:var(--mono)}
+  .win{color:var(--sage);font-weight:600}.lose{color:var(--red);font-weight:600}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}@media(max-width:900px){.grid2{grid-template-columns:1fr}}
+  figure{margin:1.4em 0;text-align:center}figure svg{max-width:100%;height:auto}
+  figcaption{color:var(--ink-faint);font-size:13px;margin-top:8px}
+  .kbd{font-family:var(--mono);font-size:.85em;background:#2a2118;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:1px 6px;color:#f0c9a8}
+  ul,ol{padding-left:1.3em}li{margin:.3em 0}
+  .footer{padding:34px 56px;color:var(--ink-faint);font-size:13px}
+  .toc-top{font-size:12px;color:var(--ink-faint);margin-top:30px}
+  @media(max-width:980px){.wrap{grid-template-columns:1fr}aside{position:static;height:auto;border-right:none;border-bottom:1px solid var(--line)}.hero,section,.footer{padding-left:24px;padding-right:24px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<aside>
+  <div class="brand">
+    <svg class="gearmark" viewBox="0 0 100 100" aria-hidden="true">
+      <circle cx="50" cy="50" r="46" fill="none" stroke="#ce422b" stroke-width="6"/>
+      <g fill="#ce422b">
+        <circle cx="50" cy="50" r="14" fill="none" stroke="#ce422b" stroke-width="6"/>
+        <g><rect x="46" y="2" width="8" height="18" rx="2"/><rect x="46" y="80" width="8" height="18" rx="2"/><rect x="2" y="46" width="18" height="8" rx="2"/><rect x="80" y="46" width="18" height="8" rx="2"/></g>
+        <g transform="rotate(45 50 50)"><rect x="46" y="2" width="8" height="18" rx="2"/><rect x="46" y="80" width="8" height="18" rx="2"/><rect x="2" y="46" width="18" height="8" rx="2"/><rect x="80" y="46" width="18" height="8" rx="2"/></g>
+      </g>
+    </svg>
+    <div><h2>VIC Fission</h2></div>
+  </div>
+  <p class="sub">Parallelism-aware kernel fission for an implicit fluid solver</p>
+  <nav id="toc">
+    <div class="grp">Part I — The optimization</div>
+    <a href="#tldr">TL;DR &amp; results</a>
+    <a href="#science">1 · The science</a>
+    <a href="#blocktri" class="l2">1.1 Block-tridiagonal system</a>
+    <a href="#threejobs" class="l2">1.2 The 2½ jobs inside</a>
+    <a href="#profile">2 · Finding the bottleneck</a>
+    <a href="#whyslow">3 · Why it was slow</a>
+    <a href="#starve1" class="l2">3.1 Grid starvation</a>
+    <a href="#starve2" class="l2">3.2 Register pressure</a>
+    <a href="#idea">4 · The idea: fission</a>
+    <a href="#impl">5 · Implementation</a>
+    <a href="#impl-assemble" class="l2">5.1 Assemble (map)</a>
+    <a href="#impl-solve" class="l2">5.2 Solve (scan)</a>
+    <a href="#impl-redist" class="l2">5.3 Redistribute (map)</a>
+    <a href="#impl-handoff" class="l2">5.4 Passing data</a>
+    <a href="#journey">6 · The phase-by-phase journey</a>
+    <a href="#pcr">7 · The PCR detour (negative)</a>
+    <a href="#results">8 · Results &amp; validation</a>
+    <div class="grp">Part II — Generalize</div>
+    <a href="#generalize">9 · The reusable recipe</a>
+    <a href="#taxonomy" class="l2">9.1 map / reduce / scan</a>
+    <a href="#winlose" class="l2">9.2 When it helps</a>
+    <a href="#duality" class="l2">9.3 Fission ⟷ fusion</a>
+    <a href="#limits" class="l2">9.4 Limitations</a>
+    <div class="grp">Appendix</div>
+    <a href="#related">10 · Related topics</a>
+    <a href="#glossary">11 · Glossary</a>
+    <a href="#filemap">12 · File &amp; command map</a>
+    <p class="toc-top"><a href="#top">↑ back to top</a> · <a href="evolve_implicit_optimization.html">→ companion: evolve_implicit</a></p>
+  </nav>
+</aside>
+
+<main id="top">
+  <div class="hero">
+    <div class="eyebrow">GPU Performance · CUDA · Implicit CFD · Block-Tridiagonal Solvers</div>
+    <h1>Splitting the <span class="accent">VIC</span> implicit solver</h1>
+    <p class="lead">One monolithic kernel did three fundamentally different jobs — and ran at 8% occupancy because
+      of it. The cure was not to make it faster but to <em>break it apart</em> along the grain of its parallelism:
+      map, scan, map. A case study in parallelism-aware kernel fission — and the companion/opposite of the
+      <a href="evolve_implicit_optimization.html">evolve_implicit fusion story</a>.</p>
+    <div class="meta">
+      <span class="chip">solver: <b>vertical implicit correction</b></span>
+      <span class="chip">device: <b>RTX 5090</b> · 170 SMs</span>
+      <span class="chip">occupancy <b>8% → 39–79%</b></span>
+      <span class="chip">per call <b>3.19 → 1.40 ms</b> (≈2.3×)</span>
+      <span class="chip">numerics <b>bit-identical</b></span>
+    </div>
+  </div>
+
+  <section id="tldr">
+    <h2><span class="n">§0</span>TL;DR &amp; results</h2>
+    <p>The Jupiter CRM advances acoustic &amp; gravity waves with a <b>vertically-implicit</b> correction
+      (<code>vic</code>): every vertical column solves a block-tridiagonal linear system. The original GPU kernel
+      gave <b>one thread an entire column</b> — it assembled the system, ran the serial Thomas sweep, and did the
+      constituent redistribution, all in one launch. That packed three different parallel structures into one
+      thread, starving the GPU (8.3% occupancy) and spilling registers (128/thread).</p>
+    <p>The fix was <b>kernel fission</b>: split the monolith into three kernels, each launched at its natural
+      granularity — two embarrassingly-parallel <em>maps</em> (assembly, redistribution) over every cell, and one
+      irreducible serial <em>scan</em> (the Thomas recurrence) kept one-thread-per-column.</p>
+    <table>
+      <thead><tr><th>Stage (profiling config, NCU/nsys)</th><th class="num">SM thru</th><th class="num">occupancy</th><th class="num">cost</th></tr></thead>
+      <tbody>
+        <tr><td>before — monolithic solve</td><td class="num lose">2.8%</td><td class="num lose">8.3%</td><td class="num">3.19 ms/call</td></tr>
+        <tr><td>after — assemble (map)</td><td class="num win">79%</td><td class="num win">28.8%</td><td class="num">~0.15 ms</td></tr>
+        <tr><td>after — solve (scan, Thomas)</td><td class="num">16%</td><td class="num">8.3%</td><td class="num">1.18 ms</td></tr>
+        <tr><td>after — redistribute (map)</td><td class="num win">73%</td><td class="num win">39%</td><td class="num">~0.08 ms</td></tr>
+        <tr><td><b>vic total per solver call</b></td><td class="num" colspan="2">—</td><td class="num win">1.40 ms (≈2.3×)</td></tr>
+      </tbody>
+    </table>
+    <div class="box insight"><span class="tag">The one-sentence lesson</span>
+      <p>A kernel should do <b>one kind of parallel work</b>. When a single kernel mixes a map, a reduction, and a
+        serial recurrence, split it: launch each piece at the granularity that lets the GPU fill — and leave the
+        irreducibly serial core alone rather than over-parallelizing it (see §7).</p>
+    </div>
+  </section>
+
+  <section id="science">
+    <h2><span class="n">§1</span>The science: a vertically-implicit fluid correction</h2>
+    <p>Atmospheric flows carry fast vertical acoustic and gravity waves. An explicit time step would have to
+      resolve their tiny CFL timescale — crippling. The standard remedy is <b>semi-implicit</b>: treat the fast
+      vertical terms implicitly so the step is governed by the slow (advective) timescale instead. In this code
+      that correction is the <b>VIC</b> solve: along each vertical column it inverts the linearized fast-wave
+      operator.</p>
+
+    <h3 id="blocktri">1.1 The block-tridiagonal system &amp; the Thomas algorithm</h3>
+    <p>Discretizing the implicit vertical operator couples each cell only to its two vertical neighbors. Stacking
+      a column's unknowns gives a <b>block-tridiagonal</b> system, where each block is a small dense matrix
+      coupling the conserved quantities at one cell:</p>
+    <pre><code>   ⎡ a₀ c₀          ⎤ ⎡Δ₀⎤   ⎡r₀⎤
+   ⎢ b₁ a₁ c₁       ⎥ ⎢Δ₁⎥   ⎢r₁⎥
+   ⎢    b₂ a₂ c₂    ⎥ ⎢Δ₂⎥ = ⎢r₂⎥      aᵢ,bᵢ,cᵢ : small dense blocks
+   ⎢       ⋱  ⋱  ⋱  ⎥ ⎢ ⋮⎥   ⎢ ⋮⎥      Δᵢ      : the correction at cell i
+   ⎣          b_N a_N⎦ ⎣Δ_N⎦   ⎣r_N⎦</code></pre>
+    <div class="box sci"><span class="tag">Science note — where the blocks come from</span>
+      <p>The off-diagonal blocks are <b>Roe-flux Jacobians</b> at the cell interfaces. The Roe solver writes the
+        upwind dissipation as <code>|A| = R·|Λ|·R⁻¹</code> — eigen-decompose the flux Jacobian, take absolute
+        eigenvalues, recompose. The diagonal block <code>aᵢ</code> bundles the two interface contributions, the
+        timestep inertia <code>I/dt</code>, and a gravity coupling <code>Φ</code>. For the "partial" solve used by
+        Jupiter the block is <b>3×3</b> — density, the vertical momentum component, and pressure.</p>
+    </div>
+    <p>The system is solved by the <b>Thomas algorithm</b> (block-LU for tridiagonals): a <em>forward sweep</em>
+      that eliminates the sub-diagonal, then a <em>backward substitution</em>. Crucially, each step of the sweep
+      depends on the previous one:</p>
+    <pre><code>   forward :  aᵢ ← aᵢ − bᵢ·aᵢ₋₁⁻¹·cᵢ₋₁ ,   Δᵢ ← aᵢ⁻¹(rᵢ − bᵢ·Δᵢ₋₁)   (i = 0…N, in order)
+   backward:  Δᵢ ← Δᵢ − aᵢ·Δᵢ₊₁                                   (i = N…0, in order)</code></pre>
+    <div class="box insight"><span class="tag">The structural fact that drives everything</span>
+      <p>The Thomas sweep is a <b>scan</b> — an inherently serial recurrence over the ~100 layers of a column.
+        You cannot parallelize <em>within</em> a column for free. But the columns themselves (10,000 of them at
+        100³) are <b>completely independent</b>. That independence is the parallelism to exploit.</p>
+    </div>
+
+    <h3 id="threejobs">1.2 The 2½ jobs hiding in one solve</h3>
+    <p>The original <code>vic_solve_partial</code> did three things in one kernel, with very different parallel
+      structure:</p>
+    <table>
+      <thead><tr><th>Job</th><th>What it does</th><th>Parallel structure</th></tr></thead>
+      <tbody>
+        <tr><td><b>1 · Assemble</b></td><td>Roe eigendecomposition at every interface → build <code>aᵢ,bᵢ,cᵢ</code></td><td class="win">map — each cell independent</td></tr>
+        <tr><td><b>2 · Solve</b></td><td>forward sweep + backward substitution (Thomas)</td><td class="lose">scan — serial recurrence over layers</td></tr>
+        <tr><td><b>½ · Redistribute</b></td><td>MS-VIC constituent fix-up (a reduce + a per-cell map)</td><td>reduce + map</td></tr>
+      </tbody>
+    </table>
+    <div class="box sci"><span class="tag">Science note — the "½": MS-VIC redistribution</span>
+      <p>A later physics change (MS-VIC) added a step that <b>conserves column-integrated constituent
+        tendencies</b>: after the solve, it computes column reduction sums (the "structure functions") and then
+        redistributes each species' tendency through a smooth, bounded map <code>capped_exp(x) = 1 + (2/π)·atan(πx/2)</code>.
+        This is a <em>reduce</em> (whole-column sums) followed by a <em>per-cell map</em> — two more distinct
+        parallel structures bolted onto the serial solve.</p>
+    </div>
+  </section>
+
+  <section id="profile">
+    <h2><span class="n">§2</span>Finding the bottleneck</h2>
+    <p>Nsight Systems ranked <code>vic_solve_partial</code> as the heaviest GPU-<em>compute</em> kernel in the run
+      — ~14.5% of all kernel time, ~3.4&nbsp;ms per call. Nsight Compute then explained <em>why</em> a compute
+      kernel was so slow: it wasn't compute-bound at all.</p>
+    <table>
+      <thead><tr><th>NCU metric (before)</th><th class="num">value</th><th>reading</th></tr></thead>
+      <tbody>
+        <tr><td>Achieved occupancy</td><td class="num lose">8.3%</td><td>almost no warps resident to hide latency</td></tr>
+        <tr><td>SM throughput</td><td class="num lose">2.8%</td><td>the cores sit idle</td></tr>
+        <tr><td>Memory throughput</td><td class="num">4.2%</td><td>not memory-bound either</td></tr>
+        <tr><td>Registers / thread</td><td class="num lose">128</td><td>register-limited to ~4 blocks/SM</td></tr>
+        <tr><td>Grid size (profiling cfg)</td><td class="num lose">8 blocks</td><td>on a 170-SM GPU</td></tr>
+      </tbody>
+    </table>
+    <div class="box insight"><span class="tag">Diagnosis: latency-bound, doubly starved</span>
+      <p>Low SM <em>and</em> low memory throughput with low occupancy is the fingerprint of a <b>latency-bound</b>
+        kernel: each thread stalls waiting on its own long dependency chain, and there aren't enough other warps
+        to swap in. Two independent causes (§3): too few threads, and too many registers per thread.</p>
+    </div>
+  </section>
+
+  <section id="whyslow">
+    <h2><span class="n">§3</span>Why it was slow: occupancy &amp; latency hiding</h2>
+    <p>A GPU hides memory and pipeline latency by <b>oversubscription</b> — keeping many warps resident so that
+      while one stalls, another runs. Two things must be true: enough threads to launch, and few enough resources
+      per thread that many can be co-resident. The monolithic kernel failed both.</p>
+
+    <h3 id="starve1">3.1 Starvation #1 — too few threads (grid starvation)</h3>
+    <p>One thread per <em>column</em> means the grid is <code>nx2 × nx3</code> threads. On the profiling
+      configuration that's only ~1,024 threads = 8 blocks of 128 — on a card with 170 SMs that can hold tens of
+      thousands of warps. Most of the machine is dark.</p>
+    <figure>
+      <svg viewBox="0 0 760 120" font-family="var(--mono)" font-size="12">
+        <text x="14" y="18" fill="#b6a791">170 SMs — one-thread-per-column lights only a sliver:</text>
+        <g>
+          <rect x="14" y="30" width="16" height="14" rx="2" fill="#e4572e"/>
+          <rect x="32" y="30" width="16" height="14" rx="2" fill="#e4572e"/>
+          <rect x="50" y="30" width="16" height="14" rx="2" fill="#e4572e"/>
+          <rect x="68" y="30" width="16" height="14" rx="2" fill="#e4572e"/>
+          <rect x="86" y="30" width="16" height="14" rx="2" fill="#e4572e"/>
+          <rect x="104" y="30" width="16" height="14" rx="2" fill="#e4572e"/>
+          <rect x="122" y="30" width="16" height="14" rx="2" fill="#e4572e"/>
+          <rect x="140" y="30" width="16" height="14" rx="2" fill="#e4572e"/>
+        </g>
+        <rect x="160" y="29" width="586" height="16" rx="2" fill="#1b1610" stroke="#2c241b"/>
+        <text x="453" y="41" fill="#5f5444" font-size="10" text-anchor="middle">… ~162 idle SMs …</text>
+        <text x="14" y="68" fill="#8b7c69" font-size="11">8 blocks lit · ~162 idle  (profiling config)</text>
+        <text x="14" y="90" fill="#7bbf9e" font-size="11">after fission, the map kernels launch nx1·nx2·nx3 threads → all 170 SMs busy</text>
+      </svg>
+      <figcaption>Grid starvation: a per-column launch leaves the vast majority of the GPU idle.</figcaption>
+    </figure>
+
+    <h3 id="starve2">3.2 Starvation #2 — register pressure</h3>
+    <p>Even the few resident threads couldn't multiply, because each carried an enormous live set. The assembly
+      holds, simultaneously, several <b>5×5 Eigen matrices</b> for the Roe eigendecomposition — <code>Rmat</code>,
+      <code>Rimat</code>, <code>Am</code>, <code>Ap</code>, <code>dfdqf</code> — plus the eigenvalue vector and a
+      clutch of 3×3 blocks. That is ~150 live doubles, which the compiler spends <b>128 registers/thread</b>
+      trying to hold (and still spills). With a hard cap of 65,536 registers per SM, 128 reg/thread limits
+      residency to ~4 blocks/SM — independent of how many threads you launch.</p>
+    <pre><div class="filebar"><span>vic_assemble_partial_impl.h — the register-heavy live set</span><span class="lang">C++ / Eigen</span></div><code>Eigen::Matrix&lt;T,5,5&gt; Rmat, Rimat, Am, Ap, dfdqf;   <span class="cmt">// 5 × 25 doubles</span>
+Eigen::Matrix&lt;T,5,1&gt; Lambda;                       <span class="cmt">// eigenvalues |Λ|</span>
+Eigen::Matrix&lt;T,3,3&gt; Am2, Ap2, dfdq_prev, dfdq_curr, dfdq_next;
+<span class="cmt">// … Roe average → |A| = Rmat · Λ.asDiagonal() · Rimat at each interface …</span>
+Am.<span class="fn">noalias</span>() = Rmat * Lambda.<span class="fn">asDiagonal</span>() * Rimat;</code></pre>
+    <div class="box warn"><span class="tag">A failed-but-instructive first attempt</span>
+      <p><b>Phase 1</b> tried to relieve this by trimming dead temporaries and folding constants — and it was
+        <em>bit-exact</em> and clean. But it bought <b>~0 speed-up</b>: registers stayed at 128, occupancy at 8.3%.
+        Lesson: shaving a few doubles doesn't help unless you cross an occupancy <em>threshold</em>. The six 5×5
+        matrices dominate; you can't trim your way under the cliff. The structure had to change, not the bookkeeping.</p>
+    </div>
+  </section>
+
+  <section id="idea">
+    <h2><span class="n">§4</span>The idea: parallelism-aware kernel fission</h2>
+    <p>The monolith forced the <em>serial</em> structure of the Thomas sweep (one thread per column) onto the
+      <em>map</em> structure of assembly and redistribution (which want one thread per cell). The two are
+      incompatible: you can't have both 10,000 threads and 1,000,000 threads in one launch. <b>Fission</b>
+      resolves the conflict — split into three kernels, each launched at the granularity its work wants:</p>
+    <figure>
+      <svg viewBox="0 0 760 250" font-family="var(--mono)" font-size="12">
+        <text x="14" y="20" fill="#ece2d4" font-size="13">Before — one kernel, one thread per column (10⁴ threads), does everything</text>
+        <rect x="14" y="30" width="500" height="40" rx="8" fill="#241d16" stroke="#d9595a"/>
+        <text x="264" y="55" text-anchor="middle" fill="#f0c9a8">assemble + Thomas scan + redistribute   (128 regs, 8% occ)</text>
+        <text x="14" y="108" fill="#ece2d4" font-size="13">After — three kernels, each at its natural granularity</text>
+        <g>
+          <rect x="14" y="120" width="220" height="64" rx="8" fill="#1b1610" stroke="#7bbf9e"/>
+          <text x="124" y="142" text-anchor="middle" fill="#7bbf9e">① assemble — MAP</text>
+          <text x="124" y="160" text-anchor="middle" fill="#d9cdbb" font-size="11">10⁶ threads (1 / cell)</text>
+          <text x="124" y="176" text-anchor="middle" fill="#8b7c69" font-size="10">79% SM · 28.8% occ</text>
+          <rect x="270" y="120" width="220" height="64" rx="8" fill="#1b1610" stroke="#e0a13a"/>
+          <text x="380" y="142" text-anchor="middle" fill="#e0a13a">② solve — SCAN</text>
+          <text x="380" y="160" text-anchor="middle" fill="#d9cdbb" font-size="11">10⁴ threads (1 / column)</text>
+          <text x="380" y="176" text-anchor="middle" fill="#8b7c69" font-size="10">serial Thomas — left alone</text>
+          <rect x="526" y="120" width="220" height="64" rx="8" fill="#1b1610" stroke="#7bbf9e"/>
+          <text x="636" y="142" text-anchor="middle" fill="#7bbf9e">③ redistribute — MAP</text>
+          <text x="636" y="160" text-anchor="middle" fill="#d9cdbb" font-size="11">10⁶ threads (1 / cell)</text>
+          <text x="636" y="176" text-anchor="middle" fill="#8b7c69" font-size="10">73% SM · 39% occ</text>
+        </g>
+        <path d="M234 152 L268 152" stroke="#8b7c69" marker-end="url(#a)"/>
+        <path d="M490 152 L524 152" stroke="#8b7c69" marker-end="url(#a)"/>
+        <defs><marker id="a" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="#8b7c69"/></marker></defs>
+        <text x="14" y="218" fill="#8b7c69" font-size="11">The heavy 5×5 Roe matrices now live only in ① — which is cell-parallel, so it tolerates the registers.</text>
+      </svg>
+      <figcaption>Fission separates the map work (cell-parallel) from the irreducible serial scan, and runs each where it thrives.</figcaption>
+    </figure>
+    <div class="box insight"><span class="tag">Why fission cures both starvations at once</span>
+      <p><b>Grid starvation:</b> the map kernels now launch <code>nx1·nx2·nx3</code> ≈ 10⁶ threads, filling all
+        170 SMs. <b>Register pressure:</b> the 128-register Roe assembly is isolated in the cell-parallel kernel,
+        where high register use is fine because each thread does <em>one</em> cell's work and exits — there's
+        enough independent work to hide its latency. The serial solve, now stripped of assembly, holds far fewer
+        registers.</p>
+    </div>
+  </section>
+
+  <section id="impl">
+    <h2><span class="n">§5</span>Implementation, in coding detail</h2>
+    <p>The split is realized as three dispatched kernels, wired through the same <code>DECLARE_DISPATCH</code>
+      pattern as the rest of the implicit module. The CPU path stays <b>fully fused</b> (assembly = no-op,
+      solve = the original combined routine), so the CPU is bit-identical and risk-free; only CUDA splits.</p>
+
+    <h3 id="impl-assemble">5.1 Assemble — the per-cell map</h3>
+    <p>The assembly loop becomes a device function over a single cell <code>i</code>; the CUDA launcher fires
+      <code>ncol × nlayer</code> threads. Each thread recomputes its two interface Jacobians (a small amount of
+      duplicated work — the interface is shared with the neighbor — in exchange for perfect cell independence)
+      and writes <code>a[i], b[i], c[i]</code> into the column's global coefficient arrays.</p>
+    <pre><div class="filebar"><span>vic_assemble_partial_impl.h — the heart of the assembly</span><span class="lang">C++ (host+device)</span></div><code><span class="cmt">// interface i−½ : Roe average of cells (i−1, i)  →  |A⁻| = R·|Λ|·R⁻¹</span>
+<span class="fn">RoeAverage</span>(prim, gm1, wl, wr);
+cs = <span class="fn">SoundSpeed</span>(prim, gm1);
+<span class="fn">Eigenvalue</span>(Lambda, prim[IVX + dir], cs);
+<span class="fn">Eigenvector</span>(Rmat, Rimat, prim, cs, gm1, dir);
+Am.<span class="fn">noalias</span>() = Rmat * Lambda.<span class="fn">asDiagonal</span>() * Rimat;   <span class="cmt">// upwind dissipation</span>
+<span class="cmt">// … same for interface i+½ → Ap …</span>
+
+T half_inv_vol = 0.5 / <span class="fn">VOL</span>(i);
+a[i] = (Am2*area_i + Ap2*area_ip1 + (area_ip1-area_i)*dfdq_curr) * half_inv_vol - Phi;
+a[i].<span class="fn">diagonal</span>() += Dt;                              <span class="cmt">// + I/dt</span>
+b[i] = -(Am2 + dfdq_prev) * area_i   * half_inv_vol;     <span class="cmt">// sub-diagonal block</span>
+c[i] = -(Ap2 - dfdq_next) * area_ip1 * half_inv_vol;     <span class="cmt">// super-diagonal block</span>
+<span class="kw">if</span> (i == is &amp;&amp; first_block) a[i] += b[i] * Bnd.<span class="fn">asDiagonal</span>();  <span class="cmt">// fold BC into a₀</span>
+<span class="kw">if</span> (i == ie &amp;&amp; last_block ) a[i] += c[i] * Bnd.<span class="fn">asDiagonal</span>();</code></pre>
+    <pre><div class="filebar"><span>implicit_dispatch.cu — the cell-parallel launch</span><span class="lang">CUDA C++</span></div><code><span class="kw">int64_t</span> total = ncol * (<span class="kw">int64_t</span>)nlayer;
+at::native::<span class="fn">launch_legacy_kernel</span>&lt;128, 1&gt;(total, [=] __device__(<span class="kw">int</span> idx) {
+  <span class="kw">int</span> col = idx / nlayer, i = idx % nlayer;        <span class="cmt">// one thread = one cell</span>
+  <span class="ty">auto</span> offsets = offset_calc.<span class="fn">get</span>(col);            <span class="cmt">// per-column base pointers</span>
+  <span class="cmt">/* reinterpret a,b,c,w,gamma,area,vol … */</span>
+  <span class="fn">vic_assemble_partial_impl</span>(a, b, c, w, gamma, area, vol, i, 0, nlayer-1,
+                            dt, grav, dir, ny, stride1, stride2, first_block, last_block);
+});</code></pre>
+
+    <h3 id="impl-solve">5.2 Solve — the irreducible serial scan</h3>
+    <p>With <code>a,b,c</code> pre-assembled, the solve kernel is now <em>only</em> the Thomas sweep, one thread
+      per column (<code>gpu_kernel&lt;9&gt;</code>). For the 3×3 partial block it inverts in place; the recurrence
+      is unavoidably ordered over layers:</p>
+    <pre><div class="filebar"><span>forward_backward_impl.h — ForwardSweep (partial, N=3)</span><span class="lang">C++ (host+device)</span></div><code>a[il] = a[il].<span class="fn">inverse</span>().<span class="fn">eval</span>();          <span class="cmt">// first layer</span>
+delta[il] = a[il] * rhs;
+a[il] = a[il] * c[il];
+<span class="kw">for</span> (<span class="kw">int</span> i = il + 1; i &lt;= iu; ++i) {        <span class="cmt">// SERIAL recurrence over layers</span>
+  a[i] -= b[i] * a[i - 1];                  <span class="cmt">// each step needs the previous</span>
+  a[i] = a[i].<span class="fn">inverse</span>().<span class="fn">eval</span>();
+  delta[i] = a[i] * (rhs - b[i] * delta[i - 1]);
+  a[i] = a[i] * c[i];
+}</code></pre>
+
+    <h3 id="impl-redist">5.3 Redistribute — the second per-cell map</h3>
+    <p>The MS-VIC redistribution is split in two. The <b>column reductions</b> (serial, must see the whole
+      column) stay in the solve kernel as <code>vic_backward_reduce</code> — it does the backward substitution and
+      then the structure-function sums, stashing them in scratch. The <b>per-cell map</b>
+      (<code>capped_exp</code> applied independently at each cell) becomes its own cell-parallel kernel:</p>
+    <pre><div class="filebar"><span>vic_redistribute_impl.h — vic_redistribute_cell (per cell, cell-parallel)</span><span class="lang">C++ (host+device)</span></div><code>T denom = scratch[0], dry_struct = scratch[1];      <span class="cmt">// column reductions (precomputed)</span>
+T a0 = delta[i](0) * <span class="fn">VOL</span>(i);
+T dryfrac = 1; <span class="kw">for</span> (<span class="kw">int</span> n = 0; n &lt; ny; ++n) dryfrac -= <span class="fn">W</span>(ICY + n, i);
+
+<span class="fn">DU</span>(IDN, i) = delta[i](0) * dryfrac *
+             <span class="fn">capped_exp</span>(a0 * dry_struct / std::<span class="fn">max</span>((T)1e-12, denom * dryfrac));
+<span class="fn">DU</span>(IVX + dir, i) = delta[i](1);
+<span class="fn">DU</span>(IPR, i)       = delta[i](2);
+<span class="kw">for</span> (<span class="kw">int</span> n = 0; n &lt; ny; ++n) {                    <span class="cmt">// per-species correction</span>
+  T corr = <span class="fn">capped_exp</span>(a0 * scratch[2+n] / std::<span class="fn">max</span>((T)1e-12, denom * <span class="fn">W</span>(ICY+n,i)));
+  <span class="fn">DU</span>(ICY + n, i) = delta[i](0) * <span class="fn">W</span>(ICY + n, i) * corr;
+}</code></pre>
+
+    <h3 id="impl-handoff">5.4 Passing data between the phases (zero extra memory)</h3>
+    <p>Splitting a kernel raises a question: where do the intermediates live now that they cross kernel
+      boundaries? The coefficients <code>a,b,c</code> and the solution <code>delta</code> already live in global
+      buffers (the assembly writes them, the solve reads them). The only new data is the column reduction scalars
+      the redistribute kernel needs. The trick: after the forward sweep, the <b>off-diagonal buffer <code>b</code>
+      is dead</b> — so we reuse it as scratch for <code>denom</code>, <code>dry_struct</code>, and the per-species
+      sums. No new allocation, no extra traffic.</p>
+    <pre><div class="filebar"><span>vic_redistribute_impl.h — vic_backward_reduce stashes reductions in the freed b buffer</span><span class="lang">C++</span></div><code><span class="kw">for</span> (<span class="kw">int</span> i = iu - 1; i &gt;= il; --i) delta[i] -= a[i] * delta[i + 1];  <span class="cmt">// backward scan</span>
+T denom = 0, dry_struct = 0;
+<span class="kw">for</span> (<span class="kw">int</span> i = il; i &lt;= iu; ++i) { <span class="cmt">/* … accumulate structure functions … */</span> }
+scratch[0] = denom;  scratch[1] = dry_struct;       <span class="cmt">// scratch = b[0].data() — dead after sweep</span>
+<span class="kw">for</span> (<span class="kw">int</span> n = 0; n &lt; ny; ++n) scratch[2 + n] = species_struct;</code></pre>
+    <div class="box note"><span class="tag">Why this is safe &amp; bit-identical</span>
+      <p>The split reproduces the original <code>BackwardSubstitution</code> arithmetic exactly — same sums, same
+        <code>capped_exp</code>, same order — just partitioned across two launches. Reusing a buffer that is
+        provably dead introduces no aliasing. The seeded simulation matched the fused baseline to <b>all
+        digits</b>.</p>
+    </div>
+  </section>
+
+  <section id="journey">
+    <h2><span class="n">§6</span>The phase-by-phase journey</h2>
+    <p>The optimization landed in stages, each with a lesson:</p>
+    <table>
+      <thead><tr><th>Phase</th><th>Action</th><th>Outcome</th></tr></thead>
+      <tbody>
+        <tr><td><b>1</b></td><td>Register trimming (remove dead temporaries, fold constants)</td><td class="lose">Bit-exact but ~0 gain — regs stayed 128, occ 8.3%. <em>Trimming ≠ crossing a threshold.</em></td></tr>
+        <tr><td><b>2</b></td><td>Fission the <b>assembly</b> into a per-cell kernel</td><td class="win">Assembly 2.8%→79% SM, 8→800 blocks; vic total ~2.26× faster.</td></tr>
+        <tr><td><b>—</b></td><td>Upstream merge adds MS-VIC constituent redistribution</td><td class="lose">Solve regressed 1.56→3.05 ms/call (regs 102→128): the new per-column redistribution map re-bloated the serial kernel.</td></tr>
+        <tr><td><b>3</b></td><td>Fission the <b>redistribution</b> map into a third per-cell kernel</td><td class="win">Redistribute 73% SM / 39% occ; solve back to 1.18 ms; vic total 3.19→1.40 ms/call (≈2.3×).</td></tr>
+      </tbody>
+    </table>
+    <div class="box insight"><span class="tag">A meta-lesson on regressions</span>
+      <p>When the MS-VIC merge bolted a fresh map onto the serial solve, the <em>same</em> anti-pattern reappeared
+        — and the <em>same</em> cure (fission) fixed it. Recognizing the pattern made the second fix mechanical.
+        "One kernel, one kind of parallel work" is a durable rule, not a one-off trick.</p>
+    </div>
+  </section>
+
+  <section id="pcr">
+    <h2><span class="n">§7</span>The PCR detour — a deliberate negative result</h2>
+    <p>After fission, the serial Thomas scan was the last big piece. The tempting next move: parallelize
+      <em>inside</em> the column with <b>Parallel Cyclic Reduction</b> (PCR) — one block per column, one thread per
+      layer, cooperating in shared memory. PCR turns the O(N) serial recurrence into O(log&nbsp;N) parallel steps.
+      It was implemented, validated, and benchmarked.</p>
+    <table>
+      <thead><tr><th>Config</th><th class="num">serial Thomas</th><th class="num">block-PCR</th><th>verdict</th></tr></thead>
+      <tbody>
+        <tr><td>small (32×32×100)</td><td class="num">1.18 ms</td><td class="num">0.43 ms</td><td class="win">PCR 2.7× faster</td></tr>
+        <tr><td>production (100³)</td><td class="num">1.40 ms</td><td class="num">3.29 ms</td><td class="lose">PCR 2.35× SLOWER</td></tr>
+      </tbody>
+    </table>
+    <div class="box pitfall"><span class="tag">Why PCR backfired at scale — the key insight of the whole study</span>
+      <p>PCR does ~7× <em>more total work</em> (O(N&nbsp;log&nbsp;N) vs O(N)) to win latency. On the small grid the
+        GPU was under-filled (8 columns), so trading work for parallelism paid. But at production there are
+        <b>10,000 independent columns</b> — the simple one-thread-per-column map <em>already saturates the
+        GPU</em>. Adding intra-column parallelism just piles on the extra work with no occupancy left to buy.
+        <b>Match the parallelism you add to the parallelism you lack.</b> When the GPU is already full, reduce
+        work — don't add it.</p>
+    </div>
+    <p>PCR was reverted. The serial Thomas scan, one thread per column, is near-optimal for this structure at
+      production scale. <em>The negative result is as valuable as the positive ones</em> — it defines the
+      boundary of the technique.</p>
+  </section>
+
+  <section id="results">
+    <h2><span class="n">§8</span>Results &amp; validation</h2>
+    <p>End to end, the fissioned pipeline replaced one 8%-occupancy monolith with two well-fed map kernels around
+      a lean serial scan:</p>
+    <table>
+      <thead><tr><th>Metric</th><th class="num">before</th><th class="num">after</th></tr></thead>
+      <tbody>
+        <tr><td>vic per solver call</td><td class="num">3.19 ms</td><td class="num win">1.40 ms (≈2.3×)</td></tr>
+        <tr><td>assemble occupancy / SM</td><td class="num">8.3% / 2.8%</td><td class="num win">28.8% / 79%</td></tr>
+        <tr><td>redistribute occupancy / SM</td><td class="num">—</td><td class="num win">39% / 73%</td></tr>
+        <tr><td>serial solve / call</td><td class="num">3.05 ms</td><td class="num win">1.18 ms</td></tr>
+        <tr><td>numerics</td><td class="num" colspan="2">bit-identical (seeded sim matches to all digits)</td></tr>
+      </tbody>
+    </table>
+    <div class="box note"><span class="tag">Correctness ladder</span>
+      <p>Bit-identical seeded simulation (mass/energy match the fused baseline to all digits, deterministic across
+        runs — no race); CPU path unchanged (stays fused) so <code>test_run_hydro_cpu</code> is an untouched
+        oracle; <code>test_run_hydro_cuda</code> and <code>test_backward_substitution</code> pass. Because the
+        split is an exact re-partition of the same arithmetic (not a different algorithm, unlike PCR), bit-identity
+        is achievable here — and was the bar.</p>
+    </div>
+  </section>
+
+  <section id="generalize">
+    <h2><span class="n">§9</span>Generalizing: parallelism-aware fission</h2>
+    <h3 id="taxonomy">9.1 Classify the work: map / reduce / scan</h3>
+    <p>Before splitting a kernel, label each piece by its dependency structure. The label dictates the launch:</p>
+    <table>
+      <thead><tr><th>Pattern</th><th>Dependency</th><th>Natural launch</th><th>VIC example</th></tr></thead>
+      <tbody>
+        <tr><td><b>Map</b></td><td>none (per element)</td><td>one thread/element — saturate the GPU</td><td>assembly, redistribution</td></tr>
+        <tr><td><b>Reduce</b></td><td>combine many → one</td><td>tree / cooperative, or fold into a neighbor</td><td>column structure-function sums</td></tr>
+        <tr><td><b>Scan</b></td><td>serial recurrence</td><td>one thread per independent system; parallelize within only if systems are few</td><td>the Thomas sweep</td></tr>
+      </tbody>
+    </table>
+    <h4>The recipe</h4>
+    <ol>
+      <li><b>Profile</b> → find a low-occupancy, latency-bound kernel.</li>
+      <li><b>Decompose by dependency type</b> — separate the maps, reductions, and scans hiding inside it.</li>
+      <li><b>Launch each at its natural granularity</b>; let the embarrassingly parallel parts fill the GPU.</li>
+      <li><b>Hand off through existing buffers</b> — reuse dead scratch to avoid new traffic.</li>
+      <li><b>Keep a fused reference path</b> (here, the CPU) as a bit-exact oracle.</li>
+      <li><b>Leave the irreducible serial core alone</b> unless it is the bottleneck <em>and</em> the GPU is
+        under-filled (§7).</li>
+    </ol>
+
+    <h3 id="winlose">9.2 When fission helps — and when it doesn't</h3>
+    <table>
+      <thead><tr><th>Situation</th><th>Verdict</th></tr></thead>
+      <tbody>
+        <tr><td>One kernel mixes map + serial work; map starved by serial granularity</td><td class="win">fission wins big</td></tr>
+        <tr><td>High register/shared use from one phase throttles the rest</td><td class="win">isolate it — fission wins</td></tr>
+        <tr><td>The kernel is already a clean map at full occupancy</td><td class="lose">nothing to gain</td></tr>
+        <tr><td>Phases are tiny and the launch/handoff overhead exceeds the win</td><td class="lose">keep fused</td></tr>
+        <tr><td>Irreducible serial core, GPU already saturated by independent systems</td><td>leave serial (don't PCR)</td></tr>
+      </tbody>
+    </table>
+
+    <h3 id="duality">9.3 The duality: fission ⟷ fusion</h3>
+    <p>This study and its <a href="evolve_implicit_optimization.html">companion (evolve_implicit)</a> are mirror
+      images — and reading them together is the real education:</p>
+    <table>
+      <thead><tr><th></th><th>VIC solver (this doc)</th><th>evolve_implicit (companion)</th></tr></thead>
+      <tbody>
+        <tr><td>Move</td><td><b>fission</b> — split 1 kernel into 3</td><td><b>fusion</b> — merge library calls into 1</td></tr>
+        <tr><td>Disease</td><td>serial granularity starves the maps; register pressure</td><td>tiny batched library ops fragment into many launches</td></tr>
+        <tr><td>Cure granularity</td><td>per-cell maps + per-column scan</td><td>per-cell fused solve</td></tr>
+        <tr><td>Numerics</td><td>bit-identical (same arithmetic, re-partitioned)</td><td>bit-close (~1e-11, different solver path)</td></tr>
+        <tr><td>Shared lesson</td><td colspan="2" class="win">match the unit of parallel work to the hardware; don't over-parallelize a saturated GPU (the PCR lesson)</td></tr>
+      </tbody>
+    </table>
+    <div class="box insight"><span class="tag">Fusion and fission are the same principle</span>
+      <p>Both ask: "what is the right granularity of independent work, and is the GPU full of it?" Fusion
+        <em>increases</em> the work per launch when launches are too small and too many; fission <em>decreases</em>
+        it when one launch crams together incompatible parallel structures. The skill is reading which way the
+        imbalance runs.</p>
+    </div>
+
+    <h3 id="limits">9.4 Limitations &amp; honest caveats</h3>
+    <ul>
+      <li><b>Recomputation cost.</b> Per-cell assembly recomputes each shared interface Jacobian twice (once per
+        adjacent cell). That ~2× redundant flux work is a fair trade for cell independence here, but a denser
+        stencil could tip the balance.</li>
+      <li><b>Handoff discipline.</b> Reusing the dead <code>b</code> buffer as scratch is safe only because it is
+        provably dead post-sweep; such buffer reuse must be audited, not assumed.</li>
+      <li><b>The serial core remains.</b> At configurations where columns are <em>few</em> (under-filled GPU), the
+        Thomas scan is the bottleneck and PCR <em>would</em> win — the opposite of production. The right choice is
+        config-dependent; we optimized for prod.</li>
+      <li><b>More kernels, more launches.</b> Three launches + their syncs replace one. Worth it only because each
+        map is large; for tiny columns the overhead could dominate.</li>
+    </ul>
+  </section>
+
+  <section id="related">
+    <h2><span class="n">§10</span>Related topics worth your time</h2>
+    <div class="grid2">
+      <div class="box note"><span class="tag">Occupancy &amp; the register cliff</span>
+        <p>Residency is capped by <code>regs/thread × threads</code> ≤ 65,536/SM. Crossing a block-count threshold
+          is discrete — which is why Phase 1's incremental trimming bought nothing. Tools: <code>ncu</code>
+          occupancy section; <code>__launch_bounds__</code> to cap registers (at the cost of spills).</p></div>
+      <div class="box note"><span class="tag">Roe Riemann solvers</span>
+        <p>The upwind dissipation <code>|A| = R|Λ|R⁻¹</code> is the source of those expensive 5×5
+          eigendecompositions. Approximate/HLLC alternatives trade accuracy for cheaper Jacobians — a different
+          lever on the same cost.</p></div>
+      <div class="box note"><span class="tag">Cyclic reduction family</span>
+        <p>CR (work-efficient) and PCR (latency-optimal) parallelize tridiagonal solves; hybrids switch between
+          them by size. Essential reading for <em>when</em> intra-system parallelism pays — and §7 for when it
+          doesn't.</p></div>
+      <div class="box note"><span class="tag">Launch overhead &amp; CUDA Graphs</span>
+        <p>Fission adds launches; if the surrounding loop is launch-bound, a CUDA Graph can replay the whole
+          assemble→solve→redistribute sequence with minimal CPU overhead.</p></div>
+    </div>
+  </section>
+
+  <section id="glossary">
+    <h2><span class="n">§11</span>Glossary</h2>
+    <table>
+      <tbody>
+        <tr><td><b>VIC (vertically-implicit correction)</b></td><td>Implicit treatment of fast vertical waves so the step follows the slow timescale.</td></tr>
+        <tr><td><b>Block-tridiagonal</b></td><td>Tridiagonal system whose entries are small dense matrices (one per cell coupling).</td></tr>
+        <tr><td><b>Thomas algorithm</b></td><td>Block-LU for tridiagonals: serial forward sweep + backward substitution.</td></tr>
+        <tr><td><b>Roe solver / |A|=R|Λ|R⁻¹</b></td><td>Upwind flux via eigendecomposition of the flux Jacobian.</td></tr>
+        <tr><td><b>MS-VIC redistribution</b></td><td>Constituent fix-up conserving column-integrated tendencies via a bounded <code>capped_exp</code> map.</td></tr>
+        <tr><td><b>Kernel fission</b></td><td>Splitting one kernel into several, each launched at its own parallel granularity.</td></tr>
+        <tr><td><b>map / reduce / scan</b></td><td>The three dependency structures: independent / combine-to-one / serial recurrence.</td></tr>
+        <tr><td><b>Occupancy</b></td><td>Fraction of an SM's max warps resident; the budget for hiding latency.</td></tr>
+        <tr><td><b>PCR</b></td><td>Parallel Cyclic Reduction — O(N log N) parallel tridiagonal solve; wins only when systems are few.</td></tr>
+        <tr><td><b>Latency-bound</b></td><td>Stalled on dependency chains with too few warps to hide them (low SM <em>and</em> low memory throughput).</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="filemap">
+    <h2><span class="n">§12</span>File &amp; command map</h2>
+    <h4>Files (in <code>snapy/src/implicit/</code>)</h4>
+    <table>
+      <thead><tr><th>File</th><th>Role</th></tr></thead>
+      <tbody>
+        <tr><td><code>vic_assemble_partial_impl.h</code></td><td>per-cell Roe assembly of <code>a,b,c</code> (the map ①)</td></tr>
+        <tr><td><code>forward_backward_impl.h</code></td><td><code>ForwardSweep</code> + <code>BackwardSubstitution</code> + <code>capped_exp</code> (the scan ②, fused reference)</td></tr>
+        <tr><td><code>vic_redistribute_impl.h</code></td><td><code>vic_backward_reduce</code> (scan tail + reductions) &amp; <code>vic_redistribute_cell</code> (map ③)</td></tr>
+        <tr><td><code>implicit_dispatch.cu</code></td><td>the three CUDA launchers (per-cell, per-column, per-cell)</td></tr>
+        <tr><td><code>implicit_dispatch.{cpp,hpp}</code></td><td>dispatch registration; CPU stays fused (assemble/redistribute = no-ops)</td></tr>
+        <tr><td><code>implicit_hydro.cpp</code></td><td>calls assemble → solve → redistribute on the partial branch</td></tr>
+      </tbody>
+    </table>
+    <h4>Validation commands</h4>
+    <pre><code><span class="cmt"># build + reinstall the .so, then:</span>
+ctest -R test_run_hydro          <span class="cmt"># cpu (fused oracle) + cuda (fissioned) must agree</span>
+ctest -R test_backward_substitution
+<span class="cmt"># seeded end-to-end sim: cycle-N mass/energy must match the fused baseline to all digits</span>
+nsys profile -o vic_after  python run_jupiter_crm.py -c jupiter_crm_100.yaml
+ncu  --kernel-name-base demangled  --launch-count 3  …   <span class="cmt"># confirm occupancy of the map kernels</span></code></pre>
+  </section>
+
+  <div class="footer">
+    <p>Self-contained artifact — no external fonts, scripts, or stylesheets; opens locally with its aesthetics
+      intact. Rust-inspired warm-dark palette, matched to its companion.</p>
+    <p>Companion reading: <a href="evolve_implicit_optimization.html">evolve_implicit_optimization.html</a> — the
+      fusion dual of this fission story.</p>
+  </div>
+</main>
+</div>
+<script>
+(function(){
+  var links=[].slice.call(document.querySelectorAll('#toc a[href^="#"]')),map={};
+  links.forEach(function(a){var id=a.getAttribute('href').slice(1),el=document.getElementById(id);if(el)map[id]=a;});
+  var ids=Object.keys(map);
+  function spy(){var best=null,bt=-1e9,y=scrollY+120;ids.forEach(function(id){var el=document.getElementById(id);if(!el)return;var t=el.getBoundingClientRect().top+scrollY;if(t<=y&&t>bt){bt=t;best=id;}});links.forEach(function(a){a.classList.remove('active');});if(best&&map[best])map[best].classList.add('active');}
+  document.addEventListener('scroll',spy,{passive:true});addEventListener('resize',spy);spy();
+})();
+</script>
+</body>
+</html>
