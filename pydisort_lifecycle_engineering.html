@@ -1,0 +1,1203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Life Cycle of a Torch-Backed Native Extension — A Field Guide via pydisort</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,300..900,0..100,0..1;1,9..144,300..900,0..100,0..1&family=Source+Serif+4:ital,opsz,wght@0,8..60,300..700;1,8..60,300..700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --paper: #f7f4ec; --paper-2: #efeadc; --paper-3: #e6dfca;
+  --ink: #1a1612; --ink-soft: #3d3830; --ink-faint: #7a7468;
+  --rule: #c4bba5; --rule-soft: #ddd5bc;
+  --oxblood: #9d2818; --oxblood-deep: #6e1a0e;
+  --teal: #2a6066; --teal-deep: #163c41;
+  --ochre: #b08020; --moss: #5e6f3a;
+  --code-bg: #1a1d22; --code-ink: #e8e3d4;
+  --maxw: 1020px;
+}
+*{ box-sizing: border-box; }
+html{ scroll-behavior: smooth; }
+body{
+  margin: 0; background: var(--paper); color: var(--ink);
+  font-family: 'Source Serif 4', Georgia, serif;
+  font-variation-settings: "opsz" 16;
+  font-size: 17px; line-height: 1.62;
+  -webkit-font-smoothing: antialiased;
+}
+body::before{
+  content: ""; position: fixed; inset: 0;
+  background-image: radial-gradient(rgba(80,55,20,0.03) 1px, transparent 1px);
+  background-size: 4px 4px; pointer-events: none; z-index: 1;
+  mix-blend-mode: multiply;
+}
+header, main, footer{ position: relative; z-index: 2; }
+header{
+  max-width: var(--maxw); margin: 0 auto;
+  padding: 80px 32px 56px;
+  border-bottom: 4px solid var(--ink); position: relative;
+}
+header::after{
+  content: ""; display: block; position: absolute;
+  bottom: -10px; left: 32px; right: 32px; height: 1px; background: var(--ink);
+}
+.kicker{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; letter-spacing: .28em; text-transform: uppercase;
+  color: var(--oxblood); margin-bottom: 32px;
+  display: flex; align-items: center; gap: 16px;
+}
+.kicker::before{ content: "\2B25"; color: var(--ochre); }
+.kicker::after{
+  content: ""; flex: 1; height: 2px;
+  background: linear-gradient(to right, var(--rule) 0%, var(--rule) 30%, transparent 100%);
+}
+h1{
+  font-family: 'Fraunces', serif;
+  font-variation-settings: "opsz" 144, "SOFT" 100, "WONK" 1;
+  font-weight: 500; font-size: clamp(44px, 8vw, 88px);
+  line-height: 0.94; letter-spacing: -0.025em;
+  margin: 0 0 24px; color: var(--ink);
+}
+h1 .ital{ font-style: italic; font-weight: 400; color: var(--oxblood); }
+.deck{
+  font-family: 'Source Serif 4', serif;
+  font-variation-settings: "opsz" 32;
+  font-size: 21px; font-style: italic; color: var(--ink-soft);
+  max-width: 760px; line-height: 1.45; margin-top: 20px;
+}
+.meta-row{
+  margin-top: 36px; display: flex; gap: 32px; flex-wrap: wrap;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11.5px; color: var(--ink-faint); letter-spacing: .04em;
+}
+.meta-row .m b{ color: var(--ink); font-weight: 600; }
+.toc{
+  margin-top: 48px; border: 2px solid var(--ink); background: var(--paper-2);
+  padding: 26px 30px; position: relative;
+}
+.toc::before{
+  content: "Index"; position: absolute; top: -12px; left: 24px;
+  background: var(--paper); padding: 0 10px;
+  font-family: 'Fraunces', serif; font-style: italic;
+  font-size: 16px; color: var(--ink);
+}
+.toc-grid{ display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px 36px; }
+@media (max-width: 760px){ .toc-grid{ grid-template-columns: 1fr; } }
+.toc-grid a{
+  color: var(--ink-soft); text-decoration: none;
+  font-size: 14.5px; padding: 5px 0; display: flex; gap: 14px;
+  border-bottom: 1px solid transparent; transition: all .15s;
+  font-family: 'Source Serif 4', serif;
+}
+.toc-grid a:hover{ color: var(--oxblood); border-color: var(--rule); }
+.toc-grid a .n{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; color: var(--oxblood); min-width: 30px; font-weight: 600;
+}
+main{ max-width: var(--maxw); margin: 0 auto; padding: 48px 32px 80px; }
+.part{
+  margin-top: 90px; padding-top: 48px;
+  border-top: 4px solid var(--ink); position: relative;
+}
+.part::after{
+  content: ""; position: absolute; top: 8px; left: 0; right: 0;
+  height: 1px; background: var(--ink);
+}
+.part:first-child{ margin-top: 32px; border-top: none; padding-top: 0; }
+.part:first-child::after{ display: none; }
+.part-label{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; letter-spacing: .28em; color: var(--oxblood);
+  text-transform: uppercase; margin-bottom: 12px; font-weight: 600;
+}
+.part-title{
+  font-family: 'Fraunces', serif;
+  font-variation-settings: "opsz" 96;
+  font-weight: 500; font-size: 48px; line-height: 1.0;
+  letter-spacing: -0.015em; margin: 0 0 14px; color: var(--ink);
+}
+.part-title .ital{ font-style: italic; color: var(--oxblood); font-weight: 400; }
+.part-intro{
+  color: var(--ink-soft); font-size: 18px; max-width: 720px;
+  margin-bottom: 36px; font-style: italic;
+  font-family: 'Source Serif 4', serif;
+  font-variation-settings: "opsz" 24; line-height: 1.55;
+}
+section.chapter{ margin-top: 48px; }
+h2{
+  font-family: 'Fraunces', serif;
+  font-variation-settings: "opsz" 48;
+  font-weight: 500; font-size: 30px; line-height: 1.18;
+  letter-spacing: -0.01em; margin: 0 0 14px; color: var(--ink);
+  display: flex; align-items: baseline; gap: 18px;
+}
+h2 .ch-num{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px; color: var(--oxblood); letter-spacing: .15em;
+  font-weight: 600; flex-shrink: 0;
+}
+h3{
+  font-family: 'Fraunces', serif;
+  font-variation-settings: "opsz" 32;
+  font-weight: 600; font-size: 20px; margin: 28px 0 10px;
+  color: var(--ink); letter-spacing: -0.005em;
+}
+h4{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; letter-spacing: .2em; text-transform: uppercase;
+  color: var(--teal); margin: 22px 0 8px; font-weight: 600;
+}
+p{ margin: 12px 0; }
+p code, li code, td code{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: .82em; background: var(--paper-3); color: var(--oxblood-deep);
+  padding: 1px 6px; border-radius: 2px;
+}
+ul, ol{ padding-left: 1.4em; }
+li{ margin: 6px 0; }
+ul.tight li{ margin: 3px 0; }
+ul.dash{ list-style: none; padding-left: 0; }
+ul.dash li{ position: relative; padding-left: 26px; }
+ul.dash li::before{
+  content: "\2014"; position: absolute; left: 0;
+  color: var(--oxblood); font-weight: 600;
+}
+pre{
+  background: var(--code-bg); border: 1px solid #2a2e35;
+  padding: 16px 20px; overflow-x: auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12.5px; line-height: 1.6;
+  color: var(--code-ink); margin: 18px 0;
+  position: relative; border-radius: 2px;
+}
+pre .com{ color: #7e8a78; font-style: italic; }
+pre .kw{  color: #d9b88a; }
+pre .ty{  color: #88c5b4; }
+pre .str{ color: #e09678; }
+pre .num{ color: #c8a4d8; }
+pre .fn{  color: #84b5d4; }
+pre .pp{  color: #d8b070; }
+pre::before{
+  content: attr(data-lang); position: absolute; top: 6px; right: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9.5px; letter-spacing: .18em;
+  color: #5a6258; text-transform: uppercase;
+}
+.code-caption{
+  font-family: 'Source Serif 4', serif; font-style: italic;
+  font-size: 14.5px; color: var(--ink-faint);
+  margin: -10px 0 18px; padding-left: 6px;
+}
+.callout{
+  margin: 22px 0; padding: 16px 22px;
+  border-left: 4px solid var(--teal); background: var(--paper-2);
+  font-size: 15.5px; line-height: 1.6;
+}
+.callout.warn{ border-color: var(--ochre); }
+.callout.danger{ border-color: var(--oxblood); }
+.callout.tip{ border-color: var(--moss); }
+.callout h5{
+  margin: 0 0 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px; letter-spacing: .22em; text-transform: uppercase;
+  color: var(--teal); font-weight: 700;
+}
+.callout.warn h5{ color: var(--ochre); }
+.callout.danger h5{ color: var(--oxblood); }
+.callout.tip h5{ color: var(--moss); }
+.callout p:first-child{ margin-top: 0; }
+.callout p:last-child{ margin-bottom: 0; }
+.callout pre{ margin: 8px 0 4px; }
+.tbl{ width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 14px; }
+.tbl th, .tbl td{
+  text-align: left; padding: 10px 14px; vertical-align: top;
+  border-bottom: 1px solid var(--rule);
+}
+.tbl th{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--oxblood); font-weight: 700;
+  border-bottom: 2px solid var(--oxblood);
+}
+.tbl th.r{ text-align: right; }
+.tbl tr:hover td{ background: var(--paper-2); }
+.tbl td:first-child{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px; color: var(--ink); font-weight: 600; width: 22%;
+}
+.tbl td.r{ text-align: right; font-family: 'JetBrains Mono', monospace; font-size: 12.5px; color: var(--ink-soft); }
+.tbl td.wide:first-child{ width: auto; }
+.win{ color: var(--moss); font-weight: 700; }
+.lose{ color: var(--oxblood); font-weight: 700; }
+.twocol{ display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 22px 0; }
+@media (max-width: 760px){ .twocol{ grid-template-columns: 1fr; } }
+.twocol .col{ background: var(--paper-2); border: 1px solid var(--rule); padding: 18px 20px; }
+.twocol .col h5{
+  margin: 0 0 10px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; letter-spacing: .18em; text-transform: uppercase;
+  color: var(--teal); font-weight: 700;
+}
+.twocol .col.bad h5{ color: var(--oxblood); }
+.twocol .col.good h5{ color: var(--moss); }
+.twocol .col p{ margin: 8px 0; font-size: 14.5px; }
+.diagram{
+  background: var(--paper-2); border: 1px solid var(--rule);
+  padding: 22px 24px; margin: 22px 0;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px; line-height: 1.55; color: var(--ink-soft);
+  white-space: pre; overflow-x: auto;
+}
+.pull{
+  font-family: 'Fraunces', serif;
+  font-variation-settings: "opsz" 72;
+  font-style: italic; font-weight: 400;
+  font-size: 26px; line-height: 1.32;
+  color: var(--oxblood); margin: 36px 0;
+  padding: 0 0 0 32px; border-left: 3px solid var(--oxblood);
+}
+.idea{
+  margin: 24px 0; border: 2px solid var(--ink);
+  background: var(--paper); padding: 20px 24px; position: relative;
+}
+.idea::before{
+  content: "Key idea"; position: absolute; top: -10px; left: 20px;
+  background: var(--paper); padding: 0 10px;
+  font-family: 'Fraunces', serif; font-style: italic;
+  font-size: 14px; color: var(--ink);
+}
+.idea p{ margin: 6px 0; font-size: 15.5px; }
+.idea p:first-child{ margin-top: 6px; }
+.idea p:last-child{ margin-bottom: 0; }
+.rule-sep{ height: 1px; background: var(--rule); margin: 56px 0; position: relative; }
+.rule-sep::after{
+  content: "\00A7"; position: absolute;
+  top: 50%; left: 50%; transform: translate(-50%, -50%);
+  background: var(--paper); color: var(--oxblood);
+  padding: 0 18px;
+  font-family: 'Fraunces', serif; font-style: italic; font-size: 18px;
+}
+footer{
+  max-width: var(--maxw); margin: 0 auto; padding: 56px 32px 80px;
+  border-top: 4px solid var(--ink); color: var(--ink-soft);
+  font-size: 14.5px; position: relative;
+}
+footer::after{
+  content: ""; position: absolute; top: 8px; left: 32px; right: 32px;
+  height: 1px; background: var(--ink);
+}
+footer h4{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; letter-spacing: .22em;
+  color: var(--oxblood); margin: 0 0 14px; font-weight: 700;
+}
+footer .resources{ columns: 2; column-gap: 36px; }
+@media (max-width: 680px){ footer .resources{ columns: 1; } }
+footer ul{ list-style: none; padding: 0; margin: 0; }
+footer li{ padding: 5px 0; font-size: 14px; break-inside: avoid; }
+footer li code{ color: var(--oxblood); background: transparent; padding: 0; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="kicker">Software life cycle &middot; native extensions &middot; CMake + torch &middot; C++ ABI &middot; CI/CD &middot; wheels</div>
+  <h1>The life cycle of a<br><span class="ital">torch-backed</span> native extension</h1>
+  <p class="deck">
+    A wheel that says <code>import pydisort</code> is the visible 1% of an iceberg. Under it: a 1980s C radiative-transfer kernel, a C++ layer, a PyTorch device-dispatch system, a CUDA path, two build systems stitched together, a dual C++ ABI, RPATH gymnastics, four Python versions, two operating systems, and a release robot. This is a field guide to that iceberg &mdash; structured as the knowledge map of a <em>Senior Life Cycle Engineer (PyTorch / Deep Learning)</em>, grounded line-by-line in how <code>pydisort</code> actually builds, links, tests, packages, and ships.
+  </p>
+  <div class="meta-row">
+    <span class="m"><b>Subject</b> pydisort 1.7.3</span>
+    <span class="m"><b>Vertical</b> Python &rarr; pybind11 &rarr; C++/torch &rarr; CUDA &rarr; cdisort/C &rarr; libm</span>
+    <span class="m"><b>Build</b> CMake + setuptools(torch)</span>
+    <span class="m"><b>Targets</b> manylinux_2_28 x86_64 &middot; macOS arm64</span>
+    <span class="m"><b>Torch</b> pinned == 2.10.0</span>
+  </div>
+  <div class="toc">
+    <div class="toc-grid">
+      <a href="#c00"><span class="n">&sect;00</span><span>Synopsis &amp; the competency map</span></a>
+      <a href="#c01"><span class="n">&sect;01</span><span>The software vertical, end to libm</span></a>
+      <a href="#c02"><span class="n">&sect;02</span><span>The two-stage build graph</span></a>
+      <a href="#c03"><span class="n">&sect;03</span><span>Dependency acquisition &amp; pinning</span></a>
+      <a href="#c04"><span class="n">&sect;04</span><span>The dual C++11 ABI problem</span></a>
+      <a href="#c05"><span class="n">&sect;05</span><span>Symbols: the dispatch registry</span></a>
+      <a href="#c06"><span class="n">&sect;06</span><span>Runtime linking: RPATH &amp; $ORIGIN</span></a>
+      <a href="#c07"><span class="n">&sect;07</span><span>Device dispatch architecture</span></a>
+      <a href="#c08"><span class="n">&sect;08</span><span>The CUDA build matrix</span></a>
+      <a href="#c09"><span class="n">&sect;09</span><span>The torch integration surface</span></a>
+      <a href="#c10"><span class="n">&sect;10</span><span>Wheels, manylinux, cibuildwheel</span></a>
+      <a href="#c11"><span class="n">&sect;11</span><span>auditwheel/delocate: the exclude</span></a>
+      <a href="#c12"><span class="n">&sect;12</span><span>Versioning &amp; ABI windows</span></a>
+      <a href="#c13"><span class="n">&sect;13</span><span>Continuous integration</span></a>
+      <a href="#c14"><span class="n">&sect;14</span><span>Continuous delivery to PyPI</span></a>
+      <a href="#c15"><span class="n">&sect;15</span><span>Release automation</span></a>
+      <a href="#c16"><span class="n">&sect;16</span><span>Testing &amp; numerical goldens</span></a>
+      <a href="#c17"><span class="n">&sect;17</span><span>Static analysis &amp; style gates</span></a>
+      <a href="#c18"><span class="n">&sect;18</span><span>Docs &amp; typing life cycle</span></a>
+      <a href="#c19"><span class="n">&sect;19</span><span>Debugging the native boundary</span></a>
+      <a href="#c20"><span class="n">&sect;20</span><span>Supply chain &amp; dev envs</span></a>
+      <a href="#c21"><span class="n">&sect;21</span><span>Failure-mode catalog</span></a>
+      <a href="#c22"><span class="n">&sect;22</span><span>The decision trees</span></a>
+      <a href="#c23"><span class="n">&sect;23</span><span>Glossary &amp; file map</span></a>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<!-- ===================== PART I ===================== -->
+<div class="part" id="p1">
+  <div class="part-label">Part I</div>
+  <h2 class="part-title">The system &amp; the <span class="ital">stack</span></h2>
+  <p class="part-intro">Before any single competency makes sense, you have to see the whole vertical and the build graph that produces it. This is the orientation: what pydisort <em>is</em>, as a life-cycle artifact, and why a one-line import is a multi-team supply chain in miniature.</p>
+
+  <section class="chapter" id="c00">
+    <h2><span class="ch-num">&sect;00</span>Synopsis &amp; the competency map</h2>
+    <p>The NVIDIA <em>Senior Life Cycle Engineer</em> brief names a specific competency set: continuous build and release for Linux, cloud-hosted CI/CD, C++ build systems with <strong>dependency, symbol-resolution, and linking</strong> problems, the full vertical &ldquo;from end-users, through layers of open-source software, down to math libraries, compilers, and drivers,&rdquo; and the discipline of <em>shipping and supporting at scale</em>. <code>pydisort</code> is a near-perfect miniature of that brief: a single repository that nonetheless exercises every layer.</p>
+    <table class="tbl">
+      <thead><tr><th>Brief competency</th><th class="wide">Where it lives in pydisort</th><th>Chapter</th></tr></thead>
+      <tbody>
+        <tr><td>C++ build systems</td><td>CMake builds the C/C++/CUDA libs; setuptools+torch builds the Python ext &mdash; a two-stage graph</td><td>&sect;02&ndash;03</td></tr>
+        <tr><td>Dependency issues</td><td><code>FetchContent</code> (fmt, pybind11), vendored cdisort, exact <code>torch==2.10.0</code> pin</td><td>&sect;03, &sect;12</td></tr>
+        <tr><td>Symbol resolution</td><td>ATen <code>DispatchStub</code> registration across translation units &amp; libraries</td><td>&sect;05</td></tr>
+        <tr><td>Linking problems</td><td>dual <code>_GLIBCXX_USE_CXX11_ABI</code>, RPATH <code>$ORIGIN</code>, not-vendoring torch</td><td>&sect;04, &sect;06, &sect;11</td></tr>
+        <tr><td>Math libs / compilers / drivers</td><td>libm, GCC/Clang flags, CUDA arch fatbins, the driver/JIT contract</td><td>&sect;01, &sect;08</td></tr>
+        <tr><td>Continuous build for Linux</td><td><code>ci.yml</code> matrix + <code>cibuildwheel</code> on manylinux_2_28</td><td>&sect;10, &sect;13</td></tr>
+        <tr><td>Release management</td><td><code>cd.yml</code> &rarr; PyPI; <code>bump-and-tag.yaml</code> automation</td><td>&sect;14&ndash;15</td></tr>
+        <tr><td>Support in production</td><td>failure-mode catalog, debugging the native boundary</td><td>&sect;19, &sect;21</td></tr>
+      </tbody>
+    </table>
+    <div class="idea">
+      <p>The deep truth the brief is pointing at: <strong>a native Python extension is not a program, it is a contract</strong> &mdash; between a compiler ABI, a set of shared libraries, a Python ABI, an OS loader, and a hardware/driver pair. The life-cycle engineer&rsquo;s job is to keep every clause of that contract true on every platform, on every release, forever. Most production incidents are a clause silently violated: an ABI flag flipped, a symbol unregistered, a library found at the wrong path.</p>
+    </div>
+    <p>Throughout, each chapter follows the same four-beat structure the brief implies: <strong>(1)</strong> the production issue you actually hit, <strong>(2)</strong> how pydisort configures it today, <strong>(3)</strong> whether and how to improve it, and <strong>(4)</strong> the decision tree / debugging reflex that makes you fast.</p>
+  </section>
+
+  <section class="chapter" id="c01">
+    <h2><span class="ch-num">&sect;01</span>The software vertical, from <code>import</code> to <code>libm</code></h2>
+    <p>The brief&rsquo;s phrase &ldquo;through layers of open-source software, down to math libraries, compilers, and drivers&rdquo; is the mental model to internalize first. When a user types <code>import pydisort</code>, the loader walks a dependency tower. Knowing the tower cold is what lets you place any bug at the right layer in seconds.</p>
+    <div class="diagram">  user code            import pydisort; Disort(opts).forward(prop, ...)
+       │
+  ┌────▼─────────────────────────────────────────────────────────┐
+  │ pydisort/__init__.py        import torch  →  from .pydisort *  │  Python
+  ├────▼─────────────────────────────────────────────────────────┤
+  │ pydisort/pydisort*.so       pybind11 module (PYBIND11_MODULE) │  C++ / Python C-API
+  ├────▼─────────────────────────────────────────────────────────┤
+  │ libdisort_release.so        DisortImpl, TensorIterator glue   │  C++17 + LibTorch
+  │   ├── libcdisort (OBJECT)   the 1980s DISORT 2.1.3 solver     │  C99 + libm
+  │   └── (CUDA) libdisort_cuda_release.so   gpu_kernel<12>       │  CUDA / nvcc
+  ├────▼─────────────────────────────────────────────────────────┤
+  │ libtorch_cpu.so libc10.so   the USER's installed torch        │  resolved by RPATH
+  │   (+ libtorch_cuda, libc10_cuda when GPU)                     │
+  ├────▼─────────────────────────────────────────────────────────┤
+  │ libstdc++ / libgomp / libm  toolchain runtime + math          │  compiler / glibc
+  ├────▼─────────────────────────────────────────────────────────┤
+  │ CUDA driver (libcuda.so)    JIT-compiles PTX for the GPU      │  driver / hardware
+  └────────────────────────────────────────────────────────────────┘</div>
+    <p>Three properties of this tower drive everything later:</p>
+    <ul class="dash">
+      <li><strong>It is half-vendored, half-borrowed.</strong> <code>libcdisort</code> and <code>libdisort_release</code> are <em>ours</em> and ship inside the wheel. <code>libtorch</code>/<code>libc10</code> are the <em>user&rsquo;s</em> &mdash; they are deliberately <em>not</em> in the wheel (&sect;11). The boundary between &ldquo;ship it&rdquo; and &ldquo;find it at runtime&rdquo; is the single most consequential packaging decision.</li>
+      <li><strong>Each arrow is an ABI.</strong> Python&harr;C++ is the CPython ABI (why wheels are tagged <code>cp310</code>, <code>cp311</code>&hellip;). C++&harr;libtorch is the libstdc++ ABI (&sect;04). C++&harr;CUDA&harr;driver is the PTX/SASS contract (&sect;08). A mismatch at any arrow is a load-time crash, not a compile error.</li>
+      <li><strong>The bottom layer is not in your control.</strong> The CUDA driver, the user&rsquo;s glibc, the user&rsquo;s torch build &mdash; production support means reasoning about <em>their</em> machine from <em>your</em> stack trace.</li>
+    </ul>
+    <div class="callout tip">
+      <h5>The placement reflex</h5>
+      <p>When something breaks, name the layer before you name the bug. &ldquo;<code>ImportError: undefined symbol</code>&rdquo; is the C++&harr;libtorch arrow (&sect;04/&sect;05). &ldquo;<code>cannot open shared object file</code>&rdquo; is the loader/RPATH arrow (&sect;06). &ldquo;<code>no kernel image is available</code>&rdquo; is the CUDA arch arrow (&sect;08). Numerically-wrong-but-runs is the solver/precision arrow (&sect;16). The layer tells you which tool to reach for.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c02">
+    <h2><span class="ch-num">&sect;02</span>The two-stage build graph</h2>
+    <p>pydisort does <em>not</em> build with a single command. It builds in two stages with two different build systems, and understanding why is the foundation for every CI and packaging chapter.</p>
+    <div class="diagram">STAGE 1 — CMake                          STAGE 2 — setuptools + torch
+  cmake -B build                            pip install --no-build-isolation .
+  cmake --build build --parallel              └─ setup.py: torch.utils.cpp_extension
+    ├─ libcdisort  (OBJECT, C, libm)             ├─ CppExtension  (CPU)  OR
+    ├─ libdisort_release.so (C++/torch)          └─ CUDAExtension (if torch.cuda)
+    └─ build/lib/*.so  ◄───────────────────┐        sources: python/csrc/*.cpp
+                                           └──────  links: build/lib/*.so  (parsed!)
+                                                    output: pydisort/pydisort*.so</div>
+    <p><strong>Stage 1</strong> is plain CMake. It compiles the C solver as an <code>OBJECT</code> library, links it into <code>libdisort_release.so</code> against LibTorch, and drops the result in <code>build/lib/</code>. <strong>Stage 2</strong> is <code>setup.py</code>, which uses PyTorch&rsquo;s own <code>cpp_extension.BuildExtension</code> to compile the pybind11 module and link it against whatever Stage 1 produced. The bridge between the stages is literally a directory scan:</p>
+<pre data-lang="Python — setup.py"><span class="kw">def</span> <span class="fn">parse_library_names</span>(libdir):
+    library_names = []
+    <span class="kw">for</span> root, _, files <span class="kw">in</span> os.<span class="fn">walk</span>(libdir):
+        <span class="kw">for</span> file <span class="kw">in</span> files:
+            <span class="kw">if</span> file.<span class="fn">endswith</span>((<span class="str">".a"</span>, <span class="str">".so"</span>, <span class="str">".dylib"</span>)):
+                file_name = os.path.<span class="fn">basename</span>(file)
+                library_names.<span class="fn">append</span>(file_name[<span class="num">3</span>:].<span class="fn">rsplit</span>(<span class="str">"."</span>, <span class="num">1</span>)[<span class="num">0</span>])  <span class="com"># lib<NAME>.so → NAME</span>
+    <span class="kw">return</span> library_names
+
+current_dir = os.<span class="fn">getenv</span>(<span class="str">"WORKSPACE"</span>, Path().<span class="fn">absolute</span>())
+lib_dirs    = [<span class="str">f"{current_dir}/build/lib"</span>]
+libraries   = <span class="fn">parse_library_names</span>(<span class="str">f"{current_dir}/build/lib"</span>)   <span class="com"># whatever Stage 1 built</span></pre>
+    <p class="code-caption">The Python ext links against the <em>artifacts</em> of the CMake stage by discovering them on disk &mdash; not against CMake targets. The <code>WORKSPACE</code> env var lets CI relocate the source tree.</p>
+    <p><strong>Why two stages instead of one?</strong> Two opposing forces:</p>
+    <div class="twocol">
+      <div class="col good"><h5>Why CMake for the libs</h5><p>The C/C++/CUDA libraries need real dependency management: <code>find_package(Torch)</code>, CUDA architecture handling, <code>FetchContent</code> for fmt/pybind11, per-compiler flags. CMake is the lingua franca here, and it is what the C++ unit tests link against too.</p></div>
+      <div class="col good"><h5>Why torch&rsquo;s BuildExtension for the ext</h5><p><code>cpp_extension</code> knows the <em>exact</em> include paths, library paths, and &mdash; critically &mdash; the ABI and compile flags of the installed torch. It guarantees the Python ext is compiled with the same contract as the torch it will load against. Reinventing that in CMake is a maintenance trap.</p></div>
+    </div>
+    <div class="callout warn">
+      <h5>The fragility this introduces</h5>
+      <p>Stage 2 depends on Stage 1 having already run and on the build dir being co-located. That is why CI does <code>cmake --build</code> <em>then</em> <code>pip install --no-build-isolation --no-deps .</code> &mdash; <code>--no-build-isolation</code> so the install reuses the already-built <code>build/lib</code> and the already-installed torch, rather than spinning up a pristine build env that knows nothing about Stage 1. Get the order wrong, or build in isolation, and Stage 2 links against an empty <code>build/lib</code> and produces a useless <code>.so</code>.</p>
+    </div>
+    <h4>Improve</h4>
+    <p>The modern alternative is <strong>scikit-build-core</strong>, which makes CMake the build backend directly &mdash; one stage, declarative, no on-disk handshake, proper editable installs. The cost is teaching scikit-build-core to use torch&rsquo;s exact flags (via <code>find_package(Torch)</code> + the cmake_prefix_path that <code>cd.yml</code> already computes). For a project this size the current hybrid is pragmatic; the moment a third build target appears, scikit-build-core pays for itself.</p>
+    <div class="callout tip">
+      <h5>Decision tree &mdash; build backend</h5>
+      <p>Pure-CMake project, no Python ext &rarr; CMake. Python ext over a torch op &rarr; <code>torch.utils.cpp_extension</code> (this repo&rsquo;s Stage 2). Python ext + substantial non-torch C++ libs + want one command &rarr; <strong>scikit-build-core</strong>. Header-only / pybind-only, no torch &rarr; <code>pybind11</code>&rsquo;s own <code>setup_helpers</code> or scikit-build-core.</p>
+    </div>
+  </section>
+</div>
+
+<!-- ===================== PART II ===================== -->
+<div class="part" id="p2">
+  <div class="part-label">Part II</div>
+  <h2 class="part-title">C++ build systems: <span class="ital">dependencies, symbols, linking</span></h2>
+  <p class="part-intro">The brief calls this out by name as a way to stand out &mdash; &ldquo;dependency issues, symbol resolution, and linking problems.&rdquo; It is also where native extensions actually break in production. Four chapters, one per failure mode.</p>
+
+  <section class="chapter" id="c03">
+    <h2><span class="ch-num">&sect;03</span>Dependency acquisition &amp; pinning</h2>
+    <p>pydisort acquires its C++ dependencies three different ways, and each represents a distinct point on the reproducibility-vs-convenience curve.</p>
+    <table class="tbl">
+      <thead><tr><th>Dep</th><th>Mechanism</th><th class="wide">Pin &amp; tradeoff</th></tr></thead>
+      <tbody>
+        <tr><td>cdisort 2.1.3</td><td>vendored in-tree (<code>cdisort213/</code>)</td><td>maximally reproducible; the solver never moves under you. Cost: you own its security/patching.</td></tr>
+        <tr><td>fmt 12.1.0</td><td><code>FetchContent</code> + git tag</td><td>pinned to a tag, cached as a tarball; reproducible unless the tag is re-pointed upstream</td></tr>
+        <tr><td>pybind11 2.11.1</td><td><code>FetchContent</code> + git tag</td><td>same; must stay compatible with the torch pybind it co-exists with</td></tr>
+        <tr><td>torch 2.10.0</td><td>pip, <strong>exact</strong> <code>==</code> pin</td><td>the hard constraint &mdash; both a build requirement and a runtime dependency (&sect;12)</td></tr>
+      </tbody>
+    </table>
+    <p>The <code>FetchContent</code> path is wrapped in a small macro that adds a tarball cache so repeated CI configures don&rsquo;t re-clone:</p>
+<pre data-lang="CMake — cmake/macros/macro_add_package.cmake"><span class="kw">if</span>(EXISTS ${CACHE_FILE})                              <span class="com"># .cache/<name>-<tag>.tar.gz</span>
+  <span class="fn">FetchContent_Declare</span>(${name} DOWNLOAD_COMMAND tar -xzf ${CACHE_FILE} -C ...)
+<span class="kw">else</span>()
+  <span class="fn">FetchContent_Declare</span>(${name}
+    GIT_REPOSITORY ${url} GIT_TAG ${tag}
+    PATCH_COMMAND ${patch} UPDATE_DISCONNECTED TRUE)               <span class="com"># don't re-fetch on reconfigure</span>
+<span class="kw">endif</span>()
+<span class="fn">FetchContent_MakeAvailable</span>(${name})</pre>
+    <h4>Production issues</h4>
+    <ul class="dash">
+      <li><strong>Git tags are mutable.</strong> A tag is a pointer; upstream can move it. For true reproducibility, pin a <strong>commit SHA</strong> or add <code>FetchContent</code> hash verification. The tarball cache helps only after the first fetch.</li>
+      <li><strong>Network in CI.</strong> A first-time configure clones two repos from GitHub. A GitHub outage breaks your build. The cache tarball + <code>UPDATE_DISCONNECTED</code> mitigates; <code>FETCHCONTENT_FULLY_DISCONNECTED=ON</code> with a pre-seeded cache eliminates it.</li>
+      <li><strong>The diamond.</strong> torch <em>also</em> bundles a pybind11. pydisort fetches its own 2.11.1. If those two pybind11s disagree on the internal type registry layout, you get subtle cross-module cast failures. The fix is to keep your fetched pybind close to torch&rsquo;s, or build the ext purely against torch&rsquo;s pybind (it ships the headers).</li>
+      <li><strong>Vendored cdisort is a security surface.</strong> A 1980s C codebase frozen in-tree never gets upstream CVE fixes because there is no upstream cadence. That is acceptable for a numerics kernel with no untrusted input, but it must be a <em>conscious</em> decision recorded somewhere.</li>
+    </ul>
+    <div class="callout tip">
+      <h5>Decision tree &mdash; how to acquire a C++ dep</h5>
+      <p>Tiny, stable, no upstream cadence (a numerics kernel) &rarr; <strong>vendor</strong>. Active library you track by version (fmt, pybind11) &rarr; <strong>FetchContent + pinned SHA + cache</strong>. Heavy, ABI-defining, the user already has it (torch) &rarr; <strong>depend on it, pin exactly, do not bundle</strong> (&sect;11). System primitive (libm, libstdc++) &rarr; <strong>find, never ship</strong>.</p>
+    </div>
+    <p>One small but real detail: the top-level CMake sets <code>cmake_policy(SET CMP0074 NEW)</code> so that <code>&lt;Package&gt;_ROOT</code> environment variables are honored by <code>find_package</code> &mdash; the standard escape hatch for telling CMake where a hand-installed dependency lives. Knowing the CMP policy numbers is exactly the kind of build-system fluency the brief rewards.</p>
+  </section>
+
+  <section class="chapter" id="c04">
+    <h2><span class="ch-num">&sect;04</span>The dual C++11 ABI problem</h2>
+    <p>This is the single most famous linking problem in the PyTorch-extension world, and pydisort handles it explicitly. In 2015 GCC 5 changed the libstdc++ ABI for <code>std::string</code> and <code>std::list</code> (the &ldquo;C++11 ABI&rdquo;), gated behind the macro <code>_GLIBCXX_USE_CXX11_ABI</code>. Two object files compiled with different values of that macro have <em>different mangled names</em> for any function passing a <code>std::string</code> &mdash; they will fail to link, or worse, link and corrupt memory.</p>
+    <div class="pull">PyTorch ships wheels built with a specific ABI value. Every line of C++ you link into the same process must agree, or symbols silently fail to resolve.</div>
+    <p>pydisort does not guess; it interrogates the installed torch and propagates its answer:</p>
+<pre data-lang="CMake — CMakeLists.txt"><span class="fn">execute_process</span>(
+  COMMAND ${Python3_EXECUTABLE} -c
+    <span class="str">"import torch; print(int(torch._C._GLIBCXX_USE_CXX11_ABI))"</span>
+  OUTPUT_VARIABLE _ABI_OUTPUT  OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+<span class="fn">add_compile_definitions</span>(_GLIBCXX_USE_CXX11_ABI=${_ABI_OUTPUT})   <span class="com"># match torch, whatever it is</span></pre>
+    <p>The <code>FindTorch.cmake</code> module reinforces this with a phony interface target that <em>propagates</em> the flag to anything that links it &mdash; so the ABI travels with the dependency, not as a global:</p>
+<pre data-lang="CMake — cmake/modules/FindTorch.cmake"><span class="fn">add_library</span>(torch_cxx11_abi INTERFACE IMPORTED)
+<span class="fn">execute_process</span>(COMMAND ${Python3_EXECUTABLE} -c
+  <span class="str">"import torch; print(torch.compiled_with_cxx11_abi())"</span> OUTPUT_VARIABLE TORCH_CXX11_ABI ...)
+<span class="fn">target_compile_definitions</span>(torch_cxx11_abi
+  INTERFACE _GLIBCXX_USE_CXX11_ABI=$&lt;BOOL:${TORCH_CXX11_ABI}&gt;)</pre>
+    <p class="code-caption">Stage 2 gets the same guarantee for free: torch&rsquo;s own <code>BuildExtension</code> compiles the pybind module with torch&rsquo;s ABI flags. Both stages therefore agree by construction.</p>
+    <h4>How it manifests in production</h4>
+    <ul class="dash">
+      <li><strong>The classic symptom:</strong> <code>undefined symbol: _ZN3c107WarningC1ENSt7__cxx1112basic_stringE...</code> on import. The <code>__cxx11</code> token in the mangled name is the tell &mdash; one side wants the new ABI, the other the old.</li>
+      <li><strong>The nastier symptom:</strong> it links and imports, then segfaults or returns garbage when a <code>std::string</code> crosses the boundary, because the two ABIs lay the string out differently. This is the &ldquo;links but corrupts&rdquo; failure the brief implies.</li>
+      <li><strong>macOS is immune</strong> &mdash; it uses libc++ (Clang&rsquo;s STL), not libstdc++, so there is no <code>_GLIBCXX_USE_CXX11_ABI</code>. This is why the detection is guarded by <code>CMAKE_SYSTEM_NAME STREQUAL "Linux"</code> in FindTorch.</li>
+    </ul>
+    <div class="callout danger">
+      <h5>The trap</h5>
+      <p>Modern PyTorch (2.x on manylinux_2_28) ships with the <strong>new</strong> ABI (<code>=1</code>), reversing a decade of <code>=0</code> defaults. A stale tutorial that hard-codes <code>add_definitions(-D_GLIBCXX_USE_CXX11_ABI=0)</code> &mdash; note that exact line is <em>commented out</em> in this repo&rsquo;s CMakeLists, a fossil of the old advice &mdash; will produce undefined-symbol errors against a modern torch. Always <em>derive</em> the value; never hard-code it.</p>
+    </div>
+    <h4>Debugging reflex</h4>
+<pre data-lang="Bash — confirm an ABI mismatch"><span class="com"># what ABI does the user's torch want?</span>
+python -c <span class="str">"import torch; print(torch.compiled_with_cxx11_abi())"</span>
+
+<span class="com"># does the offending symbol carry the __cxx11 tag?</span>
+nm -D -C build/lib/libdisort_release.so | grep -i string | head
+c++filt _ZN3c107Warning...                 <span class="com"># demangle the undefined symbol from the error</span></pre>
+  </section>
+
+  <section class="chapter" id="c05">
+    <h2><span class="ch-num">&sect;05</span>Symbols: the device-dispatch registry</h2>
+    <p>The most interesting symbol-resolution problem in pydisort is not a missing library &mdash; it is ATen&rsquo;s <strong>DispatchStub</strong>, the mechanism by which one logical operation (<code>call_disort</code>) resolves to a CPU or CUDA implementation at runtime. It is a small registry built entirely out of the C++ static-initialization order, and it is a beautiful, fragile example of cross-translation-unit symbol wiring.</p>
+    <p>The pattern has three keywords in three different files:</p>
+<pre data-lang="C++ — the DispatchStub triad"><span class="com">// disort_dispatch.hpp — DECLARE the stub (a global function-pointer table)</span>
+<span class="kw">using</span> disort_fn = <span class="kw">void</span> (*)(at::TensorIterator&amp;, <span class="kw">int</span>, disort_state*, disort_output*);
+<span class="fn">DECLARE_DISPATCH</span>(disort_fn, call_disort);
+
+<span class="com">// disort_dispatch.cpp — DEFINE the stub, then REGISTER the CPU impl</span>
+<span class="fn">DEFINE_DISPATCH</span>(call_disort);
+<span class="fn">REGISTER_ALL_CPU_DISPATCH</span>(call_disort, &amp;disort::call_disort_cpu);
+
+<span class="com">// disort_dispatch.cu — REGISTER the CUDA impl into the same table</span>
+<span class="fn">REGISTER_CUDA_DISPATCH</span>(call_disort, &amp;disort::call_disort_cuda);</pre>
+    <p>At call time, <code>forward()</code> simply hands the table the tensor&rsquo;s device and lets it pick:</p>
+<pre data-lang="C++ — src/disort.cpp"><span class="fn">at::native::call_disort</span>(flx.<span class="fn">device</span>().<span class="fn">type</span>(),  <span class="com">// CPU or CUDA — chosen at runtime</span>
+                        iter, options-&gt;<span class="fn">upward</span>(), ds_.<span class="fn">data</span>(), ds_out_.<span class="fn">data</span>());</pre>
+    <p>The <code>REGISTER_*</code> macros expand to a <strong>static object whose constructor writes the function pointer into the table</strong>. That is the crux: registration happens as a side effect of loading the object file. And that is exactly where the symbol-resolution problems live.</p>
+    <div class="callout danger">
+      <h5>The dead-strip / never-loaded trap</h5>
+      <p>If the CUDA registration lives in a separate library (<code>libdisort_cuda_release.so</code>) that the process never actually loads &mdash; or if the linker <em>dead-strips</em> the registration object because &ldquo;nothing references it&rdquo; &mdash; then the static constructor never runs, the table entry stays null, and you get <code>RuntimeError: Could not run 'call_disort' with arguments from the 'CUDA' backend</code> at runtime, with a perfectly successful build. The fix is to force the registration TU to be kept: <code>--whole-archive</code> / <code>-Wl,--no-as-needed</code> on the library, or ensure the symbol is referenced. This is the canonical &ldquo;builds fine, fails at runtime&rdquo; symbol bug.</p>
+    </div>
+    <h4>Production issues &amp; how pydisort is exposed to them</h4>
+    <ul class="dash">
+      <li><strong>Private-header coupling.</strong> <code>ATen/native/DispatchStub.h</code> is a torch-<em>internal</em> header with no stability guarantee. pydisort reaches into <code>at::native</code> &mdash; a deliberate, powerful choice that buys zero-overhead dispatch but couples the build to torch internals that can change between minor versions. This is a direct contributor to the exact-pin in &sect;12.</li>
+      <li><strong>One process, one registry.</strong> The dispatch table is a process-global singleton inside libtorch. If two copies of libtorch are loaded (the vendoring mistake in &sect;11), you get two registries and half your registrations land in the wrong one. This connects symbol resolution directly to the packaging decision.</li>
+      <li><strong>CPU vs all-CPU.</strong> <code>REGISTER_ALL_CPU_DISPATCH</code> registers for every CPU capability tier (AVX2/AVX512); the <code>HAVE_AVX512_CPU_DEFINITION</code>/<code>HAVE_AVX2_CPU_DEFINITION</code> defines in <code>compilers.cmake</code> are what make those tiers real. Drop them and the AVX-tier stub may resolve to a generic path or fail to register the SIMD variant.</li>
+    </ul>
+    <h4>Debugging reflex</h4>
+<pre data-lang="Bash — is the symbol present and is it registered?"><span class="com"># Is the dispatch symbol even in the lib?</span>
+nm -D -C build/lib/libdisort_release.so | grep call_disort
+
+<span class="com"># Watch which libs the loader pulls in — did the CUDA reg lib load at all?</span>
+LD_DEBUG=libs python -c <span class="str">"import pydisort"</span> 2&gt;&amp;1 | grep disort
+
+<span class="com"># Confirm the registration object survived the link (not dead-stripped)</span>
+nm build/lib/libdisort_cuda_release.so | grep -i register</pre>
+  </section>
+
+  <section class="chapter" id="c06">
+    <h2><span class="ch-num">&sect;06</span>Runtime linking: RPATH, RUNPATH &amp; <code>$ORIGIN</code></h2>
+    <p>Once symbols resolve at <em>build</em> time, they still have to be <em>found</em> at load time. A shared library records where to look for its dependencies in its dynamic <code>RPATH</code>/<code>RUNPATH</code> entries. pydisort encodes a deliberate two-part search policy:</p>
+<pre data-lang="Python — setup.py"><span class="kw">if</span> sys.platform == <span class="str">"darwin"</span>:
+    extra_link_args = [<span class="str">"-Wl,-rpath,@loader_path/lib"</span>,
+                       <span class="str">"-Wl,-rpath,@loader_path/../torch/lib"</span>]
+<span class="kw">else</span>:  <span class="com"># linux</span>
+    extra_link_args = [<span class="str">"-Wl,-rpath,$ORIGIN/lib"</span>,           <span class="com"># OUR libdisort, shipped in the wheel</span>
+                       <span class="str">"-Wl,-rpath,$ORIGIN/../torch/lib"</span>]   <span class="com"># the USER's torch, next to us in site-packages</span></pre>
+    <p>Read those two RPATH entries as a sentence: &ldquo;find my own helper libs <em>beside me</em>, and find torch <em>in the sibling torch package</em>.&rdquo; The layout that makes it work:</p>
+    <div class="diagram">site-packages/
+  ├── pydisort/
+  │     ├── pydisort.cpython-311-x86_64-linux-gnu.so   ← has RPATH $ORIGIN/lib, $ORIGIN/../torch/lib
+  │     └── lib/
+  │           └── libdisort_release.so                 ← found via  $ORIGIN/lib
+  └── torch/
+        └── lib/
+              ├── libtorch_cpu.so                       ← found via  $ORIGIN/../torch/lib
+              └── libc10.so</div>
+    <p><code>$ORIGIN</code> (Linux) and <code>@loader_path</code> (macOS) both mean &ldquo;the directory of the file doing the loading,&rdquo; resolved by the dynamic loader at runtime. This is what makes a relocatable wheel possible: no absolute paths are baked in.</p>
+    <div class="callout warn">
+      <h5>RPATH vs RUNPATH &mdash; the non-transitivity gotcha</h5>
+      <p>Modern GNU linkers default to <code>--enable-new-dtags</code>, so <code>-Wl,-rpath</code> actually emits <strong>DT_RUNPATH</strong>, not the legacy DT_RPATH. The difference is fatal to debug if you don&rsquo;t know it: <strong>RUNPATH is not transitive.</strong> It is consulted only for the <em>direct</em> dependencies of the object that carries it. So <code>pydisort.so</code>&rsquo;s RUNPATH finds <code>libtorch_cpu.so</code> &mdash; but <code>libtorch_cpu.so</code>&rsquo;s <em>own</em> dependencies are <em>not</em> searched via pydisort&rsquo;s RUNPATH. They rely on torch&rsquo;s own RPATH (which torch sets up) or <code>LD_LIBRARY_PATH</code>. When a torch sub-dependency goes missing, this is why.</p>
+    </div>
+    <p>This is also why the CI test step sets <code>LD_LIBRARY_PATH</code>/<code>DYLD_LIBRARY_PATH</code> to <code>build/lib</code>: the C++ <em>test binaries</em> are built without the wheel&rsquo;s package-relative layout, so they need an explicit search path to find <code>libdisort_release.so</code>.</p>
+    <h4>Production issues</h4>
+    <ul class="dash">
+      <li><strong>macOS uses install-names, not just RPATH.</strong> Each dylib records an &ldquo;install name&rdquo; (often <code>@rpath/libfoo.dylib</code>); <code>delocate</code> rewrites these during wheel repair (&sect;11). A mismatched install-name yields <code>Library not loaded: @rpath/...</code> &mdash; the mac analogue of the Linux RUNPATH miss.</li>
+      <li><strong>SIP &amp; <code>DYLD_*</code> stripping.</strong> macOS System Integrity Protection strips <code>DYLD_LIBRARY_PATH</code> from the environment of protected processes, so you cannot always paper over a bad install-name with an env var the way you can on Linux. The repo works around this with <code>DYLD_FALLBACK_LIBRARY_PATH</code> in the CD repair step, which SIP does <em>not</em> strip.</li>
+      <li><strong>The <code>@loader_path/../torch/lib</code> bet.</strong> It assumes torch is installed as a sibling package in the same environment. In a conda env where torch lives elsewhere, or a vendored-torch wheel, the bet fails. This is acceptable because the wheel <em>declares</em> a torch dependency, so pip will always co-install torch in the same site-packages.</li>
+    </ul>
+    <h4>Debugging reflex</h4>
+<pre data-lang="Bash — the load-path toolkit"><span class="com"># Linux: what's recorded, and what's missing?</span>
+patchelf --print-rpath pydisort/pydisort*.so       <span class="com"># shows $ORIGIN entries</span>
+ldd pydisort/pydisort*.so | grep 'not found'        <span class="com"># the smoking gun</span>
+readelf -d pydisort/pydisort*.so | grep -E 'RPATH|RUNPATH|NEEDED'
+
+<span class="com"># macOS: install names &amp; rpaths</span>
+otool -L pydisort/pydisort*.so                      <span class="com"># dependent dylibs + install names</span>
+otool -l pydisort/pydisort*.so | grep -A2 LC_RPATH  <span class="com"># the rpath entries</span></pre>
+    <div class="callout tip">
+      <h5>Decision tree &mdash; &ldquo;cannot open shared object file&rdquo;</h5>
+      <p>Is the lib in the wheel? &rarr; <code>unzip -l</code> the wheel; if not, it should be in <code>package-data</code> or repaired in (&sect;11). Is the RPATH right? &rarr; <code>patchelf --print-rpath</code>; fix in <code>setup.py</code> link args. Is it a transitive dep of torch? &rarr; not your RUNPATH&rsquo;s job; the user&rsquo;s torch install is broken. Is it macOS <code>@rpath</code>? &rarr; check install-names with <code>otool -L</code>; <code>delocate</code> should have rewritten them.</p>
+    </div>
+  </section>
+</div>
+
+<!-- ===================== PART III ===================== -->
+<div class="part" id="p3">
+  <div class="part-label">Part III</div>
+  <h2 class="part-title">Performance <span class="ital">portability</span></h2>
+  <p class="part-intro">The reason torch is in the stack at all: one kernel, two devices, and a path to the GPU. This is where deep-learning-framework engineering and classical numerics meet &mdash; and where pydisort is most ambitious and most unfinished.</p>
+
+  <section class="chapter" id="c07">
+    <h2><span class="ch-num">&sect;07</span>The dispatch architecture: TensorIterator</h2>
+    <p>pydisort&rsquo;s performance-portability strategy is to lean entirely on ATen&rsquo;s <code>TensorIterator</code> &mdash; the same machine that powers element-wise ops in PyTorch. The insight: a radiative-transfer problem is embarrassingly parallel across <em>(wavelength, column)</em> pairs. Each pair is one independent DISORT solve. So pydisort frames the whole batch as a single broadcasted element-wise operation whose &ldquo;element&rdquo; is one atmospheric column.</p>
+<pre data-lang="C++ — src/disort.cpp (forward)"><span class="kw">auto</span> iter = <span class="fn">at::TensorIteratorConfig</span>()
+    .<span class="fn">resize_outputs</span>(<span class="kw">false</span>)
+    .<span class="fn">check_all_same_dtype</span>(<span class="kw">true</span>)
+    .<span class="fn">declare_static_shape</span>({nwave, ncol, ds().ntau, <span class="num">2</span>}, <span class="com">/*squash_dims=*/</span>{<span class="num">2</span>, <span class="num">3</span>})
+    .<span class="fn">add_output</span>(flx)
+    .<span class="fn">add_input</span>(prop)
+    .<span class="fn">add_owned_input</span>(bc-&gt;<span class="fn">at</span>(<span class="str">"umu0"</span>).<span class="fn">view</span>({<span class="num">1</span>, ncol, <span class="num">1</span>, <span class="num">1</span>}).<span class="fn">expand</span>({nwave, ncol, <span class="num">1</span>, <span class="num">1</span>}))
+    <span class="com">// ... 10 more broadcast boundary-condition inputs ...</span>
+    .<span class="fn">add_input</span>(index)                  <span class="com">// flat (wave,col) index → picks the right ds_[]</span>
+    .<span class="fn">build</span>();
+
+<span class="fn">at::native::call_disort</span>(flx.<span class="fn">device</span>().<span class="fn">type</span>(), iter, options-&gt;<span class="fn">upward</span>(), ds_.<span class="fn">data</span>(), ds_out_.<span class="fn">data</span>());</pre>
+    <p>The cleverness is the <code>index</code> input: each element carries its own flat index, which the kernel uses to look up a <em>preallocated, per-(wave,col)</em> DISORT state struct. That makes the kernel reentrant &mdash; no shared mutable state across elements &mdash; which is precisely what lets the same loop body run single-threaded, multi-threaded, or on the GPU.</p>
+    <p>The CPU kernel then loops with ATen&rsquo;s grain-sized parallelism:</p>
+<pre data-lang="C++ — src/disort_dispatch.cpp"><span class="kw">int</span> grain_size = iter.<span class="fn">numel</span>() / <span class="fn">at::get_num_threads</span>();
+iter.<span class="fn">for_each</span>([&amp;](<span class="kw">char</span>** data, <span class="kw">const</span> int64_t* strides, int64_t n) {
+    <span class="kw">for</span> (<span class="kw">int</span> i = <span class="num">0</span>; i &lt; n; i++) {
+      <span class="kw">int</span> idx = <span class="kw">static_cast</span>&lt;<span class="kw">int</span>&gt;(*idxf);
+      <span class="fn">disort_impl</span>(out, prop, umu0, /*...*/, ds[idx], ds_out[idx], nprop);  <span class="com">// the C solver</span>
+    }
+  }, grain_size);</pre>
+    <h4>Production issues</h4>
+    <ul class="dash">
+      <li><strong>Thread safety hinges on per-element state.</strong> Because each element owns its own <code>ds_[idx]</code>, the parallel <code>for_each</code> is safe. The instant someone makes cdisort touch a shared scratch buffer, the parallelism becomes a data race. The per-(wave,col) allocation in <code>reset()</code> is therefore load-bearing, not just tidy.</li>
+      <li><strong>Grain size = numel/num_threads</strong> gives one chunk per thread &mdash; fine when columns cost roughly the same, poor when optical depths vary wildly (a thick column is far more expensive than a thin one), causing load imbalance. A smaller grain with work-stealing would balance better at the cost of more scheduling overhead.</li>
+      <li><strong>Precision boundary.</strong> cdisort is internally <code>double</code>; <code>gather_flx</code>/<code>gather_rad</code> wrap the C output structs with <code>torch::from_blob(..., kFloat64)</code> and copy into the result tensor&rsquo;s dtype. Run the module in float32 and you silently downcast double results &mdash; correct, but a precision cliff to document.</li>
+      <li><strong>Memory:</strong> <code>nwave &times; ncol</code> fully-allocated DISORT states can be large; <code>reset()</code> frees and reallocates the whole array whenever options change, which is O(nwave&middot;ncol) churn if called in a hot loop.</li>
+    </ul>
+    <div class="callout tip">
+      <h5>Improve</h5>
+      <p>Profile column-cost variance; if high, switch to a finer grain or sort columns by optical depth for better cache/branch behavior. Expose <code>grain_size</code> as a tunable. Add a fast-path that skips <code>reset()</code> reallocation when dimensions are unchanged.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c08">
+    <h2><span class="ch-num">&sect;08</span>The CUDA build matrix</h2>
+    <p>The GPU story is where the brief&rsquo;s &ldquo;compilers and drivers&rdquo; layer becomes concrete. A CUDA build must decide <em>which GPU architectures to compile for</em>, and that decision is a direct binary-size / compatibility / build-time tradeoff. pydisort encodes a version-aware policy:</p>
+<pre data-lang="CMake — CMakeLists.txt"><span class="com"># 60:P100 61:1080Ti 70:V100 75:RTX4000 80:A100 86:3090 89:4090 90:H100/H200 120:5090</span>
+<span class="kw">set</span>(_cuda_arch_list 60 61 70 75 80 86 89)
+
+<span class="kw">if</span>(CUDAToolkit_VERSION VERSION_GREATER_EQUAL <span class="str">"13.0"</span>)
+  <span class="fn">list</span>(REMOVE_ITEM _cuda_arch_list 60 61 70)   <span class="com"># nvcc 13 drops sm_<75</span>
+<span class="kw">endif</span>()
+<span class="kw">if</span>(CUDAToolkit_VERSION VERSION_GREATER_EQUAL <span class="str">"12.0"</span>)
+  <span class="fn">list</span>(APPEND _cuda_arch_list 90 120)          <span class="com"># Hopper + Blackwell</span>
+<span class="kw">endif</span>()
+<span class="kw">set</span>(CMAKE_CUDA_ARCHITECTURES ${_cuda_arch_list})</pre>
+    <p>Each architecture in the list becomes a <strong>SASS</strong> (native machine code) blob baked into a fat binary. The mental model every GPU life-cycle engineer needs:</p>
+    <table class="tbl">
+      <thead><tr><th>Concept</th><th class="wide">What it is &amp; why it matters</th></tr></thead>
+      <tbody>
+        <tr><td>SASS</td><td>arch-specific machine code (<code>sm_80</code>). Runs only on that arch. Compiled ahead of time.</td></tr>
+        <tr><td>PTX</td><td>arch-neutral virtual ISA. The <strong>driver JIT-compiles</strong> it to SASS at first launch on an unknown GPU &mdash; this is forward compatibility.</td></tr>
+        <tr><td>fatbin</td><td>the container holding SASS for listed archs + (optionally) PTX. Bigger arch list = bigger binary + longer <code>nvcc</code> compile.</td></tr>
+        <tr><td>compute capability</td><td>the GPU&rsquo;s arch number. The runtime picks the matching SASS, or JITs PTX, or errors.</td></tr>
+      </tbody>
+    </table>
+    <div class="callout danger">
+      <h5>The error every CUDA shipper sees once</h5>
+      <p><code>CUDA error: no kernel image is available for execution on the device</code> means the fatbin has no SASS for the GPU&rsquo;s arch <em>and</em> no PTX to JIT from. The defense is to always include a PTX for the highest arch (so newer GPUs JIT forward) &mdash; e.g. set <code>CMAKE_CUDA_ARCHITECTURES</code> to include a <code>90-virtual</code> entry. pydisort lists real arches only, so a GPU newer than the toolkit knows about would hit this; adding a virtual/PTX tier closes the gap.</p>
+    </div>
+    <div class="callout warn">
+      <h5>The honest state of pydisort&rsquo;s GPU path</h5>
+      <p>Two things a life-cycle engineer must surface plainly: <strong>(1)</strong> the CUDA kernel in <code>disort_dispatch.cu</code> is a <em>scaffold</em> &mdash; the dispatch is wired with <code>gpu_kernel&lt;12&gt;</code> and <code>CUDAGuard</code>, but the actual <code>disort_impl(...)</code> call inside the GPU lambda is commented out. The device path registers but does not yet compute. <strong>(2)</strong> The released wheels are <em>CPU-only</em>: <code>setup.py</code> chooses <code>CUDAExtension</code> vs <code>CppExtension</code> from <code>torch.cuda.is_available()</code> at build time, and the CD runners have no GPU, so every published wheel is the CPU build. The GPU capability exists in the source and the CMake option, but it is not in the product yet.</p>
+    </div>
+    <h4>Improve &mdash; the path to shipping GPU wheels</h4>
+    <ul class="dash">
+      <li>Decouple the build decision from <code>torch.cuda.is_available()</code> (a builder with the toolkit but no device should still produce a CUDA wheel) &mdash; key off the CUDA <em>toolkit</em> presence or an explicit flag.</li>
+      <li>Add GPU-equipped CI runners (self-hosted or a cloud GPU pool) so the CUDA kernel can be tested for parity against the CPU goldens (&sect;16).</li>
+      <li>Adopt the PyTorch convention of <code>+cu124</code>-style local version labels and a separate package index, because a CUDA wheel&rsquo;s torch dependency is itself CUDA-versioned &mdash; multiplying the matrix.</li>
+      <li>Trim the arch list per release channel: a debug/dev wheel can be <code>native</code> (one arch, fast build); a release wheel needs the broad list + PTX.</li>
+    </ul>
+    <h4>Debugging reflex</h4>
+<pre data-lang="Bash — what arches are actually in the binary?"><span class="com"># list the SASS/PTX images baked into the fatbin</span>
+cuobjdump --list-elf  build/lib/libdisort_cuda_release.so
+cuobjdump --list-ptx  build/lib/libdisort_cuda_release.so
+
+<span class="com"># memory errors / illegal accesses in the kernel</span>
+compute-sanitizer --tool memcheck  python my_gpu_script.py</pre>
+  </section>
+
+  <section class="chapter" id="c09">
+    <h2><span class="ch-num">&sect;09</span>The torch integration surface</h2>
+    <p>pydisort presents itself as a first-class torch module, which buys interoperability (it composes with <code>nn.Sequential</code>, gets <code>.to(device)</code>, prints nicely) but also imports torch&rsquo;s harder semantics. The class is a <code>Cloneable</code> module bound through torch&rsquo;s pybind helper:</p>
+<pre data-lang="C++ — src/disort.hpp"><span class="kw">class</span> <span class="ty">DisortImpl</span> : <span class="kw">public</span> torch::nn::<span class="ty">Cloneable</span>&lt;DisortImpl&gt; {
+  DisortOptions options;                  <span class="com">// = std::shared_ptr&lt;DisortOptionsImpl&gt;</span>
+  <span class="kw">void</span> <span class="fn">reset</span>() <span class="kw">override</span>;                   <span class="com">// Cloneable requires this; (re)allocates ds_</span>
+  torch::Tensor <span class="fn">forward</span>(torch::Tensor prop, std::map&lt;std::string, torch::Tensor&gt;* bc, ...);
+};
+<span class="fn">TORCH_MODULE</span>(Disort);                       <span class="com">// the shared_ptr wrapper type</span></pre>
+    <p>The pybind layer (<code>ADD_DISORT_MODULE</code> macro + a kwargs-driven <code>forward</code>) turns this into the ergonomic Python API seen in tests:</p>
+<pre data-lang="Python — tests/test_disort_01.py"><span class="kw">from</span> pydisort <span class="kw">import</span> DisortOptions, Disort, scattering_moments
+op = <span class="fn">DisortOptions</span>().<span class="fn">header</span>(<span class="str">"Isotropic Scattering Case 1"</span>)
+op.<span class="fn">flags</span>(<span class="str">"usrtau,usrang,lamber,quiet,intensity_correction,..."</span>)
+op.<span class="fn">ds</span>().nlyr = <span class="num">1</span>; op.<span class="fn">ds</span>().nmom = <span class="num">16</span>
+ds = <span class="fn">Disort</span>(op)
+flux = ds.<span class="fn">forward</span>(prop, fbeam=..., umu0=...)   <span class="com"># boundary conditions as kwargs</span></pre>
+    <h4>Production issues unique to the torch surface</h4>
+    <ul class="dash">
+      <li><strong>Shared options are a shared mutable singleton.</strong> <code>DisortOptions</code> is a <code>shared_ptr</code> deliberately shared across instances; the header itself warns that <code>reset()</code> &ldquo;modifies the shared options object &mdash; all instances sharing it will see the change.&rdquo; That is a documented footgun: cloning a module does not clone its config, so a reset on one clone reconfigures its siblings. Powerful for ensembles, dangerous by accident.</li>
+      <li><strong>No backward = no gradients.</strong> <code>forward()</code> exists; there is no autograd <code>backward</code>. The cdisort solver is not differentiable, so even though the result is a torch tensor, gradients will not flow through a DISORT solve. Anyone wiring pydisort into an optimization loop expecting <code>loss.backward()</code> to reach the optical properties will get zeros / a graph break. Surfacing this is a support necessity.</li>
+      <li><strong>Type erasure with default args.</strong> The <code>FORWARD_HAS_DEFAULT_ARGS</code> macro is required so torch&rsquo;s <code>AnyModule</code> type erasure can carry the default <code>bname</code>/<code>temf</code> arguments &mdash; a torch-version-sensitive incantation.</li>
+      <li><strong>Cloneable contract.</strong> <code>Cloneable&lt;T&gt;</code> deep-copies parameters/buffers and calls <code>reset()</code> on the clone. Since pydisort holds its real state in plain <code>std::vector&lt;disort_state&gt;</code> (not registered buffers), the clone&rsquo;s correctness depends entirely on <code>reset()</code> rebuilding that state from options &mdash; which it does, but only because options are shared.</li>
+    </ul>
+    <div class="callout tip">
+      <h5>Improve</h5>
+      <p>If a differentiable RT solve is ever needed, wrap <code>forward</code> in a custom <code>torch::autograd::Function</code> with an analytic or finite-difference adjoint. Short of that, document loudly that the module is forward-only. Consider a <code>clone_options()</code> path for users who want independent configs, removing the shared-mutation surprise.</p>
+    </div>
+  </section>
+</div>
+
+<!-- ===================== PART IV ===================== -->
+<div class="part" id="p4">
+  <div class="part-label">Part IV</div>
+  <h2 class="part-title">Packaging &amp; <span class="ital">release management</span></h2>
+  <p class="part-intro">&ldquo;Continuous build and release management for Linux&rdquo; and &ldquo;shipping multi-cloud large-scale systems&rdquo; &mdash; the part of the brief about turning a build into an artifact the world can <code>pip install</code>. For a torch extension, this is the hardest packaging problem in the ecosystem.</p>
+
+  <section class="chapter" id="c10">
+    <h2><span class="ch-num">&sect;10</span>Wheels, manylinux &amp; cibuildwheel</h2>
+    <p>A wheel is a zip with a compatibility tag. For a native extension the tag is a promise: &ldquo;this binary will load on any machine matching <code>{python}-{abi}-{platform}</code>.&rdquo; pydisort uses <strong>cibuildwheel</strong> to manufacture and validate that promise across the matrix.</p>
+<pre data-lang="YAML — .github/workflows/cd.yml (linux)">CIBW_PLATFORM: linux
+CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28      <span class="com"># glibc 2.28 floor (≈RHEL/Alma 8)</span>
+CIBW_BUILD: cp${{ env.PY_VERSION }}*             <span class="com"># one Python at a time: cp310..cp313</span>
+CIBW_ARCHS: x86_64
+CIBW_SKIP: <span class="str">"*musllinux*"</span>                       <span class="com"># no Alpine/musl builds</span>
+CIBW_BEFORE_BUILD: |
+  pip install numpy 'torch==2.10.0'
+  cmake -B build -DCMAKE_PREFIX_PATH="$TORCH_CMAKE_PREFIX_PATH" ...   <span class="com"># STAGE 1 inside the container</span>
+  cmake --build build --parallel</pre>
+    <p>The structure to internalize:</p>
+    <table class="tbl">
+      <thead><tr><th>Knob</th><th class="wide">Meaning &amp; production consequence</th></tr></thead>
+      <tbody>
+        <tr><td>manylinux_2_28</td><td>builds inside a container with glibc 2.28 so the wheel runs on any newer glibc. A higher floor = simpler build, fewer old-distro users. The single most important portability lever on Linux.</td></tr>
+        <tr><td>CIBW_BEFORE_BUILD</td><td>runs Stage 1 (CMake) <em>inside</em> the manylinux container, so the native libs are built against the container&rsquo;s old toolchain &mdash; matching the wheel&rsquo;s glibc promise.</td></tr>
+        <tr><td>per-Python loop</td><td>a torch ext is <strong>not</strong> abi3 (it uses the version-specific CPython API via pybind + torch), so you build cp310, cp311, cp312, cp313 separately &mdash; 4&times; the work.</td></tr>
+        <tr><td>HOST_PYTHON 3.11</td><td>the Python that <em>runs cibuildwheel</em> is fixed; the matrix Python is what gets <em>built for</em>. Conflating the two is a classic CD bug.</td></tr>
+      </tbody>
+    </table>
+    <p>macOS mirrors this with <code>CIBW_PLATFORM: macos</code>, <code>CIBW_ARCHS: arm64</code>, and a per-Python matrix.</p>
+    <div class="callout warn">
+      <h5>A real inconsistency worth fixing</h5>
+      <p>The macOS deployment target is set in two places that disagree: <code>CMakeLists.txt</code> says <code>CMAKE_OSX_DEPLOYMENT_TARGET "12.0"</code>, while <code>cd.yml</code> exports <code>MACOSX_DEPLOYMENT_TARGET: 15.0</code>. The wheel&rsquo;s platform tag is derived from the env var (15.0), but the CMake-built lib targets 12.0. They <em>happen</em> to be compatible (a 12.0 lib runs on 15.0), but the wheel will claim a 15.0 minimum and exclude macOS 12&ndash;14 users unnecessarily. Pick one floor and set it in both places.</p>
+    </div>
+    <h4>Decision tree &mdash; the glibc / OS floor</h4>
+    <p>Need the broadest reach &rarr; lowest practical manylinux (<code>2_17</code>), accept an older toolchain. Build needs C++17/modern CUDA &rarr; <code>2_28</code> (pydisort&rsquo;s choice). Internal/HPC only &rarr; build for the exact target image and skip manylinux entirely. Apple Silicon only &rarr; arm64 + a deliberate min-OS; add <code>x86_64</code> only if Intel Macs still matter to you.</p>
+  </section>
+
+  <section class="chapter" id="c11">
+    <h2><span class="ch-num">&sect;11</span>auditwheel / delocate: the <em>exclude</em> strategy</h2>
+    <p>This is the most important packaging decision in the whole repo, and it is a single flag. After cibuildwheel builds the wheel, it runs a &ldquo;repair&rdquo; step that normally <em>vendors</em> every external shared library into the wheel to make it self-contained. pydisort deliberately tells it <strong>not to</strong>:</p>
+<pre data-lang="YAML — .github/workflows/cd.yml"><span class="com"># Linux: do NOT copy any lib*.so into the wheel</span>
+CIBW_REPAIR_WHEEL_COMMAND_LINUX:
+  auditwheel repair --exclude lib*.so -w {dest_dir} {wheel}
+
+<span class="com"># macOS: copy nothing for torch or our own disort lib</span>
+CIBW_REPAIR_WHEEL_COMMAND_MACOS:
+  delocate-wheel -e torch -e disort_release -w {dest_dir} {wheel}</pre>
+    <p>Why on earth would you ship a <em>non</em>-self-contained wheel? Because the alternative is catastrophic:</p>
+    <div class="twocol">
+      <div class="col bad"><h5>If you vendored torch</h5><p>The wheel would balloon by ~2&ndash;3 GB. Worse: the process would now have <strong>two copies of libtorch/libc10</strong> &mdash; the user&rsquo;s and yours. libtorch&rsquo;s dispatch table, CUDA caching allocator, and type registry are process-global <em>singletons</em>. Two copies means two registries, half-initialized state, and crashes like <code>c10::Error</code> or duplicate-registration aborts. (&sect;05 is exactly this failure.)</p></div>
+      <div class="col good"><h5>So instead</h5><p>Exclude torch entirely; resolve it at runtime from the user&rsquo;s install via the <code>$ORIGIN/../torch/lib</code> RPATH (&sect;06). Ship <em>only our own</em> <code>libdisort_release.so</code> &mdash; but not even via the repair tool: via <code>package-data</code>, placed in <code>pydisort/lib/</code> and found via <code>$ORIGIN/lib</code>.</p></div>
+    </div>
+    <p>The package-data half of the deal, from <code>pyproject.toml</code>:</p>
+<pre data-lang="TOML — pyproject.toml">[tool.setuptools.package-data]
+<span class="str">"pydisort"</span> = [<span class="str">"disort/**/*"</span>, <span class="str">"cdisort213/*"</span>, <span class="str">"lib/*.so"</span>, <span class="str">"lib/*.dylib"</span>, <span class="str">"*.pyi"</span>, <span class="str">"py.typed"</span>]</pre>
+    <div class="idea">
+      <p>The whole strategy in one sentence: <strong>vendor what is uniquely yours and small (libdisort), borrow what is the user&rsquo;s and huge and singleton-bearing (libtorch), and ship nothing that the user must already have.</strong> The exact <code>torch==2.10.0</code> dependency (&sect;12) is the contract that makes &ldquo;borrow at runtime&rdquo; safe.</p>
+    </div>
+    <div class="callout danger">
+      <h5>The consequence to own in support</h5>
+      <p>This wheel is <em>not</em> a standalone manylinux wheel in spirit, even though it carries the tag. It will fail to import in any environment where a compatible torch is not present at the expected sibling path. That is by design, but it means &ldquo;<code>pip install pydisort</code> then import fails&rdquo; tickets are almost always &ldquo;torch missing / wrong version / wrong location&rdquo; &mdash; check that first.</p>
+    </div>
+    <h4>Decision tree &mdash; vendor vs. depend (the general rule)</h4>
+    <ul class="dash">
+      <li>Library is <strong>small + uniquely yours + no global singletons</strong> &rarr; vendor it into the wheel (libdisort).</li>
+      <li>Library is <strong>huge, ABI-coupled, the user already has it, and holds process-global state</strong> &rarr; depend on it, exclude from repair, find via RPATH (libtorch).</li>
+      <li>Library is a <strong>system primitive</strong> (libm, libstdc++, libgomp) &rarr; never ship; rely on the manylinux policy / the user&rsquo;s OS.</li>
+    </ul>
+  </section>
+
+  <section class="chapter" id="c12">
+    <h2><span class="ch-num">&sect;12</span>Versioning &amp; ABI compatibility windows</h2>
+    <p>Everything above resolves into one line that appears <em>three</em> times in the repo:</p>
+<pre data-lang="TOML — pyproject.toml"><span class="com"># [build-system].requires</span>
+<span class="str">"torch==2.10.0"</span>
+<span class="com"># [project].dependencies</span>
+<span class="str">"torch==2.10.0"</span>
+<span class="com"># and in CI/CD: pip install 'torch==2.10.0'</span></pre>
+    <p>Why <code>==</code> and not <code>&gt;=</code>? Because <strong>LibTorch has no stable C++ ABI across releases.</strong> The internal headers pydisort relies on &mdash; <code>ATen/native/DispatchStub.h</code>, <code>TensorIterator</code>, the gpu_kernel machinery &mdash; change shape between minor versions. A pydisort built against 2.10.0&rsquo;s internals, loaded against a user&rsquo;s 2.11.0, can hit undefined symbols, changed vtables, or altered struct layouts &mdash; the &sect;04/&sect;05 failures, but caused by version drift instead of ABI flags.</p>
+    <table class="tbl">
+      <thead><tr><th>Stability tier</th><th class="wide">What you can depend on</th></tr></thead>
+      <tbody>
+        <tr><td>Python API</td><td>fairly stable across torch minors &mdash; the safe surface</td></tr>
+        <tr><td>Stable C++ (torch::stable)</td><td>a small, explicitly-stable subset; pydisort does <em>not</em> restrict itself to it</td></tr>
+        <tr><td>ATen internals (at::native)</td><td><strong>no</strong> stability guarantee &mdash; pydisort lives here, hence the exact pin</td></tr>
+        <tr><td>CPython ABI</td><td>stable within a minor (cp311), changes across (why the per-Python matrix)</td></tr>
+      </tbody>
+    </table>
+    <div class="callout warn">
+      <h5>The cost &amp; the cadence</h5>
+      <p>An exact pin means <strong>every torch release forces a pydisort rebuild-and-republish</strong>, and users cannot upgrade torch independently. That is the price of using ATen internals for zero-overhead dispatch. The release engineering implication: a torch release is a trigger event for your pipeline. Track the torch release calendar; treat &ldquo;bump torch&rdquo; as a first-class, tested change (re-run the full goldens in &sect;16, because numerics can shift with their kernels too).</p>
+    </div>
+    <h4>Improve</h4>
+    <ul class="dash">
+      <li>Run a <strong>compatibility matrix</strong> in CI against the last N torch minors to learn your true window empirically, even if you ship one pin.</li>
+      <li>Where feasible, migrate hot interfaces to the <code>torch::stable</code> ABI to widen the window (and reduce republish toil) &mdash; at the cost of the convenience of <code>at::native</code>.</li>
+      <li>Consider <code>~=2.10</code> only after proving compatibility; never blindly loosen a native-ABI pin.</li>
+    </ul>
+  </section>
+</div>
+
+<!-- ===================== PART V ===================== -->
+<div class="part" id="p5">
+  <div class="part-label">Part V</div>
+  <h2 class="part-title">CI / <span class="ital">CD</span></h2>
+  <p class="part-intro">The literal center of the role: &ldquo;continuous integration, testing, and delivery.&rdquo; pydisort has three workflows &mdash; a gate, a publisher, and a release robot. Here is each, with the production gaps a senior engineer would close.</p>
+
+  <section class="chapter" id="c13">
+    <h2><span class="ch-num">&sect;13</span>Continuous integration: the gate</h2>
+    <p><code>ci.yml</code> runs on every PR and push to <code>main</code>, as a two-job pipeline: a fast style gate, then a build-and-test matrix that depends on it.</p>
+    <div class="diagram">on: pull_request / push(main)
+   │
+   ├─ job: pre-commit         (ubuntu) ── cpplint, cppcheck, pre-commit hooks
+   │        │ needs: ✓
+   ├─ job: build-and-test     matrix = { ubuntu-latest, macos-latest } × py3.11
+   │        ├─ install torch==2.10.0  (CPU wheel on Linux via download.pytorch.org/whl/cpu)
+   │        ├─ cmake -B build -DBUILD_TESTS=ON   ← Stage 1
+   │        ├─ cmake --build build --parallel
+   │        ├─ pip install --no-build-isolation --no-deps .   ← Stage 2
+   │        └─ ctest --output-on-failure -E test_disort_09     ← C++ + Python tests
+   │              env: LD_LIBRARY_PATH / DYLD_LIBRARY_PATH = build/lib</div>
+    <p>Several decisions here are textbook, and a few are gaps:</p>
+    <table class="tbl">
+      <thead><tr><th>Decision</th><th class="wide">Read</th></tr></thead>
+      <tbody>
+        <tr><td>style gate first</td><td><span class="win">good</span> &mdash; fail cheap before spending build minutes; <code>needs: pre-commit</code> enforces order</td></tr>
+        <tr><td>CPU torch on Linux</td><td><span class="win">good</span> &mdash; pulls the small CPU wheel from the torch CPU index; GitHub runners have no GPU anyway</td></tr>
+        <tr><td><code>--no-build-isolation</code></td><td><span class="win">good</span> &mdash; reuses Stage-1 artifacts &amp; the installed torch (the only correct way given &sect;02)</td></tr>
+        <tr><td><code>-E test_disort_09</code></td><td><span class="lose">smell</span> &mdash; a test is excluded in CI. Honest, but a permanently-skipped test is a silent coverage hole; track it with an issue and a re-enable plan</td></tr>
+        <tr><td>py3.11 only</td><td><span class="lose">gap</span> &mdash; CI tests one Python; CD <em>ships</em> four (3.10&ndash;3.13). A 3.13-only breakage ships untested</td></tr>
+        <tr><td><code>fail-fast: true</code></td><td><span class="lose">tradeoff</span> &mdash; a macOS failure cancels the Linux job (and vice-versa); you lose the cross-platform signal from one run</td></tr>
+        <tr><td>no GPU job</td><td><span class="lose">gap</span> &mdash; the CUDA path (&sect;08) is never exercised by CI</td></tr>
+      </tbody>
+    </table>
+    <h4>Improve</h4>
+    <ul class="dash">
+      <li><strong>Close the CI/CD Python gap:</strong> run the test matrix over the same <code>{3.10, 3.11, 3.12, 3.13}</code> CD ships. If minutes are tight, test the endpoints (3.10 + 3.13) on PRs and the full set nightly.</li>
+      <li><strong>Cache Stage 1:</strong> the CMake <code>.cache</code> tarballs and <code>build/</code> are re-created every run; an <code>actions/cache</code> keyed on the lockfile + CMake files cuts minutes.</li>
+      <li><strong>Add a wheel-smoke job</strong> that builds a wheel and <code>pip install</code>s it into a clean venv with only the declared deps &mdash; this is the test that would have caught a broken RPATH or a missing package-data entry before users do.</li>
+      <li><strong>Set <code>fail-fast: false</code></strong> for the OS matrix so you see all platform results from one run.</li>
+    </ul>
+  </section>
+
+  <section class="chapter" id="c14">
+    <h2><span class="ch-num">&sect;14</span>Continuous delivery to PyPI</h2>
+    <p><code>cd.yml</code> is the publisher. It is <code>workflow_dispatch</code> &mdash; manually triggered with <em>branch</em> and <em>OS</em> inputs &mdash; and fans out into a small DAG:</p>
+    <div class="diagram">workflow_dispatch (branch, build_os ∈ {Both, MacOS, Ubuntu})
+   │  concurrency: deploy-pypi-<branch>, cancel-in-progress
+   ├─ prepare        (resolve branch)
+   ├─ build-macos    matrix py3.10–3.13  → cibuildwheel → upload artifact (per py)
+   ├─ build-linux    matrix py3.10–3.13  → cibuildwheel → upload artifact (per py)
+   └─ publish-pypi   (needs both; if: always())
+          download all wheels-*  →  dist/  →  pypa/gh-action-pypi-publish</div>
+    <table class="tbl">
+      <thead><tr><th>Element</th><th class="wide">Read</th></tr></thead>
+      <tbody>
+        <tr><td>manual dispatch</td><td><span class="win">deliberate</span> &mdash; humans decide when to release; the branch/OS inputs make partial re-releases (e.g. macOS-only) easy</td></tr>
+        <tr><td>concurrency group</td><td><span class="win">good</span> &mdash; <code>cancel-in-progress</code> per branch prevents two overlapping publishes racing the same version</td></tr>
+        <tr><td>free-disk-space step</td><td><span class="win">necessary</span> &mdash; torch + the manylinux image fill the runner; Linux explicitly purges apt lists &amp; pip cache</td></tr>
+        <tr><td><code>if: always()</code> + result gate</td><td><span class="win">resilient</span> &mdash; publishes whatever succeeded; if macOS fails but Linux passes, Linux wheels still ship</td></tr>
+        <tr><td><code>PYPI_API_TOKEN</code></td><td><span class="lose">improve</span> &mdash; the job already declares <code>permissions: id-token: write</code> but still authenticates with a long-lived token. Switch to <strong>OIDC Trusted Publishing</strong> and delete the secret</td></tr>
+        <tr><td>no pre-publish test</td><td><span class="lose">gap</span> &mdash; built wheels go straight to PyPI without an install-and-import smoke test on a clean machine</td></tr>
+      </tbody>
+    </table>
+    <div class="callout tip">
+      <h5>The OIDC upgrade (free security win)</h5>
+      <p>PyPI Trusted Publishing exchanges GitHub&rsquo;s OIDC token for a short-lived, scoped upload credential &mdash; no secret to leak, rotate, or scope-creep. The <code>id-token: write</code> permission is <em>already present</em>; the change is to configure the publisher on PyPI and drop the <code>password:</code> line. For a project that ships to a global index, this is the highest-leverage supply-chain hardening available.</p>
+    </div>
+    <h4>Improve &mdash; the release safety net</h4>
+    <ul class="dash">
+      <li>Insert a <strong>TestPyPI</strong> dry-run + a clean-venv install/import/smoke-test job between <code>build-*</code> and <code>publish-pypi</code>. Publishing untested binaries to a permanent, immutable index (you cannot overwrite a released version) is the riskiest step in the whole life cycle.</li>
+      <li>Generate and attach <strong>build provenance / attestations</strong> (the publish action supports it) so consumers can verify the wheels came from this workflow.</li>
+      <li>Make the publish <strong>tag-triggered</strong> (see &sect;15) so &ldquo;merge &rarr; tag &rarr; publish&rdquo; is one chain, not a manual hand-off that can be forgotten.</li>
+    </ul>
+  </section>
+
+  <section class="chapter" id="c15">
+    <h2><span class="ch-num">&sect;15</span>Release automation</h2>
+    <p>The third workflow, <code>bump-and-tag.yaml</code>, fires when a PR is <em>closed</em> (merged) into <code>main</code> or <code>nightly</code>. It bumps the version, tags it, and writes the release notes:</p>
+<pre data-lang="YAML — .github/workflows/bump-and-tag.yaml">on:
+  pull_request:
+    types: [closed]
+    branches: [main, nightly]
+steps:
+  - uses: jasonamyers/github-bumpversion-action   <span class="com"># bumps __init__.py via .bumpversion.cfg</span>
+  - uses: ad-m/github-push-action                  <span class="com"># pushes the bump commit + tag</span>
+  - uses: octokit/request-action                   <span class="com"># POST .../releases/generate-notes</span>
+  - uses: actions/create-release                   <span class="com"># cut the GitHub release</span>
+  - uses: actions/github-script                    <span class="com"># comment the notes back on the PR</span></pre>
+    <p>The single source of version truth is small and clean:</p>
+<pre data-lang="INI — .bumpversion.cfg">[bumpversion]
+current_version = 1.7.3
+commit = True
+tag = True
+[bumpversion:file:python/__init__.py]
+search  = __version__ = "{current_version}"
+replace = __version__ = "{new_version}"</pre>
+    <p class="code-caption">The git log confirms the model in action: a steady stream of &ldquo;Bump version: 1.7.2 &rarr; 1.7.3&rdquo; commits, one per merged PR.</p>
+    <h4>Production issues</h4>
+    <ul class="dash">
+      <li><strong>Every merge is a patch bump.</strong> The automation always increments the patch component, so semantic intent (was this a feature? a breaking change?) is lost. SemVer becomes &ldquo;build counter.&rdquo; A label-driven bump (<code>major</code>/<code>minor</code>/<code>patch</code> from PR labels) restores meaning.</li>
+      <li><strong>The bot pushes back to <code>main</code>.</strong> A workflow that commits to the branch that triggers it risks a loop and definitely re-triggers <code>push</code>-gated CI. The standard guards: a <code>[skip ci]</code> in the bump commit and/or path filters; verify those are present.</li>
+      <li><strong>Tag &ne; publish.</strong> <code>bump-and-tag</code> creates a tag and a GitHub release, but <code>cd.yml</code> is <em>manual</em>. So a tagged release is <em>not</em> on PyPI until a human dispatches the deploy. That decoupling is a deliberate safety choice, but it is also where &ldquo;we tagged 1.7.3 but forgot to publish it&rdquo; happens.</li>
+    </ul>
+    <div class="callout tip">
+      <h5>Improve &mdash; close the loop</h5>
+      <p>Wire <code>cd.yml</code> to also trigger <code>on: push: tags: ['v*']</code>, gated behind the wheel-smoke job from &sect;14. Then the chain is fully automatic and safe: merge &rarr; bump &amp; tag &rarr; build &rarr; test wheels &rarr; publish via OIDC. Keep the manual <code>workflow_dispatch</code> as the break-glass path for re-releases.</p>
+    </div>
+  </section>
+</div>
+
+<!-- ===================== PART VI ===================== -->
+<div class="part" id="p6">
+  <div class="part-label">Part VI</div>
+  <h2 class="part-title">Quality, docs, <span class="ital">debugging &amp; operations</span></h2>
+  <p class="part-intro">&ldquo;Drives software quality and reliability&rdquo; and &ldquo;debugs issues as they arise, fixes problems across the entire stack.&rdquo; The disciplines that keep a shipped extension trustworthy &mdash; and the toolkit for when it isn&rsquo;t.</p>
+
+  <section class="chapter" id="c16">
+    <h2><span class="ch-num">&sect;16</span>Testing &amp; numerical goldens</h2>
+    <p>pydisort tests at two levels, both wired through <code>ctest</code>:</p>
+    <ul class="dash">
+      <li><strong>C++ unit tests</strong> &mdash; <code>test_disort</code>, <code>test_clone</code>, built by the <code>setup_test</code> macro and linked against <code>pydisort::disort</code>. These exercise the C++ API and the module-clone semantics (&sect;09) directly, below the Python layer.</li>
+      <li><strong>Python parity tests</strong> &mdash; <code>test_disort_01..09</code>, globbed and registered as ctest cases run with <code>python3</code>. Each mirrors a reference case from the original cdisort C suite. <code>test_disort_01</code> reproduces the six Van de Hulst isotropic-scattering cases (a 1980 standard reference table) &mdash; these are <strong>numerical golden tests</strong>.</li>
+    </ul>
+    <p>Golden tests are the right tool here because radiative transfer has known analytic/tabulated answers, so correctness is checkable against published physics with <code>assert_allclose</code>:</p>
+<pre data-lang="Python — tests/test_disort_01.py"><span class="kw">from</span> numpy.testing <span class="kw">import</span> assert_allclose, assert_equal
+<span class="com"># Reference: Van de Hulst (1980), Multiple Light Scattering, Tables — VH1 Table 12.</span>
+<span class="fn">assert_allclose</span>(flux_up, reference_up, rtol=...)   <span class="com"># physics is the oracle</span></pre>
+    <h4>Production issues unique to numerical goldens</h4>
+    <ul class="dash">
+      <li><strong>Tolerance is a contract.</strong> Too tight and harmless compiler/optimization changes turn the suite red; too loose and real regressions slip. The build uses <code>-O3 -funroll-loops -funroll-all-loops -fstrict-aliasing</code> (no <code>-ffast-math</code>, mercifully), so reassociation is bounded &mdash; but cross-compiler and cross-arch float results <em>will</em> differ in the last bits. Tolerances must be set per-quantity, not globally.</li>
+      <li><strong>CPU/GPU parity (future).</strong> The moment the CUDA kernel (&sect;08) computes, it needs to match the CPU goldens within tolerance &mdash; a parity suite, not just a self-consistency check. GPU floating-point ordering differs from CPU, so the tolerance story gets harder.</li>
+      <li><strong>The excluded test.</strong> <code>test_disort_09</code> is skipped in CI (&sect;13). A golden test that &ldquo;doesn&rsquo;t pass on CI&rsquo;s hardware&rdquo; is itself a finding &mdash; it usually means a tolerance that is platform-sensitive, which is worth root-causing rather than excluding permanently.</li>
+    </ul>
+    <div class="callout tip">
+      <h5>Improve</h5>
+      <p>Add property-based tests (e.g. energy conservation: out-flux &le; in-flux for a non-emitting layer; reciprocity relations) that hold for <em>any</em> input, complementing the fixed goldens. Record tolerances and their justification next to each assertion. Run the goldens as part of the &ldquo;bump torch&rdquo; change (&sect;12), since their kernels can shift your last bits.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c17">
+    <h2><span class="ch-num">&sect;17</span>Static analysis &amp; style gates</h2>
+    <p>The <code>pre-commit</code> config is the quality floor enforced before code merges. It is multi-language and layered:</p>
+    <table class="tbl">
+      <thead><tr><th>Layer</th><th class="wide">Hooks</th></tr></thead>
+      <tbody>
+        <tr><td>global hygiene</td><td>trailing-whitespace, end-of-file, merge-conflict, case-conflict, detect-private-key, mixed-line-ending, codespell, check-github-workflows</td></tr>
+        <tr><td>C/C++</td><td><code>clang-format</code> (Google style, in-place), <code>cppcheck</code>, <code>cpplint</code> (with a tuned filter list)</td></tr>
+        <tr><td>Python</td><td><code>black</code> (line-length 79), <code>pycln</code> (dead imports), check-ast, check-docstring-first</td></tr>
+        <tr><td>config</td><td>check-yaml (multi-doc), check-toml, requirements-txt-fixer, shebang-executable</td></tr>
+      </tbody>
+    </table>
+    <p>And the same hooks run as the first CI job (&sect;13), so the gate is enforced even if a contributor skips the local hook.</p>
+    <h4>Production-honest reads</h4>
+    <ul class="dash">
+      <li><strong>The exclude list is pragmatic but lossy.</strong> <code>cdisort.c/.h</code> (vendored, not yours to reformat), <code>disort.hpp</code>, <code>pydisort.cpp</code>, and <code>python/__init__.py</code> are globally excluded. Excluding vendored C is correct; excluding your own <code>disort.hpp</code>/<code>pydisort.cpp</code> (large, macro-heavy, lint-noisy) is a maintenance shortcut that also turns off real checks on those files. Worth periodically re-including with targeted suppressions instead of a blanket skip.</li>
+      <li><strong><code>cppcheck --check-config</code> only.</strong> That flag checks cppcheck&rsquo;s own include configuration &mdash; it is <em>not</em> a full static analysis pass. The hook name promises &ldquo;find warnings/errors&rdquo; but the args under-deliver. A real pass (<code>--enable=warning,performance,portability</code>) would catch more.</li>
+      <li><strong>The <code>cpplint</code> filter list</strong> disables ~10 categories (include-order, fn-size, braces/parens whitespace, &hellip;). Each suppression is a deliberate tradeoff against Google-style strictness; the list should be revisited when the codebase stabilizes.</li>
+    </ul>
+    <div class="callout tip">
+      <h5>Improve &mdash; the analysis ladder</h5>
+      <p>Add <code>clang-tidy</code> (bugprone-, performance-, modernize- checks) for real semantic analysis; run <code>ASAN</code>/<code>UBSAN</code> builds of the C++ tests in a dedicated CI job (native extensions are exactly where use-after-free and UB hide); and add <code>compute-sanitizer</code> once the GPU path is live. Static gates catch style; sanitizers catch the bugs that crash users.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c18">
+    <h2><span class="ch-num">&sect;18</span>Docs &amp; typing life cycle</h2>
+    <p>Docs are built on Read the Docs with Sphinx, and the package ships type information &mdash; both are life-cycle artifacts that drift if not gated.</p>
+<pre data-lang="YAML — .readthedocs.yaml">build:
+  os: ubuntu-22.04
+  tools:
+    python: <span class="str">"3.9"</span>                 <span class="com"># ← note: package requires-python &gt;=3.10</span>
+sphinx:
+  configuration: docs/source/conf.py
+python:
+  install:
+    - requirements: docs/requirements.txt</pre>
+    <div class="callout warn">
+      <h5>A latent docs/runtime mismatch</h5>
+      <p>RTD builds docs on <strong>Python 3.9</strong>, but <code>pyproject.toml</code> sets <code>requires-python = "&gt;=3.10"</code>. This works only because the docs build evidently does <em>not</em> import the compiled extension (which couldn&rsquo;t install on 3.9 anyway, and certainly couldn&rsquo;t find a 3.9 torch + native lib). It is a smell: the docs describe a package they cannot actually import. Bump RTD to 3.10+ and, ideally, build the extension in the docs env so autodoc reflects the real signatures.</p>
+    </div>
+    <h4>Typing: PEP 561</h4>
+    <p>pydisort ships a <code>py.typed</code> marker and a <code>pydisort.pyi</code> stub via <code>package-data</code>, so downstream users get autocomplete and <code>mypy</code> coverage over a C-extension that has no introspectable signatures. The risk is <strong>stub drift</strong>: the <code>.pyi</code> is hand-maintained and nothing checks it against the actual pybind-exported signatures.</p>
+    <h4>Improve</h4>
+    <ul class="dash">
+      <li>Generate stubs with <code>pybind11-stubgen</code> in CI and diff against the committed <code>.pyi</code> &mdash; fail the build on drift.</li>
+      <li>Pin <code>docs/requirements.txt</code> for reproducible doc builds (RTD&rsquo;s own advice).</li>
+      <li>Run a docs build in CI (not just on RTD) so doc breakage is a PR signal, not a post-merge surprise.</li>
+    </ul>
+  </section>
+
+  <section class="chapter" id="c19">
+    <h2><span class="ch-num">&sect;19</span>Debugging the native boundary</h2>
+    <p>When a pure-Python bug appears, you read a traceback. When a native extension breaks, the traceback ends at <code>import pydisort</code> and the real story is in the loader, the symbol table, or a signal. This is the toolkit, mapped to the failure it diagnoses.</p>
+    <table class="tbl">
+      <thead><tr><th>Symptom</th><th>Tool</th><th class="wide">What it tells you</th></tr></thead>
+      <tbody>
+        <tr><td>cannot open .so</td><td><code>ldd</code> / <code>otool -L</code></td><td>which dependent library is missing or unresolved (&sect;06)</td></tr>
+        <tr><td>undefined symbol</td><td><code>nm -D -C</code> / <code>c++filt</code></td><td>is the symbol present? does its name carry <code>__cxx11</code> (ABI, &sect;04) or a torch-internal namespace (version drift, &sect;12)?</td></tr>
+        <tr><td>wrong lib loaded</td><td><code>LD_DEBUG=libs</code></td><td>the loader&rsquo;s full search + bind trace; reveals a stray libtorch on <code>LD_LIBRARY_PATH</code></td></tr>
+        <tr><td>mac lib not loaded</td><td><code>DYLD_PRINT_LIBRARIES=1</code></td><td>dyld&rsquo;s load order &amp; the failing <code>@rpath</code> resolution</td></tr>
+        <tr><td>segfault on call</td><td><code>gdb --args python ...</code></td><td>backtrace across the Python/C++ boundary; <code>py-bt</code> for the Python frames</td></tr>
+        <tr><td>memory corruption</td><td>ASAN / UBSAN build</td><td>use-after-free, OOB, UB in the C/C++ &mdash; the bugs that survive all static gates</td></tr>
+        <tr><td>backend not found</td><td><code>nm</code> + <code>LD_DEBUG</code></td><td>dispatch registration didn&rsquo;t run / the kernel lib didn&rsquo;t load (&sect;05)</td></tr>
+        <tr><td>GPU illegal access</td><td><code>compute-sanitizer</code></td><td>OOB / race in the CUDA kernel (&sect;08)</td></tr>
+      </tbody>
+    </table>
+    <div class="callout danger">
+      <h5>Decoding the three import-time crashes</h5>
+      <p><strong>(a) <code>ImportError: undefined symbol: _ZN...__cxx11...</code></strong> &rarr; ABI mismatch (&sect;04) or torch version drift (&sect;12); confirm with <code>nm</code> + <code>c++filt</code>. <strong>(b) <code>ImportError: libdisort_release.so: cannot open shared object file</code></strong> &rarr; RPATH/package-data problem (&sect;06/&sect;11); confirm with <code>patchelf --print-rpath</code> and <code>unzip -l</code> the wheel. <strong>(c) <code>Segfault</code> immediately on <code>import torch; import pydisort</code></strong> &rarr; almost always two libtorch copies (the vendoring mistake, &sect;11) or an ABI-incompatible torch; confirm with <code>LD_DEBUG=libs</code>.</p>
+    </div>
+    <div class="callout tip">
+      <h5>The first three commands, every time</h5>
+<pre data-lang="Bash — native triage one-liners">python -c <span class="str">"import torch; print(torch.__version__, torch.compiled_with_cxx11_abi())"</span>
+ldd $(python -c <span class="str">"import pydisort, os; print(pydisort.__file__)"</span> | xargs dirname)/pydisort*.so | grep 'not found'
+LD_DEBUG=libs python -c <span class="str">"import pydisort"</span> 2&gt;&amp;1 | grep -E 'torch|disort|error'</pre>
+    </div>
+  </section>
+
+  <section class="chapter" id="c20">
+    <h2><span class="ch-num">&sect;20</span>Supply chain &amp; developer environments</h2>
+    <p>The brief asks for &ldquo;cloud-hosted developer environments&rdquo; and &ldquo;multi-cloud large-scale systems.&rdquo; Two life-cycle concerns close out the operational picture: <em>can you trust what you shipped</em>, and <em>can a new contributor build it</em>.</p>
+    <h4>Supply chain</h4>
+    <ul class="dash">
+      <li><strong>Pinning posture:</strong> torch is exact-pinned (strong); fmt/pybind11 are tag-pinned (medium &mdash; tags are mutable, &sect;03); the <code>.cache</code> tarballs are unverified by hash. Adding SHA pins + hash verification + an SBOM (e.g. via <code>cyclonedx</code>) would make the dependency set tamper-evident.</li>
+      <li><strong>Publish credentials:</strong> the long-lived <code>PYPI_API_TOKEN</code> should become OIDC Trusted Publishing (&sect;14) &mdash; the biggest single supply-chain improvement available.</li>
+      <li><strong>Provenance:</strong> attach build attestations so a consumer can prove a wheel came from this repo&rsquo;s CD, not a typosquat.</li>
+    </ul>
+    <h4>Reproducible developer environments</h4>
+    <p>The reproducibility primitive already exists: the exact two-stage sequence (<code>cmake build</code> &rarr; <code>pip install --no-build-isolation --no-deps .</code>) plus the exact torch pin means a contributor&rsquo;s local build matches CI&rsquo;s. To make that a <em>cloud-hosted</em> dev environment in the brief&rsquo;s sense:</p>
+    <ul class="dash">
+      <li>Ship a <strong>devcontainer / Dockerfile</strong> based on the same <code>manylinux_2_28</code> image CD uses, so &ldquo;works in my Codespace&rdquo; equals &ldquo;works in the wheel.&rdquo;</li>
+      <li>Capture the &ldquo;scripting glue&rdquo; (the bash in the workflows, the <code>WORKSPACE</code> env handshake, the cmake-prefix-path computation) into committed scripts so local and CI builds share one code path &mdash; today some of that logic lives only inside YAML <code>run:</code> blocks.</li>
+      <li>For GPU work, a cloud GPU runner pool (the &ldquo;multi-cloud&rdquo; angle) is the prerequisite to ever testing &sect;08.</li>
+    </ul>
+    <div class="callout tip">
+      <h5>Improve &mdash; one build path</h5>
+      <p>The strongest reproducibility move is to have <em>exactly one</em> build script that CI, CD, and humans all call. Right now Stage-1 CMake flags differ subtly between <code>ci.yml</code> (no explicit prefix path) and <code>cd.yml</code> (computes <code>TORCH_CMAKE_PREFIX_PATH</code>). Converging them removes a class of &ldquo;passes in CI, fails in CD&rdquo; surprises.</p>
+    </div>
+  </section>
+</div>
+
+<!-- ===================== PART VII ===================== -->
+<div class="part" id="p7">
+  <div class="part-label">Part VII</div>
+  <h2 class="part-title">Synthesis: <span class="ital">playbooks &amp; trees</span></h2>
+  <p class="part-intro">The reference layer. Everything above, compressed into the catalog you reach for at 2am and the decision trees you internalize so you don&rsquo;t have to.</p>
+
+  <section class="chapter" id="c21">
+    <h2><span class="ch-num">&sect;21</span>Failure-mode catalog</h2>
+    <p>Symptom &rarr; most-likely root cause &rarr; first move. Drawn from every chapter above; this is the on-call index.</p>
+    <table class="tbl">
+      <thead><tr><th>Symptom</th><th>Likely cause</th><th class="wide">First move</th><th>&sect;</th></tr></thead>
+      <tbody>
+        <tr><td>undefined symbol w/ <code>__cxx11</code></td><td>ABI mismatch</td><td>compare <code>torch.compiled_with_cxx11_abi()</code> to build ABI; rebuild against the user&rsquo;s torch</td><td>04</td></tr>
+        <tr><td>undefined symbol, torch-internal name</td><td>torch version drift</td><td>check installed torch == 2.10.0; rebuild on the matching pin</td><td>12</td></tr>
+        <tr><td>cannot open libdisort_release.so</td><td>RPATH or missing package-data</td><td><code>patchelf --print-rpath</code>; <code>unzip -l</code> the wheel for <code>lib/</code></td><td>06,11</td></tr>
+        <tr><td>segfault on import after torch</td><td>two libtorch copies / bad ABI</td><td><code>LD_DEBUG=libs</code>; ensure torch was excluded from the wheel</td><td>11</td></tr>
+        <tr><td>Could not run for CUDA backend</td><td>dispatch not registered</td><td>confirm the CUDA reg lib loaded; check for dead-stripping</td><td>05</td></tr>
+        <tr><td>no kernel image for device</td><td>arch not in fatbin, no PTX</td><td><code>cuobjdump --list-elf</code>; add the GPU&rsquo;s arch or a virtual/PTX tier</td><td>08</td></tr>
+        <tr><td>goldens red after a no-op change</td><td>tolerance too tight / compiler reassoc</td><td>diff results; widen per-quantity tolerance with justification</td><td>16</td></tr>
+        <tr><td>wheel installs, import fails</td><td>torch absent/wrong/misplaced</td><td>verify torch==2.10.0 in the same env/site-packages</td><td>11,12</td></tr>
+        <tr><td>mac: Library not loaded @rpath</td><td>install-name not rewritten</td><td><code>otool -L</code>; confirm delocate ran &amp; left the right names</td><td>06</td></tr>
+        <tr><td>tagged but not on PyPI</td><td>CD is manual, not tag-triggered</td><td>dispatch <code>cd.yml</code> for the branch; long-term wire tag trigger</td><td>14,15</td></tr>
+        <tr><td>gradients are zero through forward</td><td>no autograd backward exists</td><td>expected &mdash; solver is non-differentiable; document / add adjoint</td><td>09</td></tr>
+        <tr><td>CI green, prod wheel broken</td><td>CI tests py3.11 only; no wheel-smoke</td><td>add clean-venv install test over full py matrix</td><td>13,14</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="chapter" id="c22">
+    <h2><span class="ch-num">&sect;22</span>The decision trees</h2>
+    <h3>Vendor vs. depend (the packaging fork)</h3>
+    <div class="diagram">Is the library uniquely yours and small, with no process-global singletons?
+   ├─ YES → VENDOR into the wheel (package-data + $ORIGIN/lib)        e.g. libdisort
+   └─ NO ↓
+Does the user already have it, is it huge, does it hold global state (dispatch/allocator)?
+   ├─ YES → DEPEND: exact-pin, exclude from repair, find via RPATH    e.g. libtorch
+   └─ NO ↓
+Is it a system primitive (libm, libstdc++, libgomp)?
+   └─ YES → NEVER ship; rely on manylinux policy / the OS</div>
+    <h3>Which C++ ABI / which torch?</h3>
+    <div class="diagram">Linux build?
+   ├─ YES → derive _GLIBCXX_USE_CXX11_ABI from torch._C._GLIBCXX_USE_CXX11_ABI  (never hard-code)
+   └─ NO (macOS) → libc++, no GLIBCXX ABI flag — skip the detection
+Always: build against the SAME torch version you will run against (exact pin).</div>
+    <h3>CUDA architecture list</h3>
+    <div class="diagram">Dev / local iteration?         → native  (one arch, fastest nvcc)
+Internal cluster, known GPUs?  → just those archs (smallest fatbin that covers the fleet)
+Public release wheel?          → broad SASS list  +  PTX for the newest arch (forward-compat JIT)
+Toolkit older than target GPU? → must include a virtual/PTX tier or hit "no kernel image"</div>
+    <h3>&ldquo;import pydisort&rdquo; fails &mdash; triage</h3>
+    <div class="diagram">undefined symbol?  → nm + c++filt → __cxx11 ? ABI (§04) : torch-internal ? drift (§12)
+cannot open .so?   → ldd/otool → ours missing? package-data/RPATH (§06,§11) : torch's? user env
+segfault on import?→ LD_DEBUG=libs → two libtorch? vendoring bug (§11) : ABI-incompatible torch
+runs, wrong device?→ "backend not found" → registration/load (§05)</div>
+  </section>
+
+  <section class="chapter" id="c23">
+    <h2><span class="ch-num">&sect;23</span>Glossary &amp; file map</h2>
+    <h4>Glossary</h4>
+    <table class="tbl">
+      <thead><tr><th>Term</th><th class="wide">Meaning in this stack</th></tr></thead>
+      <tbody>
+        <tr><td>ABI</td><td>binary contract between separately-compiled objects (name mangling, struct layout, calling convention). Mismatch = link failure or silent corruption.</td></tr>
+        <tr><td>_GLIBCXX_USE_CXX11_ABI</td><td>libstdc++ macro selecting the pre-/post-GCC-5 <code>std::string</code>/<code>std::list</code> layout. Must match torch.</td></tr>
+        <tr><td>DispatchStub</td><td>ATen&rsquo;s per-device function-pointer registry; populated by static-init <code>REGISTER_*</code> macros. pydisort&rsquo;s CPU/CUDA selector.</td></tr>
+        <tr><td>TensorIterator</td><td>ATen&rsquo;s broadcasting element-wise execution engine; pydisort frames each (wave,col) DISORT solve as one element.</td></tr>
+        <tr><td>RPATH / RUNPATH</td><td>dynamic library search paths baked into an object. RUNPATH (new default) is non-transitive.</td></tr>
+        <tr><td>$ORIGIN / @loader_path</td><td>&ldquo;directory of the loading object,&rdquo; resolved at runtime &mdash; what makes a relocatable wheel possible.</td></tr>
+        <tr><td>manylinux_2_28</td><td>build standard: link against glibc 2.28 so the wheel runs on any newer glibc.</td></tr>
+        <tr><td>cibuildwheel</td><td>tool that builds + repairs wheels across the Python/OS/arch matrix in CI.</td></tr>
+        <tr><td>auditwheel / delocate</td><td>Linux/macOS wheel-repair tools. pydisort uses them to <em>exclude</em> torch, not bundle it.</td></tr>
+        <tr><td>fatbin / SASS / PTX</td><td>CUDA fat binary holding per-arch machine code (SASS) and/or virtual ISA (PTX, JIT&rsquo;d by the driver).</td></tr>
+        <tr><td>abi3</td><td>Python&rsquo;s stable C ABI (one wheel across minors). <em>Not</em> available to a torch+pybind ext &mdash; hence the per-Python matrix.</td></tr>
+        <tr><td>OIDC Trusted Publishing</td><td>secretless PyPI upload via short-lived GitHub-issued tokens. The recommended replacement for API tokens.</td></tr>
+        <tr><td>Cloneable / TORCH_MODULE</td><td>torch C++ module base that deep-copies and calls <code>reset()</code>; <code>TORCH_MODULE</code> wraps it in a shared_ptr handle.</td></tr>
+      </tbody>
+    </table>
+    <h4>File map (pydisort/)</h4>
+    <table class="tbl">
+      <thead><tr><th>Path</th><th class="wide">Role in the life cycle</th></tr></thead>
+      <tbody>
+        <tr><td>CMakeLists.txt</td><td>Stage 1 entry; ABI detection, CUDA arch policy, dep includes</td></tr>
+        <tr><td>setup.py</td><td>Stage 2; CppExtension/CUDAExtension, library discovery, RPATH link args</td></tr>
+        <tr><td>pyproject.toml</td><td>build-system reqs, the torch==2.10.0 pin, package-data (the wheel contents)</td></tr>
+        <tr><td>cmake/modules/FindTorch.cmake</td><td>locates LibTorch from the Python install; propagates the cxx11-ABI target</td></tr>
+        <tr><td>cmake/compilers.cmake</td><td>per-compiler flags, AVX defines, nvcc flags, PIC</td></tr>
+        <tr><td>cmake/macros/macro_add_package.cmake</td><td>FetchContent + tarball cache for fmt/pybind11</td></tr>
+        <tr><td>src/disort_dispatch.{hpp,cpp,cu}</td><td>the DECLARE/DEFINE/REGISTER dispatch triad; CPU &amp; (scaffold) CUDA kernels</td></tr>
+        <tr><td>src/disort.{hpp,cpp}</td><td>DisortImpl module, TensorIterator forward(), gather_flx/rad</td></tr>
+        <tr><td>python/csrc/*.cpp</td><td>pybind11 module: bindings, kwargs boundary conditions, fmt repr</td></tr>
+        <tr><td>cdisort213/</td><td>vendored DISORT 2.1.3 C solver (OBJECT lib, libm)</td></tr>
+        <tr><td>.github/workflows/ci.yml</td><td>the gate: pre-commit + build-and-test matrix</td></tr>
+        <tr><td>.github/workflows/cd.yml</td><td>the publisher: cibuildwheel + PyPI</td></tr>
+        <tr><td>.github/workflows/bump-and-tag.yaml</td><td>the release robot: bump, tag, notes</td></tr>
+        <tr><td>.pre-commit-config.yaml</td><td>the quality floor (clang-format, cpplint, black, &hellip;)</td></tr>
+        <tr><td>.readthedocs.yaml</td><td>docs build (note the py3.9/3.10 mismatch)</td></tr>
+        <tr><td>tests/</td><td>C++ ctest + Python numerical goldens (Van de Hulst)</td></tr>
+      </tbody>
+    </table>
+  </section>
+</div>
+
+</main>
+
+<footer>
+  <h4>Colophon &amp; further reading</h4>
+  <div class="resources">
+    <ul>
+      <li><strong>Companion guides</strong> &mdash; <code>modern_cpp_handbook.html</code> (the C++ idioms underneath), <code>vic_solver_optimization.html</code> and <code>evolve_implicit_optimization.html</code> (the GPU-kernel craft this scaffolds toward), <code>checkpoint_restart_filesystems.html</code> (the I/O side of the same model family).</li>
+      <li><strong>Subject under study</strong> &mdash; <code>pydisort</code> 1.7.3: a torch-backed Python/C++/CUDA wrapper over DISORT 2.1.3, source of truth for DISORT semantics in the scix workspace.</li>
+      <li><strong>Build &amp; link</strong> &mdash; CMake <code>find_package(Torch)</code>; <code>_GLIBCXX_USE_CXX11_ABI</code>; ELF <code>RPATH</code>/<code>RUNPATH</code> &amp; <code>$ORIGIN</code>; macOS <code>@rpath</code>/<code>@loader_path</code> &amp; install-names.</li>
+      <li><strong>Packaging</strong> &mdash; PEP 600 (manylinux), <code>cibuildwheel</code>, <code>auditwheel</code>/<code>delocate</code>, PEP 561 typing, PyPI Trusted Publishing (OIDC).</li>
+      <li><strong>Torch internals</strong> &mdash; ATen <code>TensorIterator</code> &amp; <code>DispatchStub</code>; <code>torch.utils.cpp_extension</code>; <code>torch::nn::Cloneable</code>; the <code>torch::stable</code> ABI.</li>
+      <li><strong>CUDA</strong> &mdash; <code>CMAKE_CUDA_ARCHITECTURES</code>, fatbins, PTX JIT &amp; forward-compat, <code>cuobjdump</code>, <code>compute-sanitizer</code>.</li>
+      <li><strong>Self-contained</strong> &mdash; layout, colour, and structure are inline; display fonts load from Google Fonts and degrade to serif/mono offline. Open directly in any browser.</li>
+    </ul>
+  </div>
+</footer>
+
+</body>
+</html>
