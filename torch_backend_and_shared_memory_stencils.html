@@ -1,0 +1,1195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Torch as a Performance-Portable Backend &amp; Shared-Memory Stencils — A Tutorial</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,300..900,0..100,0..1;1,9..144,300..900,0..100,0..1&family=Source+Serif+4:ital,opsz,wght@0,8..60,300..700;1,8..60,300..700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --paper: #f7f4ec; --paper-2: #efeadc; --paper-3: #e6dfca;
+  --ink: #1a1612; --ink-soft: #3d3830; --ink-faint: #7a7468;
+  --rule: #c4bba5; --rule-soft: #ddd5bc;
+  --oxblood: #9d2818; --oxblood-deep: #6e1a0e;
+  --teal: #2a6066; --teal-deep: #163c41;
+  --ochre: #b08020; --moss: #5e6f3a;
+  --code-bg: #1a1d22; --code-ink: #e8e3d4;
+  --maxw: 1020px;
+}
+*{ box-sizing: border-box; }
+html{ scroll-behavior: smooth; }
+body{
+  margin: 0; background: var(--paper); color: var(--ink);
+  font-family: 'Source Serif 4', Georgia, serif;
+  font-variation-settings: "opsz" 16;
+  font-size: 17px; line-height: 1.62;
+  -webkit-font-smoothing: antialiased;
+}
+body::before{
+  content: ""; position: fixed; inset: 0;
+  background-image: radial-gradient(rgba(80,55,20,0.03) 1px, transparent 1px);
+  background-size: 4px 4px; pointer-events: none; z-index: 1;
+  mix-blend-mode: multiply;
+}
+header, main, footer{ position: relative; z-index: 2; }
+header{
+  max-width: var(--maxw); margin: 0 auto;
+  padding: 80px 32px 56px;
+  border-bottom: 4px solid var(--ink); position: relative;
+}
+header::after{
+  content: ""; display: block; position: absolute;
+  bottom: -10px; left: 32px; right: 32px; height: 1px; background: var(--ink);
+}
+.kicker{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; letter-spacing: .28em; text-transform: uppercase;
+  color: var(--oxblood); margin-bottom: 32px;
+  display: flex; align-items: center; gap: 16px;
+}
+.kicker::before{ content: "\2B25"; color: var(--ochre); }
+.kicker::after{
+  content: ""; flex: 1; height: 2px;
+  background: linear-gradient(to right, var(--rule) 0%, var(--rule) 30%, transparent 100%);
+}
+h1{
+  font-family: 'Fraunces', serif;
+  font-variation-settings: "opsz" 144, "SOFT" 100, "WONK" 1;
+  font-weight: 500; font-size: clamp(44px, 8vw, 88px);
+  line-height: 0.94; letter-spacing: -0.025em;
+  margin: 0 0 24px; color: var(--ink);
+}
+h1 .ital{ font-style: italic; font-weight: 400; color: var(--oxblood); }
+.deck{
+  font-family: 'Source Serif 4', serif;
+  font-variation-settings: "opsz" 32;
+  font-size: 21px; font-style: italic; color: var(--ink-soft);
+  max-width: 760px; line-height: 1.45; margin-top: 20px;
+}
+.meta-row{
+  margin-top: 36px; display: flex; gap: 32px; flex-wrap: wrap;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11.5px; color: var(--ink-faint); letter-spacing: .04em;
+}
+.meta-row .m b{ color: var(--ink); font-weight: 600; }
+.toc{
+  margin-top: 48px; border: 2px solid var(--ink); background: var(--paper-2);
+  padding: 26px 30px; position: relative;
+}
+.toc::before{
+  content: "Index"; position: absolute; top: -12px; left: 24px;
+  background: var(--paper); padding: 0 10px;
+  font-family: 'Fraunces', serif; font-style: italic;
+  font-size: 16px; color: var(--ink);
+}
+.toc-grid{ display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px 36px; }
+@media (max-width: 760px){ .toc-grid{ grid-template-columns: 1fr; } }
+.toc-grid a{
+  color: var(--ink-soft); text-decoration: none;
+  font-size: 14.5px; padding: 5px 0; display: flex; gap: 14px;
+  border-bottom: 1px solid transparent; transition: all .15s;
+  font-family: 'Source Serif 4', serif;
+}
+.toc-grid a:hover{ color: var(--oxblood); border-color: var(--rule); }
+.toc-grid a .n{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; color: var(--oxblood); min-width: 30px; font-weight: 600;
+}
+main{ max-width: var(--maxw); margin: 0 auto; padding: 48px 32px 80px; }
+.part{
+  margin-top: 90px; padding-top: 48px;
+  border-top: 4px solid var(--ink); position: relative;
+}
+.part::after{
+  content: ""; position: absolute; top: 8px; left: 0; right: 0;
+  height: 1px; background: var(--ink);
+}
+.part:first-child{ margin-top: 32px; border-top: none; padding-top: 0; }
+.part:first-child::after{ display: none; }
+.part-label{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; letter-spacing: .28em; color: var(--oxblood);
+  text-transform: uppercase; margin-bottom: 12px; font-weight: 600;
+}
+.part-title{
+  font-family: 'Fraunces', serif;
+  font-variation-settings: "opsz" 96;
+  font-weight: 500; font-size: 48px; line-height: 1.0;
+  letter-spacing: -0.015em; margin: 0 0 14px; color: var(--ink);
+}
+.part-title .ital{ font-style: italic; color: var(--oxblood); font-weight: 400; }
+.part-intro{
+  color: var(--ink-soft); font-size: 18px; max-width: 720px;
+  margin-bottom: 36px; font-style: italic;
+  font-family: 'Source Serif 4', serif;
+  font-variation-settings: "opsz" 24; line-height: 1.55;
+}
+section.chapter{ margin-top: 48px; }
+h2{
+  font-family: 'Fraunces', serif;
+  font-variation-settings: "opsz" 48;
+  font-weight: 500; font-size: 30px; line-height: 1.18;
+  letter-spacing: -0.01em; margin: 0 0 14px; color: var(--ink);
+  display: flex; align-items: baseline; gap: 18px;
+}
+h2 .ch-num{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px; color: var(--oxblood); letter-spacing: .15em;
+  font-weight: 600; flex-shrink: 0;
+}
+h3{
+  font-family: 'Fraunces', serif;
+  font-variation-settings: "opsz" 32;
+  font-weight: 600; font-size: 20px; margin: 28px 0 10px;
+  color: var(--ink); letter-spacing: -0.005em;
+}
+h4{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; letter-spacing: .2em; text-transform: uppercase;
+  color: var(--teal); margin: 22px 0 8px; font-weight: 600;
+}
+p{ margin: 12px 0; }
+p code, li code, td code{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: .82em; background: var(--paper-3); color: var(--oxblood-deep);
+  padding: 1px 6px; border-radius: 2px;
+}
+ul, ol{ padding-left: 1.4em; }
+li{ margin: 6px 0; }
+ul.tight li{ margin: 3px 0; }
+ul.dash{ list-style: none; padding-left: 0; }
+ul.dash li{ position: relative; padding-left: 26px; }
+ul.dash li::before{
+  content: "\2014"; position: absolute; left: 0;
+  color: var(--oxblood); font-weight: 600;
+}
+pre{
+  background: var(--code-bg); border: 1px solid #2a2e35;
+  padding: 16px 20px; overflow-x: auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12.5px; line-height: 1.6;
+  color: var(--code-ink); margin: 18px 0;
+  position: relative; border-radius: 2px;
+}
+pre .com{ color: #7e8a78; font-style: italic; }
+pre .kw{  color: #d9b88a; }
+pre .ty{  color: #88c5b4; }
+pre .str{ color: #e09678; }
+pre .num{ color: #c8a4d8; }
+pre .fn{  color: #84b5d4; }
+pre .pp{  color: #d8b070; }
+pre::before{
+  content: attr(data-lang); position: absolute; top: 6px; right: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9.5px; letter-spacing: .18em;
+  color: #5a6258; text-transform: uppercase;
+}
+.code-caption{
+  font-family: 'Source Serif 4', serif; font-style: italic;
+  font-size: 14.5px; color: var(--ink-faint);
+  margin: -10px 0 18px; padding-left: 6px;
+}
+.callout{
+  margin: 22px 0; padding: 16px 22px;
+  border-left: 4px solid var(--teal); background: var(--paper-2);
+  font-size: 15.5px; line-height: 1.6;
+}
+.callout.warn{ border-color: var(--ochre); }
+.callout.danger{ border-color: var(--oxblood); }
+.callout.tip{ border-color: var(--moss); }
+.callout h5{
+  margin: 0 0 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px; letter-spacing: .22em; text-transform: uppercase;
+  color: var(--teal); font-weight: 700;
+}
+.callout.warn h5{ color: var(--ochre); }
+.callout.danger h5{ color: var(--oxblood); }
+.callout.tip h5{ color: var(--moss); }
+.callout p:first-child{ margin-top: 0; }
+.callout p:last-child{ margin-bottom: 0; }
+.callout pre{ margin: 8px 0 4px; }
+.tbl{ width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 14px; }
+.tbl th, .tbl td{
+  text-align: left; padding: 10px 14px; vertical-align: top;
+  border-bottom: 1px solid var(--rule);
+}
+.tbl th{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--oxblood); font-weight: 700;
+  border-bottom: 2px solid var(--oxblood);
+}
+.tbl th.r{ text-align: right; }
+.tbl tr:hover td{ background: var(--paper-2); }
+.tbl td:first-child{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px; color: var(--ink); font-weight: 600; width: 22%;
+}
+.tbl td.r{ text-align: right; font-family: 'JetBrains Mono', monospace; font-size: 12.5px; color: var(--ink-soft); }
+.tbl td.wide:first-child{ width: auto; }
+.win{ color: var(--moss); font-weight: 700; }
+.lose{ color: var(--oxblood); font-weight: 700; }
+.twocol{ display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 22px 0; }
+@media (max-width: 760px){ .twocol{ grid-template-columns: 1fr; } }
+.twocol .col{ background: var(--paper-2); border: 1px solid var(--rule); padding: 18px 20px; }
+.twocol .col h5{
+  margin: 0 0 10px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; letter-spacing: .18em; text-transform: uppercase;
+  color: var(--teal); font-weight: 700;
+}
+.twocol .col.bad h5{ color: var(--oxblood); }
+.twocol .col.good h5{ color: var(--moss); }
+.twocol .col p{ margin: 8px 0; font-size: 14.5px; }
+.diagram{
+  background: var(--paper-2); border: 1px solid var(--rule);
+  padding: 22px 24px; margin: 22px 0;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px; line-height: 1.55; color: var(--ink-soft);
+  white-space: pre; overflow-x: auto;
+}
+.pull{
+  font-family: 'Fraunces', serif;
+  font-variation-settings: "opsz" 72;
+  font-style: italic; font-weight: 400;
+  font-size: 26px; line-height: 1.32;
+  color: var(--oxblood); margin: 36px 0;
+  padding: 0 0 0 32px; border-left: 3px solid var(--oxblood);
+}
+.idea{
+  margin: 24px 0; border: 2px solid var(--ink);
+  background: var(--paper); padding: 20px 24px; position: relative;
+}
+.idea::before{
+  content: "Key idea"; position: absolute; top: -10px; left: 20px;
+  background: var(--paper); padding: 0 10px;
+  font-family: 'Fraunces', serif; font-style: italic;
+  font-size: 14px; color: var(--ink);
+}
+.idea p{ margin: 6px 0; font-size: 15.5px; }
+.idea p:first-child{ margin-top: 6px; }
+.idea p:last-child{ margin-bottom: 0; }
+.rule-sep{ height: 1px; background: var(--rule); margin: 56px 0; position: relative; }
+.rule-sep::after{
+  content: "\00A7"; position: absolute;
+  top: 50%; left: 50%; transform: translate(-50%, -50%);
+  background: var(--paper); color: var(--oxblood);
+  padding: 0 18px;
+  font-family: 'Fraunces', serif; font-style: italic; font-size: 18px;
+}
+footer{
+  max-width: var(--maxw); margin: 0 auto; padding: 56px 32px 80px;
+  border-top: 4px solid var(--ink); color: var(--ink-soft);
+  font-size: 14.5px; position: relative;
+}
+footer::after{
+  content: ""; position: absolute; top: 8px; left: 32px; right: 32px;
+  height: 1px; background: var(--ink);
+}
+footer h4{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; letter-spacing: .22em;
+  color: var(--oxblood); margin: 0 0 14px; font-weight: 700;
+}
+footer .resources{ columns: 2; column-gap: 36px; }
+@media (max-width: 680px){ footer .resources{ columns: 1; } }
+footer ul{ list-style: none; padding: 0; margin: 0; }
+footer li{ padding: 5px 0; font-size: 14px; break-inside: avoid; }
+footer li code{ color: var(--oxblood); background: transparent; padding: 0; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="kicker">PyTorch as backend &middot; performance portability &middot; CUDA shared memory &middot; stencil kernels</div>
+  <h1>Torch as a <span class="ital">backend</span>, &amp; the kernels you write by hand</h1>
+  <p class="deck">
+    The same algorithm has to run on a laptop CPU, a datacenter GPU, and an Apple M-series chip. You don&rsquo;t want to write it three times. You also don&rsquo;t want to give up <em>peak</em> performance on the device where it matters most. This is a tutorial &mdash; starting from zero &mdash; in the architecture that lets you have both: <strong>use PyTorch as the device-dispatching tensor backend</strong>, then drop down to a <strong>hand-written shared-memory CUDA kernel</strong> exactly where it pays. The case studies are <code>pydisort</code> (a C radiative-transfer solver wrapped as torch ops), <code>kintera</code> (chemistry + thermodynamics), and <code>snapy</code> (a fluid-dynamics code whose WENO5 reconstruction is the cleanest shared-memory stencil in the workspace).
+  </p>
+  <div class="meta-row">
+    <span class="m"><b>Prereq</b> none beyond &ldquo;tensors and arrays exist&rdquo;</span>
+    <span class="m"><b>Repos</b> pydisort &middot; kintera &middot; snapy</span>
+    <span class="m"><b>Pattern</b> TensorIterator + DispatchStub + hand kernel</span>
+    <span class="m"><b>Targets</b> CPU &middot; CUDA &middot; MPS (Apple)</span>
+  </div>
+  <div class="toc">
+    <div class="toc-grid">
+      <a href="#c00"><span class="n">&sect;00</span><span>Synopsis: the one-sentence answer</span></a>
+      <a href="#c01"><span class="n">&sect;01</span><span>The problem: one algorithm, three devices</span></a>
+      <a href="#c02"><span class="n">&sect;02</span><span>What &ldquo;torch as backend&rdquo; really means</span></a>
+      <a href="#c03"><span class="n">&sect;03</span><span>A tensor is a small contract</span></a>
+      <a href="#c04"><span class="n">&sect;04</span><span>TensorIterator: the loop machine</span></a>
+      <a href="#c05"><span class="n">&sect;05</span><span>DispatchStub: per-device function pointers</span></a>
+      <a href="#c06"><span class="n">&sect;06</span><span>nn::Module: a class that lives in two languages</span></a>
+      <a href="#c07"><span class="n">&sect;07</span><span>The recipe end to end, in 50 lines</span></a>
+      <a href="#c08"><span class="n">&sect;08</span><span>The pattern across three repos</span></a>
+      <a href="#c09"><span class="n">&sect;09</span><span>pydisort: wrap a 1980s C solver</span></a>
+      <a href="#c10"><span class="n">&sect;10</span><span>kintera: chemistry as torch ops</span></a>
+      <a href="#c11"><span class="n">&sect;11</span><span>snapy: setting up the stencil call</span></a>
+      <a href="#c12"><span class="n">&sect;12</span><span>What a stencil is (and the reuse it leaves)</span></a>
+      <a href="#c13"><span class="n">&sect;13</span><span>Three flavors of WENO5 side by side</span></a>
+      <a href="#c14"><span class="n">&sect;14</span><span>The CUDA shared-mem kernel, annotated</span></a>
+      <a href="#c15"><span class="n">&sect;15</span><span>Grid &amp; block geometry, illustrated</span></a>
+      <a href="#c16"><span class="n">&sect;16</span><span>Why this is efficient: bandwidth math</span></a>
+      <a href="#c17"><span class="n">&sect;17</span><span>Why not just use torch ops?</span></a>
+      <a href="#c18"><span class="n">&sect;18</span><span>The kernel-launch &amp; tensor-materialization tax</span></a>
+      <a href="#c19"><span class="n">&sect;19</span><span>The MPS path is the counterfactual</span></a>
+      <a href="#c20"><span class="n">&sect;20</span><span>When to stay on torch, when to drop down</span></a>
+      <a href="#c21"><span class="n">&sect;21</span><span>The full architecture in one picture</span></a>
+      <a href="#c22"><span class="n">&sect;22</span><span>Decision trees</span></a>
+      <a href="#c23"><span class="n">&sect;23</span><span>Glossary &amp; file map</span></a>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<!-- =================================================================
+     PART I  —  WHY THIS EXISTS  (zero-knowledge entry)
+================================================================== -->
+<div class="part" id="p1">
+  <div class="part-label">Part I</div>
+  <h2 class="part-title">The <span class="ital">problem</span> &amp; the idea</h2>
+  <p class="part-intro">No code, no jargon yet. First we get clear on <em>what we are trying to accomplish</em> and <em>what trick makes it possible</em>. Once those two things are in your head, every later chapter is a slot the trick clicks into.</p>
+
+  <section class="chapter" id="c00">
+    <h2><span class="ch-num">&sect;00</span>Synopsis: the one-sentence answer</h2>
+    <p>The one-sentence answer to &ldquo;how does one codebase run fast on every device?&rdquo; is:</p>
+    <div class="pull">Write the algorithm <em>once</em> as a function that takes typed memory pointers; let PyTorch wrap that function in a tensor-shaped, device-aware op; and on the one device where peak performance matters most, write a second version of the same function using the device&rsquo;s native primitives.</div>
+    <p>That&rsquo;s it. The rest of this tutorial unpacks each phrase: <em>typed memory pointers</em>, <em>tensor-shaped op</em>, <em>device-aware</em>, <em>native primitives</em>. Then we look at three real codebases that follow exactly this recipe &mdash; with progressively harder kernels &mdash; and end with a deep dive on the most interesting case: a hand-written CUDA kernel that uses on-chip shared memory to outperform every pure-torch alternative on the same algorithm.</p>
+    <p>Audience note: this tutorial assumes nothing beyond &ldquo;an array is a contiguous block of typed numbers&rdquo; and &ldquo;a GPU runs many threads in parallel.&rdquo; If you know more, parts will feel slow; the deep-dive in &sect;14&ndash;&sect;16 should still be new.</p>
+  </section>
+
+  <section class="chapter" id="c01">
+    <h2><span class="ch-num">&sect;01</span>The problem: one algorithm, three devices</h2>
+    <p>Concretely: you have a numerical algorithm &mdash; say, a discrete-ordinates radiative transfer solver, or a chemical-equilibrium calculation, or a high-order spatial reconstruction for a fluid solver. You want users to:</p>
+    <ol>
+      <li>Run it from Python.</li>
+      <li>Pass in PyTorch tensors and get back PyTorch tensors (so it composes with the rest of their pipeline).</li>
+      <li>Have it run on whatever device their tensors live on &mdash; <strong>CPU</strong>, <strong>NVIDIA GPU</strong> (CUDA), or <strong>Apple Silicon GPU</strong> (Metal Performance Shaders, &ldquo;MPS&rdquo;) &mdash; without changing a line of their code.</li>
+      <li>Get speeds that are <em>competitive with hand-written native code</em> on whichever device matters most.</li>
+    </ol>
+    <p>The naive approach is to write three implementations of every function (one per device) and a dispatcher that picks based on the tensor&rsquo;s <code>.device</code>. That works, technically, but it has three problems:</p>
+    <ul class="dash">
+      <li><strong>Tripled maintenance.</strong> A bug fix in one path has to be applied to three.</li>
+      <li><strong>Per-device specialism.</strong> CPU benefits from cache-blocking, GPU from coalesced loads and shared memory, Apple Silicon from <em>different</em> shared-memory rules &mdash; you can&rsquo;t use one mental model.</li>
+      <li><strong>Discovery problem.</strong> Most algorithms don&rsquo;t need three implementations; the loops are simple and bandwidth-limited. Writing three copies of a loop is waste. <em>Only the few inner kernels that truly want device-specific tuning deserve a custom version.</em></li>
+    </ul>
+    <p>So we want a design where:</p>
+    <ul class="dash">
+      <li>The <strong>default</strong> per-device version of an op is <em>generated from one source</em> &mdash; you write the loop body once, the framework runs it CPU-parallel or in CUDA threads.</li>
+      <li>For the <strong>hot</strong> kernels you care about, you can <em>override</em> the default with a hand-written device kernel that uses shared memory, warp shuffles, or whatever the hardware exposes.</li>
+      <li>Either way, the user sees the same Python function and the same tensor in, tensor out, regardless of device.</li>
+    </ul>
+    <p>That design exists. PyTorch is one of its most polished implementations &mdash; not because of deep learning, but because deep-learning kernels happen to <em>need</em> exactly this structure (one op, many devices, often with hand-tuned inner loops). The three case-study repos in this tutorial use PyTorch&rsquo;s machinery for <em>non</em>-ML problems (radiation, chemistry, fluid dynamics), demonstrating that the architecture is general.</p>
+  </section>
+
+  <section class="chapter" id="c02">
+    <h2><span class="ch-num">&sect;02</span>What &ldquo;torch as backend&rdquo; really means</h2>
+    <p>The most common source of confusion: PyTorch is two things layered on top of each other, and only the bottom layer matters here.</p>
+    <div class="twocol">
+      <div class="col">
+        <h5>What you probably know PyTorch as</h5>
+        <p>A deep-learning framework. Autograd, neural-net modules, optimizers, distributed training, the whole stack used to train large models.</p>
+      </div>
+      <div class="col good">
+        <h5>What we&rsquo;re using PyTorch for here</h5>
+        <p>The <em>tensor library underneath</em>: a typed n-dimensional array (<code>at::Tensor</code>) that knows its dtype, shape, strides, and which device it lives on, plus a machine for writing operations on those tensors that dispatch to the right device implementation. Deep learning is one user of this layer; you can be another.</p>
+      </div>
+    </div>
+    <p>Specifically, three pieces of the lower layer do all the work. We&rsquo;ll meet each in Part II; the names worth memorizing now are:</p>
+    <table class="tbl">
+      <thead><tr><th>Piece</th><th class="wide">In one sentence</th></tr></thead>
+      <tbody>
+        <tr><td><code>at::Tensor</code></td><td>a typed pointer + shape + strides + device label &mdash; what gets passed in and out.</td></tr>
+        <tr><td><code>at::TensorIterator</code></td><td>given some input/output tensors and a description of how they broadcast, hand you a way to walk every element exactly once.</td></tr>
+        <tr><td><code>DispatchStub</code></td><td>a small registry mapping <em>(operation name, device)</em> to a function pointer. The call <code>call_my_op(device_type, iter, ...)</code> looks up the right function and runs it.</td></tr>
+      </tbody>
+    </table>
+    <p>The user-facing convenience &mdash; binding a C++ class as a Python type with PyTorch&rsquo;s <code>nn::Module</code> &mdash; is icing. We&rsquo;ll meet it last (&sect;06). It is not load-bearing for performance; it&rsquo;s load-bearing for ergonomics.</p>
+    <div class="idea">
+      <p>You can think of PyTorch (for our purposes) as a <strong>library that handles four things you would otherwise build yourself</strong>: device-aware memory, broadcasting iteration, a function-pointer registry per device, and a Python binding. Building any of those well is months of work. Using PyTorch&rsquo;s, your day-one is &ldquo;write the loop body.&rdquo;</p>
+    </div>
+  </section>
+</div>
+
+<!-- =================================================================
+     PART II — BUILD THE MACHINERY, END TO END
+================================================================== -->
+<div class="part" id="p2">
+  <div class="part-label">Part II</div>
+  <h2 class="part-title">The integration <span class="ital">surface</span>, end to end</h2>
+  <p class="part-intro">Now we open the lid and look at each of the three pieces in turn. By the end of this part you&rsquo;ll have read a complete, minimal example &mdash; about fifty lines of C++ &mdash; that takes one C function and turns it into a torch op runnable on CPU and CUDA. Every other chapter is a riff on this skeleton.</p>
+
+  <section class="chapter" id="c03">
+    <h2><span class="ch-num">&sect;03</span>A tensor is a small contract</h2>
+    <p>Forget what tensors mean in math for a moment. In PyTorch&rsquo;s C++ API an <code>at::Tensor</code> is a tiny C++ object that, at runtime, knows five things:</p>
+    <table class="tbl">
+      <thead><tr><th>Field</th><th class="wide">What it is</th></tr></thead>
+      <tbody>
+        <tr><td>data pointer</td><td>raw memory address of the first element (<code>tensor.data_ptr&lt;float&gt;()</code>)</td></tr>
+        <tr><td>dtype</td><td>which scalar type the bytes encode &mdash; <code>kFloat32</code>, <code>kFloat64</code>, <code>kInt32</code>, &hellip;</td></tr>
+        <tr><td>shape</td><td>a small array of dimension sizes, e.g. <code>{nwave, ncol, nlyr, nprop}</code></td></tr>
+        <tr><td>strides</td><td>how many <em>elements</em> to step to advance each dimension; lets you walk non-contiguous views without copying</td></tr>
+        <tr><td>device</td><td>where the memory lives: CPU host, CUDA device 0, MPS, &hellip;</td></tr>
+      </tbody>
+    </table>
+    <p>That&rsquo;s the entire user-visible surface. Two important consequences:</p>
+    <ul class="dash">
+      <li><strong>A tensor is <em>not</em> a number array you have to translate to and from.</strong> Once you have the data pointer and the strides, the loop body sees plain typed pointers &mdash; <em>identical</em> to the code you would write for a raw C array. PyTorch is just bookkeeping around the pointer.</li>
+      <li><strong>The device is just a label, until you act on it.</strong> A tensor on CUDA is the same C++ object as one on CPU &mdash; same class, same methods. The dispatch (&sect;05) is what reads the label and routes to the right implementation. This is what makes &ldquo;one function, many devices&rdquo; possible.</li>
+    </ul>
+    <div class="callout tip">
+      <h5>What this means in practice</h5>
+      <p>If you already have a C function <code>void my_solver(double* in, double* out, int n)</code>, you are 80% done. The remaining 20% is teaching PyTorch (a) how to walk the tensor and call your function with the right pointers, and (b) which version of <code>my_solver</code> to use for which device.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c04">
+    <h2><span class="ch-num">&sect;04</span>TensorIterator: the loop machine</h2>
+    <p><code>at::TensorIterator</code> answers a deceptively hard question: <strong>given some input tensors that may broadcast against each other, and one or more outputs, what is the loop that visits every element once with the right offsets?</strong> If you have ever written a loop over a multidim array that was strided differently from another array of the same shape, you have written a custom loop machine. PyTorch wrote that machine for you.</p>
+    <p>You configure one with a builder. Here is a real example, from <code>pydisort</code>&rsquo;s radiative-transfer forward pass, lightly trimmed:</p>
+<pre data-lang="C++ — pydisort/src/disort.cpp (TensorIterator setup)"><span class="kw">auto</span> iter = <span class="fn">at::TensorIteratorConfig</span>()
+    .<span class="fn">resize_outputs</span>(<span class="kw">false</span>)
+    .<span class="fn">check_all_same_dtype</span>(<span class="kw">true</span>)
+    .<span class="fn">declare_static_shape</span>({nwave, ncol, ds().ntau, <span class="num">2</span>},
+                          <span class="com">/*squash_dims=*/</span>{<span class="num">2</span>, <span class="num">3</span>})
+    .<span class="fn">add_output</span>(flx)
+    .<span class="fn">add_input</span>(prop)
+    .<span class="fn">add_owned_input</span>(umu0_broadcast)        <span class="com">// each boundary-condition</span>
+    .<span class="fn">add_owned_input</span>(phi0_broadcast)        <span class="com">// is broadcast up to (nwave,ncol,...)</span>
+    <span class="com">// ... more inputs, all broadcastable to the static shape ...</span>
+    .<span class="fn">build</span>();</pre>
+    <p>The builder takes a few important options:</p>
+    <table class="tbl">
+      <thead><tr><th>Option</th><th class="wide">What it does</th></tr></thead>
+      <tbody>
+        <tr><td>add_output / add_input</td><td>register the tensors. <code>add_owned_input</code> lets you pass a temporary (e.g. a broadcast view) without managing its lifetime yourself.</td></tr>
+        <tr><td>declare_static_shape</td><td>tell the iterator the conceptual shape of the computation. Broadcasting expands smaller inputs to this shape.</td></tr>
+        <tr><td>squash_dims</td><td>dimensions to treat as a single contiguous unit inside the kernel &mdash; &ldquo;don&rsquo;t parallelize over these; the kernel will loop over them itself.&rdquo; In the example above, dims 2 and 3 (the inner two) are squashed because <code>disort_impl</code> consumes them as one column at a time.</td></tr>
+      </tbody>
+    </table>
+    <p>Once built, the iterator can be walked by a CPU loop or fed to a CUDA kernel launcher. In both cases the callback you supply receives <strong>raw <code>char*</code> base pointers and per-element strides</strong> &mdash; exactly the &ldquo;typed memory pointer&rdquo; from the synopsis.</p>
+<pre data-lang="C++ — CPU side, from pydisort"><span class="kw">int</span> grain_size = iter.<span class="fn">numel</span>() / <span class="fn">at::get_num_threads</span>();
+iter.<span class="fn">for_each</span>([&amp;](<span class="kw">char</span>** data, <span class="kw">const</span> int64_t* strides, int64_t n) {
+    <span class="kw">for</span> (<span class="kw">int</span> i = <span class="num">0</span>; i &lt; n; i++) {
+      <span class="kw">auto</span> out  = <span class="kw">reinterpret_cast</span>&lt;scalar_t*&gt;(data[<span class="num">0</span>] + i * strides[<span class="num">0</span>]);
+      <span class="kw">auto</span> prop = <span class="kw">reinterpret_cast</span>&lt;scalar_t*&gt;(data[<span class="num">1</span>] + i * strides[<span class="num">1</span>]);
+      <span class="com">// ... more reinterpret_casts to recover typed pointers from char* + stride ...</span>
+      <span class="fn">disort_impl</span>(out, prop, /*&hellip;,*/ ds[idx], ds_out[idx], nprop);  <span class="com">// the actual solver</span>
+    }
+  }, grain_size);</pre>
+    <p>Three things to notice:</p>
+    <ul class="dash">
+      <li>The callback is a plain C++ lambda. No torch types appear inside it.</li>
+      <li><code>iter.for_each</code> automatically multi-threads across the iteration with the supplied grain size. You write the inner loop; PyTorch parallelizes it.</li>
+      <li>The kernel body &mdash; <code>disort_impl(...)</code> here &mdash; is <em>the same function</em> that would be called from a CUDA kernel (&sect;05). One source of truth.</li>
+    </ul>
+  </section>
+
+  <section class="chapter" id="c05">
+    <h2><span class="ch-num">&sect;05</span>DispatchStub: per-device function pointers</h2>
+    <p><code>DispatchStub</code> is a small idiom you will see in every torch-extension repo. It looks like three macros in three different files, doing one thing: <strong>maintain a table of function pointers, indexed by device.</strong></p>
+<pre data-lang="C++ — the three-line idiom (from pydisort, identical shape in kintera/snapy)"><span class="com">// 1) HEADER: declare the dispatch stub (a global function-pointer table)</span>
+<span class="kw">using</span> disort_fn = <span class="kw">void</span> (*)(at::TensorIterator&amp;, <span class="kw">int</span>,
+                           disort_state*, disort_output*);
+<span class="fn">DECLARE_DISPATCH</span>(disort_fn, call_disort);
+
+<span class="com">// 2) CPU CPP: define the table, then register the CPU implementation</span>
+<span class="fn">DEFINE_DISPATCH</span>(call_disort);
+<span class="fn">REGISTER_ALL_CPU_DISPATCH</span>(call_disort, &amp;disort::call_disort_cpu);
+
+<span class="com">// 3) CUDA CU:  register the CUDA implementation into the SAME table</span>
+<span class="fn">REGISTER_CUDA_DISPATCH</span>(call_disort, &amp;disort::call_disort_cuda);</pre>
+    <p>At call time the table is keyed by a <code>DeviceType</code>:</p>
+<pre data-lang="C++ — calling the dispatched op">at::native::<span class="fn">call_disort</span>(flx.<span class="fn">device</span>().<span class="fn">type</span>(),   <span class="com">// kCPU or kCUDA — picked at runtime</span>
+                        iter, upward, ds_.<span class="fn">data</span>(), ds_out_.<span class="fn">data</span>());</pre>
+    <p>What just happened mechanically:</p>
+    <ol>
+      <li><code>DECLARE_DISPATCH</code> creates a global object <code>call_disort</code> with a function-pointer slot per device.</li>
+      <li><code>DEFINE_DISPATCH</code> actually allocates that object in one translation unit (otherwise you&rsquo;d get linker duplicates).</li>
+      <li>Each <code>REGISTER_*_DISPATCH</code> macro expands to a <strong>static object whose constructor writes the function pointer into the right slot</strong>. The constructor runs when the .so loads.</li>
+      <li>Calling <code>call_disort(device_type, ...)</code> looks up the slot and invokes the function.</li>
+    </ol>
+    <div class="callout tip">
+      <h5>Why this design wins</h5>
+      <p>Two reasons. First, <strong>zero overhead at the call site</strong> &mdash; just an indirect function call. Second, <strong>the CUDA implementation can be in a separate .cu file</strong>, which only the CUDA-enabled build of the project even compiles. The CPU build doesn&rsquo;t need an nvcc dependency; the CUDA-included build automatically picks up the GPU variant when present.</p>
+    </div>
+    <div class="callout danger">
+      <h5>One subtle trap, mentioned for completeness</h5>
+      <p>Because registration happens via a static constructor, if the linker decides the registration object is &ldquo;unused&rdquo; (nothing references its symbol) and strips it out, the constructor never runs and the device slot stays null &mdash; you get &ldquo;Could not run with backend CUDA&rdquo; at runtime even though the code compiled fine. The fix is a link-time flag (<code>-Wl,--no-as-needed</code> wrapping the CUDA library on the link line), which kintera handles explicitly in its <code>setup.py</code>. You don&rsquo;t need to act on this in a tutorial reading, but knowing it exists saves an hour the first time you hit it.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c06">
+    <h2><span class="ch-num">&sect;06</span>nn::Module: a class that lives in two languages</h2>
+    <p>The last piece is the user-facing wrapper. You want users to write:</p>
+<pre data-lang="Python — user code">disort = pydisort.<span class="fn">Disort</span>(opts)
+flux   = disort.<span class="fn">forward</span>(properties, fbeam=..., umu0=...)    <span class="com"># returns a torch.Tensor</span></pre>
+    <p>To make this work, you wrap your C++ solver class as a <code>torch::nn::Module</code> and use PyTorch&rsquo;s pybind11 helper to bind it as a Python class. The mechanism, from pydisort:</p>
+<pre data-lang="C++ — pydisort/src/disort.hpp"><span class="kw">class</span> <span class="ty">DisortImpl</span> : <span class="kw">public</span> torch::nn::<span class="ty">Cloneable</span>&lt;DisortImpl&gt; {
+  DisortOptions options;                       <span class="com">// shared_ptr to a config struct</span>
+  <span class="kw">void</span> <span class="fn">reset</span>() <span class="kw">override</span>;                       <span class="com">// (re)allocate internal state</span>
+  torch::Tensor <span class="fn">forward</span>(torch::Tensor prop,
+                        std::map&lt;std::string, torch::Tensor&gt;* bc,
+                        std::string bname = <span class="str">""</span>, ...);
+};
+<span class="fn">TORCH_MODULE</span>(Disort);                            <span class="com">// alias: shared_ptr&lt;DisortImpl&gt; with sugar</span></pre>
+<pre data-lang="C++ — pydisort/python/csrc/pydisort.cpp (pybind binding)"><span class="fn">PYBIND11_MODULE</span>(pydisort, m) {
+  ...
+  <span class="fn">ADD_DISORT_MODULE</span>(Disort, DisortOptions)     <span class="com">// macro: bind_module + ctor + repr</span>
+      .<span class="fn">def</span>(<span class="str">"forward"</span>, [](DisortImpl&amp; self, torch::Tensor prop, ...,
+                          <span class="kw">const</span> py::kwargs&amp; kwargs) {
+            <span class="com">// build boundary-condition map from Python kwargs</span>
+            <span class="com">// broadcast inputs to (nwave, ncol, ...)</span>
+            <span class="kw">return</span> self.<span class="fn">forward</span>(prop, &amp;bc, bname, temf);
+          });
+}</pre>
+    <p>Two things this buys you:</p>
+    <ul class="dash">
+      <li><strong>The C++ class <em>is</em> the Python class.</strong> A user&rsquo;s <code>disort.forward(...)</code> call dispatches directly to the C++ method. No marshaling, no glue.</li>
+      <li><strong>It plays well with torch.</strong> Because <code>Disort</code> is an <code>nn::Module</code>, it has <code>.to(device)</code>, <code>.state_dict()</code>, can sit in an <code>nn::Sequential</code> &mdash; it acts like any other torch module, and torch handles parameter bookkeeping for you.</li>
+    </ul>
+    <p>That said, <code>nn::Module</code> is convenience, not necessity. You could expose a plain pybind11 class. Using <code>nn::Module</code> is the choice you make when you want the wrapped op to live in the torch ecosystem rather than alongside it.</p>
+  </section>
+
+  <section class="chapter" id="c07">
+    <h2><span class="ch-num">&sect;07</span>The recipe end to end, in 50 lines</h2>
+    <p>Putting Parts II together. Here is the minimum viable torch-backed op. Imagine you have a C function <code>void my_solver(double* out, const double* in, int nprop)</code> that does some per-column calculation. The complete wrapping in this style is roughly:</p>
+<pre data-lang="C++ — header (declare the op)"><span class="kw">using</span> my_fn_t = <span class="kw">void</span> (*)(at::TensorIterator&amp;);
+<span class="fn">DECLARE_DISPATCH</span>(my_fn_t, call_my_solver);</pre>
+<pre data-lang="C++ — cpu.cpp (define table + CPU implementation)"><span class="kw">void</span> <span class="fn">my_solver_cpu</span>(at::TensorIterator&amp; iter) {
+  <span class="fn">AT_DISPATCH_FLOATING_TYPES</span>(iter.<span class="fn">dtype</span>(), <span class="str">"my_solver_cpu"</span>, [&amp;] {
+    iter.<span class="fn">for_each</span>([&amp;](<span class="kw">char</span>** data, <span class="kw">const</span> int64_t* strides, int64_t n) {
+      <span class="kw">for</span> (int64_t i = <span class="num">0</span>; i &lt; n; i++) {
+        <span class="kw">auto</span> out = <span class="kw">reinterpret_cast</span>&lt;scalar_t*&gt;(data[<span class="num">0</span>] + i * strides[<span class="num">0</span>]);
+        <span class="kw">auto</span> in  = <span class="kw">reinterpret_cast</span>&lt;<span class="kw">const</span> scalar_t*&gt;(data[<span class="num">1</span>] + i * strides[<span class="num">1</span>]);
+        <span class="fn">my_solver</span>(out, in, nprop);                  <span class="com">// the same C function</span>
+      }
+    });
+  });
+}
+<span class="fn">DEFINE_DISPATCH</span>(call_my_solver);
+<span class="fn">REGISTER_ALL_CPU_DISPATCH</span>(call_my_solver, &amp;my_solver_cpu);</pre>
+<pre data-lang="C++ — cuda.cu (CUDA implementation, registered into the same table)"><span class="kw">void</span> <span class="fn">my_solver_cuda</span>(at::TensorIterator&amp; iter) {
+  at::cuda::<span class="fn">CUDAGuard</span> g(iter.<span class="fn">device</span>());
+  <span class="fn">AT_DISPATCH_FLOATING_TYPES</span>(iter.<span class="fn">dtype</span>(), <span class="str">"my_solver_cuda"</span>, [&amp;] {
+    native::<span class="fn">gpu_kernel</span>&lt;<span class="num">2</span>&gt;(iter, [=] <span class="fn">GPU_LAMBDA</span>(<span class="kw">char</span>* <span class="kw">const</span> data[<span class="num">2</span>], <span class="kw">unsigned</span> strides[<span class="num">2</span>]) {
+      <span class="kw">auto</span> out = <span class="kw">reinterpret_cast</span>&lt;scalar_t*&gt;(data[<span class="num">0</span>] + strides[<span class="num">0</span>]);
+      <span class="kw">auto</span> in  = <span class="kw">reinterpret_cast</span>&lt;<span class="kw">const</span> scalar_t*&gt;(data[<span class="num">1</span>] + strides[<span class="num">1</span>]);
+      <span class="fn">my_solver</span>(out, in, nprop);                  <span class="com">// SAME function — if it&rsquo;s __host__ __device__</span>
+    });
+  });
+}
+<span class="fn">REGISTER_CUDA_DISPATCH</span>(call_my_solver, &amp;my_solver_cuda);</pre>
+<pre data-lang="C++ — forward() in your module"><span class="kw">auto</span> iter = <span class="fn">at::TensorIteratorConfig</span>()
+   .<span class="fn">add_output</span>(out).<span class="fn">add_input</span>(in).<span class="fn">build</span>();
+
+at::native::<span class="fn">call_my_solver</span>(out.<span class="fn">device</span>().<span class="fn">type</span>(), iter);     <span class="com">// dispatches CPU or CUDA</span></pre>
+    <p>That is the whole skeleton. Notice that <strong><code>my_solver</code> appears identically in both the CPU and CUDA paths</strong>. This is the &ldquo;write once&rdquo; promise of the architecture. The only thing that has to be different is the surrounding boilerplate that walks the iterator &mdash; and TensorIterator + DispatchStub give you both versions for free.</p>
+    <p>How does the same C function compile for both the CPU and the GPU? With a <strong>portability macro</strong> that expands to <code>__host__ __device__</code> under nvcc and to nothing otherwise. kintera does this explicitly in its <code>configure.h</code>:</p>
+<pre data-lang="C++ — kintera/configure.h.in"><span class="pp">#ifdef</span> __CUDACC__
+  <span class="pp">#define</span> DISPATCH_MACRO __host__ __device__
+<span class="pp">#else</span>
+  <span class="pp">#define</span> DISPATCH_MACRO
+<span class="pp">#endif</span></pre>
+<pre data-lang="C++ — kintera/src/recon/interp_impl.h"><span class="kw">template</span> &lt;<span class="kw">typename</span> T, <span class="kw">int</span> N&gt;
+<span class="fn">DISPATCH_MACRO</span> <span class="kw">void</span> <span class="fn">interp_poly_impl</span>(T* out, T* inp, T* coeff, ...) {
+  <span class="kw">for</span> (<span class="kw">int</span> j = <span class="num">0</span>; j &lt; nvar; ++j) {
+    <span class="fn">OUT</span>(j) = <span class="num">0</span>.;
+    <span class="kw">for</span> (<span class="kw">int</span> i = <span class="num">0</span>; i &lt; N; ++i) <span class="fn">OUT</span>(j) += coeff[i] * <span class="fn">INP</span>(j, i);
+  }
+}</pre>
+    <p>That single function body runs as serial C++ on CPU (inside <code>iter.for_each</code>) and as device-callable code on GPU (inside <code>gpu_kernel</code>). One file, two compilers, two devices.</p>
+    <div class="idea">
+      <p>Everything in this guide is a riff on this 50-line skeleton. The three case studies in Part III show how it scales to a real C solver, to a multi-domain module, and to a stencil that wants more. The deep dive in Part IV shows what happens when the default <code>gpu_kernel</code> isn&rsquo;t enough and you replace it with a hand-written kernel that uses shared memory.</p>
+    </div>
+  </section>
+</div>
+
+<!-- =================================================================
+     PART III — APPLY THE RECIPE TO REAL REPOS
+================================================================== -->
+<div class="part" id="p3">
+  <div class="part-label">Part III</div>
+  <h2 class="part-title">The pattern across <span class="ital">three repos</span></h2>
+  <p class="part-intro">Same recipe, three problems of progressively richer shape. Read these to internalize that the architecture really is universal: a 1980s C solver, a polyglot chemistry library, and a fluid dynamics stencil all fit into the same skeleton.</p>
+
+  <section class="chapter" id="c08">
+    <h2><span class="ch-num">&sect;08</span>The pattern at a glance</h2>
+    <table class="tbl">
+      <thead><tr><th>Repo</th><th>Inner kernel</th><th>Granularity per call</th><th>CUDA strategy</th></tr></thead>
+      <tbody>
+        <tr><td>pydisort</td><td>cdisort (a C radiative-transfer solver)</td><td>one atmospheric column per element</td><td>scaffold default (kernel body is a stub today)</td></tr>
+        <tr><td>kintera</td><td>thermodynamic / kinetic / photochem updates</td><td>one cell or one reaction per element</td><td>same <code>gpu_kernel</code> as default; multi-domain</td></tr>
+        <tr><td>snapy</td><td>WENO5 reconstruction (a stencil)</td><td>one cell-face per element</td><td><strong>hand-written shared-memory kernel (&sect;14)</strong></td></tr>
+      </tbody>
+    </table>
+    <p>The first two use the <em>default</em> per-element machinery and get most of what they want. snapy demonstrates the case where you outgrow the default. Together they cover the full design space.</p>
+  </section>
+
+  <section class="chapter" id="c09">
+    <h2><span class="ch-num">&sect;09</span>pydisort: wrap a 1980s C solver</h2>
+    <p>pydisort takes the 1980s discrete-ordinates radiative-transfer solver (cdisort, written in plain C) and exposes it as a torch op. The key observation: radiative transfer over (wavelength, column) pairs is embarrassingly parallel &mdash; each pair is one independent solve. So one element of the iteration = one DISORT call.</p>
+<pre data-lang="C++ — pydisort/src/disort_dispatch.cpp (essence)"><span class="kw">void</span> <span class="fn">call_disort_cpu</span>(at::TensorIterator&amp; iter, <span class="kw">int</span> upward,
+                     disort_state* ds, disort_output* ds_out) {
+  <span class="fn">AT_DISPATCH_FLOATING_TYPES</span>(iter.<span class="fn">dtype</span>(), <span class="str">"call_disort_cpu"</span>, [&amp;] {
+    <span class="kw">int</span> grain_size = iter.<span class="fn">numel</span>() / <span class="fn">at::get_num_threads</span>();
+    iter.<span class="fn">for_each</span>([&amp;](<span class="kw">char</span>** data, <span class="kw">const</span> int64_t* strides, int64_t n) {
+        <span class="kw">for</span> (<span class="kw">int</span> i = <span class="num">0</span>; i &lt; n; i++) {
+          <span class="kw">auto</span> out  = <span class="kw">reinterpret_cast</span>&lt;scalar_t*&gt;(data[<span class="num">0</span>] + i * strides[<span class="num">0</span>]);
+          <span class="kw">auto</span> prop = <span class="kw">reinterpret_cast</span>&lt;scalar_t*&gt;(data[<span class="num">1</span>] + i * strides[<span class="num">1</span>]);
+          <span class="com">// ...11 more inputs unpacked similarly (boundary conditions, index)...</span>
+          <span class="kw">int</span> idx = <span class="kw">static_cast</span>&lt;<span class="kw">int</span>&gt;(*idxf);
+          <span class="fn">disort_impl</span>(out, prop, /*&hellip;*/, ds[idx], ds_out[idx], nprop);
+        }
+      }, grain_size);
+  });
+}</pre>
+    <p>Three details worth pulling out:</p>
+    <ul class="dash">
+      <li><strong>The C solver state is per-element.</strong> <code>ds[idx]</code> and <code>ds_out[idx]</code> are preallocated arrays of DISORT state structs, one per (wave, col). The kernel passes the right element&rsquo;s state in. This is how a legacy C solver with mutable state becomes thread-safe in a torch-parallel context: you give each &ldquo;element&rdquo; its own copy.</li>
+      <li><strong>The <code>index</code> input is a trick.</strong> A small int tensor whose <em>i</em>th entry is just <em>i</em>, broadcast into the iteration so each element knows its flat index for the state-array lookup.</li>
+      <li><strong>The same body works on CUDA</strong> (in principle). pydisort&rsquo;s CUDA registration is wired and uses <code>gpu_kernel&lt;12&gt;</code> over 12 broadcast inputs &mdash; though the <code>disort_impl</code> body itself is commented out in the .cu file today, marking it as a scaffold the GPU build registers but does not yet compute through. The infrastructure works; the kernel body is a TODO.</li>
+    </ul>
+    <p>This case is the simplest possible application of the recipe: no shared state, no neighbor access, no stencils. Default machinery is enough.</p>
+  </section>
+
+  <section class="chapter" id="c10">
+    <h2><span class="ch-num">&sect;10</span>kintera: chemistry as torch ops, multi-domain</h2>
+    <p>kintera scales the pattern in two dimensions. First, the binding is split into <strong>six pybind11 translation units</strong> (one per scientific domain &mdash; thermo, kinetics, photochem, sparse-solver, diffusion, constants), each owning its own slice of the Python API. Second, the kernels actually <em>are</em> portable C++ that compiles for both CPU and GPU thanks to the <code>DISPATCH_MACRO</code> trick.</p>
+    <p>You can see the per-element bodies are pure C-style code that compiles for either device:</p>
+<pre data-lang="C++ — kintera/src/recon/interp_impl.h (host/device portable)"><span class="kw">template</span> &lt;<span class="kw">typename</span> T&gt;
+<span class="fn">DISPATCH_MACRO</span> <span class="kw">void</span> <span class="fn">interp_weno3_impl</span>(T* out, T* inp, T* coeff, ...,
+                                      <span class="kw">int</span> nvar, <span class="kw">double</span> scale) {
+  <span class="kw">for</span> (<span class="kw">int</span> j = <span class="num">0</span>; j &lt; nvar; ++j) {
+    T vscale = scale ? (<span class="fn">fabs</span>(<span class="fn">INP</span>(j,<span class="num">0</span>)) + <span class="fn">fabs</span>(<span class="fn">INP</span>(j,<span class="num">1</span>)) + <span class="fn">fabs</span>(<span class="fn">INP</span>(j,<span class="num">2</span>))) / <span class="num">3</span>.<span class="num">0</span> : <span class="num">1</span>.<span class="num">0</span>;
+    <span class="com">// ... WENO algorithm using normal C math: dots, squares, divisions ...</span>
+    <span class="fn">OUT</span>(j) = (alpha0*p0 + alpha1*p1) / (alpha0 + alpha1) * vscale;
+  }
+}</pre>
+    <p>One template, two compilers. The CPU path wraps it with <code>iter.for_each</code>, the GPU path wraps it with <code>gpu_kernel</code>. The actual numerics &mdash; the only thing that needed thinking &mdash; lives in <em>one</em> file.</p>
+    <p>This is also the case where a non-torch question matters: <strong>some sub-ops need device-native libraries that PyTorch does not expose</strong>. The sparse linear solver for stiff chemical networks wants <code>cusolver</code>/<code>cusparse</code> on GPU. kintera links those directly (its <code>setup.py</code> includes them in the library list) and the sparse-solver binding calls them from inside its kernel. The torch surface still presents one Python op; underneath, the GPU path reaches into NVIDIA&rsquo;s math libraries.</p>
+    <div class="callout tip">
+      <h5>The progression so far</h5>
+      <p>pydisort: one element = one heavy C call; default machinery suffices. kintera: one element = one C++ body, shared between devices via the portability macro; default machinery again, plus direct links to NVIDIA math libs where needed. snapy is the next step &mdash; the default machinery <em>doesn&rsquo;t</em> suffice for the inner stencil kernel, and you write the CUDA part by hand.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c11">
+    <h2><span class="ch-num">&sect;11</span>snapy: setting up the stencil call</h2>
+    <p>snapy is a fluid-dynamics code. Its high-order reconstruction step (WENO5) computes, for each cell face, an interpolated value from a 5-cell <em>stencil</em> &mdash; the cell to its left and right, two cells out on each side, plus the face itself. The interface looks identical to the previous repos:</p>
+<pre data-lang="C++ — snapy/src/recon/weno5.cpp (Weno5InterpImpl::left)"><span class="kw">auto</span> iter = <span class="fn">at::TensorIteratorConfig</span>()
+    .<span class="fn">resize_outputs</span>(<span class="kw">false</span>)
+    .<span class="fn">check_all_same_dtype</span>(<span class="kw">true</span>)
+    .<span class="fn">declare_static_shape</span>(out.<span class="fn">sizes</span>(), squash_dim)
+    .<span class="fn">add_output</span>(out)
+    .<span class="fn">add_input</span>(w)
+    .<span class="fn">build</span>();
+
+at::native::<span class="fn">call_weno5</span>(out.<span class="fn">device</span>().<span class="fn">type</span>(), iter, cm, dim, options-&gt;<span class="fn">scale</span>());</pre>
+    <p>Same shape as &sect;07. Same DispatchStub call. What changes is what happens <em>inside</em> the registered functions on different devices. The CPU and MPS paths use what torch gives you. The CUDA path drops down to a hand-written kernel that uses on-chip shared memory. That difference is the whole story of Part IV.</p>
+    <p>One small but important wrinkle visible above: <code>squash_dim</code>. For CPU, only dim 0 (the &ldquo;number of variables&rdquo; axis) is squashed &mdash; the iteration walks the spatial axes. For CUDA, the <em>stencil axis</em> is <strong>also</strong> squashed:</p>
+<pre data-lang="C++ — snapy/src/recon/weno5.cpp"><span class="kw">std::vector</span>&lt;int64_t&gt; squash_dim = {<span class="num">0</span>};
+<span class="kw">if</span> (w.<span class="fn">device</span>().<span class="fn">is_cuda</span>()) {
+  squash_dim.<span class="fn">push_back</span>(dim);                  <span class="com">// don&rsquo;t parallelize across the stencil axis</span>
+}</pre>
+    <p>Why: the CUDA kernel will parallelize <em>within</em> the stencil axis using thread indices, and use neighbor access along that axis &mdash; it doesn&rsquo;t want TensorIterator to chunk that axis. The CPU kernel has no such constraint and would rather just see a flat sequence of points. This is a window into how the same op gets different framing on different devices &mdash; even though the user-visible API is identical.</p>
+  </section>
+</div>
+
+<!-- =================================================================
+     PART IV — THE SHARED-MEMORY STENCIL KERNEL
+================================================================== -->
+<div class="part" id="p4">
+  <div class="part-label">Part IV</div>
+  <h2 class="part-title">Snapy&rsquo;s shared-memory <span class="ital">stencil</span></h2>
+  <p class="part-intro">The deep dive. What a stencil is, how snapy implements WENO5 three different ways on three different devices, why the CUDA version uses shared memory, and exactly what the dimension layout looks like &mdash; with diagrams.</p>
+
+  <section class="chapter" id="c12">
+    <h2><span class="ch-num">&sect;12</span>What a stencil is (and the reuse it leaves)</h2>
+    <p>A <strong>stencil</strong> is an operation where each output point reads from a small fixed window of input points. The simplest stencil &mdash; a 3-point average &mdash; reads <code>in[i-1]</code>, <code>in[i]</code>, <code>in[i+1]</code> for each output <code>out[i]</code>. WENO5 (Weighted Essentially Non-Oscillatory, 5th order) reads <strong>five</strong> contiguous input cells per output:</p>
+    <div class="diagram">  WENO5 stencil — to compute one output value at face i+½, read 5 cells:
+
+         input cells:    [ i-2 ][ i-1 ][  i  ][ i+1 ][ i+2 ]
+                            │     │      │      │      │
+                            └─────┴──┐  ┌┴──────┘      │
+                                     │  │              │
+                       (nonlinear weights, smoothness measures, &hellip;)
+                                     │  │
+                                     ▼  ▼
+                              output:  reconstructed value at face i+½
+</div>
+    <p>Now slide that window along the input array. For an input array of length <em>N</em>, you produce ~<em>N</em> outputs, each reading 5 cells. <strong>Counted naively, that&rsquo;s 5<em>N</em> reads from input memory.</strong></p>
+    <p>But look at the diagram: input cell <code>i</code> participates in <em>five different output computations</em> &mdash; the ones at faces <code>i-2.5, i-1.5, i-0.5, i+0.5, i+1.5</code>. If each output is computed independently in its own thread, that one input value is fetched from memory <strong>five times</strong>. That redundancy is what makes a stencil <em>memory-bandwidth-bound</em>, and it is the gap a good kernel closes.</p>
+    <div class="idea">
+      <p>Stencil kernels are the canonical example of an operation that is <strong>arithmetically light per memory load</strong>: each input byte is touched by ~5 outputs (for WENO5) but only a handful of floating-point ops &mdash; dot products, squares, divisions &mdash; happen <em>once</em> per output. The kernel&rsquo;s performance is dominated not by how fast it computes but by how often each input value travels from global memory to a register. <strong>Bring each value across that wire once, reuse it five times near the ALU, and you go five times faster.</strong> That is what shared memory is for.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c13">
+    <h2><span class="ch-num">&sect;13</span>Three flavors of WENO5 side by side</h2>
+    <p>snapy implements the same WENO5 algorithm three times &mdash; one for each device class. They are pedagogically perfect because they let you see what each approach <em>asks of</em> the device.</p>
+
+    <h3>CPU: per-element loop</h3>
+<pre data-lang="C++ — snapy/src/recon/recon_dispatch.cpp (CPU)"><span class="kw">void</span> <span class="fn">call_weno5_cpu</span>(at::TensorIterator&amp; iter, torch::Tensor coeff, <span class="kw">int</span> dim, <span class="kw">bool</span> scale) {
+  <span class="kw">int</span> grain_size = iter.<span class="fn">numel</span>() / <span class="fn">at::get_num_threads</span>();
+  <span class="fn">AT_DISPATCH_FLOATING_TYPES</span>(iter.<span class="fn">dtype</span>(), <span class="str">"call_weno5_cpu"</span>, [&amp;] {
+    iter.<span class="fn">for_each</span>([&amp;](<span class="kw">char</span>** data, <span class="kw">const</span> int64_t* strides, int64_t n) {
+        <span class="kw">for</span> (<span class="kw">int</span> i = <span class="num">0</span>; i &lt; n; i++) {
+          <span class="kw">auto</span> out = <span class="kw">reinterpret_cast</span>&lt;scalar_t*&gt;(data[<span class="num">0</span>] + i * strides[<span class="num">0</span>]);
+          <span class="kw">auto</span> w   = <span class="kw">reinterpret_cast</span>&lt;scalar_t*&gt;(data[<span class="num">1</span>] + i * strides[<span class="num">1</span>]);
+          <span class="fn">interp_weno5_impl</span>(out, w, c, stride1, stride2, stride_out, nvar, scale);
+        }
+      }, grain_size);
+  });
+}</pre>
+    <p>What it does: walk every output cell, call <code>interp_weno5_impl</code> with a pointer to where the 5-cell window starts. The CPU&rsquo;s caches do the reuse work implicitly &mdash; if the array fits in L1/L2, repeated reads of the same value are cheap. <em>You don&rsquo;t explicitly manage reuse.</em> This is why CPU code can be naive and still fast on stencils.</p>
+
+    <h3>MPS: pure torch ops</h3>
+<pre data-lang="C++ — snapy/src/recon/recon_dispatch.cpp (MPS / Apple Silicon)"><span class="kw">void</span> <span class="fn">call_weno5_mps</span>(at::TensorIterator&amp; iter, torch::Tensor coeff, <span class="kw">int</span> dim, <span class="kw">bool</span> scale) {
+  <span class="kw">auto</span> result = iter.<span class="fn">output</span>();
+  <span class="kw">auto</span> w      = iter.<span class="fn">input</span>();
+
+  <span class="kw">auto</span> wu = w.<span class="fn">unfold</span>(dim, <span class="num">5</span>, <span class="num">1</span>);                   <span class="com">// create the 5-wide stencil as a strided view</span>
+  <span class="kw">auto</span> beta1 = <span class="num">13</span>./<span class="num">12</span>. * wu.<span class="fn">matmul</span>(c4).<span class="fn">square</span>() + <span class="num">1</span>./<span class="num">4</span>. * wu.<span class="fn">matmul</span>(c5).<span class="fn">square</span>();
+  <span class="kw">auto</span> beta2 = <span class="num">13</span>./<span class="num">12</span>. * wu.<span class="fn">matmul</span>(c6).<span class="fn">square</span>() + <span class="num">1</span>./<span class="num">4</span>. * wu.<span class="fn">matmul</span>(c7).<span class="fn">square</span>();
+  <span class="kw">auto</span> beta3 = <span class="num">13</span>./<span class="num">12</span>. * wu.<span class="fn">matmul</span>(c8).<span class="fn">square</span>() + <span class="num">1</span>./<span class="num">4</span>. * wu.<span class="fn">matmul</span>(c9).<span class="fn">square</span>();
+  <span class="kw">auto</span> alpha1 = <span class="num">0</span>.<span class="num">3</span> / (beta1 + <span class="num">1</span>e<span class="num">-6</span>).<span class="fn">square</span>();
+  <span class="kw">auto</span> alpha2 = <span class="num">0</span>.<span class="num">6</span> / (beta2 + <span class="num">1</span>e<span class="num">-6</span>).<span class="fn">square</span>();
+  <span class="kw">auto</span> alpha3 = <span class="num">0</span>.<span class="num">1</span> / (beta3 + <span class="num">1</span>e<span class="num">-6</span>).<span class="fn">square</span>();
+  torch::<span class="fn">div_out</span>(result,
+      alpha1*wu.<span class="fn">matmul</span>(c1) + alpha2*wu.<span class="fn">matmul</span>(c2) + alpha3*wu.<span class="fn">matmul</span>(c3),
+      alpha1 + alpha2 + alpha3);
+}</pre>
+    <p>What it does: composes the entire WENO5 algorithm out of <em>existing torch ops</em>. <code>unfold(dim, 5, 1)</code> creates a strided view that adds a new last dimension of size 5 &mdash; the stencil window &mdash; without copying. Then a sequence of matmul / square / divide ops, each backed by Apple&rsquo;s Metal Performance Shaders, computes the answer. <strong>No custom kernel was written.</strong> This is the &ldquo;just use torch&rdquo; approach in its purest form, and it works because each op (unfold, matmul, square, divide) is already implemented on MPS by PyTorch. We will return to its cost in &sect;19.</p>
+
+    <h3>CUDA: hand-written shared-memory kernel</h3>
+<pre data-lang="C++ — snapy/src/recon/recon_dispatch.cu (CUDA)"><span class="kw">void</span> <span class="fn">call_weno5_cuda</span>(at::TensorIterator&amp; iter, at::Tensor coeff, <span class="kw">int</span> dim, <span class="kw">bool</span> scale) {
+  at::cuda::<span class="fn">CUDAGuard</span> g(iter.<span class="fn">device</span>());
+  <span class="fn">AT_DISPATCH_FLOATING_TYPES</span>(iter.<span class="fn">common_dtype</span>(), <span class="str">"call_weno5_cuda"</span>, [&amp;]() {
+    <span class="com">// strides, nvar, coefficient pointer ...</span>
+    native::<span class="fn">stencil_kernel</span>&lt;scalar_t, <span class="num">2</span>&gt;(iter, dim, coeff.<span class="fn">numel</span>(),
+      [=] __device__ (<span class="kw">char</span>* <span class="kw">const</span> data[<span class="num">2</span>], <span class="kw">unsigned</span> strides[<span class="num">2</span>], scalar_t* smem) {
+        <span class="kw">auto</span> out = <span class="kw">reinterpret_cast</span>&lt;scalar_t*&gt;(data[<span class="num">0</span>] + strides[<span class="num">0</span>]);
+        <span class="kw">auto</span> w   = <span class="kw">reinterpret_cast</span>&lt;scalar_t*&gt;(data[<span class="num">1</span>] + strides[<span class="num">1</span>]);
+        <span class="fn">interp_weno5_impl</span>(out, w, c, nvar, stride_in1, stride_in2,
+                          stride_out1, stride_out2, scale, smem);     <span class="com">// note smem</span>
+      });
+  });
+}</pre>
+    <p>What it does: launches a <em>custom CUDA kernel</em> (<code>native::stencil_kernel</code>) that allocates shared memory, loads the stencil window into it cooperatively, synchronizes, and then has each thread compute its output from shared memory. The user lambda receives a <code>scalar_t* smem</code> argument that the kernel passes through &mdash; that&rsquo;s the on-chip scratchpad. The reusable work happens explicitly. The rest of the chapters in this part dissect exactly how this kernel works.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Device</th><th>How reuse is achieved</th><th class="wide">Performance posture</th></tr></thead>
+      <tbody>
+        <tr><td>CPU</td><td>L1/L2 cache (implicit)</td><td>good enough &mdash; modern CPUs hide repeated reads in cache; no explicit work needed</td></tr>
+        <tr><td>MPS</td><td>none specific &mdash; relies on the MPS implementations of <code>unfold</code> + <code>matmul</code></td><td>each op = a kernel launch; multiple intermediates materialized; correct but not peak</td></tr>
+        <tr><td>CUDA</td><td>shared memory (explicit, per-block scratchpad)</td><td>each input value read from global memory <em>once</em>, then reused 5&times; locally &mdash; near peak bandwidth</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="chapter" id="c14">
+    <h2><span class="ch-num">&sect;14</span>The CUDA shared-mem kernel, annotated</h2>
+    <p>The whole kernel lives in two files: a generic launcher (<code>snapy/src/utils/loops.cuh</code>) and the per-algorithm body (<code>snapy/src/recon/interp_impl.cuh</code>). We&rsquo;ll read them in order: the body first (what each thread does), then the launcher (how blocks are sized and how shared memory is allocated).</p>
+
+    <h3>The per-thread body</h3>
+<pre data-lang="C++ — snapy/src/recon/interp_impl.cuh (WENO5, annotated)"><span class="kw">template</span> &lt;<span class="kw">typename</span> T&gt;
+__device__ <span class="kw">void</span> <span class="fn">interp_weno5_impl</span>(T* out, T* inp, T* coeff, <span class="kw">int</span> nvar,
+                                  <span class="kw">int</span> stride_in1, <span class="kw">int</span> stride_in2,
+                                  <span class="kw">int</span> stride_out1, <span class="kw">int</span> stride_out2,
+                                  <span class="kw">bool</span> scale, T* smem) {
+  <span class="kw">int</span> id = threadIdx.x;                  <span class="com">// MY index along the stencil axis</span>
+  <span class="kw">int</span> nt = blockDim.x;                   <span class="com">// number of threads in my block along that axis</span>
+
+  <span class="com">// PHASE 1 — cooperative load into shared memory --------------------------</span>
+  <span class="com">// Every thread loads ONE input value per variable into shared memory.</span>
+  T* sinp = smem;                          <span class="com">// shared-mem region 1: input cache</span>
+  <span class="kw">for</span> (<span class="kw">int</span> j = <span class="num">0</span>; j &lt; nvar; ++j) {
+    sinp[id + j * nt] = <span class="fn">INP</span>(j, id);       <span class="com">// global → shared, one read per thread per var</span>
+  }
+
+  <span class="com">// Coefficients (45 doubles) are constant per block — load them once cooperatively.</span>
+  T* scoeff = smem + nt * nvar;            <span class="com">// shared-mem region 2: coefficient cache</span>
+  <span class="kw">constexpr</span> <span class="kw">int</span> N = <span class="num">45</span>;                  <span class="com">// 9 vectors × 5 coefficients</span>
+  <span class="kw">for</span> (<span class="kw">int</span> i = id; i &lt; N; i += nt) {
+    scoeff[i] = coeff[i];
+  }
+
+  <span class="kw">if</span> (id &gt; nt - <span class="num">5</span>) <span class="kw">return</span>;                 <span class="com">// last 4 threads only loaded; no output for them</span>
+  __syncthreads();                         <span class="com">// barrier — all writes to smem are visible to every thread</span>
+
+  <span class="com">// PHASE 2 — compute, reading 5 neighbors from SHARED memory --------------</span>
+  T* c1 = scoeff;       <span class="com">// 5 coefficients for substencil-0 reconstruction</span>
+  T* c2 = c1 + <span class="num">5</span>;       <span class="com">// 5 for substencil-1</span>
+  T* c3 = c2 + <span class="num">5</span>;       <span class="com">// 5 for substencil-2</span>
+  T* c4 = c3 + <span class="num">5</span>;       <span class="com">// 5 for smoothness indicator 0 (part a)</span>
+  T* c5 = c4 + <span class="num">5</span>;       <span class="com">// 5 for smoothness indicator 0 (part b)</span>
+  <span class="com">// ... c6..c9 similarly</span>
+
+  T phi[<span class="num">5</span>];
+  <span class="kw">for</span> (<span class="kw">int</span> j = <span class="num">0</span>; j &lt; nvar; ++j) {
+    <span class="kw">int</span> i = id + j * nt;                 <span class="com">// my 5-wide window start in shared mem</span>
+    T vscale = scale ? (<span class="fn">fabs</span>(sinp[i]) + ... + <span class="fn">fabs</span>(sinp[i+<span class="num">4</span>])) / <span class="num">5</span>.<span class="num">0</span> : <span class="num">1</span>.<span class="num">0</span>;
+    <span class="kw">for</span> (<span class="kw">int</span> k = <span class="num">0</span>; k &lt; <span class="num">5</span>; ++k) phi[k] = sinp[i + k] / vscale;   <span class="com">// 5 reads from SHARED MEM</span>
+
+    T p0 = <span class="fn">_vvdot</span>&lt;<span class="num">5</span>&gt;(phi, c1);              <span class="com">// substencil reconstructions</span>
+    T p1 = <span class="fn">_vvdot</span>&lt;<span class="num">5</span>&gt;(phi, c2);
+    T p2 = <span class="fn">_vvdot</span>&lt;<span class="num">5</span>&gt;(phi, c3);
+    T beta0 = <span class="num">13</span>./<span class="num">12</span>. * <span class="fn">SQR</span>(<span class="fn">_vvdot</span>&lt;<span class="num">5</span>&gt;(phi, c4)) + .<span class="num">25</span> * <span class="fn">SQR</span>(<span class="fn">_vvdot</span>&lt;<span class="num">5</span>&gt;(phi, c5));
+    <span class="com">// ... beta1, beta2 ...</span>
+    T alpha0 = .<span class="num">3</span> / <span class="fn">SQR</span>(beta0 + <span class="num">1</span>e<span class="num">-6</span>);
+    <span class="com">// ... alpha1, alpha2 ...</span>
+    <span class="fn">OUT</span>(j, id) = vscale * (alpha0*p0 + alpha1*p1 + alpha2*p2) / (alpha0+alpha1+alpha2);
+  }
+}</pre>
+
+    <p>Four properties of this kernel are worth naming explicitly:</p>
+    <ul class="dash">
+      <li><strong>One global-memory read per (thread, variable).</strong> Each thread fetches its own input value once into <code>sinp</code>. There is no redundant load anywhere.</li>
+      <li><strong>Coefficients are loaded cooperatively.</strong> Only one thread per index loads each coefficient; all threads then read from <code>scoeff</code>. Coefficients are the same for every output point, so this is a pure broadcast.</li>
+      <li><strong>The barrier <code>__syncthreads()</code> is non-negotiable.</strong> Without it, thread <em>i</em> might read <code>sinp[i+4]</code> before thread <em>i+4</em> has written it &mdash; a race. The barrier guarantees all writes to shared memory are visible to all threads in the block before any reads.</li>
+      <li><strong>The last 4 threads load but don&rsquo;t compute</strong> (the <code>if (id &gt; nt-5) return;</code>). They are <em>halo loaders</em>: their job is to ensure threads <em>before</em> them have the right neighbors in shared memory. Their wasted output cell at the block boundary is the cost of doing business.</li>
+    </ul>
+
+    <h3>The launcher</h3>
+<pre data-lang="C++ — snapy/src/utils/loops.cuh (stencil_kernel launcher, condensed)"><span class="kw">template</span> &lt;<span class="kw">typename</span> scalar_t, <span class="kw">int</span> Arity, <span class="kw">typename</span> func_t&gt;
+<span class="kw">void</span> <span class="fn">stencil_kernel</span>(at::TensorIterator&amp; iter, <span class="kw">int</span> dim, <span class="kw">int</span> buffers, <span class="kw">const</span> func_t&amp; f) {
+  <span class="com">// Figure out tensor lengths along each axis; rotate so the stencil axis is the inner one</span>
+  <span class="kw">int</span> len[<span class="num">3</span>] = {<span class="num">1</span>,<span class="num">1</span>,<span class="num">1</span>};
+  len[<span class="num">3</span> + dim - ndim] = <span class="fn">ensure_nonempty_size</span>(iter.<span class="fn">input</span>(), dim);
+  <span class="fn">_left_shift</span>&lt;<span class="num">3</span>&gt;(len, dim + <span class="num">1</span> - ndim);
+  dim3 block(len[<span class="num">2</span>], len[<span class="num">1</span>], len[<span class="num">0</span>]);     <span class="com">// stencil axis → block.x (threadIdx.x)</span>
+
+  <span class="com">// Grid covers the other axes</span>
+  dim3 grid(len[<span class="num">2</span>]/block.x, len[<span class="num">1</span>]/block.y, len[<span class="num">0</span>]/block.z);
+
+  <span class="com">// Shared-mem size: input cache (nt × nvar) + coefficient cache (buffers)</span>
+  <span class="kw">int</span> nvar = <span class="fn">ensure_nonempty_size</span>(iter.<span class="fn">output</span>(), <span class="num">0</span>);
+  <span class="kw">size_t</span> shared = (block.x * nvar + buffers) * <span class="kw">sizeof</span>(scalar_t);
+
+  <span class="kw">auto</span> stream = at::cuda::<span class="fn">getCurrentCUDAStream</span>();
+  <span class="fn">reduce_kernel</span>&lt;scalar_t&gt;&lt;&lt;&lt;grid, block, shared, stream&gt;&gt;&gt;(numel,
+    [=] __device__ (<span class="kw">int</span> bid, scalar_t* smem) {
+      <span class="kw">auto</span> offsets = offset_calc.<span class="fn">get</span>(bid);
+      <span class="fn">f</span>(data.<span class="fn">data</span>(), offsets.<span class="fn">data</span>(), smem);    <span class="com">// hand smem to the user lambda</span>
+    });
+}</pre>
+    <p>The launcher does three things: <strong>(1)</strong> rotate the iteration extents so the stencil axis ends up as <code>threadIdx.x</code> (the fastest-varying), <strong>(2)</strong> compute the shared-memory size needed per block (per-thread input cache + coefficient buffer), and <strong>(3)</strong> launch a kernel whose lambda forwards the shared-memory pointer to the user&rsquo;s function body. Everything else is plumbing.</p>
+  </section>
+
+  <section class="chapter" id="c15">
+    <h2><span class="ch-num">&sect;15</span>Grid &amp; block geometry, illustrated</h2>
+    <p>Now the dimensions, which the user specifically asked about. We&rsquo;ll work with a concrete example: a 2D simulation grid of size <code>(nvar=5, nx=256, ny=128)</code>, doing WENO5 along the <code>x</code> direction. The launcher decides on this geometry:</p>
+    <div class="diagram">CUDA launch geometry for WENO5 along the x-axis of a (5, 256, 128) tensor
+
+  GRID  (one block per row, plus 5 variables come in via the block)
+                  +─────+─────+─────+ ... +─────+
+                  │blk 0│blk 1│blk 2│     │blk 127│   ← gridDim.y = 128 (over y)
+                  +─────+─────+─────+ ... +─────+
+                                              gridDim.x = 1  (block covers all of x)
+                                              gridDim.z = 1
+                                              blockDim.x = 256  (one thread per cell along x)
+                                              blockDim.y = 1
+                                              blockDim.z = 1
+
+  ONE BLOCK in detail — blockDim.x = 256 threads, threadIdx.x = id ∈ [0, 255]
+
+    threadIdx.x:    0     1     2     3   ...  251  252  253  254  255
+                    │     │     │     │         │    │    │    │    │
+                    ▼     ▼     ▼     ▼         ▼    ▼    ▼    ▼    ▼
+   global x cell:  in[0] in[1] in[2] in[3] ... in[251] ... in[255]
+                    │     │     │     │              │              │
+        PHASE 1: each thread loads ONE input cell → shared memory
+                    ▼     ▼     ▼     ▼              ▼              ▼
+   shared sinp[]: [s 0][s 1][s 2][s 3] ... [s251][s252][s253][s254][s255]
+                  └────────────────────────────────────────────────────┘
+                                       __syncthreads()
+
+        PHASE 2: thread `id` computes output[id] by reading sinp[id..id+4]
+
+         thread 0  reads  sinp[0..4]   → writes out[0]
+         thread 1  reads  sinp[1..5]   → writes out[1]
+         thread 2  reads  sinp[2..6]   → writes out[2]
+              ...
+         thread 251 reads sinp[251..255]→ writes out[251]
+         threads 252,253,254,255 → halo loaders, no output  (the `if id>nt-5 return;`)
+
+  PER-BLOCK SHARED MEMORY LAYOUT
+                  ┌──────────────────────────┬─────────────────┐
+                  │  sinp  (256 × nvar=5)    │  scoeff  (45)   │
+                  │  = 1280 doubles          │  = 45 doubles   │   total ≈ 10.6 KiB
+                  └──────────────────────────┴─────────────────┘
+                  └─────────────┬────────────┘
+                          smem  (pointer passed to the user lambda)
+</div>
+    <p>What this picture says, in words:</p>
+    <ul class="dash">
+      <li><strong>Each <em>block</em> handles one row of <em>x</em>.</strong> The block has 256 threads &mdash; one per cell along <em>x</em>. There are 128 blocks (one per <em>y</em> row). All blocks run in parallel on the GPU&rsquo;s streaming multiprocessors.</li>
+      <li><strong>Within a block, every thread loads exactly one input cell into shared memory.</strong> 256 threads &times; 5 variables = 1280 doubles cached per block. That is one global-memory read per (thread, variable) &mdash; the minimum possible.</li>
+      <li><strong>After the barrier, each thread reads its 5-element window from shared memory.</strong> Reads from shared memory are ~100&times; faster than reads from global memory. The reuse pattern from &sect;12 (each input cell touched by 5 outputs) is now resolved <em>on-chip</em> instead of crossing the wire 5 times.</li>
+      <li><strong>The last 4 threads can&rsquo;t produce a full window</strong> (their <code>id+4</code> would walk off the end of the loaded region), so they exit early. Their <em>loads</em> were still useful &mdash; they populated the halo their predecessors needed.</li>
+    </ul>
+    <div class="callout tip">
+      <h5>What if the row is bigger than a block can hold?</h5>
+      <p>The launcher assumes the stencil axis fits in one block (<code>block.x = len[2]</code>). For very long rows, you would split into multiple blocks per row, each loading its own halo &mdash; that&rsquo;s the &ldquo;halo region&rdquo; extension every shared-memory stencil tutorial talks about. snapy keeps it simple: rows fit. In a production-scale code, the extension is a fixed cost (16 extra threads per block load the halo, then return).</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c16">
+    <h2><span class="ch-num">&sect;16</span>Why this is efficient: bandwidth math</h2>
+    <p>Let&rsquo;s put numbers on it. For our (5 vars, 256, 128) tensor doing WENO5 along x:</p>
+    <ul class="dash">
+      <li><strong>Total output cells:</strong> 5 &times; 256 &times; 128 &asymp; 164,000.</li>
+      <li><strong>Naive kernel</strong> (no shared memory, each thread reads its own 5-cell window): each output reads 5 doubles, so 5 &times; 164,000 = 820,000 global-memory reads = ~6.5 MB.</li>
+      <li><strong>Shared-memory kernel:</strong> each thread loads exactly one input cell once. 5 &times; 256 &times; 128 = 164,000 input cells = ~1.3 MB. Coefficients are loaded once per block by 45 of the threads &mdash; effectively free.</li>
+      <li><strong>Speedup factor</strong>, just from this: 5&times; less global-memory traffic, assuming the kernel was bandwidth-bound (which stencil kernels almost always are).</li>
+    </ul>
+    <p>That&rsquo;s the headline. But there&rsquo;s a second, subtler win:</p>
+    <table class="tbl">
+      <thead><tr><th>Memory tier</th><th class="r">Latency (cycles)</th><th class="r">Bandwidth</th><th class="wide">Cost of a single read</th></tr></thead>
+      <tbody>
+        <tr><td>Register</td><td class="r">1</td><td class="r win">very high</td><td>essentially free</td></tr>
+        <tr><td>Shared memory (L1-equivalent SRAM, on the SM)</td><td class="r">~20&ndash;30</td><td class="r win">~10&ndash;15 TB/s on H100</td><td>one cycle of work, then ready</td></tr>
+        <tr><td>L2 cache</td><td class="r">~200</td><td class="r">a few TB/s</td><td>tens of cycles &mdash; pipelined, but real</td></tr>
+        <tr><td>HBM global memory</td><td class="r lose">~500&ndash;700</td><td class="r">~3 TB/s (H100)</td><td>hundreds of cycles per miss</td></tr>
+      </tbody>
+    </table>
+    <p>Even when a naive kernel&rsquo;s redundant reads are caught by L2 cache, each L2 hit still costs ~10&times; more than a shared-memory read. The shared-memory kernel moves the 4 redundant reads from L2 (slow) to shared (fast). For stencils, this is what closes the gap to peak bandwidth.</p>
+    <div class="idea">
+      <p>The win in one sentence: <strong>a shared-memory stencil kernel turns a memory-bandwidth-bound op into one that is bottlenecked by the fastest memory tier on the chip.</strong> Each input value crosses the global-memory wire exactly once, then the redundant reads required by the stencil&rsquo;s shape are served from on-chip SRAM at ~10&times; the bandwidth and ~25&times; less latency than even L2. Stencils are the canonical case where this design pays for the extra programming effort.</p>
+    </div>
+  </section>
+</div>
+
+<!-- =================================================================
+     PART V — WHY NOT JUST USE TORCH OPS ON CUDA?
+================================================================== -->
+<div class="part" id="p5">
+  <div class="part-label">Part V</div>
+  <h2 class="part-title">Why not <span class="ital">just use torch</span> on CUDA?</h2>
+  <p class="part-intro">The fairest possible question. If torch on CUDA already has fast <code>unfold</code> and <code>matmul</code> kernels &mdash; and they&rsquo;re what the MPS path uses &mdash; why doesn&rsquo;t snapy use them on CUDA too? Three reasons, each one a useful design lesson.</p>
+
+  <section class="chapter" id="c17">
+    <h2><span class="ch-num">&sect;17</span>Why not just use torch ops?</h2>
+    <p>You absolutely can, and you sometimes should &mdash; the MPS path proves it. But for a stencil on CUDA, three costs add up:</p>
+    <table class="tbl">
+      <thead><tr><th>Cost</th><th class="wide">What it is &amp; how it hurts</th></tr></thead>
+      <tbody>
+        <tr><td>Kernel launches</td><td>each torch op (matmul, square, add, divide) is a separate CUDA kernel launch. Each launch costs ~10&micro;s of fixed overhead. The MPS WENO5 path has ~15&ndash;20 ops. For a small grid, the overhead can dominate the actual work.</td></tr>
+        <tr><td>Intermediate tensors</td><td>each op produces a full-size intermediate tensor written to global memory and read back by the next op. <code>wu.matmul(c1)</code> is a (5, 256, 128) tensor written to HBM; the next op reads it back. <strong>Bandwidth scales with the number of ops</strong>, not with what the algorithm fundamentally needs.</td></tr>
+        <tr><td>No on-chip reuse</td><td><code>unfold</code> creates a strided view, not a copy &mdash; good &mdash; but each downstream op still reads through global memory. The stencil&rsquo;s natural 5&times; reuse is invisible to torch&rsquo;s individual ops; they don&rsquo;t share a shared-memory cache across op boundaries.</td></tr>
+      </tbody>
+    </table>
+    <p>To answer the user&rsquo;s specific question directly: <strong>yes, this is fundamentally because torch&rsquo;s op interface doesn&rsquo;t let you express &ldquo;these N ops all want to share a chunk of shared memory inside a single fused kernel.&rdquo;</strong> Each torch op is its own kernel. To get the shared-memory locality, you have to write the fused kernel yourself.</p>
+  </section>
+
+  <section class="chapter" id="c18">
+    <h2><span class="ch-num">&sect;18</span>The kernel-launch &amp; tensor-materialization tax</h2>
+    <p>The cleanest mental model:</p>
+    <div class="twocol">
+      <div class="col bad">
+        <h5>Pure torch on CUDA</h5>
+        <p><strong>Compute graph:</strong> 15 ops &times; 1 launch each = 15 kernel launches.</p>
+        <p><strong>Bandwidth:</strong> every intermediate result is materialized in HBM &mdash; ~15 round trips of (5, 256, 128) doubles each = ~20 MB of bandwidth.</p>
+        <p><strong>Reuse:</strong> the 5&times; stencil reuse is paid for in <em>L2 cache hits</em> at best &mdash; still 10&times; slower than shared memory.</p>
+      </div>
+      <div class="col good">
+        <h5>Custom shared-memory kernel</h5>
+        <p><strong>Compute graph:</strong> 1 kernel launch. Total.</p>
+        <p><strong>Bandwidth:</strong> ~1.3 MB read from HBM (each input once), result written once. ~2.6 MB total &mdash; about <em>8&times; less</em> than the torch path.</p>
+        <p><strong>Reuse:</strong> 5&times; reuse paid for in <em>shared-memory hits</em> &mdash; effectively register-speed.</p>
+      </div>
+    </div>
+    <p>For a (small) 256&times;128 grid, the launch overhead alone (15 &times; 10&micro;s = 150&micro;s) can be more than the actual compute. For a (large) 4096&times;4096 grid, bandwidth dominates and the 8&times;-less-traffic difference is what wins. Either way, the custom kernel is the better answer on CUDA &mdash; <em>provided you&rsquo;re willing to write and maintain it</em>.</p>
+  </section>
+
+  <section class="chapter" id="c19">
+    <h2><span class="ch-num">&sect;19</span>The MPS path is the counterfactual</h2>
+    <p>Now &mdash; why use pure torch on MPS but not on CUDA? Two reasons:</p>
+    <ul class="dash">
+      <li><strong>The cost shape is different on Apple Silicon.</strong> Apple Silicon has unified memory, no discrete HBM, and very different shared-memory semantics; the &ldquo;every op writes back to global memory&rdquo; tax is smaller because there is no distinct global memory. The launch overhead is real but lower in absolute terms. The win from a custom shared-memory kernel is correspondingly smaller.</li>
+      <li><strong>Writing Metal/Apple-Silicon shader code is an additional language and toolchain.</strong> CUDA gives you <code>__global__</code>/<code>__device__</code> in your C++ source. Metal is Objective-C++ or Metal Shading Language plus a runtime. For a small marginal win, the engineering cost isn&rsquo;t worth it &mdash; especially when the same algorithm composed out of torch ops <em>just works</em> on MPS for free.</li>
+    </ul>
+    <p>So the MPS path is the answer to &ldquo;what does pure torch give you for free?&rdquo; It is, deliberately, the <em>baseline you decided to beat on CUDA</em>. Read the MPS code as &ldquo;here is what we&rsquo;d ship if we didn&rsquo;t care about peak performance.&rdquo; Compare its 15 lines to the CUDA kernel&rsquo;s 100, and you see what the extra 85 lines bought you.</p>
+    <div class="callout tip">
+      <h5>This also explains the squash_dim trick</h5>
+      <p>Recall from &sect;11 that the CUDA path squashes the stencil axis but the CPU/MPS paths don&rsquo;t. The reason: the CUDA kernel handles the stencil axis <em>itself</em> via shared memory and thread indexing &mdash; it doesn&rsquo;t want TensorIterator to chunk it. The CPU/MPS paths walk per-element through TensorIterator&rsquo;s normal machinery, so they want the stencil axis treated normally. One line of code (<code>squash_dim.push_back(dim)</code> only on CUDA) encodes the entire structural difference.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c20">
+    <h2><span class="ch-num">&sect;20</span>When to stay on torch, when to drop down</h2>
+    <p>The general decision rule, distilled from the three repos:</p>
+    <div class="diagram">                   ┌─ Is the kernel a hot inner loop you call millions of times? ──┐
+                   │                                                                  │
+                  NO                                                                YES
+                   │                                                                  │
+   stay on torch:                                              ┌── Does it have spatial reuse  ──┐
+   compose with torch ops                                      │   (stencils, gather, attention,  │
+   ── easiest, portable across                                 │    shared accumulators)?         │
+      every device torch supports                              │                                  │
+   ── default for pydisort whole-                             NO                                YES
+      column ops &amp; kintera per-                                 │                                  │
+      element thermo                                  use torch's default                 write a shared-memory
+                                                      gpu_kernel pattern                  CUDA kernel (snapy's
+                                                      ── same body for CPU+GPU             stencil_kernel)
+                                                      ── pydisort &amp; kintera               ── pay the maintenance cost
+                                                         do this                              for the worst inner loop
+                                                                                              ── leave torch on for
+                                                                                                 CPU / MPS / others
+</div>
+    <p>The honest costs of dropping down to a custom CUDA kernel:</p>
+    <ul class="dash">
+      <li><strong>Maintenance:</strong> two implementations of the same algorithm to keep in sync. snapy mitigates this by using <em>the same per-thread body</em> in CUDA and CPU; only the <em>cooperation pattern</em> (load to shared, syncthreads) differs.</li>
+      <li><strong>ABI coupling:</strong> the kernel reaches into ATen-internal types (<code>at::TensorIterator</code>, <code>at::native::ensure_nonempty_size</code>) that have no stability guarantee across torch versions. Hence the exact <code>torch==2.10.0</code> pin you see in all three repos.</li>
+      <li><strong>Platform-specific:</strong> the CUDA kernel doesn&rsquo;t run on MPS, AMD ROCm, or anywhere else. You need a torch-op fallback (the MPS path) for every other device.</li>
+    </ul>
+    <p>So the architecture you end up with is a <strong>hybrid</strong>: torch handles 90% of the surface area for free, you pay the cost of a custom kernel only on the device + kernel combination that bottlenecks your application. That hybrid is performance-portability done correctly.</p>
+  </section>
+</div>
+
+<!-- =================================================================
+     PART VI — SYNTHESIS
+================================================================== -->
+<div class="part" id="p6">
+  <div class="part-label">Part VI</div>
+  <h2 class="part-title">Synthesis</h2>
+  <p class="part-intro">One picture of the full architecture, the decision trees you should walk away with, and a short glossary so the vocabulary stays usable next week.</p>
+
+  <section class="chapter" id="c21">
+    <h2><span class="ch-num">&sect;21</span>The full architecture in one picture</h2>
+    <div class="diagram">                       USER (Python)
+                          │
+                          │   import snapy
+                          │   weno5 = snapy.Weno5Interp(opts)
+                          │   wl, wr = weno5(w, dim=2)            # w is a torch.Tensor
+                          │
+                          ▼
+                ┌──────────────────────────────────────┐
+                │  pybind11 binding → C++ Weno5Impl    │   nn::Module wrapper
+                │  Weno5Impl::left(w, dim, out)        │   (the ergonomic part)
+                └──────────────┬───────────────────────┘
+                               │
+                               ▼
+                ┌──────────────────────────────────────┐
+                │  at::TensorIteratorConfig ... build()│   the iteration plan
+                │  (shape, broadcast, squash_dim)      │   — same for every device
+                └──────────────┬───────────────────────┘
+                               │
+                               ▼
+                ┌──────────────────────────────────────┐
+                │  at::native::call_weno5(             │
+                │      out.device().type(),  ◄── device │  DispatchStub lookup
+                │      iter, coeff, dim, scale )       │
+                └──────┬──────────┬─────────┬──────────┘
+                       │          │         │
+        kCPU ◄─────────┘          │         └─────────► kCUDA
+                                  │
+                                kMPS
+       ┌──────────────────┐       │       ┌──────────────────────────────┐
+       │ call_weno5_cpu   │       │       │ call_weno5_cuda              │
+       │   iter.for_each  │       │       │   native::stencil_kernel<…>  │
+       │   per-element    │       │       │     allocates SHARED MEMORY  │
+       │   interp_weno5   │       │       │     loads input once         │
+       │ (cache does the  │       │       │     __syncthreads()          │
+       │  reuse work)     │       │       │     each thread reads 5 from │
+       └──────────────────┘       │       │     SHARED, computes one out │
+                                  │       └──────────────────────────────┘
+                  ┌───────────────┴──────────────┐
+                  │  call_weno5_mps              │
+                  │   pure torch ops:            │
+                  │   wu = w.unfold(dim, 5, 1)   │
+                  │   wu.matmul(c1) * alpha + ...│
+                  │   (15 ops, 15 launches,      │
+                  │    intermediates in memory)  │
+                  └──────────────────────────────┘
+
+   ▸ ONE Python API.   ▸ ONE TensorIterator setup.   ▸ THREE device implementations.
+   ▸ Two of them generated almost for free; ONE hand-written where it pays.
+</div>
+  </section>
+
+  <section class="chapter" id="c22">
+    <h2><span class="ch-num">&sect;22</span>Decision trees</h2>
+    <h3>Should I wrap my algorithm as a torch op?</h3>
+    <div class="diagram">Will users want to compose its output with other torch tensors?
+   ├─ YES → wrap as a torch op (this guide)
+   └─ NO  → just bind via pybind11 directly; skip TensorIterator + DispatchStub</div>
+    <h3>How many device implementations do I write?</h3>
+    <div class="diagram">Does my per-element body work as plain C++ (no neighbor access, no shared state)?
+   ├─ YES → write ONE body with DISPATCH_MACRO; let TensorIterator+gpu_kernel handle CPU+CUDA+...
+   │        (pydisort, kintera's per-element ops)
+   └─ NO  → write the body once for CPU/MPS via torch ops, and once for CUDA as a custom kernel
+            (snapy's WENO5: CPU+MPS use torch composition, CUDA uses shared_memory_kernel)</div>
+    <h3>When to write a hand kernel for CUDA?</h3>
+    <div class="diagram">Bottleneck profiling shows the op is bandwidth-bound AND has spatial reuse (stencil/gather/attention)?
+   ├─ YES → custom shared-memory kernel (~5–10× speedup typical)
+   └─ NO  → stay on torch; reach for cuBLAS/cuSOLVER calls if you need GEMM-shaped ops</div>
+  </section>
+
+  <section class="chapter" id="c23">
+    <h2><span class="ch-num">&sect;23</span>Glossary &amp; file map</h2>
+    <h4>Glossary</h4>
+    <table class="tbl">
+      <thead><tr><th>Term</th><th class="wide">Meaning in this tutorial</th></tr></thead>
+      <tbody>
+        <tr><td>at::Tensor</td><td>PyTorch&rsquo;s C++ tensor: pointer + dtype + shape + strides + device label.</td></tr>
+        <tr><td>TensorIterator</td><td>PyTorch&rsquo;s loop-machine: takes input/output tensors, walks every element in the right order with broadcast semantics.</td></tr>
+        <tr><td>DispatchStub</td><td>per-device function-pointer table; <code>DECLARE/DEFINE/REGISTER_*_DISPATCH</code> macros.</td></tr>
+        <tr><td>squash_dim</td><td>tell TensorIterator &ldquo;don&rsquo;t parallelize across this axis; the kernel will handle it.&rdquo; Used for the stencil axis on CUDA.</td></tr>
+        <tr><td>gpu_kernel&lt;N&gt;</td><td>the default GPU element-wise kernel launcher in ATen (N = number of input+output tensors).</td></tr>
+        <tr><td>stencil</td><td>an op where each output reads a fixed window of input neighbors. WENO5 is a 5-cell stencil.</td></tr>
+        <tr><td>shared memory (CUDA)</td><td>on-chip SRAM shared by all threads in a block; ~100&times; faster than global HBM. Allocated per-block via the third launch parameter.</td></tr>
+        <tr><td>__syncthreads()</td><td>CUDA barrier; all threads in the block must reach it before any can pass. Required after a cooperative shared-memory load.</td></tr>
+        <tr><td>halo thread</td><td>a thread whose <em>load</em> populates the stencil tail used by a neighbor; it produces no output itself.</td></tr>
+        <tr><td>MPS</td><td>Metal Performance Shaders &mdash; Apple&rsquo;s GPU compute backend; PyTorch ships an MPS backend for Apple Silicon.</td></tr>
+        <tr><td>DISPATCH_MACRO</td><td>kintera/snapy portability macro: <code>__host__ __device__</code> under nvcc, empty otherwise. Lets the same function compile for CPU and GPU.</td></tr>
+        <tr><td>fused kernel</td><td>one CUDA kernel that does the work of multiple torch ops, sharing on-chip state between them &mdash; what the hand-written stencil kernel buys you.</td></tr>
+        <tr><td>kernel-launch overhead</td><td>fixed ~10&micro;s cost per CUDA kernel launch; matters when you have many small ops.</td></tr>
+      </tbody>
+    </table>
+    <h4>File map &mdash; the files that implement what was discussed</h4>
+    <table class="tbl">
+      <thead><tr><th>Path</th><th class="wide">Role</th></tr></thead>
+      <tbody>
+        <tr><td>pydisort/src/disort.cpp</td><td>TensorIteratorConfig + forward() &mdash; the &sect;04 example</td></tr>
+        <tr><td>pydisort/src/disort_dispatch.{hpp,cpp,cu}</td><td>the DECLARE/DEFINE/REGISTER triad &mdash; the &sect;05 example</td></tr>
+        <tr><td>kintera/configure.h.in</td><td>DISPATCH_MACRO definition &mdash; the host/device portability trick</td></tr>
+        <tr><td>kintera/src/recon/interp_impl.h</td><td>host/device-portable per-element body</td></tr>
+        <tr><td>snapy/src/recon/interpolation.{hpp,cpp}</td><td>Weno5InterpImpl::left/right &mdash; the &sect;11 setup</td></tr>
+        <tr><td>snapy/src/recon/recon_dispatch.cpp</td><td><strong>all three flavors side-by-side</strong>: <code>call_weno5_cpu</code>, <code>call_weno5_mps</code>, dispatch registrations</td></tr>
+        <tr><td>snapy/src/recon/recon_dispatch.cu</td><td><code>call_weno5_cuda</code> &mdash; launches the shared-memory kernel</td></tr>
+        <tr><td>snapy/src/recon/interp_impl.cuh</td><td>device-side WENO5 body that takes a shared-mem pointer (&sect;14)</td></tr>
+        <tr><td>snapy/src/utils/loops.cuh</td><td><code>stencil_kernel</code> launcher &mdash; sizes shared memory, sets grid/block, fires the kernel (&sect;14)</td></tr>
+        <tr><td>snapy/src/recon/recon_dispatch.hpp</td><td>DECLARE_DISPATCH for call_weno3/5, call_poly3/5</td></tr>
+      </tbody>
+    </table>
+  </section>
+</div>
+
+</main>
+
+<footer>
+  <h4>Colophon &amp; further reading</h4>
+  <div class="resources">
+    <ul>
+      <li><strong>Companion guides</strong> &mdash; <code>pydisort_lifecycle_engineering.html</code> and <code>kintera_lifecycle_engineering.html</code>: the build / packaging / CI/CD machinery that lets these op libraries actually ship as wheels. Read them for ABI, RPATH, and release engineering.</li>
+      <li><strong>Other companions</strong> &mdash; <code>modern_cpp_handbook.html</code> (the C++ idioms underneath), <code>vic_solver_optimization.html</code> and <code>evolve_implicit_optimization.html</code> (GPU-kernel craft, deeper), <code>checkpoint_restart_filesystems.html</code> (file-system side of the same model family).</li>
+      <li><strong>Subjects under study</strong> &mdash; <code>pydisort</code> (RT solver), <code>kintera</code> (chemistry + thermo), <code>snapy</code> (fluid dynamics + WENO reconstruction).</li>
+      <li><strong>PyTorch internals</strong> &mdash; <code>ATen/TensorIterator.h</code>, <code>ATen/native/DispatchStub.h</code>, <code>ATen/native/cuda/Loops.cuh</code>, <code>torch::nn::Module</code>, <code>torch::python::bind_module</code>. These headers <em>are</em> the integration surface.</li>
+      <li><strong>CUDA</strong> &mdash; CUDA C++ Programming Guide (shared memory, <code>__syncthreads()</code>, occupancy); NVIDIA&rsquo;s &ldquo;CUDA Best Practices&rdquo; (memory hierarchy, coalescing); <code>cuobjdump</code>, <code>compute-sanitizer</code>.</li>
+      <li><strong>Stencils &amp; high-order schemes</strong> &mdash; Shu &amp; Osher on WENO; the original WENO5 by Jiang &amp; Shu; finite-volume reconstruction tutorials.</li>
+      <li><strong>Self-contained</strong> &mdash; layout, colour, and structure are inline; display fonts load from Google Fonts and degrade to serif/mono offline. Open directly in any browser.</li>
+    </ul>
+  </div>
+</footer>
+
+</body>
+</html>
