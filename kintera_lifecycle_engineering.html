@@ -1,0 +1,1207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Life Cycle of a Layered Torch-Backed Extension — A Field Guide via kintera</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,300..900,0..100,0..1;1,9..144,300..900,0..100,0..1&family=Source+Serif+4:ital,opsz,wght@0,8..60,300..700;1,8..60,300..700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --paper: #f7f4ec; --paper-2: #efeadc; --paper-3: #e6dfca;
+  --ink: #1a1612; --ink-soft: #3d3830; --ink-faint: #7a7468;
+  --rule: #c4bba5; --rule-soft: #ddd5bc;
+  --oxblood: #9d2818; --oxblood-deep: #6e1a0e;
+  --teal: #2a6066; --teal-deep: #163c41;
+  --ochre: #b08020; --moss: #5e6f3a;
+  --code-bg: #1a1d22; --code-ink: #e8e3d4;
+  --maxw: 1020px;
+}
+*{ box-sizing: border-box; }
+html{ scroll-behavior: smooth; }
+body{
+  margin: 0; background: var(--paper); color: var(--ink);
+  font-family: 'Source Serif 4', Georgia, serif;
+  font-variation-settings: "opsz" 16;
+  font-size: 17px; line-height: 1.62;
+  -webkit-font-smoothing: antialiased;
+}
+body::before{
+  content: ""; position: fixed; inset: 0;
+  background-image: radial-gradient(rgba(80,55,20,0.03) 1px, transparent 1px);
+  background-size: 4px 4px; pointer-events: none; z-index: 1;
+  mix-blend-mode: multiply;
+}
+header, main, footer{ position: relative; z-index: 2; }
+header{
+  max-width: var(--maxw); margin: 0 auto;
+  padding: 80px 32px 56px;
+  border-bottom: 4px solid var(--ink); position: relative;
+}
+header::after{
+  content: ""; display: block; position: absolute;
+  bottom: -10px; left: 32px; right: 32px; height: 1px; background: var(--ink);
+}
+.kicker{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; letter-spacing: .28em; text-transform: uppercase;
+  color: var(--oxblood); margin-bottom: 32px;
+  display: flex; align-items: center; gap: 16px;
+}
+.kicker::before{ content: "\2B25"; color: var(--ochre); }
+.kicker::after{
+  content: ""; flex: 1; height: 2px;
+  background: linear-gradient(to right, var(--rule) 0%, var(--rule) 30%, transparent 100%);
+}
+h1{
+  font-family: 'Fraunces', serif;
+  font-variation-settings: "opsz" 144, "SOFT" 100, "WONK" 1;
+  font-weight: 500; font-size: clamp(44px, 8vw, 88px);
+  line-height: 0.94; letter-spacing: -0.025em;
+  margin: 0 0 24px; color: var(--ink);
+}
+h1 .ital{ font-style: italic; font-weight: 400; color: var(--oxblood); }
+.deck{
+  font-family: 'Source Serif 4', serif;
+  font-variation-settings: "opsz" 32;
+  font-size: 21px; font-style: italic; color: var(--ink-soft);
+  max-width: 760px; line-height: 1.45; margin-top: 20px;
+}
+.meta-row{
+  margin-top: 36px; display: flex; gap: 32px; flex-wrap: wrap;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11.5px; color: var(--ink-faint); letter-spacing: .04em;
+}
+.meta-row .m b{ color: var(--ink); font-weight: 600; }
+.toc{
+  margin-top: 48px; border: 2px solid var(--ink); background: var(--paper-2);
+  padding: 26px 30px; position: relative;
+}
+.toc::before{
+  content: "Index"; position: absolute; top: -12px; left: 24px;
+  background: var(--paper); padding: 0 10px;
+  font-family: 'Fraunces', serif; font-style: italic;
+  font-size: 16px; color: var(--ink);
+}
+.toc-grid{ display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px 36px; }
+@media (max-width: 760px){ .toc-grid{ grid-template-columns: 1fr; } }
+.toc-grid a{
+  color: var(--ink-soft); text-decoration: none;
+  font-size: 14.5px; padding: 5px 0; display: flex; gap: 14px;
+  border-bottom: 1px solid transparent; transition: all .15s;
+  font-family: 'Source Serif 4', serif;
+}
+.toc-grid a:hover{ color: var(--oxblood); border-color: var(--rule); }
+.toc-grid a .n{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; color: var(--oxblood); min-width: 30px; font-weight: 600;
+}
+main{ max-width: var(--maxw); margin: 0 auto; padding: 48px 32px 80px; }
+.part{
+  margin-top: 90px; padding-top: 48px;
+  border-top: 4px solid var(--ink); position: relative;
+}
+.part::after{
+  content: ""; position: absolute; top: 8px; left: 0; right: 0;
+  height: 1px; background: var(--ink);
+}
+.part:first-child{ margin-top: 32px; border-top: none; padding-top: 0; }
+.part:first-child::after{ display: none; }
+.part-label{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; letter-spacing: .28em; color: var(--oxblood);
+  text-transform: uppercase; margin-bottom: 12px; font-weight: 600;
+}
+.part-title{
+  font-family: 'Fraunces', serif;
+  font-variation-settings: "opsz" 96;
+  font-weight: 500; font-size: 48px; line-height: 1.0;
+  letter-spacing: -0.015em; margin: 0 0 14px; color: var(--ink);
+}
+.part-title .ital{ font-style: italic; color: var(--oxblood); font-weight: 400; }
+.part-intro{
+  color: var(--ink-soft); font-size: 18px; max-width: 720px;
+  margin-bottom: 36px; font-style: italic;
+  font-family: 'Source Serif 4', serif;
+  font-variation-settings: "opsz" 24; line-height: 1.55;
+}
+section.chapter{ margin-top: 48px; }
+h2{
+  font-family: 'Fraunces', serif;
+  font-variation-settings: "opsz" 48;
+  font-weight: 500; font-size: 30px; line-height: 1.18;
+  letter-spacing: -0.01em; margin: 0 0 14px; color: var(--ink);
+  display: flex; align-items: baseline; gap: 18px;
+}
+h2 .ch-num{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px; color: var(--oxblood); letter-spacing: .15em;
+  font-weight: 600; flex-shrink: 0;
+}
+h3{
+  font-family: 'Fraunces', serif;
+  font-variation-settings: "opsz" 32;
+  font-weight: 600; font-size: 20px; margin: 28px 0 10px;
+  color: var(--ink); letter-spacing: -0.005em;
+}
+h4{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; letter-spacing: .2em; text-transform: uppercase;
+  color: var(--teal); margin: 22px 0 8px; font-weight: 600;
+}
+p{ margin: 12px 0; }
+p code, li code, td code{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: .82em; background: var(--paper-3); color: var(--oxblood-deep);
+  padding: 1px 6px; border-radius: 2px;
+}
+ul, ol{ padding-left: 1.4em; }
+li{ margin: 6px 0; }
+ul.tight li{ margin: 3px 0; }
+ul.dash{ list-style: none; padding-left: 0; }
+ul.dash li{ position: relative; padding-left: 26px; }
+ul.dash li::before{
+  content: "\2014"; position: absolute; left: 0;
+  color: var(--oxblood); font-weight: 600;
+}
+pre{
+  background: var(--code-bg); border: 1px solid #2a2e35;
+  padding: 16px 20px; overflow-x: auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12.5px; line-height: 1.6;
+  color: var(--code-ink); margin: 18px 0;
+  position: relative; border-radius: 2px;
+}
+pre .com{ color: #7e8a78; font-style: italic; }
+pre .kw{  color: #d9b88a; }
+pre .ty{  color: #88c5b4; }
+pre .str{ color: #e09678; }
+pre .num{ color: #c8a4d8; }
+pre .fn{  color: #84b5d4; }
+pre .pp{  color: #d8b070; }
+pre::before{
+  content: attr(data-lang); position: absolute; top: 6px; right: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9.5px; letter-spacing: .18em;
+  color: #5a6258; text-transform: uppercase;
+}
+.code-caption{
+  font-family: 'Source Serif 4', serif; font-style: italic;
+  font-size: 14.5px; color: var(--ink-faint);
+  margin: -10px 0 18px; padding-left: 6px;
+}
+.callout{
+  margin: 22px 0; padding: 16px 22px;
+  border-left: 4px solid var(--teal); background: var(--paper-2);
+  font-size: 15.5px; line-height: 1.6;
+}
+.callout.warn{ border-color: var(--ochre); }
+.callout.danger{ border-color: var(--oxblood); }
+.callout.tip{ border-color: var(--moss); }
+.callout h5{
+  margin: 0 0 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px; letter-spacing: .22em; text-transform: uppercase;
+  color: var(--teal); font-weight: 700;
+}
+.callout.warn h5{ color: var(--ochre); }
+.callout.danger h5{ color: var(--oxblood); }
+.callout.tip h5{ color: var(--moss); }
+.callout p:first-child{ margin-top: 0; }
+.callout p:last-child{ margin-bottom: 0; }
+.callout pre{ margin: 8px 0 4px; }
+.tbl{ width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 14px; }
+.tbl th, .tbl td{
+  text-align: left; padding: 10px 14px; vertical-align: top;
+  border-bottom: 1px solid var(--rule);
+}
+.tbl th{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--oxblood); font-weight: 700;
+  border-bottom: 2px solid var(--oxblood);
+}
+.tbl th.r{ text-align: right; }
+.tbl tr:hover td{ background: var(--paper-2); }
+.tbl td:first-child{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px; color: var(--ink); font-weight: 600; width: 22%;
+}
+.tbl td.r{ text-align: right; font-family: 'JetBrains Mono', monospace; font-size: 12.5px; color: var(--ink-soft); }
+.tbl td.wide:first-child{ width: auto; }
+.win{ color: var(--moss); font-weight: 700; }
+.lose{ color: var(--oxblood); font-weight: 700; }
+.twocol{ display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 22px 0; }
+@media (max-width: 760px){ .twocol{ grid-template-columns: 1fr; } }
+.twocol .col{ background: var(--paper-2); border: 1px solid var(--rule); padding: 18px 20px; }
+.twocol .col h5{
+  margin: 0 0 10px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; letter-spacing: .18em; text-transform: uppercase;
+  color: var(--teal); font-weight: 700;
+}
+.twocol .col.bad h5{ color: var(--oxblood); }
+.twocol .col.good h5{ color: var(--moss); }
+.twocol .col p{ margin: 8px 0; font-size: 14.5px; }
+.diagram{
+  background: var(--paper-2); border: 1px solid var(--rule);
+  padding: 22px 24px; margin: 22px 0;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px; line-height: 1.55; color: var(--ink-soft);
+  white-space: pre; overflow-x: auto;
+}
+.pull{
+  font-family: 'Fraunces', serif;
+  font-variation-settings: "opsz" 72;
+  font-style: italic; font-weight: 400;
+  font-size: 26px; line-height: 1.32;
+  color: var(--oxblood); margin: 36px 0;
+  padding: 0 0 0 32px; border-left: 3px solid var(--oxblood);
+}
+.idea{
+  margin: 24px 0; border: 2px solid var(--ink);
+  background: var(--paper); padding: 20px 24px; position: relative;
+}
+.idea::before{
+  content: "Key idea"; position: absolute; top: -10px; left: 20px;
+  background: var(--paper); padding: 0 10px;
+  font-family: 'Fraunces', serif; font-style: italic;
+  font-size: 14px; color: var(--ink);
+}
+.idea p{ margin: 6px 0; font-size: 15.5px; }
+.idea p:first-child{ margin-top: 6px; }
+.idea p:last-child{ margin-bottom: 0; }
+.rule-sep{ height: 1px; background: var(--rule); margin: 56px 0; position: relative; }
+.rule-sep::after{
+  content: "\00A7"; position: absolute;
+  top: 50%; left: 50%; transform: translate(-50%, -50%);
+  background: var(--paper); color: var(--oxblood);
+  padding: 0 18px;
+  font-family: 'Fraunces', serif; font-style: italic; font-size: 18px;
+}
+footer{
+  max-width: var(--maxw); margin: 0 auto; padding: 56px 32px 80px;
+  border-top: 4px solid var(--ink); color: var(--ink-soft);
+  font-size: 14.5px; position: relative;
+}
+footer::after{
+  content: ""; position: absolute; top: 8px; left: 32px; right: 32px;
+  height: 1px; background: var(--ink);
+}
+footer h4{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; letter-spacing: .22em;
+  color: var(--oxblood); margin: 0 0 14px; font-weight: 700;
+}
+footer .resources{ columns: 2; column-gap: 36px; }
+@media (max-width: 680px){ footer .resources{ columns: 1; } }
+footer ul{ list-style: none; padding: 0; margin: 0; }
+footer li{ padding: 5px 0; font-size: 14px; break-inside: avoid; }
+footer li code{ color: var(--oxblood); background: transparent; padding: 0; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="kicker">Software life cycle &middot; layered native extensions &middot; cross-repo deps &middot; CUDA wheels &middot; multi-cloud CI/CD</div>
+  <h1>The life cycle of a<br><span class="ital">layered</span> torch-backed extension</h1>
+  <p class="deck">
+    If <code>pydisort</code> is a torch extension that wraps one C solver, <code>kintera</code> is the next floor up: a torch extension whose own native dependencies are <em>other torch extensions</em> (pydisort, pyharp), plus a system library (NetCDF), plus an actual shipping CUDA build, plus YAML-driven chemistry, plus a multi-module pybind surface. Every problem the <em>Senior Life Cycle Engineer (PyTorch)</em> brief names &mdash; dependency issues, symbol resolution, linking problems, multi-cloud build &amp; release, &ldquo;many contributing teams&rdquo; &mdash; is concentrated here. This is the field guide.
+  </p>
+  <div class="meta-row">
+    <span class="m"><b>Subject</b> kintera (chemistry + EoS)</span>
+    <span class="m"><b>Sits on</b> pydisort &middot; pyharp &middot; torch==2.10.0 &middot; NetCDF</span>
+    <span class="m"><b>Build</b> CMake + setuptools(torch) + setuptools-scm</span>
+    <span class="m"><b>Targets</b> manylinux_2_28 + CUDA 12.8 &middot; macOS arm64</span>
+    <span class="m"><b>Versioning</b> label-driven SemVer via GitHub App</span>
+  </div>
+  <div class="toc">
+    <div class="toc-grid">
+      <a href="#c00"><span class="n">&sect;00</span><span>Synopsis &amp; the competency map</span></a>
+      <a href="#c01"><span class="n">&sect;01</span><span>The layered native stack</span></a>
+      <a href="#c02"><span class="n">&sect;02</span><span>The two-stage build, layered</span></a>
+      <a href="#c03"><span class="n">&sect;03</span><span>Cross-repo discovery in CMake</span></a>
+      <a href="#c04"><span class="n">&sect;04</span><span>The site-packages contract</span></a>
+      <a href="#c05"><span class="n">&sect;05</span><span>Configure-time codegen</span></a>
+      <a href="#c06"><span class="n">&sect;06</span><span>Dependency acquisition, layered</span></a>
+      <a href="#c07"><span class="n">&sect;07</span><span>ABI: leveraging the lesson</span></a>
+      <a href="#c08"><span class="n">&sect;08</span><span>Symbols: AVX defines from torch</span></a>
+      <a href="#c09"><span class="n">&sect;09</span><span>Linking: order &amp; --no-as-needed</span></a>
+      <a href="#c10"><span class="n">&sect;10</span><span>CUDA that actually ships</span></a>
+      <a href="#c11"><span class="n">&sect;11</span><span>Device dispatch &amp; the codegen header</span></a>
+      <a href="#c12"><span class="n">&sect;12</span><span>The multi-module torch surface</span></a>
+      <a href="#c13"><span class="n">&sect;13</span><span>Wheels with the pytorch builder</span></a>
+      <a href="#c14"><span class="n">&sect;14</span><span>Excluding CUDA libs by soname</span></a>
+      <a href="#c15"><span class="n">&sect;15</span><span>setuptools-scm: tag-driven versioning</span></a>
+      <a href="#c16"><span class="n">&sect;16</span><span>Data, YAML &amp; the wheel payload</span></a>
+      <a href="#c17"><span class="n">&sect;17</span><span>CI with system &amp; sibling deps</span></a>
+      <a href="#c18"><span class="n">&sect;18</span><span>CD: tag-input, GPU pipeline</span></a>
+      <a href="#c19"><span class="n">&sect;19</span><span>Release: label SemVer + GitHub App</span></a>
+      <a href="#c20"><span class="n">&sect;20</span><span>The stub-files architecture</span></a>
+      <a href="#c21"><span class="n">&sect;21</span><span>Docker dev env &amp; static gates</span></a>
+      <a href="#c22"><span class="n">&sect;22</span><span>Debugging across four libs</span></a>
+      <a href="#c23"><span class="n">&sect;23</span><span>Supply chain &amp; multi-team</span></a>
+      <a href="#c24"><span class="n">&sect;24</span><span>Failure-mode catalog</span></a>
+      <a href="#c25"><span class="n">&sect;25</span><span>Decision trees</span></a>
+      <a href="#c26"><span class="n">&sect;26</span><span>Glossary &amp; file map</span></a>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<!-- ===================== PART I ===================== -->
+<div class="part" id="p1">
+  <div class="part-label">Part I</div>
+  <h2 class="part-title">The system &amp; the <span class="ital">layered stack</span></h2>
+  <p class="part-intro">A wrapper of a wrapper of a framework. Before any single competency is useful you have to see how kintera sits <em>on top of</em> pydisort and pyharp, both of which sit on torch &mdash; and what that costs you at every stage of the life cycle.</p>
+
+  <section class="chapter" id="c00">
+    <h2><span class="ch-num">&sect;00</span>Synopsis &amp; the competency map</h2>
+    <p>The NVIDIA <em>Senior Life Cycle Engineer</em> brief calls out two things that pydisort barely exercises but kintera exercises constantly: <strong>&ldquo;many contributing teams&rdquo;</strong> and <strong>&ldquo;shipping multi-cloud large-scale systems and supporting those systems in production.&rdquo;</strong> kintera makes both literal. Its build links against the artifacts of three other Python packages, its wheel is the first in the workspace stack to actually ship a CUDA build, and its CD job runs inside <em>PyTorch&rsquo;s own</em> manylinux image.</p>
+    <table class="tbl">
+      <thead><tr><th>Brief competency</th><th class="wide">Where it lives in kintera</th><th>Chapter</th></tr></thead>
+      <tbody>
+        <tr><td>Many contributing teams</td><td>kintera depends on pydisort + pyharp (sibling repos) + torch (NVIDIA/Meta) + NetCDF (Unidata)</td><td>&sect;01, &sect;03, &sect;20</td></tr>
+        <tr><td>C++ build systems</td><td>same two-stage graph as pydisort, but Stage 1 has to find <em>installed Python packages</em> via custom Find modules</td><td>&sect;02&ndash;&sect;03</td></tr>
+        <tr><td>Dependency issues</td><td>build-system <code>requires</code> pyharp; runtime deps include pyharp; FindDisort runs <code>import pydisort</code></td><td>&sect;06</td></tr>
+        <tr><td>Symbol resolution</td><td>AVX-tier defines parsed in Python from <code>torch.__config__.show()</code></td><td>&sect;08</td></tr>
+        <tr><td>Linking problems</td><td>library order (cuda providers last), <code>--no-as-needed</code> for CUDA, six RPATH entries</td><td>&sect;09</td></tr>
+        <tr><td>Math libs &middot; compilers &middot; drivers</td><td>cusolver/cusparse/cublas/cublasLt/nvJitLink/cudart resolved from torch at runtime</td><td>&sect;14</td></tr>
+        <tr><td>Continuous build for Linux</td><td>cibuildwheel inside <code>pytorch/manylinux2_28-builder:cuda12.8</code></td><td>&sect;13</td></tr>
+        <tr><td>Release management</td><td>label-driven SemVer (<code>release:major/minor/patch</code>), GitHub App token</td><td>&sect;19</td></tr>
+        <tr><td>Cloud-hosted dev env</td><td>Docker Compose with GPU passthrough + Jupyter port</td><td>&sect;21</td></tr>
+      </tbody>
+    </table>
+    <div class="idea">
+      <p>The deep truth specific to kintera: <strong>a layered native extension is a multi-team contract enforced at link time and at run time.</strong> pydisort&rsquo;s contract was with <em>torch</em>. kintera&rsquo;s contract is with torch <em>and</em> pydisort <em>and</em> pyharp <em>and</em> NetCDF &mdash; four independent release calendars, each with its own ABI surface. The life-cycle engineer&rsquo;s job is to make every clause of <em>all four</em> contracts true on every release, on Linux x86_64 with and without GPUs, and on macOS arm64.</p>
+    </div>
+    <p>If you have already read the pydisort guide, the foundational mechanisms (the two-stage build, the dual C++ ABI, <code>$ORIGIN</code> RPATHs, the <em>vendor-vs-depend</em> packaging fork) are the same. This guide is structured to <em>lean</em> on those where they repeat, and spend its pages on the four things kintera adds: <strong>(a)</strong> cross-repo discovery, <strong>(b)</strong> the aggressive Linux linker, <strong>(c)</strong> a CUDA wheel that actually ships, and <strong>(d)</strong> the operational discipline of versioning and releasing a many-author repo.</p>
+  </section>
+
+  <section class="chapter" id="c01">
+    <h2><span class="ch-num">&sect;01</span>The layered native stack</h2>
+    <p>When a user types <code>import kintera</code>, the loader walks a strictly taller tower than pydisort&rsquo;s. Knowing this map cold is again the trick to placing any bug at the right floor in seconds.</p>
+    <div class="diagram">  user code             import kintera; kintera.ThermoX(opts).forward(T, P, X)
+       │
+  ┌────▼─────────────────────────────────────────────────────────────────┐
+  │ kintera/__init__.py        + atm2d/ (pure Python orchestration)        │  Python
+  ├────▼─────────────────────────────────────────────────────────────────┤
+  │ kintera/kintera*.so        pybind11 module: thermo, kinetics, photo,   │  C++ / Python C-API
+  │                            constants, sparsesolver, diffusion         │
+  ├────▼─────────────────────────────────────────────────────────────────┤
+  │ libkintera_release.so      thermo, kinetics, photochem, diffusion,    │  C++17 + LibTorch
+  │ libkintera_cuda_release.so   math, vapors, utils — over 9 src dirs    │  CUDA (Linux wheels)
+  ├────▼─────────────────────────────────────────────────────────────────┤
+  │ SIBLING Python packages (installed in the SAME site-packages):         │
+  │   pydisort/lib/libdisort_release.so      (radiative transfer)         │
+  │   pyharp/lib/libharp_release.so          (RT kernels / infra)         │
+  ├────▼─────────────────────────────────────────────────────────────────┤
+  │ libtorch_cpu.so libc10.so  (+ libtorch_cuda, libc10_cuda)              │  user's torch
+  ├────▼─────────────────────────────────────────────────────────────────┤
+  │ SYSTEM libs: libnetcdf, libcusolver, libcusparse, libcublas, libm      │  OS / driver
+  ├────▼─────────────────────────────────────────────────────────────────┤
+  │ libstdc++ / libgomp     +     CUDA driver (libcuda.so) → PTX JIT       │
+  └────────────────────────────────────────────────────────────────────────┘</div>
+    <p>Three properties of this taller tower drive every later chapter:</p>
+    <ul class="dash">
+      <li><strong>The sibling-package floor is new.</strong> pydisort and pyharp are <em>not</em> system libraries and <em>not</em> torch &mdash; they are Python packages installed in the same <code>site-packages</code> directory, and kintera resolves their shared libs by walking up to that directory and back down. This is what <code>$ORIGIN/../pydisort/lib</code> means in &sect;09.</li>
+      <li><strong>NetCDF is the first true system dep.</strong> Unlike torch and the siblings, NetCDF is not installed by pip &mdash; it is <code>apt-get install libnetcdf-dev</code> on Linux, <code>brew install netcdf</code> on macOS, <code>yum install netcdf-devel</code> in the CD container. The CI matrix has to branch on OS to install it.</li>
+      <li><strong>The CUDA layer is real, not aspirational.</strong> kintera&rsquo;s Linux wheels ship a <code>libkintera_cuda_release.so</code> built inside <code>pytorch/manylinux2_28-builder:cuda12.8</code>. The user does <em>not</em> install the CUDA toolkit &mdash; CUDA math libs (cusolver/cusparse/cublas) come from <em>torch&rsquo;s</em> own bundled set, found via RPATH (&sect;14).</li>
+    </ul>
+    <div class="callout tip">
+      <h5>The placement reflex, layered edition</h5>
+      <p>When something breaks: &ldquo;undefined symbol&rdquo; with <code>pydisort::</code> or <code>harp::</code> in the name &rarr; sibling-floor (&sect;03/&sect;04); with <code>__cxx11</code> &rarr; ABI (&sect;07); with <code>at::</code> or <code>c10::</code> &rarr; torch drift (carry forward pydisort&rsquo;s &sect;12). &ldquo;cannot open libnetcdf.so&rdquo; &rarr; system dep missing (&sect;17). &ldquo;cannot open libcusolver.so.12&rdquo; &rarr; torch absent or no GPU (&sect;14). &ldquo;no kernel image&rdquo; &rarr; CUDA arch (&sect;10).</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c02">
+    <h2><span class="ch-num">&sect;02</span>The two-stage build, layered edition</h2>
+    <p>kintera uses the same two-stage CMake&rarr;setuptools build as pydisort, with one consequential addition: <strong>Stage 1 itself depends on installed Python packages</strong>. <code>find_package(Disort REQUIRED)</code> and <code>find_package(Harp REQUIRED)</code> shell out to <code>python -c "import pydisort"</code> to locate their headers and shared libs. So before Stage 1 can even configure, the build environment must already have pyharp and pydisort installed in the <em>same Python</em> that CMake will use.</p>
+    <div class="diagram">STAGE 0 — environment    pip install 'pyharp>=2.2.0' 'pydisort'    (implicit via pyharp)
+              ^^^^^^^^^   pip install 'torch==2.10.0'  +  system: NetCDF
+                  │
+STAGE 1 — CMake             cmake -B build              ┌── runs `python -c "import pydisort"`
+                            cmake --build build          ├── runs `python -c "import pyharp"`
+                            ├── libkintera_release.so    └── locates their lib & include dirs
+                            └── (optional) libkintera_cuda_release.so
+
+STAGE 2 — setuptools+torch  pip install --no-build-isolation --no-deps .
+                            ├── parse_library_names(build/lib)  → orders cuda last
+                            ├── compute 6 RPATHs (own + torch + pydisort + pyharp)
+                            └── kintera/kintera.cp3XX-*.so</div>
+    <p>The implication is that &ldquo;<code>pip install kintera</code> from a clean machine&rdquo; is a non-trivial chain &mdash; the build-system table in <code>pyproject.toml</code> bakes the chain into PEP 517 as a hard requirement:</p>
+<pre data-lang="TOML — pyproject.toml">[build-system]
+requires = [
+  <span class="str">"setuptools&gt;=61.0.0"</span>, <span class="str">"setuptools-scm&gt;=8"</span>, <span class="str">"wheel"</span>, <span class="str">"build"</span>, <span class="str">"ninja"</span>,
+  <span class="str">"pyharp&gt;=2.2.0"</span>,    <span class="com"># native sibling — must be importable before CMake runs</span>
+  <span class="str">"torch==2.10.0"</span>,    <span class="com"># exact pin: shared with pydisort/pyharp; the keystone</span>
+]
+build-backend = <span class="str">"setuptools.build_meta"</span></pre>
+    <p>Note that pydisort is <em>not</em> in <code>requires</code>: it comes in as a transitive dependency of pyharp. That choice is a tiny but important release-coordination decision (you pin the immediate parent and trust its tree), and it concentrates breakage on the pyharp release cadence.</p>
+    <div class="callout warn">
+      <h5>The build environment is a contract too</h5>
+      <p>A torch extension whose Stage 1 imports siblings has a fourth ABI it has to keep right: the <strong>build-time Python</strong>. The CD pipeline goes out of its way to verify this with a literal smoke test inside <code>CIBW_BEFORE_BUILD</code>:</p>
+<pre data-lang="YAML — .github/workflows/cd.yml"><span class="com"># Test that pydisort imports correctly in the *same Python* that CMake will use</span>
+python - &lt;&lt;<span class="str">'PY'</span>
+<span class="kw">import</span> sys, os
+<span class="kw">try</span>:
+    <span class="kw">import</span> pydisort
+    print(<span class="str">"pydisort import OK:"</span>, pydisort.__version__)
+<span class="kw">except</span> Exception <span class="kw">as</span> e:
+    print(<span class="str">"pydisort import FAILED:"</span>, e); sys.exit(<span class="num">1</span>)
+PY</pre>
+      <p>A failed sibling import here means CMake will fail in Stage 1 with a less clear message; the fail-fast in the right Python is exactly the kind of pipeline hygiene a senior engineer adds.</p>
+    </div>
+    <h4>Decision tree &mdash; how to depend on a sibling native package</h4>
+    <ul class="dash">
+      <li>Sibling is a torch extension, on PyPI &rarr; this pattern: <code>find_package</code> by Python import, declare in <code>build-system.requires</code>, RPATH to <code>$ORIGIN/../&lt;sibling&gt;/lib</code>.</li>
+      <li>Sibling is C++-only, on the system &rarr; classical <code>find_package</code> against an installed CMake config; link via system paths.</li>
+      <li>Sibling is git-only, no release &rarr; <code>FetchContent</code> (vendor the source); avoid for anything that holds global state (the &sect;11 trap from pydisort).</li>
+      <li>Sibling is yours, monorepo &rarr; CMake <code>add_subdirectory</code>; one build, no Python handshake.</li>
+    </ul>
+  </section>
+</div>
+
+<!-- ===================== PART II ===================== -->
+<div class="part" id="p2">
+  <div class="part-label">Part II</div>
+  <h2 class="part-title">C++ build: <span class="ital">dependencies, symbols, linking</span></h2>
+  <p class="part-intro">Same brief, harder problems &mdash; because every problem from pydisort returns with one extra layer of indirection, and three new ones appear.</p>
+
+  <section class="chapter" id="c03">
+    <h2><span class="ch-num">&sect;03</span>Cross-repo discovery in CMake</h2>
+    <p>The CMake idiom for &ldquo;find an installed Python-packaged native lib&rdquo; is not standardized; kintera implements it in <code>FindDisort.cmake</code> and <code>FindHarp.cmake</code>. The pattern, distilled:</p>
+<pre data-lang="CMake — cmake/modules/FindDisort.cmake (essence)"><span class="kw">set</span>(Python3_FIND_VIRTUALENV ONLY)              <span class="com"># pin to the active venv, not /usr/bin/python</span>
+<span class="fn">find_package</span>(Python3 QUIET COMPONENTS Interpreter)
+
+<span class="fn">execute_process</span>(COMMAND ${Python3_EXECUTABLE} -c
+  <span class="str">"import pydisort; print(pydisort.__file__)"</span>
+  OUTPUT_VARIABLE disort_init_file OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+<span class="fn">cmake_path</span>(REPLACE_FILENAME disort_init_file lib     OUTPUT_VARIABLE disort_lib_dir)
+<span class="fn">cmake_path</span>(REPLACE_FILENAME disort_init_file disort  OUTPUT_VARIABLE disort_include_dir)
+
+<span class="fn">find_path</span>(_DISORT_HEADER_DIR disort.hpp HINTS ${disort_include_dir} ...)
+<span class="fn">find_library</span>(DISORT_LIBRARY disort_release  HINTS ${disort_lib_dir} ...)
+
+<span class="fn">__disort_determine_version</span>()                  <span class="com"># import pydisort; print(pydisort.__version__)</span>
+<span class="fn">find_package_handle_standard_args</span>(Disort REQUIRED_VARS ... VERSION_VAR DISORT_VERSION)</pre>
+    <p>The same pattern (with one ankle-grabber) is in FindHarp.cmake, which additionally calls <code>link_directories</code> against pyharp&rsquo;s <code>.dylibs</code> directory on macOS &mdash; reflecting that pyharp ships some libs in <code>pyharp/.dylibs</code> rather than <code>pyharp/lib</code>:</p>
+<pre data-lang="CMake — FindHarp.cmake"><span class="kw">if</span> (APPLE)
+  <span class="fn">link_directories</span>(${Python3_SITELIB}/pyharp/.dylibs)
+<span class="kw">else</span>()
+  <span class="fn">link_directories</span>(${Python3_SITELIB}/pyharp.libs)
+<span class="kw">endif</span>()</pre>
+    <p class="code-caption">These directories (<code>pyharp.libs</code> on Linux, <code>pyharp/.dylibs</code> on Mac) are auditwheel/delocate&rsquo;s own convention for the libs they vendored into the sibling wheel &mdash; an undocumented surface that becomes load-bearing across teams.</p>
+    <h4>Production issues</h4>
+    <ul class="dash">
+      <li><strong>The Python version baked at configure time wins.</strong> <code>Python3_FIND_VIRTUALENV ONLY</code> locks to the active interpreter; if a contributor accidentally runs <code>cmake</code> outside their venv, the lookups silently succeed against a different Python with a different (or absent) pydisort &mdash; producing a kintera build that links against the wrong sibling. Surfacing <code>Python3_EXECUTABLE</code> in the CMake log is the cheap fix; refusing to configure without a venv is the better one.</li>
+      <li><strong>Sibling layout is not standardized.</strong> <code>pyharp/.dylibs</code> vs <code>pyharp.libs</code> is auditwheel&rsquo;s internal convention, not pyharp&rsquo;s API. A pyharp release that changes its repair-tool or its layout silently breaks kintera&rsquo;s build &mdash; the kind of multi-team coupling the brief warns about.</li>
+      <li><strong>No installed CMake config.</strong> The cleaner pattern would be for pydisort and pyharp to <em>ship</em> a <code>pydisortConfig.cmake</code> in their wheel and have kintera do plain <code>find_package(pydisort)</code>. Today the contract is implicit and lives in Find modules; a senior engineer would push to formalize it.</li>
+    </ul>
+    <div class="callout tip">
+      <h5>Improve &mdash; the Config.cmake upgrade</h5>
+      <p>Have pydisort and pyharp install proper CMake package config files via <code>install(EXPORT)</code>. Then kintera replaces <code>FindDisort.cmake</code> with <code>find_package(pydisort CONFIG REQUIRED)</code>, and the cross-repo contract becomes a versioned, namespaced target (e.g. <code>pydisort::disort</code>) instead of a path-walk. This is exactly the layered-team coordination move the brief is rewarding.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c04">
+    <h2><span class="ch-num">&sect;04</span>The site-packages contract</h2>
+    <p>Once Stage 1 has linked against pydisort&rsquo;s and pyharp&rsquo;s shared libs, Stage 2 must encode where to find them <em>at runtime</em>. pydisort needed two RPATH entries; kintera needs six, and they tell a complete sociological story about layered Python-native deps:</p>
+<pre data-lang="Python — setup.py"><span class="kw">if</span> sys.platform == <span class="str">"darwin"</span>:
+    extra_link_args = [
+        <span class="str">"-Wl,-rpath,@loader_path/lib"</span>,                <span class="com"># my own libkintera</span>
+        <span class="str">"-Wl,-rpath,@loader_path/../torch/lib"</span>,        <span class="com"># torch (sibling)</span>
+        <span class="str">"-Wl,-rpath,@loader_path/../pydisort/lib"</span>,     <span class="com"># pydisort (sibling)</span>
+        <span class="str">"-Wl,-rpath,@loader_path/../pyharp/lib"</span>,       <span class="com"># pyharp (sibling)</span>
+    ]
+<span class="kw">else</span>:
+    extra_link_args = [
+        <span class="str">"-Wl,-rpath,$ORIGIN/lib"</span>,
+        <span class="str">"-Wl,-rpath,$ORIGIN/../torch/lib"</span>,
+        <span class="str">"-Wl,-rpath,$ORIGIN/../pydisort/lib"</span>,
+        <span class="str">"-Wl,-rpath,$ORIGIN/../pyharp/lib"</span>,
+        <span class="str">f"-Wl,-rpath,{site_dir}/torch/lib"</span>,            <span class="com"># ABSOLUTE fallback to site-packages</span>
+        <span class="str">f"-Wl,-rpath,{site_dir}/pydisort/lib"</span>,
+        <span class="str">f"-Wl,-rpath,{site_dir}/pyharp/lib"</span>,
+    ]</pre>
+    <p>The Linux side has an extra trick that pydisort doesn&rsquo;t: <strong>both relative <em>and</em> absolute paths</strong> are baked in. <code>$ORIGIN/../torch/lib</code> works when kintera is installed in the same site-packages as torch (the normal case). The absolute <code>{site_dir}/torch/lib</code> works when something has moved kintera (e.g., a vendored install, a frozen app, an unusual layout) &mdash; the loader tries both.</p>
+    <div class="callout warn">
+      <h5>The absolute-path tradeoff</h5>
+      <p>Baking absolute paths into an ELF binary makes it <em>less</em> relocatable: the wheel built on the runner&rsquo;s <code>/opt/python/cp311/.../site-packages</code> carries that exact string forever. It happens to coincide with where pip installs in practice, but a custom prefix install will leave those entries dangling. The relative <code>$ORIGIN</code> entries do the real work; the absolute entries are a safety net &mdash; arguably one to retire once the relative paths are battle-tested.</p>
+    </div>
+    <p>Recall from the pydisort guide that <code>-Wl,-rpath</code> emits <strong>DT_RUNPATH</strong> on modern Linux, which is <em>non-transitive</em>. That means each of these six entries is consulted only for kintera&rsquo;s direct NEEDED list. pyharp&rsquo;s and torch&rsquo;s own transitive deps rely on <em>their own</em> RPATHs &mdash; which is why pyharp wheels ship their auditwheel-vendored libs in <code>pyharp.libs</code>/<code>.dylibs</code> rather than <code>pyharp/lib</code>: those folders are where pyharp&rsquo;s own RPATH points, and the &sect;03 <code>link_directories</code> dance is how kintera reaches into that internal layout to link.</p>
+    <h4>Improve</h4>
+    <p>The cleanest long-term move is to depend only on the <em>public</em> portion of each sibling&rsquo;s layout (<code>pyharp/lib</code>, not <code>pyharp.libs</code>). That requires pyharp to ship its libs under the public path &mdash; a coordinated change but one that turns an implicit contract into an explicit one.</p>
+  </section>
+
+  <section class="chapter" id="c05">
+    <h2><span class="ch-num">&sect;05</span>Configure-time codegen</h2>
+    <p>kintera is the first repo in the workspace stack to use CMake <code>configure_file</code> for build-time C++ codegen. The template:</p>
+<pre data-lang="C++ — configure.h.in"><span class="pp">#pragma</span> once
+<span class="pp">#include</span> &lt;cstddef&gt;
+<span class="com">// NetCDF output (NETCDFOUTPUT or NO_NETCDFOUTPUT)</span>
+<span class="pp">#define</span> @NETCDF_OPTION@
+<span class="pp">#define</span> @PNETCDF_OPTION@
+<span class="pp">#define</span> @CUDA_OPTION@
+
+<span class="pp">#ifdef</span> __CUDACC__
+  <span class="pp">#define</span> DISPATCH_MACRO __host__ __device__
+<span class="pp">#else</span>
+  <span class="pp">#define</span> DISPATCH_MACRO
+<span class="pp">#endif</span>
+
+<span class="kw">constexpr</span> <span class="ty">size_t</span> KINTERA_CUDA_HEAP_SIZE = <span class="num">256</span> * <span class="num">1024</span> * <span class="num">1024</span>;  <span class="com">// 256 MB</span>
+<span class="kw">constexpr</span> <span class="kw">char</span> KINTERA_ROOT_DIR[] = <span class="str">"@CMAKE_CURRENT_SOURCE_DIR@"</span>;
+<span class="kw">constexpr</span> <span class="kw">char</span> HARP_ROOT_DIR[]    = <span class="str">"@HARP_INCLUDE_DIR@"</span>;</pre>
+    <p>CMake&rsquo;s <code>configure_file(... configure.h @ONLY)</code> substitutes the <code>@FOO@</code> tokens into <code>build/configure.h</code>, which the rest of the source includes. This is how feature flags (<code>NETCDFOUTPUT</code>/<code>NO_NETCDFOUTPUT</code>), the source-tree root, and the harp include root become available to C++ code at compile time without poisoning the command line with -Ds.</p>
+    <h4>Production issues</h4>
+    <ul class="dash">
+      <li><strong>Source-tree paths in the binary.</strong> <code>KINTERA_ROOT_DIR</code> is baked in at configure time. In a developer build it points to your local checkout, in CI it points to the runner&rsquo;s workspace, in the wheel it points to a path that <strong>no longer exists on the user&rsquo;s machine</strong>. Anything that reads files from <code>KINTERA_ROOT_DIR</code> at runtime in a shipped wheel will fail. Audit usages and prefer <code>importlib.resources</code> or a Python-side data-path lookup over a baked-in path.</li>
+      <li><strong>Same for <code>HARP_ROOT_DIR</code>.</strong> It captures pyharp&rsquo;s include dir <em>at kintera&rsquo;s build time</em> &mdash; if the user&rsquo;s pyharp is reinstalled to a different location after kintera was built, the binary still remembers the old one.</li>
+      <li><strong>The mutually-exclusive define dance.</strong> <code>@NETCDF_OPTION@</code> expands to either <code>NETCDFOUTPUT</code> or <code>NO_NETCDFOUTPUT</code> as a <em>single token in the macro name</em> &mdash; clever, but it means every guard in the codebase has to use the same constant. A typo silently disables a feature. Splitting into a boolean macro (<code>#define KINTERA_HAVE_NETCDF 1</code>) is the modern idiom.</li>
+    </ul>
+    <div class="callout tip">
+      <h5>The dispatch macro is the right thing</h5>
+      <p><code>DISPATCH_MACRO</code> expands to <code>__host__ __device__</code> when compiled by nvcc and to nothing otherwise. That single token is how the same C++ function body can be called from CPU host code <em>and</em> from a CUDA kernel &mdash; the cornerstone of pyharp-style performance-portable code. The configure-time generation is what keeps non-CUDA builds free of nvcc keywords.</p>
+    </div>
+  </section>
+</div>
+
+<!-- ===================== PART III — same family of problems, layered ===================== -->
+<div class="part" id="p3">
+  <div class="part-label">Part III</div>
+  <h2 class="part-title">Symbols, ABIs &amp; the <span class="ital">linker</span></h2>
+  <p class="part-intro">Every load-time failure pydisort had, kintera inherits. Two are specifically louder here: AVX-tier defines that travel through Python, and the Linux linker&rsquo;s eagerness to throw away the CUDA libs you need.</p>
+
+  <section class="chapter" id="c06">
+    <h2><span class="ch-num">&sect;06</span>Dependency acquisition, layered</h2>
+    <p>kintera has more shapes of dependency than pydisort, and each shape has its own pinning posture:</p>
+    <table class="tbl">
+      <thead><tr><th>Dep</th><th>Mechanism</th><th class="wide">Pin &amp; tradeoff</th></tr></thead>
+      <tbody>
+        <tr><td>torch</td><td>pip exact pin</td><td><code>==2.10.0</code> &mdash; the keystone; identical to pydisort/pyharp (&sect;07)</td></tr>
+        <tr><td>pyharp</td><td>pip range pin</td><td><code>&gt;=2.2.0</code> &mdash; trusted to honor SemVer; pulls pydisort transitively</td></tr>
+        <tr><td>NetCDF (system)</td><td>OS package manager</td><td>per-OS (apt/brew/yum); declared in CI/CD &amp; Dockerfile, <em>not</em> in pyproject</td></tr>
+        <tr><td>fmt</td><td>FetchContent + git tag</td><td>pinned tag with .cache tarball; same macro as pydisort</td></tr>
+        <tr><td>yaml-cpp</td><td>FetchContent + git tag</td><td>the YAML parser for reactions/kinetics/data files</td></tr>
+        <tr><td>googletest</td><td>FetchContent + git tag</td><td>real unit-test framework (vs pydisort&rsquo;s plain executables)</td></tr>
+      </tbody>
+    </table>
+    <p>The lift over pydisort: <strong>system NetCDF</strong> turns the build into a per-OS install dance, and <strong>yaml-cpp</strong> introduces a header-only-ish runtime-config story for chemistry (reactions in YAML, ingested at startup). yaml-cpp&rsquo;s API has shifted over the years; pinning a specific tag is what keeps users on consistent parser semantics.</p>
+    <div class="callout warn">
+      <h5>The pyharp range pin is the weak link</h5>
+      <p><code>pyharp&gt;=2.2.0</code> trusts the pyharp project to never break ABI within a major. But pyharp is a torch extension too, and (like pydisort) it reaches into ATen internals (&sect;05 of the pydisort guide) where there <em>is no</em> stable ABI. A pyharp minor release that bumps its own torch pin or changes its sibling layout will break kintera even though the range says it shouldn&rsquo;t. The defensive move is to use the same <code>==</code> discipline kintera uses for torch &mdash; pin pyharp exactly per kintera release, and bump deliberately.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c07">
+    <h2><span class="ch-num">&sect;07</span>ABI: leveraging the lesson</h2>
+    <p>The <code>_GLIBCXX_USE_CXX11_ABI</code> handling is identical to pydisort: detect torch&rsquo;s value via <code>execute_process</code>, propagate via <code>add_compile_definitions</code>. The new failure mode that <em>only</em> shows up in kintera is the <strong>three-way ABI alignment</strong>: kintera, pydisort, and pyharp must all have been built against the same torch ABI as the user&rsquo;s torch.</p>
+    <p>This works in practice for one boring reason and one important one. The boring reason: all three repos run the same detection code against the same exact torch pin (<code>==2.10.0</code>), so they always agree. The important reason: PyPI delivers them as separate wheels, so an ABI mismatch can be diagnosed precisely.</p>
+    <div class="callout danger">
+      <h5>The cross-team ABI failure</h5>
+      <p>Suppose pyharp ships a 2.3.0 wheel built against a torch RC that flipped the ABI. The user installs <code>kintera</code>, pip resolves the new pyharp, and the import-time error looks like a kintera bug &mdash; <code>undefined symbol</code> in a libharp call. The triage reflex (&sect;22): always check the <em>three</em> versions, and the ABI of <em>each</em>: <code>python -c "import pydisort, pyharp, torch; print(*[m.__version__ for m in (pydisort, pyharp, torch)])"</code>; if any disagree about <code>_GLIBCXX_USE_CXX11_ABI</code> you have found the bug.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c08">
+    <h2><span class="ch-num">&sect;08</span>Symbols: AVX defines from torch</h2>
+    <p>In pydisort, AVX2/AVX512 capability defines were set in CMake&rsquo;s <code>compilers.cmake</code> as static defines for non-Apple. kintera does it differently and better &mdash; in <code>setup.py</code>, by parsing torch&rsquo;s own build configuration:</p>
+<pre data-lang="Python — setup.py"><span class="kw">def</span> <span class="fn">torch_dispatch_stub_defines</span>():
+    config = torch.__config__.<span class="fn">show</span>()
+    defines = []
+    <span class="kw">if</span> <span class="str">"CPU capability usage: AVX512"</span> <span class="kw">in</span> config:
+        defines.<span class="fn">append</span>(<span class="str">"-DHAVE_AVX512_CPU_DEFINITION"</span>)
+    <span class="kw">if</span> (<span class="str">"PERF_WITH_AVX2=1"</span> <span class="kw">in</span> config <span class="kw">or</span>
+        <span class="str">"CPU capability usage: AVX2"</span> <span class="kw">in</span> config <span class="kw">or</span>
+        <span class="str">"CPU capability usage: AVX512"</span> <span class="kw">in</span> config):
+        defines.<span class="fn">append</span>(<span class="str">"-DHAVE_AVX2_CPU_DEFINITION"</span>)
+    <span class="kw">return</span> defines</pre>
+    <p>Why this matters: <code>REGISTER_ALL_CPU_DISPATCH</code> (the macro pydisort and kintera both use to register CPU kernels into ATen&rsquo;s DispatchStub) <em>expands differently</em> depending on whether <code>HAVE_AVX2_CPU_DEFINITION</code> / <code>HAVE_AVX512_CPU_DEFINITION</code> are set. If kintera disagrees with torch about which SIMD tiers exist, its registrations land in tiers the dispatcher never queries &mdash; or it tries to register tiers torch doesn&rsquo;t have, causing build failures or silent no-ops at runtime. The pydisort approach (static defines based on the host CPU) is correct for most cases but is technically guessing; kintera&rsquo;s approach (ask torch what <em>it</em> believes) is the ABI-honest answer.</p>
+    <div class="callout tip">
+      <h5>Improve, both repos</h5>
+      <p>Push this Python-side detection back into pydisort and pyharp too &mdash; the truth about CPU capability tiers belongs to torch, and a torch-extension build should ask torch, not the compiler. One shared helper module across the three repos is the cleanest end state.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c09">
+    <h2><span class="ch-num">&sect;09</span>Linking: order &amp; <code>--no-as-needed</code></h2>
+    <p>This is the chapter where the brief&rsquo;s &ldquo;linking problems&rdquo; bullet earns its keep. kintera&rsquo;s <code>setup.py</code> does <strong>two</strong> non-obvious link-time things that pydisort doesn&rsquo;t. Both are responses to the Linux linker behaving exactly as documented, in the way that breaks you anyway.</p>
+    <h3>(a) Library ordering &mdash; consumers before providers</h3>
+    <p>GNU <code>ld</code> resolves symbols in a single left-to-right pass: each library on the link line sees only symbols it can satisfy from <em>itself</em> plus libraries to its <em>right</em>. So if <code>libkintera_release.so</code> (consumer) calls into <code>libkintera_cuda_release.so</code> (provider), the consumer must appear <em>first</em> on the line, the provider after it. <code>setup.py</code> enforces this by sorting:</p>
+<pre data-lang="Python — setup.py (parse_library_names)"><span class="com"># 1) non-cuda libs first (CONSUMERS, with unresolved cuda symbols)</span>
+kintera_non_cuda = [l <span class="kw">for</span> l <span class="kw">in</span> library_names <span class="kw">if</span> l.<span class="fn">startswith</span>(<span class="str">"kintera"</span>) <span class="kw">and</span> <span class="str">"cuda"</span> <span class="kw">not</span> <span class="kw">in</span> l]
+<span class="com"># 2) cuda libs last (PROVIDERS, satisfying those unresolved symbols)</span>
+kintera_cuda     = [l <span class="kw">for</span> l <span class="kw">in</span> library_names <span class="kw">if</span> l.<span class="fn">startswith</span>(<span class="str">"kintera"</span>) <span class="kw">and</span> <span class="str">"cuda"</span> <span class="kw">in</span> l]
+<span class="com"># 3) everything else (NetCDF, torch — fmt &amp; yaml-cpp are linked statically/header)</span>
+other = [l <span class="kw">for</span> l <span class="kw">in</span> library_names <span class="kw">if</span> <span class="kw">not</span> l.<span class="fn">startswith</span>(<span class="str">"kintera"</span>)]
+<span class="kw">return</span> kintera_non_cuda + other + kintera_cuda</pre>
+    <p>The exact ordering rule encoded here &mdash; <em>kintera non-cuda &rarr; system &rarr; kintera cuda</em> &mdash; is a tiny but real piece of build engineering: it would not even be visible without splitting the library into a CPU and a CUDA half. The moment that split exists, the order matters.</p>
+    <h3>(b) <code>--no-as-needed</code> &mdash; defeating the aggressive linker</h3>
+    <p>Modern <code>ld</code> on Linux defaults to <code>--as-needed</code>: it drops any library from the binary&rsquo;s NEEDED list if it doesn&rsquo;t directly satisfy a symbol used by the binary itself. Static initializers that <em>only</em> register things into a global table (the &sect;05 pattern from the pydisort guide) look unused to <code>ld</code>, so it strips them, the registration constructors never run, and the kernels are missing at runtime &mdash; precisely the &ldquo;builds fine, fails at runtime&rdquo; symbol bug.</p>
+<pre data-lang="Python — setup.py"><span class="com"># ubuntu system has an aggressive linker that removes unused shared libs</span>
+<span class="com"># add cuda library explicitly if built with cuda</span>
+cuda_libraries = [lib <span class="kw">for</span> lib <span class="kw">in</span> libraries <span class="kw">if</span> <span class="str">"cuda"</span> <span class="kw">in</span> lib]
+<span class="kw">if</span> cuda_libraries:
+    <span class="kw">for</span> lib <span class="kw">in</span> cuda_libraries:
+        libraries.<span class="fn">remove</span>(lib)
+    cuda_linker = (
+        [<span class="str">"-Wl,--no-as-needed"</span>]            <span class="com"># DO keep these on NEEDED even if they look "unused"</span>
+        + [<span class="str">f"-l{lib}"</span> <span class="kw">for</span> lib <span class="kw">in</span> cuda_libraries]
+        + [<span class="str">"-Wl,--as-needed"</span>]              <span class="com"># restore the default for everything that follows</span>
+    )</pre>
+    <p>The wrap-and-restore pattern is the right idiom: it applies <code>--no-as-needed</code> only to the libs that need it, not globally (which would bloat NEEDED for everyone).</p>
+    <div class="callout danger">
+      <h5>The bug this prevents, in one line</h5>
+      <p>Without the wrap, <code>import kintera</code> on a CUDA wheel succeeds, <code>kintera.thermo.someop</code> on a CUDA tensor fails with <code>RuntimeError: Could not run '...' with arguments from the 'CUDA' backend</code>. <code>nm libkintera_cuda_release.so | grep register</code> shows the registration symbols are present; <code>readelf -d libkintera.cpython-311-...so | grep NEEDED</code> shows they are <em>not</em> listed &mdash; the linker stripped them. The fix is exactly the <code>--no-as-needed</code> wrap.</p>
+    </div>
+    <h4>Debugging reflex</h4>
+<pre data-lang="Bash — link-line forensics">readelf -d kintera/kintera*.so | grep NEEDED                     <span class="com"># are the cuda libs even on the list?</span>
+nm -D -C build/lib/libkintera_cuda_release.so | grep -i register  <span class="com"># are the registrations present?</span>
+LD_DEBUG=libs python -c <span class="str">"import kintera; t = ..."</span> 2&gt;&amp;1 | grep cuda  <span class="com"># do they actually load?</span></pre>
+  </section>
+</div>
+
+<!-- ===================== PART IV ===================== -->
+<div class="part" id="p4">
+  <div class="part-label">Part IV</div>
+  <h2 class="part-title">Performance <span class="ital">portability</span>, for real</h2>
+  <p class="part-intro">In pydisort the CUDA path was a scaffold and the wheels were CPU-only. In kintera the CUDA path is shipped &mdash; built inside PyTorch&rsquo;s own manylinux image, with a CUDA math-library exclusion list pages long. This is where the brief&rsquo;s &ldquo;compilers, math libraries, drivers&rdquo; layer becomes concrete shipping infrastructure.</p>
+
+  <section class="chapter" id="c10">
+    <h2><span class="ch-num">&sect;10</span>CUDA that actually ships</h2>
+    <p>The CMake CUDA-arch policy is identical to pydisort&rsquo;s &mdash; 60-89 with version-gated 90/120 &mdash; but kintera turns it on (<code>-DCUDA=ON</code>) in the CD pipeline and the Linux wheels carry it. The keystone decision is the manylinux base image:</p>
+<pre data-lang="YAML — .github/workflows/cd.yml">CIBW_MANYLINUX_X86_64_IMAGE: docker.io/pytorch/manylinux2_28-builder:cuda12.8</pre>
+    <p>This is <strong>PyTorch&rsquo;s own manylinux builder image</strong>, with the toolchain that PyTorch itself uses to produce its torch==2.10.0 wheels, plus CUDA 12.8 pre-installed at <code>/usr/local/cuda</code>. Two reasons it is the right choice:</p>
+    <ul class="dash">
+      <li><strong>ABI alignment by construction.</strong> Whatever GCC, libstdc++, and CUDA the user&rsquo;s torch was built against, this image is the closest mirror &mdash; minimizing the &sect;07 surface.</li>
+      <li><strong>Toolkit available without you installing it.</strong> Installing a multi-GB CUDA toolkit inside a vanilla manylinux image during every CD run is wasteful and brittle; using the pre-baked one is fast and reproducible.</li>
+    </ul>
+    <div class="callout warn">
+      <h5>The CUDA-versioned wheel implication</h5>
+      <p>This wheel was built against <strong>CUDA 12.8</strong>. The CUDA runtime API is forward-compatible across minors but not always across majors; the published wheel implicitly requires a user with a CUDA 12.x torch. PyPI metadata cannot express &ldquo;CUDA 12 only&rdquo; in the wheel tag (it&rsquo;s still just <code>manylinux_2_28_x86_64</code>), so a CUDA 11 user installing this wheel will get a runtime mismatch with no helpful warning. The fix is convention: document the supported torch/CUDA matrix loudly in the README and the release notes, or follow PyTorch&rsquo;s <code>+cu128</code> local version label convention on a separate index.</p>
+    </div>
+    <h4>The <code>--extended-lambda</code> requirement</h4>
+    <p>kintera relies on host-device generic lambdas across the GPU/CPU boundary (the &sect;05 <code>DISPATCH_MACRO</code> idiom). nvcc only accepts those with two non-default flags, which the build sets globally:</p>
+<pre data-lang="CMake — cmake/compilers.cmake"><span class="kw">set</span>(CMAKE_CUDA_FLAGS <span class="str">"${CMAKE_CUDA_FLAGS} --extended-lambda --expt-relaxed-constexpr"</span>)</pre>
+    <p>Without these, you get cryptic <code>error: __host__ __device__ lambda is not supported</code> on the kernels that share code paths between CPU and GPU &mdash; one of those compiler-error-as-policy-decision moments where the obvious fix happens to also be the right one.</p>
+  </section>
+
+  <section class="chapter" id="c11">
+    <h2><span class="ch-num">&sect;11</span>Device dispatch &amp; the codegen header</h2>
+    <p>The dispatch architecture re-uses pydisort&rsquo;s ATen <code>DispatchStub</code> pattern (<code>DECLARE/DEFINE/REGISTER</code> across CPU and CUDA TUs &mdash; see pydisort guide &sect;05). What kintera adds is a small but consequential bit of state: a tunable CUDA heap size:</p>
+<pre data-lang="C++ — configure.h"><span class="kw">constexpr</span> <span class="ty">size_t</span> KINTERA_CUDA_HEAP_SIZE = <span class="num">256</span> * <span class="num">1024</span> * <span class="num">1024</span>; <span class="com">// 256 MB</span></pre>
+    <p>This sits in the configure-generated header so a build can override it without code edits. CUDA device-side allocations (<code>malloc</code>/<code>new</code> inside kernels) live in a per-device heap that defaults to 8 MB; a chemistry kernel that allocates per-thread Jacobian state for a reaction network will exhaust that quickly. Bumping to 256 MB is a pragmatic ceiling; the right place to expose it is exactly this constant.</p>
+    <div class="callout tip">
+      <h5>The performance-portability spine, summarized</h5>
+      <p>Same single source tree compiles to CPU and CUDA because three things line up: <strong>(1)</strong> <code>DISPATCH_MACRO</code> from the configure header gates <code>__host__ __device__</code>; <strong>(2)</strong> <code>--extended-lambda</code> lets generic lambdas cross the boundary; <strong>(3)</strong> ATen&rsquo;s <code>DispatchStub</code> selects between the two at runtime per tensor. This is the same pattern modern PyTorch ops follow internally &mdash; kintera reuses it deliberately.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c12">
+    <h2><span class="ch-num">&sect;12</span>The multi-module torch surface</h2>
+    <p>pydisort exposed one main pybind module. kintera exposes one Python-level module backed by <em>six</em> binding TUs, each owning a domain:</p>
+    <table class="tbl">
+      <thead><tr><th>Binding</th><th class="wide">Domain</th></tr></thead>
+      <tbody>
+        <tr><td>kintera.cpp</td><td>top-level <code>PYBIND11_MODULE(kintera, m)</code> &mdash; species, reactions, the umbrella</td></tr>
+        <tr><td>pythermo.cpp</td><td>thermodynamics: <code>ThermoX</code>, EoS, reference states, NASA9 polynomials</td></tr>
+        <tr><td>pykinetics.cpp</td><td>reaction networks, rate evaluation, Arrhenius/falloff</td></tr>
+        <tr><td>pyphotolysis.cpp</td><td>photochemistry: cross sections, actinic flux coupling</td></tr>
+        <tr><td>pysparsesolver.cpp</td><td>sparse linear algebra for stiff networks (cusolver-backed on GPU)</td></tr>
+        <tr><td>pydiffusion.cpp</td><td>molecular/eddy diffusion operators</td></tr>
+        <tr><td>pyconstants.cpp</td><td>physical constants (R, k_B, Avogadro, &hellip;)</td></tr>
+      </tbody>
+    </table>
+    <p>Splitting the binding into one TU per domain is a maintainability win &mdash; each domain&rsquo;s C++ side can grow without producing a 5,000-line <code>kintera.cpp</code>. There is a sharp edge to it though.</p>
+    <div class="callout danger">
+      <h5>The static-init order trap</h5>
+      <p>Each binding TU registers types and submodules with pybind11 at static-init time. If any two registrations have a <em>dependency</em> on each other (TU A defines a Python class that TU B&rsquo;s function signature references via <code>py::class_</code>), the C++ static initialization order across TUs is unspecified and you can get import-time crashes like <code>generic_type: type X is already registered</code> or <code>incompatible function arguments</code>. Keep one root <code>PYBIND11_MODULE</code> (<code>kintera.cpp</code>) that calls per-domain <code>bind_*(m)</code> functions in a fixed order &mdash; pydisort already follows this pattern, kintera should too &mdash; rather than letting each TU register itself.</p>
+    </div>
+    <p>The Python side composes all of this back into one logical namespace, plus a separate <code>kintera.atm2d</code> pure-Python orchestration package (solver.py, assembly.py, chemistry.py, &hellip;) that uses the C++ ops as building blocks. That is the &ldquo;high-level API on top of native&rdquo; pattern done well: the C++ side is composable primitives, the Python side is the user-facing workflow.</p>
+  </section>
+</div>
+
+<!-- ===================== PART V ===================== -->
+<div class="part" id="p5">
+  <div class="part-label">Part V</div>
+  <h2 class="part-title">Packaging &amp; <span class="ital">release management</span></h2>
+  <p class="part-intro">A CUDA wheel under one roof with a CPU wheel, four Python versions, two operating systems, four sibling Python packages to coordinate, and a release calendar that no single person controls.</p>
+
+  <section class="chapter" id="c13">
+    <h2><span class="ch-num">&sect;13</span>Wheels with the pytorch builder</h2>
+    <p>The cibuildwheel surface is the same as pydisort&rsquo;s. What changes is the <em>image</em> for Linux and the <em>preparation</em>:</p>
+<pre data-lang="YAML — .github/workflows/cd.yml (Linux)">CIBW_PLATFORM: linux
+CIBW_MANYLINUX_X86_64_IMAGE: docker.io/pytorch/manylinux2_28-builder:cuda12.8
+CIBW_BUILD: cp${{ env.PY_VERSION }}*           <span class="com"># cp310..cp313</span>
+CIBW_ARCHS: x86_64
+CIBW_SKIP: <span class="str">"*musllinux*"</span>
+CIBW_BEFORE_BUILD: |
+  <span class="com"># Activate the matrix Python explicitly INSIDE the container</span>
+  <span class="kw">export</span> PATH=<span class="str">"/opt/python/cp${{ env.PY_VERSION }}-cp${{ env.PY_VERSION }}/bin:$PATH"</span>
+  dnf install -y epel-release ...
+  yum install -y netcdf-devel                  <span class="com"># SYSTEM dep, installed inside the container</span>
+  pip install numpy <span class="str">'cmake&lt;=3.30'</span> <span class="str">'pyharp&gt;=2.2.0'</span> <span class="str">'torch==2.10.0'</span>
+  python -c <span class="str">"import pydisort; ..."</span>            <span class="com"># sibling smoke test (&sect;02)</span>
+  <span class="kw">export</span> TORCH_CMAKE_PREFIX_PATH=$(python -c <span class="str">'...'</span>)
+  cmake -B build -DCMAKE_PREFIX_PATH=<span class="str">"$TORCH_CMAKE_PREFIX_PATH"</span> -DCUDA=ON
+  cmake --build build --parallel 3</pre>
+    <p>Things to read out of this block:</p>
+    <ul class="dash">
+      <li><strong>System dep inside the container.</strong> <code>yum install netcdf-devel</code> from EPEL (after enabling PowerTools/CodeReady) &mdash; the CD container is RHEL-family, not Debian. The <em>same</em> dependency on the GitHub runner outside the container is installed via <code>apt-get</code> in CI. This OS-aware install matrix is exactly the cross-distro reality the brief points at.</li>
+      <li><strong>The <code>cmake&lt;=3.30</code> pin.</strong> CMake 3.31+ tightened policies in ways that break some FetchContent flows; pinning is the pragmatic block on accidental upgrades inside the container. Worth revisiting deliberately.</li>
+      <li><strong>PATH manipulation for the matrix Python.</strong> Unlike the macOS path (which uses the host Python directly), Linux inside the container has every <code>cp3XX</code> in <code>/opt/python/...</code>; the <code>export PATH=</code> line is what activates the right one before <code>pip install</code> and <code>cmake</code>.</li>
+      <li><strong>Free-disk-space hammer.</strong> Linux wheels for torch+CUDA inflate fast; <code>cd.yml</code> nukes <code>/usr/share/dotnet</code>, Android SDK, Haskell, and prunes Docker before building. A senior engineer recognizes this as a runner-economics pattern, not a code-quality issue.</li>
+    </ul>
+  </section>
+
+  <section class="chapter" id="c14">
+    <h2><span class="ch-num">&sect;14</span>Excluding CUDA libs by soname</h2>
+    <p>kintera&rsquo;s wheel-repair step expands the &ldquo;don&rsquo;t bundle torch&rsquo;s singletons&rdquo; principle from pydisort into a full exclusion list of CUDA math libraries, by exact soname:</p>
+<pre data-lang="YAML — .github/workflows/cd.yml">CIBW_REPAIR_WHEEL_COMMAND_LINUX: |
+  <span class="kw">export</span> LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/local/lib64:/usr/lib64:$LD_LIBRARY_PATH
+  <span class="com"># Resolve CUDA runtime libraries from torch/lib at runtime instead</span>
+  <span class="com"># of vendoring duplicate copies into the repaired wheel.</span>
+  auditwheel repair \
+    --exclude lib*.so \
+    --exclude libcusolver.so.11   --exclude libcusolver.so.12 \
+    --exclude libcusparse.so.11   --exclude libcusparse.so.12 \
+    --exclude libcublas.so.11     --exclude libcublas.so.12 \
+    --exclude libcublasLt.so.11   --exclude libcublasLt.so.12 \
+    --exclude libnvJitLink.so.11  --exclude libnvJitLink.so.12 \
+    --exclude libcudart.so.11.0   --exclude libcudart.so.12 \
+    -w {dest_dir} {wheel}</pre>
+    <p>The first line (<code>--exclude lib*.so</code>) is the global &ldquo;don&rsquo;t vendor anything by default&rdquo; from pydisort&rsquo;s playbook. The explicit per-soname lines are the new contribution: even though the wildcard already excludes <code>libcusolver.so</code>, it does <em>not</em> match the actual install-time soname <code>libcusolver.so.12</code> (the versioned symlink target), so auditwheel would happily copy it in. The explicit lines plug that hole.</p>
+    <div class="idea">
+      <p>The why in one sentence: <strong>torch ships its own copies of these CUDA math libs inside <code>torch/lib</code> for exactly the version of CUDA torch was built against</strong>, and forcing the user&rsquo;s torch and kintera to share that one set is the only way to avoid duplicate state (allocator pools, JIT caches) and version skew between the two halves of the same process.</p>
+    </div>
+    <div class="callout warn">
+      <h5>The maintenance burden you just accepted</h5>
+      <p>Every CUDA major bump &mdash; CUDA 13 will rename these (libcusolver.so.13, libcudart.so.13, etc.) &mdash; the exclude list must grow. A version of this list that derives the sonames from torch&rsquo;s actual <code>torch/lib/</code> contents (a shell loop over <code>nm</code> / <code>readelf -d</code>) would be self-maintaining; the cost is opacity. The hand-written list is honest about which libraries you have audited.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c15">
+    <h2><span class="ch-num">&sect;15</span>setuptools-scm: tag-driven versioning</h2>
+    <p>kintera does not use <code>bumpversion</code>. Its version is derived from git tags by <strong>setuptools-scm</strong>:</p>
+<pre data-lang="TOML — pyproject.toml">[build-system]
+requires = [..., <span class="str">"setuptools-scm&gt;=8"</span>, ...]
+[project]
+dynamic = [<span class="str">"version"</span>]                       <span class="com"># resolved at build time from the latest tag</span>
+[tool.setuptools_scm]
+fallback_version = <span class="str">"0.0.0"</span>                  <span class="com"># for shallow clones / no-tags edge cases</span></pre>
+    <p>The advantages over pydisort&rsquo;s <code>__init__.py</code>-edits-on-merge approach:</p>
+    <ul class="dash">
+      <li><strong>No bump commit clutter.</strong> The git history is reactions to actual changes; the version comes from the tag, not a parallel stream of bumps.</li>
+      <li><strong>Dev builds get rich versions.</strong> Building between tags yields a version like <code>2.5.1.dev3+g4a7b9c1</code> &mdash; encoding distance from the last tag and the commit SHA. Invaluable in support: <code>kintera.__version__</code> tells you exactly which commit a user ran.</li>
+      <li><strong>The build-system requires it.</strong> <code>setuptools-scm</code> is in <code>build-system.requires</code>, so any build (CI, local, CD) gets the same versioning logic &mdash; no special tooling beyond <code>pip</code>.</li>
+    </ul>
+    <p>The fallback_version is a real production concession: shallow clones (the common case in CI without <code>fetch-depth: 0</code>) lack tags and would otherwise fail. kintera&rsquo;s workflows correctly set <code>fetch-depth: 0</code>, but the fallback keeps a half-configured CI from producing a corrupt wheel.</p>
+  </section>
+
+  <section class="chapter" id="c16">
+    <h2><span class="ch-num">&sect;16</span>Data, YAML &amp; the wheel payload</h2>
+    <p>kintera is the first repo in the stack with non-trivial <em>data</em> shipping in its wheel. Reactions, kinetics, photolysis cross-sections, NASA9 thermodynamic polynomials &mdash; all live as text data the C++ code parses at runtime.</p>
+<pre data-lang="TOML — pyproject.toml">[tool.setuptools.package-data]
+<span class="str">"kintera"</span> = [
+  <span class="str">"kintera/**/*"</span>,         <span class="com"># source tree mirror (chem tables, YAML inputs)</span>
+  <span class="str">"data/*.dat"</span>,            <span class="com"># nasa9.dat — NASA polynomial thermo data</span>
+  <span class="str">"lib/*.so"</span>, <span class="str">"lib/*.dylib"</span>,  <span class="com"># the native libs (the §11 pydisort strategy)</span>
+  <span class="str">"*.pyi"</span>, <span class="str">"py.typed"</span>,       <span class="com"># PEP 561 typing payload (1857 lines, see §20)</span>
+]</pre>
+    <p>The implications for support:</p>
+    <ul class="dash">
+      <li><strong>Locating the data at runtime.</strong> Anywhere kintera reads <code>nasa9.dat</code> it must use <code>importlib.resources</code> (or torch&rsquo;s equivalent) rather than relative paths or the baked-in <code>KINTERA_ROOT_DIR</code> from &sect;05 &mdash; the latter is the source tree, which does not exist on the user&rsquo;s machine after install. This is a real gotcha that the configure header makes easy to fall into.</li>
+      <li><strong>YAML config as a release surface.</strong> Users write <code>chapman_cycle.yaml</code>-style reaction networks (the repo has examples). The yaml-cpp version that ingests them is a frozen release surface: bumping yaml-cpp can change anchor/alias semantics and silently alter user inputs. Pin tightly and document.</li>
+      <li><strong>Data is a SemVer surface.</strong> Changing the contents of <code>nasa9.dat</code> (or its parsing) changes numerical results. That is at least a minor bump per &sect;19&rsquo;s label scheme &mdash; an editorial discipline that matters for reproducibility.</li>
+    </ul>
+  </section>
+</div>
+
+<!-- ===================== PART VI ===================== -->
+<div class="part" id="p6">
+  <div class="part-label">Part VI</div>
+  <h2 class="part-title">CI / CD &amp; <span class="ital">release</span></h2>
+  <p class="part-intro">Three workflows, more rigorous than pydisort&rsquo;s, each one a clear answer to a question: what gates merge, what produces wheels, and what decides their version.</p>
+
+  <section class="chapter" id="c17">
+    <h2><span class="ch-num">&sect;17</span>CI with system &amp; sibling deps</h2>
+    <p>kintera&rsquo;s <code>ci.yml</code> looks like pydisort&rsquo;s &mdash; pre-commit gate then a build-and-test matrix &mdash; but with three real additions:</p>
+    <div class="diagram">on: pull_request / push(main)
+   │
+   ├─ job: pre-commit          (ubuntu) ── cpplint, cppcheck, clang-format==20.1.4
+   │        │  └─ actions/cache: ~/.cache/pre-commit  ← cached across runs
+   │        │ needs: ✓
+   ├─ job: build-and-test      matrix = { ubuntu-latest, macOS-latest } × py3.11
+   │        ├─ pip install torch==2.10.0  +  pyharp>=2.2.0       ← SIBLING preinstall
+   │        ├─ apt-get install libnetcdf-dev  OR  brew install netcdf  ← SYSTEM dep per OS
+   │        ├─ cmake -B build -DNETCDF=ON -DBUILD_TESTS=ON
+   │        ├─ cmake --build build --parallel 4 (linux) / 3 (mac)  ← memory-aware
+   │        ├─ pip install --no-build-isolation --no-deps .
+   │        └─ ctest --output-on-failure    ← no excludes; clean test suite</div>
+    <table class="tbl">
+      <thead><tr><th>Decision</th><th class="wide">Read</th></tr></thead>
+      <tbody>
+        <tr><td>pre-commit cache</td><td><span class="win">improvement over pydisort</span> &mdash; <code>actions/cache</code> keyed by hash of the config; pre-commit envs survive across runs</td></tr>
+        <tr><td>clang-format pin</td><td><span class="win">good</span> &mdash; <code>clang-format==20.1.4</code> exact pin; otherwise format drift causes false PRs on every patch update</td></tr>
+        <tr><td>NetCDF per-OS</td><td><span class="win">necessary</span> &mdash; <code>apt-get</code> on Linux, <code>brew</code> on macOS; cibuildwheel adds yum-in-container (&sect;13)</td></tr>
+        <tr><td>parallel 4 vs 3</td><td><span class="win">memory-aware</span> &mdash; macOS runners have less RAM; saturating with 4 parallel torch-flavored compiles OOMs the runner</td></tr>
+        <tr><td>no <code>-E</code> excludes</td><td><span class="win">cleaner than pydisort</span> &mdash; the test suite runs in full; no permanently-skipped tests</td></tr>
+        <tr><td>py3.11 only</td><td><span class="lose">gap, same as pydisort</span> &mdash; CD ships 3.10&ndash;3.13; CI tests one</td></tr>
+        <tr><td>no GPU runner</td><td><span class="lose">gap</span> &mdash; the CUDA wheel that CD will ship has no CI test path</td></tr>
+        <tr><td>fail-fast: true</td><td><span class="lose">tradeoff</span> &mdash; same caveat as pydisort: one OS fails &rarr; both cancelled</td></tr>
+      </tbody>
+    </table>
+    <h4>Improve</h4>
+    <ul class="dash">
+      <li><strong>Test against multiple pyharp versions</strong> in a nightly matrix &mdash; the <code>&gt;=2.2.0</code> range pin (&sect;06) needs an empirical floor.</li>
+      <li>Add a <strong>self-hosted GPU runner</strong> (or cloud-GPU) for at least one matrix entry so CUDA changes don&rsquo;t ship without CI coverage.</li>
+      <li>Same wheel-smoke job recommended in the pydisort guide: build the wheel, install it into a clean venv, <code>python -c "import kintera"</code>. This is the test that would catch a broken RPATH or a missing exclude before users do.</li>
+    </ul>
+  </section>
+
+  <section class="chapter" id="c18">
+    <h2><span class="ch-num">&sect;18</span>CD: tag-input, GPU pipeline</h2>
+    <p>kintera&rsquo;s <code>cd.yml</code> is named <em>release.yml</em> but I&rsquo;ll refer to the publish workflow by its content: <code>workflow_dispatch</code> with a required <strong>tag</strong> input. That decision is the difference from pydisort, where the dispatch took a branch:</p>
+    <div class="diagram">workflow_dispatch (tag: REQUIRED, build_os ∈ {Both, MacOS, Ubuntu})
+   │  concurrency: publish-pypi-<tag>, cancel-in-progress: false  ← unlike pydisort
+   ├─ build-macos    matrix py3.10–3.13  → cibuildwheel → upload artifact
+   ├─ build-linux    matrix py3.10–3.13  → cibuildwheel (in pytorch image, CUDA on)
+   └─ publish-pypi   needs both; if: always()  → pypa/gh-action-pypi-publish</div>
+    <p>The structural improvements over pydisort:</p>
+    <ul class="dash">
+      <li><strong>You publish a tag, not a branch.</strong> <code>actions/checkout@v5 with: ref: ${{ github.event.inputs.tag }}</code>. This guarantees the wheels are built from an immutable, named point in history &mdash; the foundation of reproducible release artifacts. pydisort&rsquo;s branch-input approach trusts the operator not to dispatch from a moving target; kintera makes the target immovable.</li>
+      <li><strong><code>cancel-in-progress: false</code>.</strong> A second dispatch for the <em>same</em> tag doesn&rsquo;t cancel the first &mdash; once you have started uploading wheels, you finish; PyPI rejects duplicate version uploads anyway, so cancelling mid-flight is worse than completing.</li>
+      <li><strong>CUDA wheels on Linux.</strong> The Linux builder turns CUDA on (<code>-DCUDA=ON</code>), the macOS builder does not (no native CUDA on Apple Silicon). So macOS arm64 ships CPU, Linux x86_64 ships CUDA + CPU dispatch in one wheel. The user gets the right artifact from one PyPI install.</li>
+    </ul>
+    <div class="callout tip">
+      <h5>OIDC opportunity, same as pydisort</h5>
+      <p>The publish job already declares <code>permissions: id-token: write</code> but still authenticates with <code>PYPI_API_TOKEN</code>. The same one-line upgrade to Trusted Publishing applies. Across three workspace repos using the same pattern, doing this once is a multiplier.</p>
+    </div>
+    <h4>The gap the brief would surface</h4>
+    <p>No pre-publish wheel smoke test. The wheels go from <code>upload-artifact</code> to <code>aggregate</code> to <code>pypi-publish</code> without ever being installed and imported in a clean Python in this workflow. Given the layered RPATH story (&sect;04), this is the single highest-leverage CD improvement: <code>pip install dist/kintera-*.whl</code> into a clean venv with only the declared runtime deps, <code>python -c "import kintera"</code>, smoke-test a function, and only then publish.</p>
+  </section>
+
+  <section class="chapter" id="c19">
+    <h2><span class="ch-num">&sect;19</span>Release: label-driven SemVer + GitHub App</h2>
+    <p>kintera&rsquo;s release automation is the most sophisticated piece of the workspace stack. <code>release.yml</code> &mdash; misleadingly named, but content-accurate as &ldquo;tag on PR merge&rdquo; &mdash; reads SemVer intent from <strong>PR labels</strong> and authenticates as a <strong>GitHub App</strong>.</p>
+<pre data-lang="YAML — .github/workflows/release.yml"><span class="com"># 1) Generate a short-lived token from a GitHub App (not a PAT, not the default GITHUB_TOKEN)</span>
+- uses: actions/create-github-app-token@v2
+  with:
+    app-id:      ${{ vars.BUMP_BOT_APP_ID }}
+    private-key: ${{ secrets.BUMP_BOT_PRIVATE_KEY }}
+
+<span class="com"># 2) Read labels, classify the bump (default: patch)</span>
+LABELS_JSON: ${{ toJson(github.event.pull_request.labels) }}
+BUMP_TYPE=$(python3 - &lt;&lt;<span class="str">'PY'</span>
+labels = {item[<span class="str">"name"</span>] <span class="kw">for</span> item <span class="kw">in</span> json.<span class="fn">loads</span>(os.environ[<span class="str">"LABELS_JSON"</span>])}
+selected = [n.<span class="fn">split</span>(<span class="str">":"</span>, <span class="num">1</span>)[<span class="num">1</span>] <span class="kw">for</span> n <span class="kw">in</span> (<span class="str">"release:major"</span>, <span class="str">"release:minor"</span>, <span class="str">"release:patch"</span>) <span class="kw">if</span> n <span class="kw">in</span> labels]
+<span class="kw">if</span> <span class="fn">len</span>(selected) &gt; <span class="num">1</span>: <span class="kw">raise</span> SystemExit(<span class="str">f"multiple release labels: {selected}"</span>)
+<span class="fn">print</span>(selected[<span class="num">0</span>] <span class="kw">if</span> selected <span class="kw">else</span> <span class="str">"patch"</span>)
+PY)
+
+<span class="com"># 3) Compute the next tag from `git describe --tags --abbrev=0`</span>
+LATEST=$(git describe --tags --abbrev=0 || echo <span class="str">"v0.0.0"</span>)
+<span class="kw">case</span> <span class="str">"$BUMP_TYPE"</span> <span class="kw">in</span>
+  major) MAJOR=$((MAJOR+<span class="num">1</span>)); MINOR=<span class="num">0</span>; PATCH=<span class="num">0</span> ;;
+  minor) MINOR=$((MINOR+<span class="num">1</span>)); PATCH=<span class="num">0</span> ;;
+  patch) PATCH=$((PATCH+<span class="num">1</span>)) ;;
+<span class="kw">esac</span>
+
+<span class="com"># 4) Race-safe: if the tag exists remotely, bump patch and try again</span>
+<span class="kw">while</span> git ls-remote --tags origin <span class="str">"refs/tags/${NEXT_TAG}"</span> | grep -q ...; <span class="kw">do</span>
+  PATCH=$((PATCH+<span class="num">1</span>))
+<span class="kw">done</span>
+
+<span class="com"># 5) Tag, push, and create a GitHub release with auto-generated notes</span>
+git tag <span class="str">"$TAG"</span>; git push origin <span class="str">"$TAG"</span>
+gh release create <span class="str">"$TAG"</span> --title <span class="str">"Release $TAG"</span> --generate-notes</pre>
+    <h4>Each line earns its keep</h4>
+    <table class="tbl">
+      <thead><tr><th>Step</th><th class="wide">Why it&rsquo;s done this way</th></tr></thead>
+      <tbody>
+        <tr><td>GitHub App token</td><td>scoped, short-lived, identifiable in audit logs as <code>bump-bot[app]</code>; avoids using <code>GITHUB_TOKEN</code> (which cannot trigger downstream workflows from a tag push) and avoids long-lived PATs</td></tr>
+        <tr><td>label-driven bump</td><td>SemVer intent stays attached to the PR that introduced the change; defaults to <code>patch</code> so no missing label is fail-closed</td></tr>
+        <tr><td>multi-label rejection</td><td>fail-loud if a PR carries <code>release:major</code> AND <code>release:minor</code>; the operator must decide</td></tr>
+        <tr><td>existing-tag short-circuit</td><td>if HEAD already has a <code>v*</code> tag (e.g. a hotfix tagged manually), skip the bump &mdash; avoids double-tagging</td></tr>
+        <tr><td>remote-tag race loop</td><td>if two PRs merge in quick succession, the second discovers its computed tag already exists and bumps again; idempotent</td></tr>
+        <tr><td>--generate-notes</td><td>GitHub fills the body from PRs since the previous tag; release notes write themselves</td></tr>
+      </tbody>
+    </table>
+    <div class="idea">
+      <p>This is one of the cleanest small examples of release engineering you will see in an open-source repo: it encodes semantic intent into a human-friendly artifact (labels), authenticates with the right primitive (an App, not a PAT), handles concurrent merges idempotently, and decouples the <em>tag</em> from the <em>publish</em> so a human still pulls the trigger in &sect;18. The only thing missing is for tag-creation to automatically dispatch the publish workflow &mdash; the same loop-closing recommendation as pydisort.</p>
+    </div>
+  </section>
+</div>
+
+<!-- ===================== PART VII ===================== -->
+<div class="part" id="p7">
+  <div class="part-label">Part VII</div>
+  <h2 class="part-title">Quality, docs, debugging, <span class="ital">operations</span></h2>
+  <p class="part-intro">The disciplines that survive contact with users. kintera&rsquo;s investments here &mdash; a documented stub-files architecture, a real Docker dev env &mdash; map directly to the brief&rsquo;s &ldquo;developer productivity&rdquo; and &ldquo;cloud-hosted developer environments&rdquo; bullets.</p>
+
+  <section class="chapter" id="c20">
+    <h2><span class="ch-num">&sect;20</span>The stub-files architecture</h2>
+    <p>kintera ships a deliberate separation between <em>implementation</em> (C++ pybind code) and <em>API documentation</em> (a 1,857-line <code>kintera.pyi</code>) &mdash; documented as a first-class architectural decision in <code>ARCHITECTURE.md</code>. The shape:</p>
+    <div class="diagram">python/
+├── csrc/                       C++ pybind11 — IMPLEMENTATION ONLY
+│   ├── kintera.cpp                  (root module, calls bind_*)
+│   ├── pythermo.cpp                 (ThermoX, EoS, NASA9)
+│   ├── pykinetics.cpp               (reaction networks)
+│   ├── pyphotolysis.cpp             (photochem)
+│   ├── pysparsesolver.cpp           (cusolver/cusparse-backed)
+│   ├── pyconstants.cpp              (physical constants)
+│   └── pydiffusion.cpp              (diffusion ops)
+│
+├── kintera.pyi    ←  TYPE INFO + DOCSTRINGS for IDE/mypy   (1857 lines)
+├── py.typed       ←  PEP 561 marker
+├── STUB_FILES.md  ←  contributor guide
+├── __init__.py    ←  from .kintera import *
+└── atm2d/         ←  pure-Python orchestration (solver, assembly, chemistry, ...)</div>
+    <p>The point of the split: pybind11 type signatures and docstrings, written in C++, are <em>worse</em> at every job than a Python stub &mdash; IDEs only partially read them, mypy doesn&rsquo;t, refactor tooling can&rsquo;t. A hand-maintained <code>.pyi</code> with <code>@overload</code>s and proper docstrings restores all of those.</p>
+    <table class="tbl">
+      <thead><tr><th>Property</th><th class="wide">Before (docs in C++)</th><th>After (stub file)</th></tr></thead>
+      <tbody>
+        <tr><td>IDE autocomplete</td><td><span class="lose">partial</span></td><td><span class="win">complete</span></td></tr>
+        <tr><td>mypy / pyright</td><td><span class="lose">no</span></td><td><span class="win">yes</span></td></tr>
+        <tr><td>Update doc</td><td>edit C++, recompile, rebuild wheel</td><td>edit text, ship</td></tr>
+        <tr><td>Runtime cost</td><td>n/a</td><td>none &mdash; stubs are never loaded</td></tr>
+      </tbody>
+    </table>
+    <div class="callout warn">
+      <h5>The drift you must own</h5>
+      <p>A 1,857-line hand-maintained <code>.pyi</code> describing a six-TU pybind module <em>will</em> drift from the actual exported signatures. The same fix recommended for pydisort applies more loudly here: run <code>pybind11-stubgen</code> in CI and diff against the committed stub. <code>STUB_FILES.md</code> mentions a <code>validate_stub_file.py</code> &mdash; that script should be part of the gate, not optional.</p>
+    </div>
+    <p><code>mypy.ini</code> exists in-tree, which means the project intends to check itself. Wiring <code>mypy</code> into pre-commit (or CI) would close the loop &mdash; today the stubs are shipped for users but not <em>verified</em> for the project.</p>
+  </section>
+
+  <section class="chapter" id="c21">
+    <h2><span class="ch-num">&sect;21</span>Docker dev env &amp; static gates</h2>
+    <p>The brief asks for &ldquo;cloud-hosted developer environments&rdquo; specifically. kintera is the first repo in the stack with a real one &mdash; a Docker Compose service intended to be the canonical contributor environment:</p>
+<pre data-lang="YAML — docker-compose.yaml">services:
+  dev:
+    image: ${USER}/kintera:dev
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        CUDA_VER: <span class="str">"12.9.1"</span>            <span class="com"># pinned CUDA in the image</span>
+        UBUNTU_VER: <span class="str">"22.04"</span>
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]      <span class="com"># needs Compose v2 + NVIDIA Container Toolkit</span>
+    volumes:
+      - ./:/workspace
+      - ${HOME}/data/:/data
+      - ${HOME}/.gitconfig:/host/.gitconfig:ro
+    working_dir: /workspace
+    ports:
+      - <span class="str">"8888:8888"</span>                    <span class="com"># Jupyter</span>
+    tty: true
+    stdin_open: true</pre>
+    <p>What makes this a <em>useful</em> dev env, not just a Dockerfile:</p>
+    <ul class="dash">
+      <li><strong>GPU passthrough as a first-class concern.</strong> <code>capabilities: [gpu]</code> in <code>deploy.resources.reservations.devices</code> &mdash; the modern Compose-v2 way to request GPUs (the old <code>runtime: nvidia</code> still works but is less portable). This is the single line that makes &ldquo;test the CUDA build before pushing&rdquo; a local possibility, not a CI-only luxury.</li>
+      <li><strong>Volumes that respect contributor identity.</strong> The host&rsquo;s <code>.gitconfig</code> is mounted read-only so commits inside the container carry the right author. Source is bind-mounted so edits in your editor land instantly.</li>
+      <li><strong>Versions baked into the image.</strong> <code>CUDA_VER</code> and <code>UBUNTU_VER</code> are build args, so the image is reproducible &mdash; you tag a Docker image alongside a kintera release if you want a frozen environment.</li>
+    </ul>
+    <div class="callout warn">
+      <h5>The gap with CI/CD</h5>
+      <p>The dev image is CUDA 12.9.1 on Ubuntu 22.04; CD builds inside <code>pytorch/manylinux2_28-builder:cuda12.8</code> (RHEL family). Two different toolchains with two different glibcs. &ldquo;Works in Docker&rdquo; does not equal &ldquo;will pass CD.&rdquo; A senior engineer would harmonize: either the dev image switches to the pytorch builder, or there is a second &ldquo;manylinux dev&rdquo; service in compose. Reproducibility is one image used by everyone, not three.</p>
+    </div>
+    <h4>Static gates</h4>
+    <p>kintera&rsquo;s <code>.pre-commit-config.yaml</code> is lighter than pydisort&rsquo;s &mdash; trailing whitespace, EOF, check-yaml, plus clang-format Google-style. The <em>cppcheck/cpplint</em> from pydisort&rsquo;s config are absent locally but installed by CI as part of pre-commit&rsquo;s side install (<code>pip install cpplint cppcheck</code> in <code>ci.yml</code>). Pulling them back into <code>pre-commit-config.yaml</code> would mean contributors get the same warnings locally as in CI.</p>
+  </section>
+
+  <section class="chapter" id="c22">
+    <h2><span class="ch-num">&sect;22</span>Debugging across four libs</h2>
+    <p>The pydisort guide&rsquo;s native-debugging toolkit applies verbatim. What changes in kintera is the <em>length of the chain</em> you have to walk. The triage commands every senior engineer should have at fingertip:</p>
+<pre data-lang="Bash — kintera-specific triage"><span class="com"># 1) The four-version sanity check (find ABI/version drift in one line)</span>
+python -c <span class="str">"import torch, pydisort, pyharp, kintera; print(*(m.__version__ for m in (torch, pydisort, pyharp, kintera)))"</span>
+
+<span class="com"># 2) Confirm the ABI is consistent across all native modules</span>
+<span class="kw">for</span> mod in torch pydisort pyharp kintera; <span class="kw">do</span>
+  echo <span class="str">"== $mod =="</span>
+  python -c <span class="str">"import $mod, os; d=os.path.dirname($mod.__file__); print(d)"</span> | \
+    xargs -I{} sh -c <span class="str">'nm -D -C {}/*.so 2>/dev/null | grep -c __cxx11'</span>
+<span class="kw">done</span>
+
+<span class="com"># 3) What does the layered RPATH actually find?</span>
+patchelf --print-rpath $(python -c <span class="str">"import kintera, os; print(os.path.dirname(kintera.__file__))"</span>)/kintera*.so
+ldd      $(python -c <span class="str">"import kintera, os; print(os.path.dirname(kintera.__file__))"</span>)/kintera*.so \
+  | grep -E <span class="str">'(disort|harp|torch|cuda|netcdf|not found)'</span>
+
+<span class="com"># 4) Are the CUDA libs being kept on NEEDED (not stripped by --as-needed)?</span>
+readelf -d $(python -c <span class="str">"..."</span>)/kintera*.so | grep -E <span class="str">'NEEDED.*(cusolver|cusparse|cublas|cudart|kintera_cuda)'</span></pre>
+    <div class="callout danger">
+      <h5>The three new failure modes kintera introduces</h5>
+      <p><strong>(a) Sibling-version drift:</strong> kintera 2.5.0 in a venv with pyharp 2.4.0 that imports against torch 2.11 &mdash; <code>undefined symbol</code> referencing a torch-internal namespace. Triage by the four-version line above. <strong>(b) System NetCDF missing:</strong> a user installs the wheel on a fresh box without <code>libnetcdf</code>; <code>ldd</code> shows <code>libnetcdf.so.* =&gt; not found</code>. <strong>(c) CUDA host without torch&rsquo;s CUDA libs:</strong> user has a GPU but installed the CPU torch; <code>libcusolver.so.12 =&gt; not found</code> at first CUDA call. The exclude list (&sect;14) is what makes this case visible &mdash; without it you&rsquo;d get a duplicate-cusolver crash instead.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c23">
+    <h2><span class="ch-num">&sect;23</span>Supply chain &amp; multi-team coordination</h2>
+    <p>Three operational concerns unique to a layered stack of separately-released native packages.</p>
+    <h4>The release-coordination calendar</h4>
+    <p>kintera, pyharp, pydisort, and torch all release independently. A naive workflow lets each repo bump its torch pin separately, producing a window where kintera 2.5.0 wants torch 2.10.0 but pyharp 2.3.0 already wants torch 2.11.0 &mdash; an impossible install. Two operational moves close this:</p>
+    <ul class="dash">
+      <li><strong>One workspace-wide torch pin file</strong> (a shared constant or a git submodule) so all four repos bump in lockstep.</li>
+      <li><strong>An integration test repo</strong> that pip-installs the four latest releases together on every nightly and runs the kintera test suite &mdash; the earliest possible discovery of a four-way drift.</li>
+    </ul>
+    <h4>Supply-chain hardening, prioritized</h4>
+    <table class="tbl">
+      <thead><tr><th>Move</th><th class="wide">Win</th><th>Effort</th></tr></thead>
+      <tbody>
+        <tr><td>OIDC Trusted Publishing</td><td>delete the long-lived PyPI token; permission already declared</td><td><span class="win">low</span></td></tr>
+        <tr><td>SHA-pinned FetchContent</td><td>tag-immutability for fmt/yaml-cpp/gtest</td><td><span class="win">low</span></td></tr>
+        <tr><td>SBOM generation</td><td>per-wheel attestations of the dependency graph</td><td>medium</td></tr>
+        <tr><td>Provenance attestations</td><td>cryptographic proof the wheel came from this CD run</td><td>low (the publish action supports it)</td></tr>
+        <tr><td>Workspace-pinned torch</td><td>kills the cross-repo drift window above</td><td>medium</td></tr>
+      </tbody>
+    </table>
+    <h4>The &ldquo;many contributing teams&rdquo; bullet, made concrete</h4>
+    <p>kintera has two author emails on the README and depends on artifacts from at least three other teams (pyharp/pydisort/torch). The brief asks for software engineering &ldquo;with many contributing teams&rdquo;; kintera is a textbook size for that. The practices that actually matter at this scale, beyond the technical: write down what <em>your</em> stable public surface is (so consumers know what they can rely on), label PRs honestly per the &sect;19 SemVer scheme, and treat sibling releases as <em>your</em> trigger events &mdash; subscribe to pyharp&rsquo;s release feed, regenerate stubs, run goldens, react before users do.</p>
+  </section>
+</div>
+
+<!-- ===================== PART VIII ===================== -->
+<div class="part" id="p8">
+  <div class="part-label">Part VIII</div>
+  <h2 class="part-title">Synthesis: <span class="ital">playbooks &amp; trees</span></h2>
+  <p class="part-intro">The reference layer, kintera-flavored. The on-call index, the decision points compressed, the glossary you point new teammates at.</p>
+
+  <section class="chapter" id="c24">
+    <h2><span class="ch-num">&sect;24</span>Failure-mode catalog</h2>
+    <table class="tbl">
+      <thead><tr><th>Symptom</th><th>Likely cause</th><th class="wide">First move</th><th>&sect;</th></tr></thead>
+      <tbody>
+        <tr><td>FindDisort/FindHarp fails in CMake</td><td>sibling not in same Python</td><td><code>which python</code>; <code>python -c "import pydisort"</code> in the same shell</td><td>03</td></tr>
+        <tr><td>cannot open libnetcdf.so</td><td>system dep missing</td><td><code>apt/brew/yum</code> install netcdf-devel; document in README</td><td>17</td></tr>
+        <tr><td>cannot open libcusolver.so.12</td><td>torch CUDA libs absent</td><td>confirm a CUDA torch is installed (not the CPU wheel)</td><td>14</td></tr>
+        <tr><td>undefined symbol w/ pydisort:: or harp::</td><td>sibling ABI drift</td><td>four-version check (&sect;22); verify cxx11-ABI uniform across all</td><td>07,22</td></tr>
+        <tr><td>Could not run for CUDA backend</td><td>CUDA reg lib stripped by linker</td><td>verify <code>--no-as-needed</code> wrap; <code>readelf -d</code> shows NEEDED</td><td>09</td></tr>
+        <tr><td>no kernel image for device</td><td>arch absent from fatbin</td><td><code>cuobjdump --list-elf</code>; add arch or PTX tier</td><td>10</td></tr>
+        <tr><td>RuntimeError on cusolver/cusparse op</td><td>CUDA major mismatch (torch CUDA 11, kintera built 12)</td><td>tighten the README CUDA-version matrix; align torch wheel</td><td>14</td></tr>
+        <tr><td>generic_type: ... already registered</td><td>multi-TU pybind static init order</td><td>centralize registrations in root module (&sect;12)</td><td>12</td></tr>
+        <tr><td>read nasa9.dat: no such file</td><td>used <code>KINTERA_ROOT_DIR</code> in shipped code</td><td>switch to <code>importlib.resources</code></td><td>05,16</td></tr>
+        <tr><td>CI green, wheel imports fail</td><td>no wheel-smoke job</td><td>add clean-venv install test before publish</td><td>18</td></tr>
+        <tr><td>release got patched, should have been minor</td><td>missing PR label</td><td>add <code>release:minor</code>, retag if appropriate</td><td>19</td></tr>
+        <tr><td>release.yml fails to push tag</td><td>App token scope</td><td>verify App has <code>contents: write</code>, not relying on default GITHUB_TOKEN</td><td>19</td></tr>
+        <tr><td>Docker dev works, CD fails</td><td>image divergence</td><td>switch dev image to pytorch&rsquo;s builder, or test in both</td><td>21</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="chapter" id="c25">
+    <h2><span class="ch-num">&sect;25</span>Decision trees</h2>
+    <h3>Depending on a sibling native package</h3>
+    <div class="diagram">Same monorepo?         → add_subdirectory; one build
+Public PyPI release?   → this pattern (FindFoo.cmake importing the python module,
+                          build-system.requires, RPATH to $ORIGIN/../<sibling>/lib)
+Internal pip index?    → same as PyPI; verify the index URL in CI
+C++ system install?    → classical find_package(Foo CONFIG); add to README install steps</div>
+    <h3>Vendor vs. exclude &mdash; for CUDA math libs</h3>
+    <div class="diagram">torch ships its own copy in torch/lib?
+   ├─ YES → EXCLUDE by exact soname (libcusolver.so.12, libcusparse.so.12, ...)
+   │        resolve at runtime via the user's torch
+   └─ NO  → would need to vendor; this is the rare path
+For a NEW major (CUDA 13):
+   → add libcusolver.so.13, libcudart.so.13, ... to the exclude list per &sect;14
+   → bump the README's required CUDA range</div>
+    <h3>SemVer label policy</h3>
+    <div class="diagram">PR adds public Python or C++ API (new class, new function, new keyword)
+   → release:minor
+PR removes/renames anything users could be calling, OR breaks numerical contracts
+   → release:major   (and document the migration in the PR body)
+PR fixes a bug, refactors, internal-only changes
+   → release:patch   (default; can be omitted)
+PR bumps a sibling pin (pyharp, torch)
+   → at LEAST release:minor (it changes installability constraints)</div>
+    <h3>&ldquo;Build fails / import fails&rdquo; triage</h3>
+    <div class="diagram">Stage 1 CMake fails?
+   ├─ FindDisort/FindHarp can't find header → siblings not pip-installed in this Python  → &sect;03
+   ├─ undefined NetCDF symbol             → system dep missing                          → &sect;17
+   └─ nvcc unsupported flag               → --extended-lambda missing                  → &sect;10
+Stage 2 build fails?
+   ├─ linker error in cuda symbols        → library ORDER (consumer before provider)   → &sect;09
+   └─ undefined cuda kernel reg           → --no-as-needed wrap missing                → &sect;09
+Import fails on the user's machine?
+   ├─ libnetcdf.so not found              → README install step missing               → &sect;17
+   ├─ libcusolver.so.12 not found         → user has CPU torch; need CUDA torch       → &sect;14
+   └─ __cxx11 symbol mismatch             → ABI / version drift across pydisort/pyharp/torch  → &sect;07</div>
+  </section>
+
+  <section class="chapter" id="c26">
+    <h2><span class="ch-num">&sect;26</span>Glossary &amp; file map</h2>
+    <h4>Glossary (kintera-additions)</h4>
+    <table class="tbl">
+      <thead><tr><th>Term</th><th class="wide">Meaning in this stack</th></tr></thead>
+      <tbody>
+        <tr><td>sibling Python package</td><td>another pip-installable native extension living in the same site-packages as you (pydisort, pyharp). Found via Python import inside CMake.</td></tr>
+        <tr><td>--as-needed / --no-as-needed</td><td>GNU ld flag controlling whether libraries listed but not directly used are stripped from NEEDED. Wrap CUDA libs to keep static registrations alive.</td></tr>
+        <tr><td>pytorch/manylinux2_28-builder</td><td>PyTorch&rsquo;s own manylinux container image; using it for kintera CD aligns toolchain &amp; CUDA with torch&rsquo;s wheels.</td></tr>
+        <tr><td>configure_file</td><td>CMake template substitution producing <code>configure.h</code> at configure time &mdash; how kintera turns CMake decisions into compile-time C++ constants.</td></tr>
+        <tr><td>DISPATCH_MACRO</td><td>kintera&rsquo;s host-device portability macro: expands to <code>__host__ __device__</code> under nvcc, nothing otherwise. The performance-portability spine.</td></tr>
+        <tr><td>setuptools-scm</td><td>builds <code>__version__</code> from git tags; gives <code>X.Y.Z.devN+gSHA</code> for between-tag builds.</td></tr>
+        <tr><td>GitHub App token</td><td>short-lived auth credential issued by an installed App; scoped &amp; auditable; required for tag pushes that should trigger downstream workflows.</td></tr>
+        <tr><td>release:major/minor/patch labels</td><td>PR labels that drive the SemVer bump in <code>release.yml</code>; the human-readable semantic intent of a change.</td></tr>
+        <tr><td>auditwheel exclude</td><td>tells auditwheel <em>not</em> to copy a soname into the wheel; kintera excludes every CUDA math lib torch ships.</td></tr>
+        <tr><td>NETCDFOUTPUT / NO_NETCDFOUTPUT</td><td>mutually-exclusive feature defines from <code>configure.h</code>; gate NetCDF output paths.</td></tr>
+        <tr><td>pyharp.libs / pyharp/.dylibs</td><td>auditwheel/delocate&rsquo;s private vendor folders inside the pyharp wheel; kintera reaches into them via <code>link_directories</code>.</td></tr>
+      </tbody>
+    </table>
+    <h4>File map (kintera/)</h4>
+    <table class="tbl">
+      <thead><tr><th>Path</th><th class="wide">Role</th></tr></thead>
+      <tbody>
+        <tr><td>CMakeLists.txt</td><td>Stage 1 entry; ABI detection, CUDA arch policy, find_package Disort/Harp/Torch</td></tr>
+        <tr><td>setup.py</td><td>Stage 2; six-RPATH link args, library ordering, <code>--no-as-needed</code> wrap, AVX defines</td></tr>
+        <tr><td>pyproject.toml</td><td>build-system requires pyharp; setuptools-scm version; package-data (data/, lib/, .pyi)</td></tr>
+        <tr><td>configure.h.in</td><td>template for compile-time constants: NetCDF/CUDA flags, dispatch macro, root paths</td></tr>
+        <tr><td>cmake/modules/FindDisort.cmake</td><td>locate pydisort by Python import &rarr; lib/include dirs</td></tr>
+        <tr><td>cmake/modules/FindHarp.cmake</td><td>same for pyharp; plus link_directories to its auditwheel folder</td></tr>
+        <tr><td>cmake/modules/FindTorch.cmake</td><td>torch lookup, cxx11-ABI propagation target (shared lineage with pydisort/pyharp)</td></tr>
+        <tr><td>cmake/compilers.cmake</td><td>--extended-lambda, --expt-relaxed-constexpr, per-compiler optimization flags</td></tr>
+        <tr><td>src/{thermo,kinetics,photochem,diffusion,math,vapors,utils,units}/</td><td>the domain libraries linked into libkintera_release.so</td></tr>
+        <tr><td>python/csrc/*.cpp</td><td>six-binding pybind layer (kintera, pythermo, pykinetics, pyphotolysis, pysparsesolver, pyconstants, pydiffusion)</td></tr>
+        <tr><td>python/kintera.pyi (+ py.typed, STUB_FILES.md)</td><td>typed API documentation, separation from C++ impl</td></tr>
+        <tr><td>python/atm2d/</td><td>pure-Python orchestration on top of the C++ ops</td></tr>
+        <tr><td>data/nasa9.dat &middot; tests/*.yaml</td><td>shipped data and YAML chemistry configs</td></tr>
+        <tr><td>docker/ &middot; docker-compose.yaml</td><td>GPU-capable dev container with Jupyter</td></tr>
+        <tr><td>.github/workflows/ci.yml</td><td>the gate: pre-commit (cached) + matrix build-and-test</td></tr>
+        <tr><td>.github/workflows/cd.yml</td><td>the publisher: tag-input, cibuildwheel in the pytorch image, CUDA on</td></tr>
+        <tr><td>.github/workflows/release.yml</td><td>label-driven SemVer + GitHub App tag-on-merge</td></tr>
+        <tr><td>.pre-commit-config.yaml &middot; mypy.ini</td><td>style + type-check configs</td></tr>
+        <tr><td>ARCHITECTURE.md</td><td>the in-repo statement of the stub-files design (&sect;20)</td></tr>
+      </tbody>
+    </table>
+  </section>
+</div>
+
+</main>
+
+<footer>
+  <h4>Colophon &amp; further reading</h4>
+  <div class="resources">
+    <ul>
+      <li><strong>Companion guide</strong> &mdash; <code>pydisort_lifecycle_engineering.html</code>: the floor below kintera. Read its &sect;04 (ABI), &sect;05 (DispatchStub symbols), &sect;06 (RPATH), &sect;11 (auditwheel exclude) for the mechanisms this guide builds on.</li>
+      <li><strong>Other companions</strong> &mdash; <code>modern_cpp_handbook.html</code> (the C++ idioms underneath), <code>vic_solver_optimization.html</code> and <code>evolve_implicit_optimization.html</code> (GPU-kernel craft), <code>checkpoint_restart_filesystems.html</code> (the I/O side of the same model family).</li>
+      <li><strong>Subject under study</strong> &mdash; <code>kintera</code>: atmospheric chemistry, thermodynamics, photochemistry, kinetics, diffusion. A torch-backed C++/CUDA library wrapped through six pybind11 binding TUs, sitting on pydisort + pyharp + torch + NetCDF.</li>
+      <li><strong>Layered build</strong> &mdash; CMake <code>configure_file</code>; FindDisort/FindHarp via <code>import</code>; <code>setuptools-scm</code>; <code>pytorch/manylinux2_28-builder:cuda12.8</code>; cibuildwheel.</li>
+      <li><strong>Linking</strong> &mdash; <code>--as-needed</code>/<code>--no-as-needed</code> for static registration kernels; library ordering across consumer/provider splits; RUNPATH non-transitivity; <code>$ORIGIN</code> + absolute site-packages RPATHs.</li>
+      <li><strong>Release</strong> &mdash; label-driven SemVer, GitHub App tokens, <code>--generate-notes</code>, tag-input CD, OIDC Trusted Publishing (the open upgrade).</li>
+      <li><strong>Reading</strong> &mdash; PEP 561 typing; PEP 600 manylinux; ATen <code>DispatchStub</code>; CMake <code>configure_file</code> &amp; <code>install(EXPORT)</code>; <code>auditwheel</code>/<code>delocate</code> repair-tool conventions.</li>
+      <li><strong>Self-contained</strong> &mdash; layout, colour, and structure are inline; display fonts load from Google Fonts and degrade to serif/mono offline. Open directly in any browser.</li>
+    </ul>
+  </div>
+</footer>
+
+</body>
+</html>
