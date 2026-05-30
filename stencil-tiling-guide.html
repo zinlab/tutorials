@@ -1,0 +1,1044 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stencil Computation &amp; Shared-Memory Tiling — A Visual Field Guide</title>
+<style>
+  :root{
+    --paper:#f3efe6;
+    --paper-2:#ece5d6;
+    --panel:#fbf9f3;
+    --ink:#221d16;
+    --ink-soft:#4c463b;
+    --ink-faint:#7c7363;
+    --rule:#dcd4c2;
+    --rule-soft:#e7e0d0;
+
+    --amber:#b45309;       /* accent / halo */
+    --amber-soft:#fbecd6;
+    --teal:#0f6e63;        /* shared memory / interior */
+    --teal-soft:#dcefeb;
+    --slate:#4f5d77;       /* global memory */
+    --slate-soft:#e2e7f0;
+    --violet:#6d28d9;      /* output */
+    --violet-soft:#ede4fb;
+    --ghost:#9aa1ad;       /* out-of-bounds / zero */
+
+    --code-bg:#201c15;
+    --code-fg:#e9e1d1;
+    --c-key:#e3a866;
+    --c-type:#84d3c6;
+    --c-num:#e09a9a;
+    --c-com:#8b8676;
+    --c-fn:#cbb4ec;
+    --c-str:#aecb8e;
+    --c-pre:#c9c0ae;
+
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+    --body:Georgia,"Iowan Old Style","Times New Roman",serif;
+    --mono:ui-monospace,"SF Mono","Cascadia Code","JetBrains Mono",Menlo,Consolas,monospace;
+
+    --maxw:880px;
+  }
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;
+    background:
+      radial-gradient(120% 80% at 50% -10%, #fbf8f1 0%, var(--paper) 42%, var(--paper-2) 100%);
+    color:var(--ink);
+    font-family:var(--body);
+    font-size:18px;
+    line-height:1.66;
+    -webkit-font-smoothing:antialiased;
+  }
+  body::before{
+    /* faint paper grain via layered hairlines */
+    content:"";
+    position:fixed; inset:0; pointer-events:none; z-index:0;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(120,108,84,.035) 0 1px, transparent 1px 26px);
+    mix-blend-mode:multiply;
+  }
+
+  .wrap{position:relative; z-index:1; max-width:var(--maxw); margin:0 auto; padding:0 26px 120px}
+
+  /* ---------- Masthead ---------- */
+  header.masthead{
+    max-width:var(--maxw); margin:0 auto; padding:64px 26px 30px;
+    position:relative; z-index:1;
+  }
+  .kicker{
+    font-family:var(--mono); font-size:12px; letter-spacing:.32em;
+    text-transform:uppercase; color:var(--amber); font-weight:700;
+    display:flex; align-items:center; gap:12px;
+  }
+  .kicker::after{content:""; height:1px; flex:1; background:linear-gradient(90deg,var(--amber),transparent)}
+  h1.title{
+    font-family:var(--serif); font-weight:700; line-height:1.04;
+    font-size:clamp(34px,6vw,58px); margin:.32em 0 .18em; letter-spacing:-.01em;
+  }
+  h1.title em{font-style:italic; color:var(--amber)}
+  .standfirst{font-size:20px; color:var(--ink-soft); max-width:62ch; margin:0}
+  .byline{
+    margin-top:22px; font-family:var(--mono); font-size:12.5px; color:var(--ink-faint);
+    border-top:1px solid var(--rule); padding-top:14px; display:flex; flex-wrap:wrap; gap:18px;
+  }
+  .byline b{color:var(--ink-soft); font-weight:700}
+
+  /* ---------- Sections ---------- */
+  section{margin:58px 0 0; animation:rise .7s cubic-bezier(.2,.7,.2,1) both}
+  section:nth-of-type(1){animation-delay:.05s}
+  section:nth-of-type(2){animation-delay:.10s}
+  section:nth-of-type(3){animation-delay:.12s}
+  @keyframes rise{from{opacity:0; transform:translateY(14px)}to{opacity:1; transform:none}}
+
+  .sec-head{display:flex; align-items:baseline; gap:16px; margin-bottom:6px}
+  .sec-num{
+    font-family:var(--mono); font-size:13px; font-weight:700; color:#fff;
+    background:var(--ink); width:30px; height:30px; flex:0 0 30px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center; transform:translateY(2px);
+    box-shadow:0 2px 0 var(--amber);
+  }
+  h2{
+    font-family:var(--serif); font-weight:700; font-size:clamp(25px,4.2vw,34px);
+    margin:0; letter-spacing:-.01em; line-height:1.12;
+  }
+  h3{
+    font-family:var(--serif); font-weight:700; font-size:21px; margin:34px 0 8px;
+    color:var(--ink); letter-spacing:-.005em;
+  }
+  h3 .mono{font-family:var(--mono); font-size:.8em; color:var(--amber)}
+  p{margin:.7em 0}
+  strong{color:#16120c}
+  a{color:var(--amber); text-decoration-thickness:1px; text-underline-offset:2px}
+
+  .lede{font-size:19.5px; color:var(--ink-soft)}
+
+  code.inl{
+    font-family:var(--mono); font-size:.86em; background:#efe9dc;
+    border:1px solid var(--rule); border-radius:5px; padding:1px 6px; color:#3a342a;
+    white-space:nowrap;
+  }
+
+  /* ---------- Figures ---------- */
+  figure{
+    margin:26px 0; padding:20px 20px 14px; background:var(--panel);
+    border:1px solid var(--rule); border-radius:14px;
+    box-shadow:0 1px 0 #fff inset, 0 10px 30px -22px rgba(40,30,10,.5);
+  }
+  figure svg{display:block; width:100%; height:auto}
+  figcaption{
+    font-family:var(--mono); font-size:12.5px; color:var(--ink-faint);
+    margin-top:12px; padding-top:10px; border-top:1px dashed var(--rule);
+    line-height:1.5;
+  }
+  figcaption b{color:var(--amber); font-weight:700}
+
+  .legend{display:flex; flex-wrap:wrap; gap:8px 16px; margin:6px 0 4px; font-family:var(--mono); font-size:12px; color:var(--ink-soft)}
+  .legend span{display:inline-flex; align-items:center; gap:7px}
+  .swatch{width:14px; height:14px; border-radius:3px; border:1px solid rgba(0,0,0,.18); flex:0 0 14px}
+
+  /* ---------- Code blocks ---------- */
+  .codewrap{margin:22px 0; border-radius:12px; overflow:hidden; border:1px solid #000; box-shadow:0 14px 34px -22px rgba(20,15,5,.8)}
+  .codebar{
+    background:#15110b; color:#cfc6b3; font-family:var(--mono); font-size:11.5px;
+    letter-spacing:.12em; text-transform:uppercase; padding:9px 14px;
+    display:flex; align-items:center; gap:10px; border-bottom:1px solid #322a1d;
+  }
+  .codebar .dot{width:9px;height:9px;border-radius:50%;background:#4a4030}
+  .codebar .tag{margin-left:auto; color:#8a806a; letter-spacing:.18em}
+  pre{
+    margin:0; background:var(--code-bg); color:var(--code-fg);
+    font-family:var(--mono); font-size:13.4px; line-height:1.62;
+    padding:16px 18px; overflow-x:auto;
+  }
+  pre .k{color:var(--c-key)} pre .t{color:var(--c-type)} pre .n{color:var(--c-num)}
+  pre .c{color:var(--c-com); font-style:italic} pre .f{color:var(--c-fn)} pre .s{color:var(--c-str)}
+  pre .p{color:var(--c-pre)} pre .m{color:#e8ddc6}
+
+  /* ---------- Callouts ---------- */
+  .note{
+    margin:24px 0; padding:16px 18px 16px 20px; border-radius:12px;
+    background:var(--amber-soft); border:1px solid #efce9b; position:relative;
+  }
+  .note::before{content:""; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--amber); border-radius:12px 0 0 12px}
+  .note .lbl{font-family:var(--mono); font-size:11px; letter-spacing:.22em; text-transform:uppercase; color:var(--amber); font-weight:700; display:block; margin-bottom:4px}
+  .note.teal{background:var(--teal-soft); border-color:#a9d6cd}
+  .note.teal::before{background:var(--teal)} .note.teal .lbl{color:var(--teal)}
+  .note p:first-of-type{margin-top:0} .note p:last-child{margin-bottom:0}
+
+  /* ---------- Tables ---------- */
+  .tablewrap{overflow-x:auto; margin:22px 0}
+  table{border-collapse:collapse; width:100%; font-size:15px; min-width:520px}
+  caption{font-family:var(--mono); font-size:12px; color:var(--ink-faint); text-align:left; padding-bottom:8px}
+  th,td{padding:9px 13px; text-align:left; border-bottom:1px solid var(--rule)}
+  thead th{font-family:var(--mono); font-size:11.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-faint); border-bottom:2px solid var(--ink)}
+  tbody tr:hover{background:#fbf6ea}
+  td.mono,th.mono{font-family:var(--mono); font-size:13.5px}
+  .big{color:var(--amber); font-weight:700}
+
+  /* index-map mini grid */
+  .idxmap{font-family:var(--mono); font-size:13px; display:grid; grid-template-columns:auto 1fr; gap:4px 16px; background:#faf6ec; border:1px solid var(--rule); border-radius:10px; padding:14px 16px; margin:18px 0}
+  .idxmap b{color:var(--amber)}
+
+  hr.rule{border:0; height:1px; background:linear-gradient(90deg,transparent,var(--rule) 12%,var(--rule) 88%,transparent); margin:54px 0}
+
+  footer{max-width:var(--maxw); margin:0 auto; padding:30px 26px 0; color:var(--ink-faint); font-family:var(--mono); font-size:12.5px; border-top:1px solid var(--rule)}
+
+  ul.clean{margin:.6em 0; padding-left:1.2em}
+  ul.clean li{margin:.4em 0}
+
+  .toc{
+    background:var(--panel); border:1px solid var(--rule); border-radius:14px;
+    padding:18px 22px; margin:30px 0 0; columns:2; column-gap:34px;
+  }
+  .toc a{display:block; font-family:var(--mono); font-size:13px; color:var(--ink-soft); text-decoration:none; padding:4px 0; break-inside:avoid}
+  .toc a span{color:var(--amber); font-weight:700; margin-right:8px}
+  .toc a:hover{color:var(--amber)}
+  @media(max-width:620px){.toc{columns:1}}
+
+  /* SVG shared text styles */
+  svg text{font-family:var(--mono); fill:var(--ink)}
+  .cap{fill:var(--ink-faint)}
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="kicker">CUDA · Memory Hierarchy · Field Guide</div>
+  <h1 class="title">Stencils &amp; <em>Shared-Memory Tiling</em></h1>
+  <p class="standfirst">How thread/block indices map onto row-major data, where halo and ghost cells come from, and exactly how much a shared-memory tile buys you — worked out in 1D and 2D, with diagrams you can read top to bottom.</p>
+  <div class="byline">
+    <span><b>Stencil:</b> 1D 3-point &amp; 2D 5-point</span>
+    <span><b>Pattern:</b> load → sync → compute</span>
+    <span><b>Goal:</b> kill redundant global reads</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <nav class="toc" aria-label="Contents">
+    <a href="#what"><span>01</span>What a stencil actually is</a>
+    <a href="#indexing"><span>02</span>Row-major arrays &amp; the index algebra</a>
+    <a href="#naive1d"><span>03</span>1D naïve kernel &amp; the reuse problem</a>
+    <a href="#tiled1d"><span>04</span>1D tiling: tile, halo, ghost</a>
+    <a href="#boundary"><span>05</span>Boundary checks: halo vs ghost</a>
+    <a href="#twod"><span>06</span>2D indexing &amp; the 5-point stencil</a>
+    <a href="#tiled2d"><span>07</span>2D tiling with a haloed tile</a>
+    <a href="#efficiency"><span>08</span>How much faster — and the honest caveat</a>
+    <a href="#cheat"><span>09</span>One-page cheat sheet</a>
+  </nav>
+
+  <!-- ============================================================ 01 -->
+  <section id="what">
+    <div class="sec-head"><div class="sec-num">01</div><h2>What a stencil actually is</h2></div>
+    <p class="lede">A <strong>stencil</strong> updates every point of a grid using a small, fixed pattern of neighbours. Same shape, applied everywhere.</p>
+    <p>The canonical 1D version — a 3-point stencil with <strong>radius&nbsp;R&nbsp;=&nbsp;1</strong>:</p>
+
+    <div class="codewrap">
+      <div class="codebar"><span class="dot"></span> math · 1D 3-point <span class="tag">radius 1 → 2R+1 = 3 taps</span></div>
+<pre><span class="m">out</span>[i] = c<span class="n">0</span>·<span class="m">in</span>[i<span class="p">-</span><span class="n">1</span>] + c<span class="n">1</span>·<span class="m">in</span>[i] + c<span class="n">2</span>·<span class="m">in</span>[i<span class="p">+</span><span class="n">1</span>]</pre>
+    </div>
+
+    <p>Two numbers define the whole problem:</p>
+    <ul class="clean">
+      <li><strong>Radius&nbsp;R</strong> — how far each output reaches. A 3-point stencil has R&nbsp;=&nbsp;1; a 5-point 1D stencil has R&nbsp;=&nbsp;2.</li>
+      <li><strong>Tap count</strong> — the number of inputs read per output. In 1D that's <code class="inl">2R+1</code>; for a 2D <em>cross</em> (von Neumann) stencil it's <code class="inl">4R+1</code> (5 taps at R&nbsp;=&nbsp;1).</li>
+    </ul>
+    <p>That tap count is the source of all the inefficiency we're about to fight: neighbouring outputs overlap heavily, so the same input element gets read from global memory many times.</p>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ============================================================ 02 -->
+  <section id="indexing">
+    <div class="sec-head"><div class="sec-num">02</div><h2>Row-major arrays &amp; the index algebra</h2></div>
+    <p class="lede">GPU memory is a flat 1D address space. A 2D grid is stored <strong>row by row</strong> — that single fact drives every index you'll write.</p>
+
+    <p>In <strong>row-major</strong> order, element <code class="inl">(row, col)</code> of a <code class="inl">height × width</code> grid lives at linear offset:</p>
+    <div class="codewrap">
+      <div class="codebar"><span class="dot"></span> row-major flattening <span class="tag">width = elements per row</span></div>
+<pre>idx = row <span class="p">*</span> width + col      <span class="c">// width is the *stride* between rows</span></pre>
+    </div>
+
+    <figure>
+      <!-- SVG: row-major layout -->
+      <svg viewBox="0 0 760 330" role="img" aria-label="A 3 by 5 grid flattened into a 1D row-major array">
+        <defs>
+          <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+            <path d="M0,0 L9,4.5 L0,9 z" fill="var(--slate)"/>
+          </marker>
+        </defs>
+        <text x="0" y="18" font-size="13" font-weight="700">2D logical view — grid[row][col]  (height 3 × width 5)</text>
+        <!-- grid -->
+        <g>
+          <!-- rows -->
+          <!-- We'll draw 3 rows, 5 cols. cell 40x40, start x=70 y=34 -->
+          <!-- row labels -->
+          <text x="10" y="62" font-size="12" class="cap">row 0</text>
+          <text x="10" y="106" font-size="12" class="cap">row 1</text>
+          <text x="10" y="150" font-size="12" class="cap">row 2</text>
+          <!-- col labels -->
+          <text x="86" y="32" font-size="12" class="cap">c0</text>
+          <text x="130" y="32" font-size="12" class="cap">c1</text>
+          <text x="174" y="32" font-size="12" class="cap">c2</text>
+          <text x="218" y="32" font-size="12" class="cap">c3</text>
+          <text x="262" y="32" font-size="12" class="cap">c4</text>
+
+          <!-- row 0 -->
+          <g>
+            <rect x="70" y="40" width="40" height="40" rx="4" fill="var(--slate-soft)" stroke="var(--slate)"/>
+            <rect x="114" y="40" width="40" height="40" rx="4" fill="var(--slate-soft)" stroke="var(--slate)"/>
+            <rect x="158" y="40" width="40" height="40" rx="4" fill="var(--slate-soft)" stroke="var(--slate)"/>
+            <rect x="202" y="40" width="40" height="40" rx="4" fill="var(--slate-soft)" stroke="var(--slate)"/>
+            <rect x="246" y="40" width="40" height="40" rx="4" fill="var(--slate-soft)" stroke="var(--slate)"/>
+            <text x="90" y="65" font-size="12" text-anchor="middle">0</text>
+            <text x="134" y="65" font-size="12" text-anchor="middle">1</text>
+            <text x="178" y="65" font-size="12" text-anchor="middle">2</text>
+            <text x="222" y="65" font-size="12" text-anchor="middle">3</text>
+            <text x="266" y="65" font-size="12" text-anchor="middle">4</text>
+          </g>
+          <!-- row 1 -->
+          <g>
+            <rect x="70" y="84" width="40" height="40" rx="4" fill="#eef1f6" stroke="var(--slate)"/>
+            <rect x="114" y="84" width="40" height="40" rx="4" fill="#eef1f6" stroke="var(--slate)"/>
+            <rect x="158" y="84" width="40" height="40" rx="4" fill="#eef1f6" stroke="var(--slate)"/>
+            <rect x="202" y="84" width="40" height="40" rx="4" fill="#eef1f6" stroke="var(--slate)"/>
+            <rect x="246" y="84" width="40" height="40" rx="4" fill="#eef1f6" stroke="var(--slate)"/>
+            <text x="90" y="109" font-size="12" text-anchor="middle">5</text>
+            <text x="134" y="109" font-size="12" text-anchor="middle">6</text>
+            <text x="178" y="109" font-size="12" text-anchor="middle">7</text>
+            <text x="222" y="109" font-size="12" text-anchor="middle">8</text>
+            <text x="266" y="109" font-size="12" text-anchor="middle">9</text>
+          </g>
+          <!-- row 2 -->
+          <g>
+            <rect x="70" y="128" width="40" height="40" rx="4" fill="var(--slate-soft)" stroke="var(--slate)"/>
+            <rect x="114" y="128" width="40" height="40" rx="4" fill="var(--slate-soft)" stroke="var(--slate)"/>
+            <rect x="158" y="128" width="40" height="40" rx="4" fill="var(--slate-soft)" stroke="var(--slate)"/>
+            <rect x="202" y="128" width="40" height="40" rx="4" fill="var(--slate-soft)" stroke="var(--slate)"/>
+            <rect x="246" y="128" width="40" height="40" rx="4" fill="var(--slate-soft)" stroke="var(--slate)"/>
+            <text x="90" y="153" font-size="12" text-anchor="middle">10</text>
+            <text x="134" y="153" font-size="12" text-anchor="middle">11</text>
+            <text x="178" y="153" font-size="12" text-anchor="middle">12</text>
+            <text x="222" y="153" font-size="12" text-anchor="middle">13</text>
+            <text x="266" y="153" font-size="12" text-anchor="middle">14</text>
+          </g>
+        </g>
+
+        <!-- mapping note -->
+        <text x="330" y="60" font-size="13" font-weight="700" fill="var(--amber)">(2,3) →</text>
+        <text x="330" y="82" font-size="12" class="cap">idx = 2·5 + 3</text>
+        <text x="330" y="100" font-size="12" class="cap">    = 13</text>
+        <rect x="202" y="128" width="40" height="40" rx="4" fill="none" stroke="var(--amber)" stroke-width="2.5"/>
+
+        <!-- flattened 1D -->
+        <text x="0" y="208" font-size="13" font-weight="700">1D physical view — one contiguous array, rows laid end to end</text>
+        <g>
+          <!-- 15 cells, width 44 each won't fit; use 46 across from x=8 -->
+        </g>
+        <g font-size="11">
+          <!-- 15 cells of width ~49 from x=8 width 740 -> 49.3 -->
+          <!-- draw programmatically-ish by hand -->
+          <!-- group row0 -->
+          <g>
+            <rect x="8"  y="224" width="48" height="38" rx="4" fill="var(--slate-soft)" stroke="var(--slate)"/>
+            <rect x="58" y="224" width="48" height="38" rx="4" fill="var(--slate-soft)" stroke="var(--slate)"/>
+            <rect x="108" y="224" width="48" height="38" rx="4" fill="var(--slate-soft)" stroke="var(--slate)"/>
+            <rect x="158" y="224" width="48" height="38" rx="4" fill="var(--slate-soft)" stroke="var(--slate)"/>
+            <rect x="208" y="224" width="48" height="38" rx="4" fill="var(--slate-soft)" stroke="var(--slate)"/>
+            <text x="32"  y="248" text-anchor="middle">0</text>
+            <text x="82"  y="248" text-anchor="middle">1</text>
+            <text x="132" y="248" text-anchor="middle">2</text>
+            <text x="182" y="248" text-anchor="middle">3</text>
+            <text x="232" y="248" text-anchor="middle">4</text>
+          </g>
+          <g>
+            <rect x="258" y="224" width="48" height="38" rx="4" fill="#eef1f6" stroke="var(--slate)"/>
+            <rect x="308" y="224" width="48" height="38" rx="4" fill="#eef1f6" stroke="var(--slate)"/>
+            <rect x="358" y="224" width="48" height="38" rx="4" fill="#eef1f6" stroke="var(--slate)"/>
+            <rect x="408" y="224" width="48" height="38" rx="4" fill="#eef1f6" stroke="var(--slate)"/>
+            <rect x="458" y="224" width="48" height="38" rx="4" fill="#eef1f6" stroke="var(--slate)"/>
+            <text x="282" y="248" text-anchor="middle">5</text>
+            <text x="332" y="248" text-anchor="middle">6</text>
+            <text x="382" y="248" text-anchor="middle">7</text>
+            <text x="432" y="248" text-anchor="middle">8</text>
+            <text x="482" y="248" text-anchor="middle">9</text>
+          </g>
+          <g>
+            <rect x="508" y="224" width="48" height="38" rx="4" fill="var(--slate-soft)" stroke="var(--slate)"/>
+            <rect x="558" y="224" width="48" height="38" rx="4" fill="var(--slate-soft)" stroke="var(--slate)"/>
+            <rect x="608" y="224" width="48" height="38" rx="4" fill="var(--slate-soft)" stroke="var(--slate)"/>
+            <rect x="658" y="224" width="48" height="38" rx="4" fill="var(--amber-soft)" stroke="var(--amber)" stroke-width="2"/>
+            <rect x="708" y="224" width="48" height="38" rx="4" fill="var(--slate-soft)" stroke="var(--slate)"/>
+            <text x="532" y="248" text-anchor="middle">10</text>
+            <text x="582" y="248" text-anchor="middle">11</text>
+            <text x="632" y="248" text-anchor="middle">12</text>
+            <text x="682" y="248" text-anchor="middle" fill="var(--amber)" font-weight="700">13</text>
+            <text x="732" y="248" text-anchor="middle">14</text>
+          </g>
+          <!-- braces -->
+          <path d="M8,272 L256,272" stroke="var(--slate)" stroke-width="1.4" marker-end="url(#arr)"/>
+          <path d="M258,272 L506,272" stroke="var(--slate)" stroke-width="1.4" marker-end="url(#arr)"/>
+          <path d="M508,272 L756,272" stroke="var(--slate)" stroke-width="1.4" marker-end="url(#arr)"/>
+          <text x="132" y="292" text-anchor="middle" class="cap" font-size="11">row 0  (idx 0–4)</text>
+          <text x="382" y="292" text-anchor="middle" class="cap" font-size="11">row 1  (idx 5–9)</text>
+          <text x="632" y="292" text-anchor="middle" class="cap" font-size="11">row 2  (idx 10–14)</text>
+          <text x="382" y="316" text-anchor="middle" class="cap" font-size="11">stepping one row down = jumping +width (=5) in linear memory</text>
+        </g>
+      </svg>
+      <figcaption><b>Read this:</b> the cell at <code class="inl">(2,3)</code> sits at linear index <b>13</b> because two full rows of 5 precede it. Moving <em>down</em> a row is a stride of <code class="inl">+width</code>; moving <em>right</em> is <code class="inl">+1</code>. Every neighbour offset below is just these two strides combined.</figcaption>
+    </figure>
+
+    <p>Once you internalise the two strides, the neighbour offsets fall out for free:</p>
+    <div class="idxmap">
+      <span><b>self</b></span><span>idx</span>
+      <span><b>left / right</b></span><span>idx − 1 &nbsp;/&nbsp; idx + 1</span>
+      <span><b>up / down</b></span><span>idx − width &nbsp;/&nbsp; idx + width</span>
+      <span><b>diagonals</b></span><span>idx − width ± 1 &nbsp;/&nbsp; idx + width ± 1</span>
+    </div>
+
+    <h3>Thread &amp; block indices → data indices</h3>
+    <p>A kernel launch is a grid of blocks; each block is a grid of threads. The job of the first lines of every stencil kernel is to convert the thread's coordinates into a <em>data</em> coordinate:</p>
+    <div class="codewrap">
+      <div class="codebar"><span class="dot"></span> the universal opening lines</div>
+<pre><span class="c">// 1D</span>
+<span class="k">int</span> i   = blockIdx.x <span class="p">*</span> blockDim.x + threadIdx.x;   <span class="c">// global element</span>
+
+<span class="c">// 2D — note: x ↔ column, y ↔ row</span>
+<span class="k">int</span> col = blockIdx.x <span class="p">*</span> blockDim.x + threadIdx.x;   <span class="c">// horizontal</span>
+<span class="k">int</span> row = blockIdx.y <span class="p">*</span> blockDim.y + threadIdx.y;   <span class="c">// vertical</span>
+<span class="k">int</span> idx = row <span class="p">*</span> width + col;                       <span class="c">// row-major linearisation</span></pre>
+    </div>
+    <div class="note teal">
+      <span class="lbl">Watch the axis swap</span>
+      <p><code class="inl">threadIdx.x</code> is the <strong>column</strong> (fastest-varying, contiguous in memory), and <code class="inl">threadIdx.y</code> is the <strong>row</strong>. Getting this backwards is the single most common stencil bug — it produces a transposed result and destroys memory coalescing. <code class="inl">x</code> goes with <code class="inl">width</code>.</p>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ============================================================ 03 -->
+  <section id="naive1d">
+    <div class="sec-head"><div class="sec-num">03</div><h2>The 1D naïve kernel &amp; the reuse problem</h2></div>
+    <p class="lede">Each thread computes one output and reads its own neighbourhood straight from global memory. Correct — but wasteful.</p>
+
+    <div class="codewrap">
+      <div class="codebar"><span class="dot"></span> stencil_1d_naive.cu</div>
+<pre><span class="k">__global__</span> <span class="k">void</span> <span class="f">stencil1d_naive</span>(<span class="k">const</span> <span class="k">float</span><span class="p">*</span> in, <span class="k">float</span><span class="p">*</span> out, <span class="k">int</span> n){
+    <span class="k">int</span> i = blockIdx.x <span class="p">*</span> blockDim.x + threadIdx.x;
+    <span class="k">if</span> (i &gt;= R &amp;&amp; i &lt; n <span class="p">-</span> R){               <span class="c">// skip the edges (no neighbours)</span>
+        <span class="k">float</span> acc = <span class="n">0.f</span>;
+        <span class="k">for</span> (<span class="k">int</span> r = <span class="p">-</span>R; r &lt;= R; ++r)
+            acc += coef[r + R] <span class="p">*</span> in[i + r]; <span class="c">// each in[] read from DRAM</span>
+        out[i] = acc;
+    }
+}</pre>
+    </div>
+
+    <figure>
+      <!-- SVG: overlapping windows / redundant reads -->
+      <svg viewBox="0 0 760 300" role="img" aria-label="Three adjacent output windows overlapping, showing in[4] read three times">
+        <text x="0" y="16" font-size="13" font-weight="700">Input array (global memory)</text>
+        <!-- cells 0..9 -->
+        <g font-size="12">
+          <!-- 10 cells width 64 from x=40 -->
+          <!-- helper positions -->
+          <!-- i: x = 40 + i*68 ; width 60 -->
+          <g>
+            <rect x="40"  y="28" width="60" height="44" rx="5" fill="var(--slate-soft)" stroke="var(--slate)"/>
+            <rect x="108" y="28" width="60" height="44" rx="5" fill="var(--slate-soft)" stroke="var(--slate)"/>
+            <rect x="176" y="28" width="60" height="44" rx="5" fill="var(--slate-soft)" stroke="var(--slate)"/>
+            <rect x="244" y="28" width="60" height="44" rx="5" fill="var(--amber-soft)" stroke="var(--amber)" stroke-width="2.4"/>
+            <rect x="312" y="28" width="60" height="44" rx="5" fill="var(--slate-soft)" stroke="var(--slate)"/>
+            <rect x="380" y="28" width="60" height="44" rx="5" fill="var(--slate-soft)" stroke="var(--slate)"/>
+            <rect x="448" y="28" width="60" height="44" rx="5" fill="var(--slate-soft)" stroke="var(--slate)"/>
+            <text x="70"  y="55" text-anchor="middle">2</text>
+            <text x="138" y="55" text-anchor="middle">3</text>
+            <text x="206" y="55" text-anchor="middle">4</text>
+            <text x="274" y="55" text-anchor="middle" font-weight="700" fill="var(--amber)">5</text>
+            <text x="342" y="55" text-anchor="middle">6</text>
+            <text x="410" y="55" text-anchor="middle">7</text>
+            <text x="478" y="55" text-anchor="middle">8</text>
+          </g>
+        </g>
+
+        <!-- three windows -->
+        <!-- out[4] reads 3,4,5 -->
+        <g stroke-width="2" fill="none">
+          <rect x="104" y="96" width="204" height="34" rx="17" stroke="var(--teal)"/>
+          <text x="320" y="118" font-size="12" fill="var(--teal)" font-weight="700">→ out[4] reads in[3,4,5]</text>
+        </g>
+        <!-- out[5] reads 4,5,6 -->
+        <g stroke-width="2" fill="none">
+          <rect x="172" y="140" width="204" height="34" rx="17" stroke="var(--violet)"/>
+          <text x="388" y="162" font-size="12" fill="var(--violet)" font-weight="700">→ out[5] reads in[4,5,6]</text>
+        </g>
+        <!-- out[6] reads 5,6,7 -->
+        <g stroke-width="2" fill="none">
+          <rect x="240" y="184" width="204" height="34" rx="17" stroke="var(--amber)"/>
+          <text x="456" y="206" font-size="12" fill="var(--amber)" font-weight="700">→ out[6] reads in[5,6,7]</text>
+        </g>
+
+        <!-- highlight column for in[5] -->
+        <line x1="274" y1="72" x2="274" y2="226" stroke="var(--amber)" stroke-dasharray="4 4" stroke-width="1.4"/>
+        <text x="0" y="262" font-size="13" font-weight="700" fill="var(--amber)">in[5] is fetched from DRAM 3 separate times — once per overlapping window.</text>
+        <text x="0" y="284" font-size="12" class="cap">In general each interior element is re-read up to (2R+1) times. That redundancy is pure wasted bandwidth.</text>
+      </svg>
+      <figcaption><b>The reuse problem:</b> adjacent output windows overlap by <code class="inl">2R</code> cells. With R&nbsp;=&nbsp;1 every interior input is read <b>3×</b>; a memory-bound kernel therefore moves ~3× more bytes than it strictly needs. Tiling fixes exactly this.</figcaption>
+    </figure>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ============================================================ 04 -->
+  <section id="tiled1d">
+    <div class="sec-head"><div class="sec-num">04</div><h2>1D tiling: the tile, the halo, the ghost</h2></div>
+    <p class="lede">A block cooperatively loads its slice <em>once</em> into shared memory — plus a thin <strong>halo</strong> of R cells on each side so edge threads still find their neighbours — then everyone computes from that fast on-chip copy.</p>
+
+    <p>Shared memory needed per block: <code class="inl">BLOCK + 2R</code> elements. Two indices now live side by side:</p>
+    <div class="idxmap">
+      <span><b>gindex</b></span><span>blockIdx.x·blockDim.x + threadIdx.x &nbsp; — position in the <em>global</em> array</span>
+      <span><b>lindex</b></span><span>threadIdx.x + R &nbsp; — position in the <em>shared</em> tile (shifted right by R to leave room for the left halo)</span>
+    </div>
+
+    <figure>
+      <!-- SVG: tile + halo load mapping -->
+      <svg viewBox="0 0 760 360" role="img" aria-label="Mapping of a global slice into a shared-memory tile with left and right halos">
+        <defs>
+          <marker id="arr2" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+            <path d="M0,0 L9,4.5 L0,9 z" fill="var(--teal)"/>
+          </marker>
+        </defs>
+
+        <text x="0" y="16" font-size="13" font-weight="700">Global memory — this block owns the 6 middle cells (BLOCK = 6, R = 1)</text>
+        <!-- 8 global cells: 1 left halo, 6 main, 1 right halo -->
+        <!-- x = 40 + k*88 width 80 -->
+        <g font-size="12">
+          <rect x="40"  y="28" width="80" height="44" rx="5" fill="var(--amber-soft)" stroke="var(--amber)" stroke-width="2"/>
+          <rect x="128" y="28" width="80" height="44" rx="5" fill="var(--slate-soft)" stroke="var(--slate)"/>
+          <rect x="216" y="28" width="80" height="44" rx="5" fill="var(--slate-soft)" stroke="var(--slate)"/>
+          <rect x="304" y="28" width="80" height="44" rx="5" fill="var(--slate-soft)" stroke="var(--slate)"/>
+          <rect x="392" y="28" width="80" height="44" rx="5" fill="var(--slate-soft)" stroke="var(--slate)"/>
+          <rect x="480" y="28" width="80" height="44" rx="5" fill="var(--slate-soft)" stroke="var(--slate)"/>
+          <rect x="568" y="28" width="80" height="44" rx="5" fill="var(--slate-soft)" stroke="var(--slate)"/>
+          <rect x="656" y="28" width="80" height="44" rx="5" fill="var(--amber-soft)" stroke="var(--amber)" stroke-width="2"/>
+          <text x="80"  y="46" text-anchor="middle" class="cap" font-size="10">g-1 (halo)</text>
+          <text x="168" y="55" text-anchor="middle">g</text>
+          <text x="256" y="55" text-anchor="middle">g+1</text>
+          <text x="344" y="55" text-anchor="middle">g+2</text>
+          <text x="432" y="55" text-anchor="middle">g+3</text>
+          <text x="520" y="55" text-anchor="middle">g+4</text>
+          <text x="608" y="55" text-anchor="middle">g+5</text>
+          <text x="696" y="46" text-anchor="middle" class="cap" font-size="10">g+6 (halo)</text>
+        </g>
+
+        <!-- arrows down -->
+        <g stroke="var(--teal)" stroke-width="1.5">
+          <line x1="80"  y1="74" x2="80"  y2="206" marker-end="url(#arr2)"/>
+          <line x1="168" y1="74" x2="168" y2="206" marker-end="url(#arr2)"/>
+          <line x1="256" y1="74" x2="256" y2="206" marker-end="url(#arr2)"/>
+          <line x1="344" y1="74" x2="344" y2="206" marker-end="url(#arr2)"/>
+          <line x1="432" y1="74" x2="432" y2="206" marker-end="url(#arr2)"/>
+          <line x1="520" y1="74" x2="520" y2="206" marker-end="url(#arr2)"/>
+          <line x1="608" y1="74" x2="608" y2="206" marker-end="url(#arr2)"/>
+          <line x1="696" y1="74" x2="696" y2="206" marker-end="url(#arr2)"/>
+        </g>
+
+        <text x="0" y="200" font-size="13" font-weight="700" fill="var(--teal)">Shared tile[] — size BLOCK + 2R = 8</text>
+        <g font-size="12">
+          <rect x="40"  y="212" width="80" height="44" rx="5" fill="var(--amber-soft)" stroke="var(--amber)" stroke-width="2"/>
+          <rect x="128" y="212" width="80" height="44" rx="5" fill="var(--teal-soft)" stroke="var(--teal)"/>
+          <rect x="216" y="212" width="80" height="44" rx="5" fill="var(--teal-soft)" stroke="var(--teal)"/>
+          <rect x="304" y="212" width="80" height="44" rx="5" fill="var(--teal-soft)" stroke="var(--teal)"/>
+          <rect x="392" y="212" width="80" height="44" rx="5" fill="var(--teal-soft)" stroke="var(--teal)"/>
+          <rect x="480" y="212" width="80" height="44" rx="5" fill="var(--teal-soft)" stroke="var(--teal)"/>
+          <rect x="568" y="212" width="80" height="44" rx="5" fill="var(--teal-soft)" stroke="var(--teal)"/>
+          <rect x="656" y="212" width="80" height="44" rx="5" fill="var(--amber-soft)" stroke="var(--amber)" stroke-width="2"/>
+          <text x="80"  y="239" text-anchor="middle">0</text>
+          <text x="168" y="239" text-anchor="middle">1</text>
+          <text x="256" y="239" text-anchor="middle">2</text>
+          <text x="344" y="239" text-anchor="middle">3</text>
+          <text x="432" y="239" text-anchor="middle">4</text>
+          <text x="520" y="239" text-anchor="middle">5</text>
+          <text x="608" y="239" text-anchor="middle">6</text>
+          <text x="696" y="239" text-anchor="middle">7</text>
+        </g>
+        <!-- lindex annotation -->
+        <text x="168" y="278" text-anchor="middle" font-size="11" fill="var(--teal)">tid 0 → lindex 1</text>
+        <text x="608" y="278" text-anchor="middle" font-size="11" fill="var(--teal)">tid 5 → lindex 6</text>
+
+        <!-- who loads halos -->
+        <rect x="40" y="296" width="696" height="52" rx="9" fill="#faf6ec" stroke="var(--rule)"/>
+        <text x="56" y="318" font-size="12.5" font-weight="700" fill="var(--amber)">Halo loading:</text>
+        <text x="150" y="318" font-size="12.5">thread 0 (tid &lt; R) also fetches tile[0] from in[g-1] and tile[7] from in[g+6].</text>
+        <text x="56" y="338" font-size="12" class="cap">Every other thread loads exactly one cell: tile[lindex] = in[gindex]. The amber cells are the halo.</text>
+      </svg>
+      <figcaption><b>One load each, plus a sliver of overlap.</b> The block reads 8 cells to produce 6 outputs. The amber halo cells belong to <em>neighbouring</em> blocks but must be copied in so this block's edge threads (tid&nbsp;0 and tid&nbsp;5) can reach their neighbours from shared memory.</figcaption>
+    </figure>
+
+    <div class="codewrap">
+      <div class="codebar"><span class="dot"></span> stencil_1d_tiled.cu <span class="tag">load → __syncthreads → compute</span></div>
+<pre><span class="k">#define</span> R     <span class="n">1</span>
+<span class="k">#define</span> BLOCK <span class="n">256</span>            <span class="c">// must equal blockDim.x</span>
+<span class="k">__constant__</span> <span class="k">float</span> coef[<span class="n">2</span><span class="p">*</span>R + <span class="n">1</span>];
+
+<span class="k">__global__</span> <span class="k">void</span> <span class="f">stencil1d_tiled</span>(<span class="k">const</span> <span class="k">float</span><span class="p">*</span> in, <span class="k">float</span><span class="p">*</span> out, <span class="k">int</span> n){
+    <span class="k">__shared__</span> <span class="k">float</span> tile[BLOCK + <span class="n">2</span><span class="p">*</span>R];
+
+    <span class="k">int</span> gindex = blockIdx.x <span class="p">*</span> blockDim.x + threadIdx.x; <span class="c">// global element</span>
+    <span class="k">int</span> lindex = threadIdx.x + R;                     <span class="c">// slot in tile</span>
+
+    <span class="c">// (1) every thread loads its own element</span>
+    tile[lindex] = (gindex &lt; n) ? in[gindex] : <span class="n">0.f</span>;
+
+    <span class="c">// (2) the first R threads also load both halos</span>
+    <span class="k">if</span> (threadIdx.x &lt; R){
+        <span class="k">int</span> L = gindex <span class="p">-</span> R;       <span class="c">// left  source</span>
+        <span class="k">int</span> Rt = gindex + BLOCK;   <span class="c">// right source</span>
+        tile[lindex <span class="p">-</span> R]     = (L  &gt;= <span class="n">0</span>) ? in[L]  : <span class="n">0.f</span>; <span class="c">// left  ghost if OOB</span>
+        tile[lindex + BLOCK] = (Rt &lt;  n) ? in[Rt] : <span class="n">0.f</span>; <span class="c">// right ghost if OOB</span>
+    }
+
+    <span class="f">__syncthreads</span>();   <span class="c">// tile is now fully populated &amp; visible to all threads</span>
+
+    <span class="c">// (3) compute purely from shared memory — no global reads here</span>
+    <span class="k">if</span> (gindex &lt; n){
+        <span class="k">float</span> acc = <span class="n">0.f</span>;
+        <span class="k">for</span> (<span class="k">int</span> r = <span class="p">-</span>R; r &lt;= R; ++r)
+            acc += coef[r + R] <span class="p">*</span> tile[lindex + r];
+        out[gindex] = acc;
+    }
+}</pre>
+    </div>
+
+    <div class="note">
+      <span class="lbl">Why __syncthreads is non-negotiable</span>
+      <p>Thread <em>j</em> reads <code class="inl">tile[lindex-1]</code>, which thread <em>j−1</em> wrote. Without the barrier, <em>j</em> might read that slot before <em>j−1</em> has filled it — a classic read-before-write race. The barrier guarantees the entire tile (interior + halo) is written before <em>anyone</em> starts computing.</p>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ============================================================ 05 -->
+  <section id="boundary">
+    <div class="sec-head"><div class="sec-num">05</div><h2>Boundary checks: halo vs ghost (they're different)</h2></div>
+    <p class="lede">These two words get used interchangeably, but keeping them apart makes boundary logic obvious.</p>
+
+    <div class="tablewrap">
+      <table>
+        <caption>// the two kinds of "extra" cells around a tile</caption>
+        <thead><tr><th>Term</th><th>What it is</th><th>Where the value comes from</th></tr></thead>
+        <tbody>
+          <tr><td class="big">Halo</td><td>Valid neighbour data that lives <em>inside</em> the global domain but is <em>owned by an adjacent block</em>.</td><td>A real <code class="inl">in[]</code> load — just from a position outside this block's main slice.</td></tr>
+          <tr><td class="big">Ghost</td><td>Positions <em>outside</em> the global domain entirely (index &lt; 0 or ≥ n).</td><td>A boundary condition: usually 0, or clamp / reflect / wrap.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <figure>
+      <!-- SVG: ghost vs halo at the true array edge -->
+      <svg viewBox="0 0 760 220" role="img" aria-label="The left edge of the global array showing a ghost cell at index -1">
+        <text x="0" y="16" font-size="13" font-weight="700">The true left edge of the whole array (block 0)</text>
+        <!-- ghost cell (hatched) then real cells -->
+        <defs>
+          <pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <rect width="8" height="8" fill="#eceae3"/>
+            <line x1="0" y1="0" x2="0" y2="8" stroke="var(--ghost)" stroke-width="2"/>
+          </pattern>
+        </defs>
+        <g font-size="12">
+          <rect x="40"  y="32" width="90" height="48" rx="6" fill="url(#hatch)" stroke="var(--ghost)" stroke-dasharray="5 4" stroke-width="2"/>
+          <rect x="140" y="32" width="90" height="48" rx="6" fill="var(--slate-soft)" stroke="var(--slate)"/>
+          <rect x="240" y="32" width="90" height="48" rx="6" fill="var(--slate-soft)" stroke="var(--slate)"/>
+          <rect x="340" y="32" width="90" height="48" rx="6" fill="var(--slate-soft)" stroke="var(--slate)"/>
+          <text x="85"  y="61" text-anchor="middle" fill="var(--ghost)" font-weight="700">−1</text>
+          <text x="185" y="61" text-anchor="middle">0</text>
+          <text x="285" y="61" text-anchor="middle">1</text>
+          <text x="385" y="61" text-anchor="middle">2</text>
+          <text x="85"  y="100" text-anchor="middle" font-size="11" fill="var(--ghost)">GHOST → 0</text>
+          <text x="185" y="100" text-anchor="middle" font-size="11" class="cap">real edge</text>
+        </g>
+
+        <text x="480" y="40" font-size="12.5" font-weight="700" fill="var(--amber)">In the load phase:</text>
+        <text x="480" y="62" font-size="12">L = gindex − R = −1</text>
+        <text x="480" y="82" font-size="12">(L &gt;= 0)? in[L] : 0.f</text>
+        <text x="480" y="102" font-size="12" fill="var(--ghost)">         └─ picks 0</text>
+
+        <rect x="40" y="128" width="696" height="74" rx="10" fill="var(--teal-soft)" stroke="var(--teal)"/>
+        <text x="58" y="152" font-size="13" font-weight="700" fill="var(--teal)">The payoff of doing bounds checks during load</text>
+        <text x="58" y="174" font-size="12.5">Once every tile slot — interior, halo, and out-of-bounds ghost — holds a valid value,</text>
+        <text x="58" y="192" font-size="12.5">the compute loop needs ZERO per-tap bounds checks. All the edge logic is concentrated up front.</text>
+      </svg>
+      <figcaption><b>Concentrate the branching.</b> In the naïve kernel you'd guard every output (<code class="inl">if (i&gt;=R &amp;&amp; i&lt;n-R)</code>) and risk branching inside the inner loop. In the tiled kernel, the only conditionals are in the load phase; the inner product runs branch-free. Different boundary conditions (Dirichlet&nbsp;=&nbsp;0, Neumann&nbsp;=&nbsp;clamp, periodic&nbsp;=&nbsp;wrap) are just different fallback values when the source index is out of range.</figcaption>
+    </figure>
+
+    <div class="note teal">
+      <span class="lbl">Rule of thumb</span>
+      <p><strong>Halo</strong> is about <em>blocks not seeing each other's data</em> — solved by loading a few extra real cells. <strong>Ghost</strong> is about <em>the domain ending</em> — solved by a boundary condition. A tile at the array's interior has halo but no ghost; a tile at the corner of the domain has both.</p>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ============================================================ 06 -->
+  <section id="twod">
+    <div class="sec-head"><div class="sec-num">06</div><h2>Stepping up: 2D indexing &amp; the 5-point stencil</h2></div>
+    <p class="lede">The 2D <em>cross</em> stencil reads a center plus its four orthogonal neighbours. In row-major memory those neighbours are <code class="inl">±1</code> and <code class="inl">±width</code> away.</p>
+
+    <figure>
+      <!-- SVG: 5-point cross + 9-point -->
+      <svg viewBox="0 0 760 270" role="img" aria-label="A 5-point cross stencil and a 9-point box stencil on a grid">
+        <text x="0" y="16" font-size="13" font-weight="700">5-point (von Neumann) — R = 1, 5 taps</text>
+        <!-- cross at center -->
+        <g font-size="11">
+          <!-- 3x3 around center; cell 50, center at (160,120) -->
+          <!-- top -->
+          <rect x="135" y="40"  width="50" height="50" rx="6" fill="var(--teal-soft)" stroke="var(--teal)"/>
+          <text x="160" y="70" text-anchor="middle">idx−w</text>
+          <!-- left -->
+          <rect x="80"  y="95" width="50" height="50" rx="6" fill="var(--teal-soft)" stroke="var(--teal)"/>
+          <text x="105" y="125" text-anchor="middle">idx−1</text>
+          <!-- center -->
+          <rect x="135" y="95" width="50" height="50" rx="6" fill="var(--amber-soft)" stroke="var(--amber)" stroke-width="2.4"/>
+          <text x="160" y="125" text-anchor="middle" font-weight="700" fill="var(--amber)">idx</text>
+          <!-- right -->
+          <rect x="190" y="95" width="50" height="50" rx="6" fill="var(--teal-soft)" stroke="var(--teal)"/>
+          <text x="215" y="125" text-anchor="middle">idx+1</text>
+          <!-- bottom -->
+          <rect x="135" y="150" width="50" height="50" rx="6" fill="var(--teal-soft)" stroke="var(--teal)"/>
+          <text x="160" y="180" text-anchor="middle">idx+w</text>
+        </g>
+
+        <text x="430" y="16" font-size="13" font-weight="700">9-point (Moore) — adds 4 diagonals, 9 taps</text>
+        <g font-size="10.5">
+          <!-- 3x3 full; center (560,120) cell 50 -->
+          <rect x="505" y="40"  width="50" height="50" rx="6" fill="var(--violet-soft)" stroke="var(--violet)"/>
+          <rect x="560" y="40"  width="50" height="50" rx="6" fill="var(--teal-soft)" stroke="var(--teal)"/>
+          <rect x="615" y="40"  width="50" height="50" rx="6" fill="var(--violet-soft)" stroke="var(--violet)"/>
+          <rect x="505" y="95"  width="50" height="50" rx="6" fill="var(--teal-soft)" stroke="var(--teal)"/>
+          <rect x="560" y="95"  width="50" height="50" rx="6" fill="var(--amber-soft)" stroke="var(--amber)" stroke-width="2.4"/>
+          <rect x="615" y="95"  width="50" height="50" rx="6" fill="var(--teal-soft)" stroke="var(--teal)"/>
+          <rect x="505" y="150" width="50" height="50" rx="6" fill="var(--violet-soft)" stroke="var(--violet)"/>
+          <rect x="560" y="150" width="50" height="50" rx="6" fill="var(--teal-soft)" stroke="var(--teal)"/>
+          <rect x="615" y="150" width="50" height="50" rx="6" fill="var(--violet-soft)" stroke="var(--violet)"/>
+          <text x="530" y="70"  text-anchor="middle" fill="var(--violet)">−w−1</text>
+          <text x="585" y="70"  text-anchor="middle">−w</text>
+          <text x="640" y="70"  text-anchor="middle" fill="var(--violet)">−w+1</text>
+          <text x="530" y="125" text-anchor="middle">−1</text>
+          <text x="585" y="125" text-anchor="middle" font-weight="700" fill="var(--amber)">idx</text>
+          <text x="640" y="125" text-anchor="middle">+1</text>
+          <text x="530" y="180" text-anchor="middle" fill="var(--violet)">+w−1</text>
+          <text x="585" y="180" text-anchor="middle">+w</text>
+          <text x="640" y="180" text-anchor="middle" fill="var(--violet)">+w+1</text>
+        </g>
+
+        <text x="0" y="240" font-size="12.5" class="cap">The diagonals (violet) are the only reason a 9-point tile must also load its four corner halo cells — a 5-point tile can skip them.</text>
+      </svg>
+      <figcaption><b>Memory offsets, not coordinates.</b> Because the array is flat, "up" is literally <code class="inl">idx − width</code> and "down-right" is <code class="inl">idx + width + 1</code>. The stencil <em>shape</em> determines which halo cells you must load.</figcaption>
+    </figure>
+
+    <div class="codewrap">
+      <div class="codebar"><span class="dot"></span> stencil_2d_naive.cu</div>
+<pre><span class="k">__global__</span> <span class="k">void</span> <span class="f">stencil2d_naive</span>(<span class="k">const</span> <span class="k">float</span><span class="p">*</span> in, <span class="k">float</span><span class="p">*</span> out,
+                                <span class="k">int</span> width, <span class="k">int</span> height){
+    <span class="k">int</span> col = blockIdx.x <span class="p">*</span> blockDim.x + threadIdx.x;
+    <span class="k">int</span> row = blockIdx.y <span class="p">*</span> blockDim.y + threadIdx.y;
+    <span class="k">if</span> (row &gt; <span class="n">0</span> &amp;&amp; row &lt; height<span class="p">-</span><span class="n">1</span> &amp;&amp; col &gt; <span class="n">0</span> &amp;&amp; col &lt; width<span class="p">-</span><span class="n">1</span>){
+        <span class="k">int</span> o = row <span class="p">*</span> width + col;
+        out[o] = cC<span class="p">*</span>in[o]
+               + cN<span class="p">*</span>in[o <span class="p">-</span> width] + cS<span class="p">*</span>in[o + width]   <span class="c">// up / down</span>
+               + cW<span class="p">*</span>in[o <span class="p">-</span> <span class="n">1</span>]     + cE<span class="p">*</span>in[o + <span class="n">1</span>];      <span class="c">// left / right</span>
+    }
+}</pre>
+    </div>
+    <p>Here each interior element is read by up to <strong>5</strong> different output computations — even worse pressure than 1D.</p>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ============================================================ 07 -->
+  <section id="tiled2d">
+    <div class="sec-head"><div class="sec-num">07</div><h2>2D tiling: a tile wrapped in a halo border</h2></div>
+    <p class="lede">A <code class="inl">TY × TX</code> block of threads loads a <code class="inl">(TY+2R) × (TX+2R)</code> tile: the interior, plus a one-cell-thick border on all sides.</p>
+
+    <figure>
+      <!-- SVG: 2D tile with halo border -->
+      <svg viewBox="0 0 760 420" role="img" aria-label="An 8x8 interior tile surrounded by a one-cell halo border, total 10x10">
+        <text x="0" y="16" font-size="13" font-weight="700">Shared tile  (TX=8, TY=8, R=1)  →  10 × 10 cells</text>
+        <!-- draw 10x10 grid, cell 34, start x=70 y=30 -->
+        <g>
+          <!-- We'll loop manually: top halo row, then 8 rows with side halos, then bottom halo row -->
+          <!-- For brevity, draw border as one big frame + interior block, then a few labels -->
+          <!-- full 10x10 background of halo color -->
+          <rect x="70" y="30" width="340" height="340" rx="6" fill="var(--amber-soft)" stroke="var(--amber)" stroke-width="2"/>
+          <!-- interior 8x8 -->
+          <rect x="104" y="64" width="272" height="272" rx="3" fill="var(--teal-soft)" stroke="var(--teal)" stroke-width="2"/>
+          <!-- grid lines -->
+          <g stroke="rgba(80,70,40,.22)" stroke-width="1">
+            <!-- verticals every 34 from 70 to 410 -->
+            <line x1="104" y1="30" x2="104" y2="370"/>
+            <line x1="138" y1="30" x2="138" y2="370"/>
+            <line x1="172" y1="30" x2="172" y2="370"/>
+            <line x1="206" y1="30" x2="206" y2="370"/>
+            <line x1="240" y1="30" x2="240" y2="370"/>
+            <line x1="274" y1="30" x2="274" y2="370"/>
+            <line x1="308" y1="30" x2="308" y2="370"/>
+            <line x1="342" y1="30" x2="342" y2="370"/>
+            <line x1="376" y1="30" x2="376" y2="370"/>
+            <line x1="70" y1="64"  x2="410" y2="64"/>
+            <line x1="70" y1="98"  x2="410" y2="98"/>
+            <line x1="70" y1="132" x2="410" y2="132"/>
+            <line x1="70" y1="166" x2="410" y2="166"/>
+            <line x1="70" y1="200" x2="410" y2="200"/>
+            <line x1="70" y1="234" x2="410" y2="234"/>
+            <line x1="70" y1="268" x2="410" y2="268"/>
+            <line x1="70" y1="302" x2="410" y2="302"/>
+            <line x1="70" y1="336" x2="410" y2="336"/>
+          </g>
+          <!-- corner cells marked (not needed for 5-point) -->
+          <g fill="#f0e0c2" stroke="var(--amber)">
+            <rect x="70" y="30" width="34" height="34"/>
+            <rect x="376" y="30" width="34" height="34"/>
+            <rect x="70" y="336" width="34" height="34"/>
+            <rect x="376" y="336" width="34" height="34"/>
+          </g>
+          <text x="87" y="51" font-size="9" text-anchor="middle" fill="var(--amber)">×</text>
+          <text x="393" y="51" font-size="9" text-anchor="middle" fill="var(--amber)">×</text>
+          <text x="87" y="357" font-size="9" text-anchor="middle" fill="var(--amber)">×</text>
+          <text x="393" y="357" font-size="9" text-anchor="middle" fill="var(--amber)">×</text>
+
+          <text x="240" y="206" font-size="13" font-weight="700" fill="var(--teal)" text-anchor="middle">interior</text>
+          <text x="240" y="224" font-size="11" fill="var(--teal)" text-anchor="middle">TY × TX = 64 threads</text>
+        </g>
+
+        <!-- labels for halo regions -->
+        <text x="240" y="22" font-size="11" fill="var(--amber)" text-anchor="middle">↑ top halo (loaded by threads with ty &lt; R)</text>
+        <text x="240" y="392" font-size="11" fill="var(--amber)" text-anchor="middle">↓ bottom halo (ty &lt; R)</text>
+        <text x="55" y="200" font-size="11" fill="var(--amber)" text-anchor="middle" transform="rotate(-90 55 200)">left halo (tx &lt; R)</text>
+        <text x="425" y="200" font-size="11" fill="var(--amber)" text-anchor="middle" transform="rotate(90 425 200)">right halo (tx &lt; R)</text>
+
+        <!-- side explainer -->
+        <g>
+          <rect x="470" y="40" width="266" height="330" rx="10" fill="#faf6ec" stroke="var(--rule)"/>
+          <text x="486" y="66" font-size="13" font-weight="700">Who loads what</text>
+          <text x="486" y="92"  font-size="12">• <tspan fill="var(--teal)" font-weight="700">all 64 threads</tspan>: one interior</text>
+          <text x="500" y="110" font-size="12">cell each (the bulk load).</text>
+          <text x="486" y="138" font-size="12">• <tspan fill="var(--amber)" font-weight="700">tx &lt; R</tspan>: left + right</text>
+          <text x="500" y="156" font-size="12">column halos.</text>
+          <text x="486" y="184" font-size="12">• <tspan fill="var(--amber)" font-weight="700">ty &lt; R</tspan>: top + bottom</text>
+          <text x="500" y="202" font-size="12">row halos.</text>
+          <text x="486" y="230" font-size="12">• <tspan fill="var(--amber)" font-weight="700">corners (×)</tspan>: only the</text>
+          <text x="500" y="248" font-size="12">9-point stencil needs them;</text>
+          <text x="500" y="266" font-size="12">a 5-point cross does not.</text>
+          <line x1="486" y1="286" x2="720" y2="286" stroke="var(--rule)"/>
+          <text x="486" y="310" font-size="11.5" fill="var(--ink-faint)">Reads per block: 10×10 = 100</text>
+          <text x="486" y="330" font-size="11.5" fill="var(--ink-faint)">Outputs per block: 8×8 = 64</text>
+          <text x="486" y="352" font-size="11.5" fill="var(--amber)" font-weight="700">100 reads vs 64×5 = 320 naïve</text>
+        </g>
+      </svg>
+      <figcaption><b>The border is the halo.</b> 64 threads produce 64 outputs but the block loads a 10×10 = 100-cell tile. Compare that to the naïve <code class="inl">64 × 5 = 320</code> global reads for the same outputs — already a 3.2× cut, and it improves with tile size.</figcaption>
+    </figure>
+
+    <div class="codewrap">
+      <div class="codebar"><span class="dot"></span> stencil_2d_tiled.cu <span class="tag">5-point · corners skipped</span></div>
+<pre><span class="k">#define</span> R  <span class="n">1</span>
+<span class="k">#define</span> TX <span class="n">16</span>
+<span class="k">#define</span> TY <span class="n">16</span>
+
+<span class="k">__global__</span> <span class="k">void</span> <span class="f">stencil2d_tiled</span>(<span class="k">const</span> <span class="k">float</span><span class="p">*</span> in, <span class="k">float</span><span class="p">*</span> out,
+                                <span class="k">int</span> width, <span class="k">int</span> height){
+    <span class="k">__shared__</span> <span class="k">float</span> tile[TY + <span class="n">2</span><span class="p">*</span>R][TX + <span class="n">2</span><span class="p">*</span>R];
+
+    <span class="k">int</span> col = blockIdx.x <span class="p">*</span> blockDim.x + threadIdx.x;  <span class="c">// global x</span>
+    <span class="k">int</span> row = blockIdx.y <span class="p">*</span> blockDim.y + threadIdx.y;  <span class="c">// global y</span>
+    <span class="k">int</span> lx  = threadIdx.x + R;                        <span class="c">// local x</span>
+    <span class="k">int</span> ly  = threadIdx.y + R;                        <span class="c">// local y</span>
+
+    <span class="c">// (1) interior</span>
+    <span class="k">if</span> (row &lt; height &amp;&amp; col &lt; width)
+        tile[ly][lx] = in[row <span class="p">*</span> width + col];
+
+    <span class="c">// (2) left/right column halos</span>
+    <span class="k">if</span> (threadIdx.x &lt; R){
+        <span class="k">int</span> cl = col <span class="p">-</span> R, cr = col + TX;
+        tile[ly][lx <span class="p">-</span> R]  = (cl &gt;= <span class="n">0</span>)    ? in[row<span class="p">*</span>width + cl] : <span class="n">0.f</span>;
+        tile[ly][lx + TX] = (cr &lt; width) ? in[row<span class="p">*</span>width + cr] : <span class="n">0.f</span>;
+    }
+    <span class="c">// (3) top/bottom row halos</span>
+    <span class="k">if</span> (threadIdx.y &lt; R){
+        <span class="k">int</span> rt = row <span class="p">-</span> R, rb = row + TY;
+        tile[ly <span class="p">-</span> R][lx]  = (rt &gt;= <span class="n">0</span>)     ? in[rt<span class="p">*</span>width + col] : <span class="n">0.f</span>;
+        tile[ly + TY][lx] = (rb &lt; height) ? in[rb<span class="p">*</span>width + col] : <span class="n">0.f</span>;
+    }
+
+    <span class="f">__syncthreads</span>();
+
+    <span class="c">// (4) compute from shared memory</span>
+    <span class="k">if</span> (row &gt; <span class="n">0</span> &amp;&amp; row &lt; height<span class="p">-</span><span class="n">1</span> &amp;&amp; col &gt; <span class="n">0</span> &amp;&amp; col &lt; width<span class="p">-</span><span class="n">1</span>){
+        out[row<span class="p">*</span>width + col] =
+              cC<span class="p">*</span>tile[ly][lx]
+            + cN<span class="p">*</span>tile[ly<span class="p">-</span><span class="n">1</span>][lx] + cS<span class="p">*</span>tile[ly<span class="p">+</span><span class="n">1</span>][lx]
+            + cW<span class="p">*</span>tile[ly][lx<span class="p">-</span><span class="n">1</span>] + cE<span class="p">*</span>tile[ly][lx<span class="p">+</span><span class="n">1</span>];
+    }
+}</pre>
+    </div>
+
+    <div class="note">
+      <span class="lbl">Two things to keep in mind</span>
+      <p><strong>Bank conflicts:</strong> padding the inner tile dimension to <code class="inl">TX + 2R + 1</code> (an odd stride) often removes shared-memory bank conflicts — the same trick you used to speed up the transpose kernel. <strong>Corners for 9-point:</strong> a diagonal stencil also needs the four corner cells, loaded by the single thread where <code class="inl">tx &lt; R &amp;&amp; ty &lt; R</code>.</p>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ============================================================ 08 -->
+  <section id="efficiency">
+    <div class="sec-head"><div class="sec-num">08</div><h2>How much faster — and the honest caveat</h2></div>
+    <p class="lede">Stencils are almost always <strong>memory-bound</strong>, so the figure that matters is global-memory traffic. Tiling collapses the redundant reads toward the theoretical floor of "read each element once."</p>
+
+    <p>Global reads per output element:</p>
+    <ul class="clean">
+      <li><strong>Naïve:</strong> exactly the tap count — <code class="inl">2R+1</code> (1D) or <code class="inl">4R+1</code> (2D cross).</li>
+      <li><strong>Tiled:</strong> tile size ÷ outputs — <code class="inl">(B+2R)/B</code> (1D) or <code class="inl">(T+2R)²/T²</code> (2D), which → 1 as the tile grows.</li>
+    </ul>
+
+    <figure>
+      <!-- SVG bar chart of traffic reduction -->
+      <svg viewBox="0 0 760 300" role="img" aria-label="Bar chart of global read traffic, naive versus tiled">
+        <text x="0" y="16" font-size="13" font-weight="700">Global reads per output element (lower = better)</text>
+        <!-- axis -->
+        <line x1="170" y1="40" x2="170" y2="250" stroke="var(--rule)"/>
+        <!-- scale: max ~9, map value v to width: 1 unit = 56px -->
+        <!-- baseline gridlines -->
+        <g stroke="var(--rule-soft)" stroke-width="1">
+          <line x1="226" y1="40" x2="226" y2="250"/>
+          <line x1="282" y1="40" x2="282" y2="250"/>
+          <line x1="338" y1="40" x2="338" y2="250"/>
+          <line x1="394" y1="40" x2="394" y2="250"/>
+          <line x1="450" y1="40" x2="450" y2="250"/>
+          <line x1="506" y1="40" x2="506" y2="250"/>
+          <line x1="562" y1="40" x2="562" y2="250"/>
+          <line x1="618" y1="40" x2="618" y2="250"/>
+        </g>
+        <g font-size="10" class="cap">
+          <text x="170" y="266" text-anchor="middle">0</text>
+          <text x="282" y="266" text-anchor="middle">2</text>
+          <text x="394" y="266" text-anchor="middle">4</text>
+          <text x="506" y="266" text-anchor="middle">6</text>
+          <text x="618" y="266" text-anchor="middle">8</text>
+        </g>
+
+        <!-- rows: each has naive (slate) + tiled (teal) -->
+        <!-- helper: x = 170 + v*56 -->
+        <!-- 1D 3-pt: naive 3 -> 168 ; tiled 1.008 -> 56.4 -->
+        <g font-size="11.5">
+          <text x="0" y="64" font-weight="700">1D 3-pt</text>
+          <text x="0" y="80" class="cap" font-size="10">B=256</text>
+          <rect x="170" y="52" width="168" height="14" rx="3" fill="var(--slate)"/>
+          <rect x="170" y="70" width="56"  height="14" rx="3" fill="var(--teal)"/>
+          <text x="344" y="63" font-size="10" fill="var(--slate)">3.0</text>
+          <text x="232" y="81" font-size="10" fill="var(--teal)">≈1.01</text>
+        </g>
+        <g font-size="11.5">
+          <text x="0" y="116" font-weight="700">2D 5-pt</text>
+          <text x="0" y="132" class="cap" font-size="10">T=16</text>
+          <rect x="170" y="104" width="280" height="14" rx="3" fill="var(--slate)"/>
+          <rect x="170" y="122" width="71"  height="14" rx="3" fill="var(--teal)"/>
+          <text x="456" y="115" font-size="10" fill="var(--slate)">5.0</text>
+          <text x="247" y="133" font-size="10" fill="var(--teal)">≈1.27</text>
+        </g>
+        <g font-size="11.5">
+          <text x="0" y="168" font-weight="700">2D 5-pt</text>
+          <text x="0" y="184" class="cap" font-size="10">T=32</text>
+          <rect x="170" y="156" width="280" height="14" rx="3" fill="var(--slate)"/>
+          <rect x="170" y="174" width="63"  height="14" rx="3" fill="var(--teal)"/>
+          <text x="456" y="167" font-size="10" fill="var(--slate)">5.0</text>
+          <text x="239" y="185" font-size="10" fill="var(--teal)">≈1.13</text>
+        </g>
+        <g font-size="11.5">
+          <text x="0" y="220" font-weight="700">2D 9-pt</text>
+          <text x="0" y="236" class="cap" font-size="10">T=16</text>
+          <rect x="170" y="208" width="504" height="14" rx="3" fill="var(--slate)"/>
+          <rect x="170" y="226" width="71"  height="14" rx="3" fill="var(--teal)"/>
+          <text x="680" y="219" font-size="10" fill="var(--slate)">9.0</text>
+          <text x="247" y="237" font-size="10" fill="var(--teal)">≈1.27</text>
+        </g>
+
+        <!-- legend -->
+        <g font-size="11">
+          <rect x="170" y="282" width="14" height="11" rx="2" fill="var(--slate)"/>
+          <text x="190" y="291">naïve (= tap count)</text>
+          <rect x="360" y="282" width="14" height="11" rx="2" fill="var(--teal)"/>
+          <text x="380" y="291">tiled (shared memory)</text>
+        </g>
+      </svg>
+      <figcaption><b>Traffic reduction factor</b> = naïve ÷ tiled: <b>≈3.0×</b> (1D), <b>≈3.9×</b> (2D 5-pt, T=16), <b>≈4.4×</b> (T=32), <b>≈7.1×</b> (2D 9-pt). Bigger tiles and bigger stencils reuse more, so they save more.</figcaption>
+    </figure>
+
+    <div class="tablewrap">
+      <table>
+        <caption>// theoretical global-read reduction from tiling</caption>
+        <thead><tr><th>Stencil</th><th class="mono">tile / block</th><th class="mono">naïve reads/elem</th><th class="mono">tiled reads/elem</th><th>reduction</th></tr></thead>
+        <tbody>
+          <tr><td>1D 3-point</td><td class="mono">B = 256</td><td class="mono">3</td><td class="mono">258/256 ≈ 1.008</td><td class="mono big">2.98×</td></tr>
+          <tr><td>2D 5-point</td><td class="mono">T = 16</td><td class="mono">5</td><td class="mono">324/256 ≈ 1.27</td><td class="mono big">3.95×</td></tr>
+          <tr><td>2D 5-point</td><td class="mono">T = 32</td><td class="mono">5</td><td class="mono">1156/1024 ≈ 1.13</td><td class="mono big">4.43×</td></tr>
+          <tr><td>2D 9-point</td><td class="mono">T = 16</td><td class="mono">9</td><td class="mono">324/256 ≈ 1.27</td><td class="mono big">7.11×</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note">
+      <span class="lbl">The honest caveat — don't expect the full factor in wall-clock time</span>
+      <p>Those numbers are <strong>reductions in global-memory traffic</strong>, not guaranteed speedups. On modern GPUs the L1/L2 caches already capture much of the naïve kernel's reuse, so a hand-written shared-memory tile sometimes wins only modestly — often <strong>~1.5–3×</strong> for simple low-radius stencils, and occasionally close to nothing when the caches were already doing the job. Shared-memory tiling pays off most clearly when: the radius is large (more reuse to harvest), the tile is sized for high occupancy, you've eliminated bank conflicts, and the working set would otherwise thrash the cache. <strong>Always measure</strong> (e.g. Nsight Compute's memory-throughput and L2-hit-rate counters) rather than trusting the arithmetic alone.</p>
+    </div>
+
+    <p>Other real-world costs the formula ignores: the <code class="inl">__syncthreads()</code> barrier, the shared-memory capacity limit (it caps occupancy), bank conflicts on the inner tile dimension, and the extra index arithmetic in the load phase. None of these are large for well-tuned kernels, but they're why the measured curve sits below the theoretical one.</p>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ============================================================ 09 -->
+  <section id="cheat">
+    <div class="sec-head"><div class="sec-num">09</div><h2>One-page cheat sheet</h2></div>
+
+    <div class="tablewrap">
+      <table>
+        <caption>// the index algebra, all in one place</caption>
+        <thead><tr><th>Quantity</th><th class="mono">1D</th><th class="mono">2D (row-major)</th></tr></thead>
+        <tbody>
+          <tr><td>global index</td><td class="mono">i = bIdx.x·bDim.x + tIdx.x</td><td class="mono">col=…x, row=…y; idx=row·width+col</td></tr>
+          <tr><td>local (tile) index</td><td class="mono">lindex = tIdx.x + R</td><td class="mono">lx=tIdx.x+R, ly=tIdx.y+R</td></tr>
+          <tr><td>tile size</td><td class="mono">B + 2R</td><td class="mono">(TY+2R)·(TX+2R)</td></tr>
+          <tr><td>neighbour offsets</td><td class="mono">±1</td><td class="mono">±1 (LR), ±width (UD), ±width±1 (diag)</td></tr>
+          <tr><td>who loads halo</td><td class="mono">tIdx.x &lt; R</td><td class="mono">tIdx.x&lt;R (cols), tIdx.y&lt;R (rows)</td></tr>
+          <tr><td>ghost value (OOB)</td><td class="mono">0 / clamp / wrap</td><td class="mono">0 / clamp / wrap</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>The four-beat pattern, every time</h3>
+    <ul class="clean">
+      <li><strong>1 · Map</strong> — turn <code class="inl">(blockIdx, threadIdx)</code> into <code class="inl">gindex</code> and <code class="inl">lindex</code>.</li>
+      <li><strong>2 · Load</strong> — every thread copies its interior cell; edge threads also copy halo cells, substituting the ghost value when the source is out of bounds. <em>All bounds checks live here.</em></li>
+      <li><strong>3 · Sync</strong> — <code class="inl">__syncthreads()</code> so the whole tile is visible before anyone reads a neighbour.</li>
+      <li><strong>4 · Compute</strong> — the weighted sum, reading only from shared memory, writing one output. Branch-free inner loop.</li>
+    </ul>
+
+    <div class="note teal">
+      <span class="lbl">The one-sentence version</span>
+      <p>Tiling trades a little redundant <em>shared</em>-memory storage (the halo) for a large reduction in redundant <em>global</em>-memory traffic — and the bigger the stencil and the tile, the better that trade gets.</p>
+    </div>
+  </section>
+
+  <footer>
+    Stencil &amp; Shared-Memory Tiling — visual field guide · 1D 3-point &amp; 2D 5-/9-point · all kernels assume a full block (blockDim == tile dim) · self-contained HTML, open anywhere offline.
+  </footer>
+
+</div>
+</body>
+</html>
