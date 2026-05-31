@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Columnar Data &amp; the GPU Stack — A Systematic Guide</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Spectral:ital,wght@0,300;0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+:root{
+  --bg:#0d0e12;
+  --bg-soft:#14161d;
+  --panel:#191c25;
+  --panel-2:#20242f;
+  --ink:#ece9e1;
+  --ink-dim:#a39f95;
+  --ink-faint:#6f6d66;
+  --line:#2a2e3a;
+  --line-soft:#21242e;
+  --amber:#e6a55c;      /* row-major / primary accent */
+  --cyan:#5cc8d6;       /* column-major / interchange */
+  --green:#93d17e;      /* GPU / CUDA */
+  --coral:#e8806c;      /* warnings / contrast */
+  --violet:#b290da;     /* secondary highlight */
+  --shadow:0 18px 50px -18px rgba(0,0,0,.7);
+  --radius:14px;
+}
+
+*{box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{
+  margin:0;
+  background:
+    radial-gradient(1200px 700px at 85% -10%, rgba(230,165,92,.07), transparent 60%),
+    radial-gradient(1000px 600px at -5% 20%, rgba(92,200,214,.06), transparent 55%),
+    var(--bg);
+  color:var(--ink);
+  font-family:'Spectral', Georgia, 'Times New Roman', serif;
+  font-size:18px;
+  line-height:1.68;
+  -webkit-font-smoothing:antialiased;
+}
+
+/* scroll progress */
+#progress{position:fixed;top:0;left:0;height:3px;width:0%;
+  background:linear-gradient(90deg,var(--amber),var(--cyan),var(--green));
+  z-index:100;transition:width .08s linear;}
+
+.wrap{max-width:1280px;margin:0 auto;padding:0 28px;
+  display:grid;grid-template-columns:262px minmax(0,1fr);gap:48px;}
+
+/* ---------- sidebar TOC ---------- */
+aside{position:sticky;top:0;align-self:start;height:100vh;overflow-y:auto;
+  padding:40px 0 60px;border-right:1px solid var(--line-soft);}
+aside .brand{font-family:'Bricolage Grotesque',sans-serif;font-weight:800;
+  font-size:.82rem;letter-spacing:.16em;text-transform:uppercase;color:var(--amber);
+  margin-bottom:6px;}
+aside .brand-sub{font-size:.78rem;color:var(--ink-faint);margin-bottom:26px;
+  font-family:'JetBrains Mono',monospace;letter-spacing:.02em;}
+.toc a{display:block;color:var(--ink-dim);text-decoration:none;font-size:.86rem;
+  padding:6px 12px 6px 14px;border-left:2px solid transparent;line-height:1.35;
+  transition:all .18s ease;font-family:'Bricolage Grotesque',sans-serif;}
+.toc a:hover{color:var(--ink);border-left-color:var(--line);}
+.toc a.active{color:var(--amber);border-left-color:var(--amber);background:rgba(230,165,92,.06);}
+.toc .num{font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--ink-faint);
+  margin-right:8px;}
+
+/* ---------- main ---------- */
+main{padding:40px 0 120px;min-width:0;}
+
+header.hero{margin-bottom:64px;padding-bottom:38px;border-bottom:1px solid var(--line);}
+.kicker{font-family:'JetBrains Mono',monospace;font-size:.75rem;letter-spacing:.28em;
+  text-transform:uppercase;color:var(--cyan);margin-bottom:18px;}
+h1{font-family:'Bricolage Grotesque',sans-serif;font-weight:800;
+  font-size:clamp(2.3rem,5vw,3.7rem);line-height:1.02;letter-spacing:-.02em;
+  margin:0 0 22px;color:var(--ink);}
+h1 em{font-style:normal;color:var(--amber);}
+.lede{font-size:1.18rem;color:var(--ink-dim);max-width:62ch;line-height:1.6;}
+
+section{margin-bottom:78px;scroll-margin-top:24px;}
+.sec-tag{font-family:'JetBrains Mono',monospace;font-size:.74rem;letter-spacing:.16em;
+  color:var(--ink-faint);text-transform:uppercase;margin-bottom:10px;display:block;}
+h2{font-family:'Bricolage Grotesque',sans-serif;font-weight:800;
+  font-size:clamp(1.7rem,3.4vw,2.5rem);line-height:1.08;letter-spacing:-.015em;
+  margin:0 0 8px;color:var(--ink);}
+h2 .accent{color:var(--amber);}
+h3{font-family:'Bricolage Grotesque',sans-serif;font-weight:600;font-size:1.32rem;
+  margin:42px 0 12px;color:var(--ink);letter-spacing:-.01em;}
+h4{font-family:'Bricolage Grotesque',sans-serif;font-weight:600;font-size:1.04rem;
+  margin:26px 0 8px;color:var(--cyan);letter-spacing:.01em;}
+p{margin:0 0 18px;}
+.section-rule{height:1px;background:linear-gradient(90deg,var(--line),transparent);
+  margin:0 0 30px;}
+strong{color:var(--ink);font-weight:600;}
+em.term{font-style:normal;color:var(--amber);font-weight:500;}
+a.inline{color:var(--cyan);text-decoration:none;border-bottom:1px solid rgba(92,200,214,.35);}
+a.inline:hover{border-bottom-color:var(--cyan);}
+
+ul,ol{margin:0 0 20px;padding-left:0;list-style:none;}
+li{position:relative;padding-left:26px;margin-bottom:11px;}
+ul li::before{content:"";position:absolute;left:4px;top:.62em;width:7px;height:7px;
+  background:var(--amber);transform:rotate(45deg);}
+ol{counter-reset:li;}
+ol li{counter-increment:li;}
+ol li::before{content:counter(li);position:absolute;left:0;top:.05em;
+  font-family:'JetBrains Mono',monospace;font-size:.78rem;color:var(--cyan);
+  font-weight:700;}
+
+code{font-family:'JetBrains Mono',monospace;font-size:.85em;
+  background:var(--panel-2);padding:.12em .42em;border-radius:5px;
+  color:var(--amber);border:1px solid var(--line-soft);}
+pre{background:var(--bg-soft);border:1px solid var(--line);border-radius:10px;
+  padding:18px 20px;overflow-x:auto;margin:0 0 22px;font-size:.83rem;line-height:1.6;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.02);}
+pre code{background:none;border:none;padding:0;color:var(--ink-dim);font-size:1em;}
+.cm-k{color:var(--violet);}      /* keyword */
+.cm-f{color:var(--cyan);}        /* func */
+.cm-c{color:var(--ink-faint);font-style:italic;}  /* comment */
+.cm-s{color:var(--green);}       /* string */
+.cm-n{color:var(--amber);}       /* number/highlight */
+
+/* panels & callouts */
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+  padding:26px 28px;margin:0 0 26px;box-shadow:var(--shadow);}
+.callout{border-left:3px solid var(--cyan);background:rgba(92,200,214,.05);
+  border-radius:0 10px 10px 0;padding:16px 20px;margin:0 0 24px;font-size:.97rem;}
+.callout.warn{border-left-color:var(--coral);background:rgba(232,128,108,.06);}
+.callout.key{border-left-color:var(--amber);background:rgba(230,165,92,.06);}
+.callout .lbl{font-family:'JetBrains Mono',monospace;font-size:.7rem;letter-spacing:.14em;
+  text-transform:uppercase;display:block;margin-bottom:6px;color:var(--cyan);}
+.callout.warn .lbl{color:var(--coral);}
+.callout.key .lbl{color:var(--amber);}
+
+/* tables */
+.tbl-wrap{overflow-x:auto;margin:0 0 26px;border:1px solid var(--line);
+  border-radius:10px;}
+table{border-collapse:collapse;width:100%;font-size:.88rem;}
+th,td{text-align:left;padding:12px 16px;border-bottom:1px solid var(--line-soft);
+  vertical-align:top;}
+th{font-family:'Bricolage Grotesque',sans-serif;font-weight:600;color:var(--cyan);
+  background:var(--bg-soft);font-size:.8rem;letter-spacing:.04em;text-transform:uppercase;}
+tr:last-child td{border-bottom:none;}
+td:first-child{color:var(--ink);font-weight:500;}
+
+/* ---------- memory layout diagrams ---------- */
+.diagram{background:var(--bg-soft);border:1px solid var(--line);border-radius:12px;
+  padding:26px;margin:0 0 26px;}
+.diagram .dtitle{font-family:'JetBrains Mono',monospace;font-size:.74rem;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:18px;}
+.cells{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;}
+.cell{font-family:'JetBrains Mono',monospace;font-size:.82rem;min-width:44px;height:44px;
+  display:flex;align-items:center;justify-content:center;border-radius:6px;
+  border:1px solid var(--line);color:var(--ink);font-weight:500;}
+.cell.lbl{background:transparent;border:none;color:var(--ink-faint);min-width:auto;
+  padding-right:8px;font-size:.74rem;}
+.r0{background:rgba(230,165,92,.16);border-color:rgba(230,165,92,.45);}
+.r1{background:rgba(92,200,214,.16);border-color:rgba(92,200,214,.45);}
+.r2{background:rgba(147,209,126,.16);border-color:rgba(147,209,126,.45);}
+.c0{background:rgba(230,165,92,.16);border-color:rgba(230,165,92,.45);}
+.c1{background:rgba(92,200,214,.16);border-color:rgba(92,200,214,.45);}
+.c2{background:rgba(147,209,126,.16);border-color:rgba(147,209,126,.45);}
+.cell.null{background:repeating-linear-gradient(45deg,var(--panel-2),var(--panel-2) 5px,var(--bg-soft) 5px,var(--bg-soft) 10px);color:var(--ink-faint);}
+.matrix-grid{display:grid;grid-template-columns:repeat(3,44px);gap:4px;width:max-content;
+  margin-bottom:8px;}
+.flow-note{font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--ink-faint);
+  margin-top:4px;}
+
+/* stack diagram */
+.stack{display:flex;flex-direction:column;gap:8px;margin:0 0 8px;}
+.layer{border:1px solid var(--line);border-radius:9px;padding:13px 18px;
+  background:var(--panel);display:flex;justify-content:space-between;align-items:center;
+  gap:14px;flex-wrap:wrap;}
+.layer .ttl{font-family:'Bricolage Grotesque',sans-serif;font-weight:600;font-size:.98rem;}
+.layer .desc{font-size:.82rem;color:var(--ink-dim);}
+.layer.l-py{border-left:4px solid var(--amber);}
+.layer.l-cpp{border-left:4px solid var(--cyan);}
+.layer.l-prim{border-left:4px solid var(--violet);}
+.layer.l-mem{border-left:4px solid var(--green);}
+.layer.l-hw{border-left:4px solid var(--coral);background:var(--bg-soft);}
+
+/* badge row */
+.badges{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 22px;}
+.badge{font-family:'JetBrains Mono',monospace;font-size:.72rem;padding:5px 11px;
+  border-radius:30px;border:1px solid var(--line);color:var(--ink-dim);
+  background:var(--panel);}
+.badge.am{color:var(--amber);border-color:rgba(230,165,92,.4);}
+.badge.cy{color:var(--cyan);border-color:rgba(92,200,214,.4);}
+.badge.gr{color:var(--green);border-color:rgba(147,209,126,.4);}
+
+/* two-col compare */
+.cols2{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:0 0 24px;}
+.cols2 .col{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+  padding:20px 22px;}
+.cols2 .col h4{margin-top:0;}
+
+footer{border-top:1px solid var(--line);padding:36px 0 20px;color:var(--ink-faint);
+  font-size:.84rem;font-family:'JetBrains Mono',monospace;}
+
+/* responsive */
+@media(max-width:920px){
+  .wrap{grid-template-columns:1fr;gap:0;}
+  aside{position:relative;height:auto;border-right:none;border-bottom:1px solid var(--line);
+    padding:28px 0;}
+  aside .toc{columns:2;column-gap:18px;}
+  main{padding-top:30px;}
+  .cols2{grid-template-columns:1fr;}
+  body{font-size:17px;}
+}
+@media(max-width:560px){
+  .wrap{padding:0 18px;}
+  aside .toc{columns:1;}
+}
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<div class="wrap">
+
+<!-- ============ SIDEBAR ============ -->
+<aside>
+  <div class="brand">Columnar &amp; the GPU Stack</div>
+  <div class="brand-sub">a systematic field guide</div>
+  <nav class="toc">
+    <a href="#layout"><span class="num">01</span>Row vs Column major</a>
+    <a href="#arrow"><span class="num">02</span>Apache Arrow</a>
+    <a href="#parquet"><span class="num">03</span>Apache Parquet</a>
+    <a href="#cudf"><span class="num">04</span>cuDF &amp; CUDA</a>
+    <a href="#thrust"><span class="num">05</span>Thrust, CUB, RMM &amp; co.</a>
+    <a href="#ray"><span class="num">06</span>Ray &amp; Arrow</a>
+    <a href="#numpy"><span class="num">07</span>NumPy memory</a>
+    <a href="#torch"><span class="num">08</span>PyTorch tensors</a>
+    <a href="#glue"><span class="num">09</span>The interchange glue</a>
+    <a href="#map"><span class="num">10</span>The whole map</a>
+  </nav>
+</aside>
+
+<!-- ============ MAIN ============ -->
+<main>
+<header class="hero">
+  <div class="kicker">In-memory · On-disk · On-device</div>
+  <h1>How data is <em>laid out</em>, and why the GPU stack is built the way it is.</h1>
+  <p class="lede">One idea — store columns together, not rows — runs through almost everything here: Arrow, Parquet, cuDF, and the way a GPU actually reads memory. This guide builds it up from first principles, then walks the whole tooling chain on top.</p>
+</header>
+
+<!-- ===== 01 LAYOUT ===== -->
+<section id="layout">
+  <span class="sec-tag">01 · The foundation</span>
+  <h2>Row-major vs <span class="accent">column-major</span></h2>
+  <div class="section-rule"></div>
+
+  <p>Memory is one-dimensional. A CPU or GPU addresses bytes in a flat line, <code>0, 1, 2, …</code>. Any structure with more than one dimension — a matrix, a table — has to be <em class="term">flattened</em> onto that line, and there is more than one way to do it. The choice is invisible to your code but decisive for performance.</p>
+
+  <h3>The 2-D array case (strides)</h3>
+  <p>Take a 3&times;3 matrix. <strong>Row-major</strong> order (used by C, C++, and NumPy by default) walks across each row before dropping to the next. <strong>Column-major</strong> order (Fortran, MATLAB, R, BLAS/LAPACK conventions) walks down each column first.</p>
+
+  <div class="diagram">
+    <div class="dtitle">Logical matrix — element (row, col)</div>
+    <div class="matrix-grid">
+      <div class="cell r0">0,0</div><div class="cell r0">0,1</div><div class="cell r0">0,2</div>
+      <div class="cell r1">1,0</div><div class="cell r1">1,1</div><div class="cell r1">1,2</div>
+      <div class="cell r2">2,0</div><div class="cell r2">2,1</div><div class="cell r2">2,2</div>
+    </div>
+    <div class="dtitle" style="margin-top:22px;">Row-major in linear memory — a whole row is contiguous</div>
+    <div class="cells">
+      <div class="cell r0">0,0</div><div class="cell r0">0,1</div><div class="cell r0">0,2</div>
+      <div class="cell r1">1,0</div><div class="cell r1">1,1</div><div class="cell r1">1,2</div>
+      <div class="cell r2">2,0</div><div class="cell r2">2,1</div><div class="cell r2">2,2</div>
+    </div>
+    <div class="flow-note">stride: move 1 slot = next column · move 3 slots = next row</div>
+    <div class="dtitle" style="margin-top:22px;">Column-major in linear memory — a whole column is contiguous</div>
+    <div class="cells">
+      <div class="cell c0">0,0</div><div class="cell c0">1,0</div><div class="cell c0">2,0</div>
+      <div class="cell c1">0,1</div><div class="cell c1">1,1</div><div class="cell c1">2,1</div>
+      <div class="cell c2">0,2</div><div class="cell c2">1,2</div><div class="cell c2">2,2</div>
+    </div>
+    <div class="flow-note">stride: move 1 slot = next row · move 3 slots = next column</div>
+  </div>
+
+  <p>The mechanism that makes both work without copying is the <em class="term">stride</em>: the number of bytes you step to advance one index along a given axis. Change the strides and the same buffer is reinterpreted — that is how a transpose can be free (just swap the strides) and why <code>arr.T</code> in NumPy returns a view, not a copy.</p>
+
+  <h3>A crucial distinction: "column-major" vs "columnar storage"</h3>
+  <p>These sound identical and are constantly confused. They are related but not the same thing:</p>
+  <div class="cols2">
+    <div class="col">
+      <h4>Column-major (strides)</h4>
+      <p style="margin:0;font-size:.95rem;">A property of a <strong>single, homogeneously-typed N-D array</strong> (all floats, say). It is about the order of axes in one buffer. Fortran/BLAS world.</p>
+    </div>
+    <div class="col">
+      <h4>Columnar storage (Arrow/Parquet)</h4>
+      <p style="margin:0;font-size:.95rem;">A property of a <strong>table with many differently-typed columns</strong>. Each column gets its <em>own</em> contiguous buffer. The database/analytics world.</p>
+    </div>
+  </div>
+  <p>Arrow and Parquet are "columnar" in the second sense: a table of <code>id (int)</code>, <code>name (string)</code>, <code>price (float)</code> is stored as three independent buffers, one per column, rather than as records where each row's three fields sit together. The intuition is the same — keep things you process together adjacent in memory — but applied to tables instead of matrices.</p>
+
+  <h3>Why the layout matters so much</h3>
+  <ul>
+    <li><strong>Cache locality.</strong> CPUs fetch memory in cache lines (~64 bytes), not single values. If your loop touches adjacent addresses, every fetched line is fully used. Summing one column: columnar gives you only the values you need, packed tight; row storage drags in every other field of every row and throws most of it away.</li>
+    <li><strong>SIMD / vectorization.</strong> A single instruction can add 8 or 16 contiguous values at once. That only works when same-typed values are adjacent — exactly what a column buffer provides. Row storage interleaves types and breaks vectorization.</li>
+    <li><strong>Compression.</strong> Values in one column are statistically similar (same type, similar magnitudes, repeats). Packing them together makes run-length, dictionary, and delta encoding dramatically more effective. Mixed-type rows compress poorly.</li>
+    <li><strong>Column pruning &amp; predicate pushdown.</strong> An analytical query like <code>SELECT AVG(price) WHERE region='US'</code> only needs two columns. Columnar lets you read just those, and skip whole blocks using per-block min/max stats. Row storage forces you to read everything.</li>
+    <li><strong>GPU coalesced access</strong> (the punchline for later). When 32 GPU threads in a warp each read one element of a contiguous buffer, the hardware merges those into a single wide memory transaction. Columnar layout is what makes that coalescing possible — it is the reason cuDF is columnar.</li>
+  </ul>
+
+  <div class="callout key">
+    <span class="lbl">The trade-off</span>
+    Columnar is a win for <strong>analytics</strong> (scan many rows, few columns, aggregate). Row-major wins for <strong>transactional</strong> work (read/update one entire record at a time — an OLTP database, a single user row). Neither is "better"; they optimize opposite access patterns.
+  </div>
+</section>
+
+<!-- ===== 02 ARROW ===== -->
+<section id="arrow">
+  <span class="sec-tag">02 · In-memory standard</span>
+  <h2>Apache <span class="accent">Arrow</span></h2>
+  <div class="section-rule"></div>
+
+  <p>Arrow is a <strong>language-independent specification for how columnar data lives in memory</strong>. That framing matters: it is not primarily a file format and not a library you "run." It is a precise, byte-level agreement about how a column should be laid out in RAM, so that any system — Python, C++, Java, Rust, a GPU library — that speaks Arrow can hand a buffer to any other system <em class="term">without serializing, copying, or converting</em> it.</p>
+
+  <div class="badges">
+    <span class="badge am">in-memory</span>
+    <span class="badge am">columnar</span>
+    <span class="badge cy">zero-copy</span>
+    <span class="badge cy">language-agnostic</span>
+    <span class="badge">little-endian canonical</span>
+    <span class="badge">64-byte aligned</span>
+  </div>
+
+  <p>Before Arrow, moving a dataframe from, say, a JVM system to Python meant serializing to some intermediate form and rebuilding it on the other side — often the dominant cost in a pipeline. Arrow's bet: if everyone agrees on the exact memory layout, that whole step disappears.</p>
+
+  <h3>The physical layout</h3>
+  <p>An Arrow array is built from a small number of contiguous <em class="term">buffers</em>. For a nullable primitive column (say <code>int32</code> values <code>[1, null, 3, 4]</code>):</p>
+
+  <div class="diagram">
+    <div class="dtitle">Validity bitmap — 1 bit per slot (1 = valid, 0 = null), LSB first</div>
+    <div class="cells">
+      <div class="cell lbl">bits</div>
+      <div class="cell r0">1</div><div class="cell null">0</div>
+      <div class="cell r0">1</div><div class="cell r0">1</div>
+    </div>
+    <div class="dtitle" style="margin-top:18px;">Values buffer — fixed-width, the null slot still occupies space</div>
+    <div class="cells">
+      <div class="cell lbl">int32</div>
+      <div class="cell r0">1</div><div class="cell null">·</div>
+      <div class="cell r0">3</div><div class="cell r0">4</div>
+    </div>
+  </div>
+
+  <p>Variable-length data (strings, lists, binary) adds an <em class="term">offsets buffer</em>. For <code>["arrow", "is", "fast"]</code>:</p>
+
+  <div class="diagram">
+    <div class="dtitle">Offsets (n+1 entries) — value i is data[ offsets[i] : offsets[i+1] ]</div>
+    <div class="cells">
+      <div class="cell lbl">int32</div>
+      <div class="cell c1">0</div><div class="cell c1">5</div>
+      <div class="cell c1">7</div><div class="cell c1">11</div>
+    </div>
+    <div class="dtitle" style="margin-top:18px;">Data buffer — all characters packed back-to-back, no separators</div>
+    <div class="cells">
+      <div class="cell c1" style="min-width:auto;padding:0 14px;">a r r o w</div>
+      <div class="cell c1" style="min-width:auto;padding:0 14px;">i s</div>
+      <div class="cell c1" style="min-width:auto;padding:0 14px;">f a s t</div>
+    </div>
+  </div>
+
+  <p>Because nulls live in a separate bitmap and values are packed densely, the value buffer is pure, same-typed data — ideal for SIMD and for GPU kernels. Buffers are padded to 64-byte boundaries so vector instructions never straddle the end of an allocation.</p>
+
+  <h3>The logical structure</h3>
+  <ul>
+    <li><em class="term">Array / ChunkedArray</em> — one column. A ChunkedArray is several Arrays glued logically end-to-end (lets you append without reallocating).</li>
+    <li><em class="term">RecordBatch</em> — a set of equal-length Arrays plus a <em>Schema</em>; i.e. a contiguous slab of a table.</li>
+    <li><em class="term">Table</em> — a Schema plus one ChunkedArray per column; a RecordBatch that may be chunked.</li>
+    <li><em class="term">Schema</em> — the field names and types; Arrow is self-describing.</li>
+  </ul>
+
+  <h3>How Arrow is actually moved around</h3>
+  <p>Arrow defines the in-memory shape, then bolts on standard ways to share it:</p>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Mechanism</th><th>Scope</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td>C Data Interface</td><td>Same process</td><td>Two tiny C structs (schema + array) that pass buffer pointers between libraries in-process — true zero-copy. This is how cuDF, pandas, Polars, DuckDB exchange data.</td></tr>
+        <tr><td>IPC / Feather</td><td>Disk &amp; pipes</td><td>The Arrow buffers written out (almost) as-is. Reading is mostly a memory-map: near-zero deserialization. Feather v2 <em>is</em> the Arrow IPC file format.</td></tr>
+        <tr><td>Flight</td><td>Network</td><td>A gRPC-based protocol to stream Arrow record batches between machines without row-by-row serialization.</td></tr>
+        <tr><td>ADBC</td><td>Databases</td><td>A database API that returns results already in Arrow, skipping the usual row-at-a-time driver conversion.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Compute on Arrow</h3>
+  <p>Several engines operate directly on Arrow buffers: <em class="term">Acero</em> (Arrow's C++ streaming execution engine), <em class="term">Gandiva</em> (compiles SQL-like expressions to native code via LLVM), and <em class="term">DataFusion</em> (a Rust query engine built on Arrow). The point is that once data is in the Arrow layout, many tools can compute on it in place.</p>
+
+  <div class="callout">
+    <span class="lbl">One-line mental model</span>
+    Arrow is the <strong>shared language for columnar data in memory</strong>. Parquet (next) is how that data rests on disk. They are partners, not competitors.
+  </div>
+</section>
+
+<!-- ===== 03 PARQUET ===== -->
+<section id="parquet">
+  <span class="sec-tag">03 · On-disk standard</span>
+  <h2>Apache <span class="accent">Parquet</span></h2>
+  <div class="section-rule"></div>
+
+  <p>Parquet is a <strong>columnar file format for storage</strong>. Where Arrow optimizes for fast access and computation in RAM, Parquet optimizes for the opposite constraints: minimal bytes on disk and minimal bytes read during a query. It is heavily encoded and compressed — wonderful for storage, but you must decode it before you can compute, which is exactly why it pairs with Arrow.</p>
+
+  <h3>File structure</h3>
+  <div class="diagram">
+    <div class="dtitle">Parquet file — nested containers, metadata at the end</div>
+    <div class="stack">
+      <div class="layer l-py"><span class="ttl">File</span><span class="desc">one logical table</span></div>
+      <div class="layer l-cpp" style="margin-left:18px;"><span class="ttl">Row Group</span><span class="desc">a horizontal slice of rows (~128&nbsp;MB) — the unit of parallelism</span></div>
+      <div class="layer l-prim" style="margin-left:36px;"><span class="ttl">Column Chunk</span><span class="desc">one column's data within that row group — contiguous on disk</span></div>
+      <div class="layer l-mem" style="margin-left:54px;"><span class="ttl">Page</span><span class="desc">smallest unit (~1&nbsp;MB): encoded + compressed, with min/max stats</span></div>
+      <div class="layer l-hw"><span class="ttl">Footer (FileMetaData)</span><span class="desc">schema · row-group locations · per-chunk statistics — read first</span></div>
+    </div>
+  </div>
+  <p>A reader opens the <strong>footer</strong> first to learn the schema and where each column chunk lives, then seeks directly to only the chunks it needs. Two superpowers fall out of this:</p>
+  <ul>
+    <li><em class="term">Column pruning (projection pushdown)</em> — need 3 of 200 columns? Read 3 column chunks, ignore the rest entirely.</li>
+    <li><em class="term">Predicate pushdown</em> — each chunk/page stores min &amp; max. Filtering <code>price &gt; 1000</code>? Any block whose max is 900 is skipped without being read or decompressed.</li>
+  </ul>
+
+  <h3>Encoding &amp; compression (the layered savings)</h3>
+  <p>Parquet first <em>encodes</em> (changes representation losslessly), then <em>compresses</em> (general-purpose codec on top):</p>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Technique</th><th>Idea</th><th>Great for</th></tr></thead>
+      <tbody>
+        <tr><td>Dictionary</td><td>Replace repeated values with small integer codes into a per-chunk dictionary</td><td>Low-cardinality columns (country, category)</td></tr>
+        <tr><td>RLE + bit-packing</td><td>Store "value &times; run length"; pack small ints into minimal bits</td><td>Long runs, dictionary codes</td></tr>
+        <tr><td>Delta</td><td>Store differences between consecutive values</td><td>Sorted / monotonic data (timestamps, IDs)</td></tr>
+        <tr><td>Codec (Snappy / ZSTD / GZIP / LZ4)</td><td>General compression over the encoded bytes</td><td>Everything — Snappy for speed, ZSTD for ratio</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Nested and repeated fields (structs, lists) are handled with Google's <em class="term">Dremel</em> encoding — repetition and definition levels — which flattens arbitrary nesting into flat columns while remembering exactly how to rebuild the structure.</p>
+
+  <h3>Arrow vs Parquet, side by side</h3>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th></th><th>Apache Arrow</th><th>Apache Parquet</th></tr></thead>
+      <tbody>
+        <tr><td>Lives</td><td>In memory (RAM / VRAM)</td><td>On disk / object storage</td></tr>
+        <tr><td>Optimized for</td><td>Compute &amp; random access</td><td>Storage size &amp; scan I/O</td></tr>
+        <tr><td>Encoding</td><td>Minimal — ready to process</td><td>Heavy — must decode first</td></tr>
+        <tr><td>Compression</td><td>Usually none</td><td>Aggressive, per-column</td></tr>
+        <tr><td>Access</td><td>O(1) to any element</td><td>Block-at-a-time scan</td></tr>
+        <tr><td>Typical role</td><td>The working representation</td><td>The resting representation</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout key">
+    <span class="lbl">The handshake</span>
+    A read is: <code>Parquet on disk → decode/decompress → Arrow in memory → compute</code>. <code>pyarrow.parquet</code> does exactly this on CPU; <code>cudf.read_parquet</code> does it straight onto the GPU. The two formats are designed by overlapping communities precisely so this conversion is clean.
+  </div>
+</section>
+
+<!-- ===== 04 cuDF ===== -->
+<section id="cudf">
+  <span class="sec-tag">04 · GPU dataframes</span>
+  <h2>cuDF &amp; how it <span class="accent">deploys on CUDA</span></h2>
+  <div class="section-rule"></div>
+
+  <p><strong>cuDF</strong> is a GPU DataFrame library — part of NVIDIA's <em class="term">RAPIDS</em> suite — that mirrors the pandas API but runs operations on the GPU. You write <code>df.groupby('k').sum()</code>; cuDF executes it across thousands of GPU threads. The Python layer is thin; the real work lives in <em class="term">libcudf</em>, a C++/CUDA library.</p>
+
+  <h3>Why cuDF is columnar (the whole point)</h3>
+  <p>cuDF stores each column as a contiguous device buffer in an <strong>Arrow-compatible memory layout</strong> — values buffer plus validity bitmap, exactly like Section 02. This is not an aesthetic choice; it is what makes the GPU fast. Here's the chain of reasoning:</p>
+  <ol>
+    <li>A GPU runs threads in groups of 32 called a <em class="term">warp</em>, all executing the same instruction (SIMT — single instruction, multiple threads).</li>
+    <li>When the 32 threads of a warp read 32 <em>adjacent</em> memory addresses, the hardware fuses them into one wide transaction. This is <em class="term">memory coalescing</em>, and it is the difference between using and wasting the GPU's enormous memory bandwidth.</li>
+    <li>A columnar buffer <em>is</em> 32 adjacent same-typed values. Map thread <code>i</code> to element <code>i</code> of the column and coalescing is automatic.</li>
+    <li>A row-major table would scatter a column's values every <em>row-width</em> bytes — strided, uncoalesced, slow.</li>
+  </ol>
+  <p>So columnar layout is the precondition for the GPU being good at this at all. Arrow just happens to be the agreed-upon columnar layout, which gives cuDF interoperability for free.</p>
+
+  <h3>How an operation becomes a kernel</h3>
+  <pre><code><span class="cm-c"># Python — looks like pandas</span>
+df[<span class="cm-s">'c'</span>] = df[<span class="cm-s">'a'</span>] + df[<span class="cm-s">'b'</span>]
+
+<span class="cm-c"># What libcudf does, conceptually:</span>
+<span class="cm-c"># launch one thread per row over the contiguous a,b buffers</span>
+<span class="cm-k">__global__</span> <span class="cm-k">void</span> <span class="cm-f">add</span>(<span class="cm-k">const float</span>* a, <span class="cm-k">const float</span>* b, <span class="cm-k">float</span>* c, <span class="cm-k">int</span> n){
+    <span class="cm-k">int</span> i = blockIdx.x * blockDim.x + threadIdx.x;   <span class="cm-c">// global index</span>
+    <span class="cm-k">if</span> (i &lt; n) c[i] = a[i] + b[i];                   <span class="cm-c">// coalesced read+write</span>
+}</code></pre>
+  <p>Elementwise ops map to one thread per element. More complex operations decompose into well-studied parallel patterns:</p>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>DataFrame op</th><th>Parallel primitive(s)</th></tr></thead>
+      <tbody>
+        <tr><td>filter / dropna</td><td>predicate → prefix-sum (scan) → compaction (gather)</td></tr>
+        <tr><td>sort / sort_values</td><td>parallel radix / merge sort</td></tr>
+        <tr><td>groupby + agg</td><td>hash-based aggregation, or sort + segmented reduce</td></tr>
+        <tr><td>join / merge</td><td>build a GPU hash table, probe in parallel</td></tr>
+        <tr><td>sum / mean / min</td><td>tree reduction across the buffer</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>cuDF does not hand-write all of these — it leans on battle-tested primitive libraries (Section 05) so its kernels are correct and near-optimal.</p>
+
+  <h3>Arrow interop on the GPU</h3>
+  <p>Because cuDF columns already match Arrow's layout, handing data to CuPy, PyTorch, or another RAPIDS library is a pointer hand-off, not a copy. It happens through the Arrow C Data Interface (extended for CUDA device pointers), the <code>__cuda_array_interface__</code> protocol, or DLPack (Section 09). Reading a Parquet file with <code>cudf.read_parquet</code> can even pull bytes from storage directly into VRAM (via GPUDirect Storage) and decompress on the GPU.</p>
+</section>
+
+<!-- ===== 05 THRUST ===== -->
+<section id="thrust">
+  <span class="sec-tag">05 · The supporting cast</span>
+  <h2>Thrust, CUB, RMM &amp; <span class="accent">friends</span></h2>
+  <div class="section-rule"></div>
+
+  <p>cuDF rarely writes raw kernels for hard parallel patterns. It composes them from a layered set of NVIDIA libraries, each operating at a different level of abstraction. Understanding this stack demystifies "how does a sort actually run on a GPU."</p>
+
+  <div class="diagram">
+    <div class="dtitle">The RAPIDS / CUDA execution stack (top = highest level)</div>
+    <div class="stack">
+      <div class="layer l-py"><span class="ttl">cuDF (Python)</span><span class="desc">pandas-like API you call</span></div>
+      <div class="layer l-cpp"><span class="ttl">libcudf (C++/CUDA)</span><span class="desc">dataframe algorithms: join, groupby, I/O</span></div>
+      <div class="layer l-prim"><span class="ttl">Thrust</span><span class="desc">high-level parallel algorithms (STL-style)</span></div>
+      <div class="layer l-prim"><span class="ttl">CUB</span><span class="desc">low-level warp/block/device primitives</span></div>
+      <div class="layer l-mem"><span class="ttl">RMM</span><span class="desc">device memory pool allocator</span></div>
+      <div class="layer l-hw"><span class="ttl">CUDA Runtime + GPU hardware</span><span class="desc">kernels, warps, global/shared memory</span></div>
+    </div>
+  </div>
+
+  <h3>Thrust — the parallel STL</h3>
+  <p><em class="term">Thrust</em> is a C++ template library that gives you STL-like algorithms — <code>sort</code>, <code>reduce</code>, <code>transform</code>, <code>scan</code> (prefix sum), <code>reduce_by_key</code>, <code>gather/scatter</code> — that run on the GPU. You express <em>what</em> ("sort this buffer", "sum these"), and Thrust handles thread configuration and the parallel algorithm. It is backend-agnostic (can target CUDA, OpenMP, or TBB) and ships with the CUDA Toolkit. libcudf uses it for things like sorts and segmented reductions inside groupby.</p>
+
+  <h3>CUB — the cooperative primitives</h3>
+  <p><em class="term">CUB</em> sits one level below. It provides reusable building blocks tuned to the GPU's execution hierarchy: <code>WarpReduce</code> and <code>BlockScan</code> (cooperation within 32 threads or a thread block) up to <code>DeviceRadixSort</code> and <code>DeviceReduce</code> (whole-device operations). Crucially, <strong>Thrust's CUDA backend is itself implemented on top of CUB</strong> — when you call a Thrust sort, a CUB device sort usually does the heavy lifting. libcudf also calls CUB directly when it needs that finer control.</p>
+
+  <div class="cols2">
+    <div class="col">
+      <h4>Thrust</h4>
+      <p style="margin:0;font-size:.93rem;"><strong>What</strong>, declaratively. Convenient, composable, productive. "Sort this array."</p>
+    </div>
+    <div class="col">
+      <h4>CUB</h4>
+      <p style="margin:0;font-size:.93rem;"><strong>How</strong>, with control. Tunable, fused into custom kernels, maximal performance. "Scan within this block."</p>
+    </div>
+  </div>
+
+  <h3>RMM — RAPIDS Memory Manager</h3>
+  <p>Calling <code>cudaMalloc</code> / <code>cudaFree</code> for every intermediate is expensive — each one synchronizes the device. <em class="term">RMM</em> grabs one large slab of VRAM up front and sub-allocates from a pool, so the thousands of temporary buffers a query needs are nearly free. Every RAPIDS library shares the same RMM resource, which is part of why they interoperate so smoothly.</p>
+
+  <h3>The rest of the neighborhood</h3>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Library</th><th>Role</th></tr></thead>
+      <tbody>
+        <tr><td>nvCOMP</td><td>GPU-accelerated compression/decompression — decodes Parquet codecs on the GPU</td></tr>
+        <tr><td>KvikIO / cuFile</td><td>GPUDirect Storage: read files straight from NVMe into VRAM, bypassing the CPU</td></tr>
+        <tr><td>Numba</td><td>JIT-compiles Python functions into CUDA kernels — powers cuDF user-defined functions</td></tr>
+        <tr><td>CuPy</td><td>NumPy-compatible GPU arrays; the array-math counterpart to cuDF's dataframes</td></tr>
+        <tr><td>cuPyNumeric / cuBLAS / cuSPARSE</td><td>Dense and sparse linear algebra kernels NVIDIA ships for numerical work</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ===== 06 RAY ===== -->
+<section id="ray">
+  <span class="sec-tag">06 · Distributed computing</span>
+  <h2>Ray &amp; Arrow — and the <span class="accent">format change</span></h2>
+  <div class="section-rule"></div>
+
+  <p><strong>Ray</strong> is a framework for distributed Python: it scatters tasks and objects across many processes and machines. cuDF and Ray both leaned on Arrow, but for different reasons, and Ray's relationship with Arrow has a genuinely instructive history — including a real format change, though a more nuanced one than "Ray dropped Arrow."</p>
+
+  <h3>Why Ray chose Arrow in the first place</h3>
+  <p>Ray's central problem is moving Python objects between processes that don't share memory. Plain <code>pickle</code> fails several of Ray's needs at once. Around 2017 the Ray team built their serialization layer on Arrow because Arrow gave them, in one package:</p>
+  <ul>
+    <li><strong>Zero-copy reads</strong> — Arrow buffers can sit in shared memory and be read by many worker processes on a node without copying. For large NumPy arrays this made deserialization essentially free (the win was eliminating data movement, not faster parsing).</li>
+    <li><strong>A columnar layout efficient for numerical data</strong> — NumPy arrays and dataframes are exactly what ML workloads pass around.</li>
+    <li><strong>Language independence</strong> — a path toward Python and Java workers sharing objects.</li>
+  </ul>
+  <p>This is the same property cuDF exploits — Arrow buffers are "just memory" with an agreed layout — but aimed at <em>shared-memory IPC</em> rather than GPU kernels. <strong>That common need is why both projects adopted Arrow:</strong> a stable, zero-copy, language-neutral memory format is exactly what you want whether you're shipping a buffer to another process or to another library on a GPU.</p>
+
+  <h3>The Plasma story</h3>
+  <p>Ray also needed a <em class="term">shared-memory object store</em> — a place to park objects on a node so any worker can grab them. The Ray team built one, called <em class="term">Plasma</em>, and contributed it <em>into</em> Apache Arrow (2017). For a while, Plasma was part of Arrow.</p>
+  <p>It didn't stay that way. Before Ray 1.0, the Ray team <strong>forked Plasma back into Ray's own codebase</strong>, so they could evolve it for Ray's architecture and performance needs without the constraints of being an Arrow subcomponent. With its developer-maintainers gone, the Arrow copy of Plasma went unmaintained, was <strong>deprecated in Arrow 10.0.0</strong> (2022) and <strong>removed around Arrow 12.0.0</strong> (2023). Today the object store is fully Ray's own; Plasma-in-Arrow is history.</p>
+
+  <h3>The actual format change: away from the Arrow serializer</h3>
+  <p>Separately from the object store, Ray <strong>replaced the Arrow-based object serializer with a customized Pickle&nbsp;protocol&nbsp;5 backport plus cloudpickle</strong>. The motivation was breadth, not speed: the Arrow serializer couldn't handle the messy variety of real Python objects Ray must ship — recursive objects, lambdas, nested functions, dynamically created classes. Pickle 5 introduced <em class="term">out-of-band buffers</em>, which let Ray keep the prize feature — zero-copy reads for NumPy arrays — while cloudpickle covers everything else.</p>
+
+  <div class="callout warn">
+    <span class="lbl">The nuance that's usually missed</span>
+    Ray did <strong>not</strong> abandon Arrow. It swapped the <em>general-purpose serializer</em> for pickle5 + cloudpickle (for flexibility) and brought the <em>object store</em> in-house (for control). But Arrow is still central where it fits: <strong>Ray Data uses Arrow as its in-memory block format</strong>, and the zero-copy NumPy path is still Arrow-flavored shared memory. The change was "Arrow where it's the right tool," not "Arrow out."
+  </div>
+
+  <h3>Why this was a net win for Ray</h3>
+  <ul>
+    <li><strong>Coverage</strong> — pickle5 + cloudpickle serialize almost any Python object; the old path choked on common cases.</li>
+    <li><strong>Kept the fast path</strong> — out-of-band buffers preserved zero-copy for the large numerical arrays that dominate ML payloads.</li>
+    <li><strong>Independence</strong> — owning the object store let Ray build features Arrow's Plasma never would: object spilling to disk, distributed reference counting, and an ownership model for fault tolerance.</li>
+  </ul>
+</section>
+
+<!-- ===== 07 NUMPY ===== -->
+<section id="numpy">
+  <span class="sec-tag">07 · CPU array memory</span>
+  <h2>NumPy <span class="accent">memory management</span></h2>
+  <div class="section-rule"></div>
+
+  <p>A NumPy <code>ndarray</code> is a thin Python object wrapped around one contiguous block of raw bytes. The object holds metadata; the bytes hold values. Almost everything clever about NumPy comes from separating those two.</p>
+
+  <div class="diagram">
+    <div class="dtitle">Anatomy of an ndarray</div>
+    <div class="stack">
+      <div class="layer l-py"><span class="ttl">data pointer</span><span class="desc">start of the raw byte buffer</span></div>
+      <div class="layer l-cpp"><span class="ttl">dtype</span><span class="desc">how to interpret each element (e.g. float64)</span></div>
+      <div class="layer l-prim"><span class="ttl">shape</span><span class="desc">size along each dimension</span></div>
+      <div class="layer l-mem"><span class="ttl">strides</span><span class="desc">bytes to step to advance one index per axis</span></div>
+      <div class="layer l-hw"><span class="ttl">flags · base</span><span class="desc">C/F-contiguous, owns-data; base = object whose memory a view borrows</span></div>
+    </div>
+  </div>
+
+  <h3>Strides make views free</h3>
+  <p>Because indexing is "data pointer + sum of index&times;stride," NumPy can describe many <em class="term">views</em> over the same buffer just by changing metadata:</p>
+  <ul>
+    <li><strong>Slicing</strong> (<code>a[2:8]</code>) returns a view — adjusts the pointer and shape, copies nothing.</li>
+    <li><strong>Transpose</strong> (<code>a.T</code>) returns a view — swaps the strides; the bytes never move.</li>
+    <li><strong>Reshape</strong> returns a view when the layout permits, otherwise copies.</li>
+    <li><strong>Broadcasting</strong> uses a stride of 0 on a dimension, so one row appears repeated without duplicating memory.</li>
+  </ul>
+  <p>The flip side: <em class="term">fancy indexing</em> (<code>a[[0,3,7]]</code>) and boolean masks <em>copy</em>, because the result can't be expressed with regular strides.</p>
+
+  <h3>Ownership, lifetime, and sharing</h3>
+  <p>A base array owns its buffer; a view's <code>base</code> attribute points to whoever owns the memory, and Python's reference counting keeps that buffer alive as long as any view references it. NumPy exposes its memory to the outside world through the <em class="term">buffer protocol (PEP&nbsp;3118)</em> and <code>__array_interface__</code>, which is precisely how PyArrow, PyTorch, and others can wrap a NumPy buffer with zero copying.</p>
+
+  <div class="callout">
+    <span class="lbl">Default order</span>
+    NumPy is <strong>row-major (C order)</strong> by default but supports column-major (<code>order='F'</code>). A C-contiguous array handed to a Fortran library (BLAS/LAPACK) may be silently copied/transposed — a common hidden cost in numeric code.
+  </div>
+</section>
+
+<!-- ===== 08 TORCH ===== -->
+<section id="torch">
+  <span class="sec-tag">08 · GPU tensor memory</span>
+  <h2>PyTorch <span class="accent">tensor memory</span></h2>
+  <div class="section-rule"></div>
+
+  <p>A PyTorch tensor uses the same buffer-plus-metadata idea as NumPy, but adds device awareness (CPU or CUDA), autograd, and a custom GPU allocator. Structurally a tensor is a <em class="term">view</em> onto a <em class="term">Storage</em> — a flat, contiguous, untyped 1-D buffer.</p>
+
+  <div class="diagram">
+    <div class="dtitle">Tensor = a view (metadata) onto a shared Storage (bytes)</div>
+    <div class="stack">
+      <div class="layer l-py"><span class="ttl">Storage</span><span class="desc">1-D contiguous buffer of raw bytes on a specific device</span></div>
+      <div class="layer l-cpp"><span class="ttl">sizes · strides · storage_offset</span><span class="desc">how this tensor reads the storage</span></div>
+      <div class="layer l-prim"><span class="ttl">dtype · device · layout</span><span class="desc">float32 · cuda:0 · strided</span></div>
+      <div class="layer l-mem"><span class="ttl">requires_grad · grad_fn</span><span class="desc">autograd bookkeeping for backprop</span></div>
+    </div>
+  </div>
+
+  <h3>Views, contiguity, and the usual gotchas</h3>
+  <ul>
+    <li><code>.view()</code> reinterprets the existing storage cheaply, but <strong>requires</strong> a compatible (often contiguous) layout, or it errors.</li>
+    <li><code>.reshape()</code> returns a view if it can, otherwise copies — the forgiving cousin of <code>view</code>.</li>
+    <li><code>.transpose()</code> / <code>.permute()</code> return non-contiguous views (strides reordered).</li>
+    <li><code>.contiguous()</code> materializes a fresh, tightly-packed copy — needed before some kernels and before <code>view</code>.</li>
+  </ul>
+
+  <h3>The CUDA caching allocator — the big one</h3>
+  <p>Raw <code>cudaMalloc</code>/<code>cudaFree</code> are slow and synchronize the GPU; a training loop allocating thousands of tensors per step couldn't afford them. PyTorch interposes a <em class="term">caching allocator</em>: it requests large segments from CUDA and recycles freed blocks internally, so most tensor allocations never touch the driver.</p>
+  <ul>
+    <li><strong>Reserved</strong> memory = total the allocator holds from CUDA. <strong>Allocated</strong> = the slice currently in live tensors. Reserved &minus; allocated is the cache sitting ready for reuse.</li>
+    <li>This is why <code>nvidia-smi</code> shows PyTorch "using" more than your tensors — that's reserved cache, not a leak.</li>
+    <li><code>torch.cuda.empty_cache()</code> returns cached-but-unused segments to CUDA (mainly to let <em>other</em> processes use the GPU; it doesn't speed up your own run).</li>
+    <li><strong>Fragmentation</strong> — many odd-sized allocations can leave reserved memory unusable for a big new tensor, causing OOM despite "free" memory; <code>expandable_segments</code> helps.</li>
+  </ul>
+
+  <h3>Two memory features worth knowing</h3>
+  <ul>
+    <li><em class="term">Pinned (page-locked) memory</em> — <code>tensor.pin_memory()</code> on the CPU side lets host&rarr;device copies run asynchronously and faster (the GPU can DMA directly). Standard in <code>DataLoader(pin_memory=True)</code>.</li>
+    <li><em class="term">Zero-copy interop</em> — PyTorch CUDA tensors expose <code>__cuda_array_interface__</code> and DLPack, so a tensor can become a cuDF column or CuPy array (and back) with no copy — they all describe the same VRAM buffer.</li>
+  </ul>
+
+  <div class="callout">
+    <span class="lbl">NumPy vs PyTorch, in one line</span>
+    Same strided-view-over-a-buffer design. PyTorch adds: a <strong>device</strong>, a <strong>caching allocator</strong> for GPU memory, and an <strong>autograd graph</strong> that itself consumes memory (every saved activation for the backward pass).
+  </div>
+</section>
+
+<!-- ===== 09 GLUE ===== -->
+<section id="glue">
+  <span class="sec-tag">09 · Crossing boundaries</span>
+  <h2>The interchange <span class="accent">glue</span></h2>
+  <div class="section-rule"></div>
+
+  <p>Everything above keeps returning to one move: hand a buffer from one library to another <em>without copying</em>. That only works because of a handful of shared protocols — the unsung standards that let NumPy, PyTorch, cuDF, CuPy, Arrow, and JAX cooperate. They all do the same job: describe an existing buffer (pointer, dtype, shape, strides, device) so the receiver can wrap it in place.</p>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Protocol</th><th>Domain</th><th>Used by</th></tr></thead>
+      <tbody>
+        <tr><td>Buffer protocol (PEP 3118)</td><td>CPU, Python-level</td><td>NumPy, memoryview, PyArrow</td></tr>
+        <tr><td><code>__array_interface__</code></td><td>CPU arrays</td><td>NumPy and friends</td></tr>
+        <tr><td><code>__cuda_array_interface__</code></td><td>GPU arrays (CUDA pointers)</td><td>Numba, CuPy, cuDF, PyTorch</td></tr>
+        <tr><td>DLPack</td><td>CPU + GPU tensors (cross-framework)</td><td>PyTorch, CuPy, cuDF, JAX, TensorFlow</td></tr>
+        <tr><td>Arrow C Data Interface</td><td>Columnar tables (CPU + CUDA)</td><td>Arrow ecosystem, cuDF, Polars, DuckDB</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p><em class="term">DLPack</em> is the closest thing to a universal tensor lingua franca — a tiny C struct (<code>DLManagedTensor</code>) that any framework can produce or consume. It's how you do <code>torch.from_dlpack(cupy_array)</code> and have two libraries share the exact same VRAM with no transfer.</p>
+
+  <div class="callout key">
+    <span class="lbl">The unifying insight</span>
+    Arrow's C Data Interface, DLPack, and the array-interface protocols are all answers to the same question: <strong>"how do I describe a buffer precisely enough that you can use it without me copying it to you?"</strong> Standardizing the answer is what turns a pile of separate libraries into one composable ecosystem.
+  </div>
+</section>
+
+<!-- ===== 10 MAP ===== -->
+<section id="map">
+  <span class="sec-tag">10 · Putting it together</span>
+  <h2>The whole <span class="accent">map</span></h2>
+  <div class="section-rule"></div>
+
+  <p>Read top to bottom, this is the life of analytical data on modern hardware — and every layer is the same idea (keep same-typed values contiguous so machines can stream and vectorize them):</p>
+
+  <div class="diagram">
+    <div class="dtitle">Where each piece lives</div>
+    <div class="stack">
+      <div class="layer l-hw"><span class="ttl">Parquet</span><span class="desc">on disk — columnar, encoded, compressed; predicate pushdown &amp; column pruning</span></div>
+      <div class="layer l-mem"><span class="ttl">Arrow</span><span class="desc">in memory — columnar, decoded, zero-copy interchange standard</span></div>
+      <div class="layer l-prim"><span class="ttl">cuDF columns / NumPy / Torch storage</span><span class="desc">the working buffers — contiguous, strided, device-aware</span></div>
+      <div class="layer l-cpp"><span class="ttl">Thrust · CUB · libcudf · BLAS</span><span class="desc">the algorithms that run over those buffers</span></div>
+      <div class="layer l-py"><span class="ttl">RMM · CUDA caching allocator</span><span class="desc">who hands out and recycles the memory</span></div>
+    </div>
+  </div>
+
+  <h3>One mental model to keep</h3>
+  <ol>
+    <li>Hardware reads memory in contiguous chunks (cache lines, coalesced warps). Layout is destiny.</li>
+    <li><strong>Columnar</strong> = same-typed values adjacent &rarr; great compression, SIMD, and GPU coalescing &rarr; the right shape for analytics.</li>
+    <li><strong>Parquet</strong> stores it compactly on disk; <strong>Arrow</strong> holds it ready-to-compute in memory; they convert cleanly into each other.</li>
+    <li><strong>cuDF</strong> puts Arrow-shaped columns in VRAM so each operation becomes a coalesced CUDA kernel, built from <strong>Thrust/CUB</strong> primitives and fed by <strong>RMM</strong>.</li>
+    <li><strong>Ray</strong> wanted the same zero-copy, language-neutral buffers for IPC — adopted Arrow, then kept it only where it fit (Ray Data blocks) while moving general serialization to pickle5+cloudpickle.</li>
+    <li><strong>NumPy/PyTorch</strong> are buffer + strides + metadata; PyTorch adds device, a caching allocator, and autograd.</li>
+    <li><strong>DLPack &amp; the *-interface protocols</strong> are the glue that lets all of them pass buffers around without copying.</li>
+  </ol>
+
+  <h3>Adjacent topics worth a look next</h3>
+  <div class="badges">
+    <span class="badge cy">Polars (Rust, Arrow-native)</span>
+    <span class="badge cy">DuckDB (in-process OLAP)</span>
+    <span class="badge cy">Apache DataFusion</span>
+    <span class="badge gr">Dask &amp; dask-cudf</span>
+    <span class="badge gr">cudf.pandas accelerator</span>
+    <span class="badge gr">Velox</span>
+    <span class="badge am">Apache Iceberg / Delta Lake</span>
+    <span class="badge am">ORC (columnar file format)</span>
+    <span class="badge">Apache Spark + Arrow UDFs</span>
+    <span class="badge">CUDA shared memory &amp; tiling</span>
+    <span class="badge">GPUDirect Storage</span>
+    <span class="badge">unified / managed memory</span>
+  </div>
+
+  <p style="color:var(--ink-dim);">Each of these is a natural extension of one thread in this guide — a new query engine on Arrow, a lakehouse format wrapping Parquet, a way to scale cuDF across many GPUs, or a deeper layer of the CUDA memory hierarchy.</p>
+</section>
+
+<footer>
+  Self-contained reference · open anywhere, styling travels with the file · built as a systematic walkthrough of the columnar &amp; GPU data stack.
+</footer>
+</main>
+</div>
+
+<script>
+// scroll progress bar
+var bar = document.getElementById('progress');
+var links = Array.prototype.slice.call(document.querySelectorAll('.toc a'));
+var sections = links.map(function(a){ return document.querySelector(a.getAttribute('href')); });
+function onScroll(){
+  var st = window.scrollY || document.documentElement.scrollTop;
+  var h = document.documentElement.scrollHeight - window.innerHeight;
+  bar.style.width = (h>0 ? (st/h*100) : 0) + '%';
+  // scrollspy
+  var idx = 0;
+  for (var i=0;i<sections.length;i++){
+    if (sections[i] && sections[i].getBoundingClientRect().top <= 120) idx = i;
+  }
+  links.forEach(function(l,i){ l.classList.toggle('active', i===idx); });
+}
+document.addEventListener('scroll', onScroll, {passive:true});
+window.addEventListener('load', onScroll);
+onScroll();
+</script>
+</body>
+</html>
