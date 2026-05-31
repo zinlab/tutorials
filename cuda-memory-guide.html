@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Coalescing &amp; Bank Conflicts — CUDA memory guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0c0d; --bg2:#101314; --bg3:#0c1011;
+    --line:rgba(255,255,255,0.08); --line2:rgba(255,255,255,0.15);
+    --ink:#eef2f3; --ink2:#9aa4a9; --ink3:#697277;
+    --teal:#3dd7b0; --teal-d:rgba(61,215,176,0.12);
+    --coral:#ff7d68; --coral-d:rgba(255,125,104,0.12);
+    --amber:#f3b948;
+    --blue:#6aa9f0; --blue-d:rgba(106,169,240,0.12);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; color:var(--ink2);
+    font-family:'IBM Plex Sans',sans-serif; font-size:16px; line-height:1.72;
+    -webkit-font-smoothing:antialiased;
+    background-color:var(--bg);
+    background-image:
+      radial-gradient(1000px 520px at 50% -12%, rgba(61,215,176,0.07), transparent 62%),
+      radial-gradient(700px 400px at 92% 8%, rgba(106,169,240,0.05), transparent 60%),
+      linear-gradient(rgba(255,255,255,0.020) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.020) 1px, transparent 1px);
+    background-size:auto,auto,30px 30px,30px 30px;
+  }
+  .wrap{max-width:940px; margin:0 auto; padding:0 24px 96px}
+
+  /* ---- header ---- */
+  header{padding:84px 0 30px; border-bottom:1px solid var(--line)}
+  .eyebrow{font-family:'IBM Plex Mono';font-size:12px;letter-spacing:.28em;text-transform:uppercase;color:var(--teal);margin:0 0 20px}
+  h1{font-family:'IBM Plex Mono';font-weight:600;font-size:clamp(34px,6vw,62px);line-height:1.02;letter-spacing:-.01em;color:var(--ink);margin:0}
+  h1 .amp{color:var(--ink3);font-weight:400}
+  .lede{font-size:18px;max-width:660px;margin:24px 0 28px;color:var(--ink2)}
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{font-family:'IBM Plex Mono';font-size:11px;letter-spacing:.05em;color:var(--ink2);border:1px solid var(--line);border-radius:999px;padding:6px 12px;background:rgba(255,255,255,0.015)}
+  .chip b{color:var(--teal);font-weight:500}
+
+  /* ---- sections ---- */
+  section{padding:54px 0 6px; border-bottom:1px solid var(--line)}
+  section:last-of-type{border-bottom:0}
+  .num{font-family:'IBM Plex Mono';font-size:13px;color:var(--teal);letter-spacing:.1em;display:block;margin-bottom:10px}
+  h2{font-family:'IBM Plex Mono';font-weight:500;font-size:clamp(22px,3.4vw,30px);color:var(--ink);margin:0 0 6px;letter-spacing:-.01em}
+  .space{font-family:'IBM Plex Mono';font-size:12px;color:var(--ink3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:20px}
+  p{margin:16px 0}
+  p.lead-p{font-size:17px;color:#c2c9cd}
+  code.inl{font-family:'IBM Plex Mono';font-size:.86em;color:var(--amber);background:rgba(243,185,72,0.10);padding:2px 6px;border-radius:5px;border:1px solid rgba(243,185,72,0.18)}
+  .ok{color:var(--teal);font-family:'IBM Plex Mono';font-size:.92em}
+  .bad{color:var(--coral);font-family:'IBM Plex Mono';font-size:.92em}
+
+  /* ---- panel for diagrams ---- */
+  .panel{background:var(--bg2);border:1px solid var(--line);border-radius:16px;padding:20px 20px 16px;margin:26px 0}
+  .panel .cap{font-family:'IBM Plex Mono';font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink3);margin:0 0 14px;display:flex;align-items:center;gap:9px}
+  .panel .cap::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--teal);box-shadow:0 0 10px var(--teal)}
+  .panel svg{display:block;width:100%;height:auto}
+  .legend{display:flex;flex-wrap:wrap;gap:16px;margin-top:14px;padding-top:12px;border-top:1px solid var(--line);font-family:'IBM Plex Mono';font-size:11.5px;color:var(--ink2)}
+  .legend span{display:inline-flex;align-items:center;gap:7px}
+  .sw{width:12px;height:12px;border-radius:3px;border:1px solid}
+  .sw.t{background:var(--teal-d);border-color:var(--teal)}
+  .sw.c{background:var(--coral-d);border-color:var(--coral)}
+  .sw.b{background:var(--blue-d);border-color:var(--blue)}
+  .sw.g{background:rgba(255,255,255,0.04);border-color:rgba(255,255,255,0.18)}
+
+  /* ---- svg shared classes ---- */
+  svg .th{font-family:'IBM Plex Mono';font-size:13px;font-weight:500;fill:var(--ink)}
+  svg .t{font-family:'IBM Plex Sans';font-size:14px;fill:var(--ink)}
+  svg .ts{font-family:'IBM Plex Mono';font-size:12px;fill:var(--ink2)}
+  svg .tx-teal{fill:#c2f0e3} svg .tx-coral{fill:#ffcabd} svg .tx-blue{fill:#d2e2fb} svg .tx-gray{fill:#9aa4a9}
+  svg .bx-teal{fill:var(--teal-d);stroke:var(--teal);stroke-width:.8}
+  svg .bx-coral{fill:var(--coral-d);stroke:var(--coral);stroke-width:.8}
+  svg .bx-blue{fill:var(--blue-d);stroke:var(--blue);stroke-width:.8}
+  svg .bx-gray{fill:rgba(255,255,255,0.035);stroke:rgba(255,255,255,0.16);stroke-width:.8}
+  svg .ar{stroke:var(--ink3);stroke-width:1.4;fill:none;stroke-linecap:round}
+  svg .dash{fill:none;stroke:var(--line2);stroke-width:.8;stroke-dasharray:4 3}
+  svg .lead{stroke:var(--line2);stroke-width:.8;stroke-dasharray:3 3}
+
+  /* ---- code blocks ---- */
+  .code{background:var(--bg3);border:1px solid var(--line);border-radius:14px;overflow:hidden;margin:22px 0}
+  .code-bar{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid var(--line);
+    font-family:'IBM Plex Mono';font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink3)}
+  .code-bar .dot{display:flex;gap:6px}
+  .code-bar .dot i{width:9px;height:9px;border-radius:50%;display:block}
+  .code pre{margin:0;padding:18px 20px;overflow-x:auto}
+  .code code{font-family:'IBM Plex Mono';font-size:13px;line-height:1.7;color:#d6dde0;white-space:pre;tab-size:2}
+  .cm{color:#5f8076;font-style:italic}
+  .kw{color:#7fc8ff}
+  .bi{color:var(--amber)}
+  .nm{color:#ff9d7a}
+  .pp{color:#c79bf0}
+
+  /* ---- callouts ---- */
+  .note{border-left:2px solid;padding:13px 18px;border-radius:0 9px 9px 0;margin:20px 0;font-size:14.5px;line-height:1.65}
+  .note.tip{border-color:var(--teal);background:var(--teal-d)}
+  .note.warn{border-color:var(--coral);background:var(--coral-d)}
+  .note b{color:var(--ink);font-weight:500}
+
+  /* ---- compare ---- */
+  .compare{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:24px 0}
+  .ccard{background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:20px;position:relative;overflow:hidden}
+  .ccard::before{content:"";position:absolute;top:0;left:0;right:0;height:2px}
+  .ccard.glob::before{background:var(--blue)}
+  .ccard.shar::before{background:var(--amber)}
+  .ccard h3{font-family:'IBM Plex Mono';font-weight:500;font-size:15px;margin:0 0 4px;color:var(--ink)}
+  .ccard .sub{font-family:'IBM Plex Mono';font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-bottom:14px}
+  .ccard p{margin:10px 0;font-size:14px}
+  .ccard .want{font-family:'IBM Plex Mono';font-size:12.5px;color:var(--teal);margin-top:14px;line-height:1.6}
+
+  footer{padding-top:40px;color:var(--ink3);font-size:14px}
+  footer a{color:var(--teal);text-decoration:none}
+  footer a:hover{text-decoration:underline}
+
+  @keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+  .reveal{animation:rise .65s cubic-bezier(.2,.7,.2,1) both}
+  @media (prefers-reduced-motion: reduce){.reveal{animation:none}}
+  @media (max-width:680px){
+    .compare{grid-template-columns:1fr}
+    header{padding:56px 0 24px}
+    section{padding:44px 0 4px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="reveal">
+    <p class="eyebrow">CUDA · memory optimization</p>
+    <h1>Coalescing <span class="amp">&amp;</span> Bank Conflicts</h1>
+    <p class="lede">Two memory-throughput problems that live in two different memory spaces. They sound like opposites because the spaces are laid out as opposites — and a shared-memory transpose has to satisfy both at once.</p>
+    <div class="chips">
+      <span class="chip"><b>warp</b> = 32 threads</span>
+      <span class="chip">global memory → <b>coalescing</b></span>
+      <span class="chip">shared memory → <b>banks</b></span>
+      <span class="chip">32 banks × 4 B</span>
+    </div>
+  </header>
+
+  <section class="reveal" style="animation-delay:.05s">
+    <span class="num">00 — orientation</span>
+    <h2>Two spaces, two rules</h2>
+    <p class="lead-p">Memory coalescing is about <b style="color:var(--ink);font-weight:500">global memory</b> (off-chip DRAM): how a warp's 32 simultaneous accesses get bundled into hardware transactions. Bank conflicts are about <b style="color:var(--ink);font-weight:500">shared memory</b> (on-chip SRAM): how 32 threads collide over a fixed set of banks.</p>
+    <p>Optimizing one does nothing for the other. The mental models even point in opposite directions: coalescing wants threads packed onto <em>consecutive</em> addresses; avoiding bank conflicts wants threads <em>spread across</em> banks. The reason they don't fight is that consecutive addresses already spread across banks — so the same access pattern can be good for both.</p>
+  </section>
+
+  <section class="reveal" style="animation-delay:.05s">
+    <span class="num">01 — global memory</span>
+    <h2>Memory coalescing</h2>
+    <p class="space">space: global / DRAM</p>
+    <p>When a warp issues a load, the memory controller inspects the 32 requested addresses and groups them into the fewest possible transactions (32-byte sectors / 128-byte cache lines). If consecutive threads touch consecutive words, the whole warp folds into one transaction. If they stride, the same data spreads across more transactions and you pay for bytes you never use.</p>
+
+    <div class="panel">
+      <p class="cap">Coalesced vs strided access</p>
+      <svg viewBox="0 0 680 460" role="img" aria-label="Top: eight threads read eight consecutive words served by one transaction. Bottom: eight threads read every other word across two transactions, wasting half the fetched bytes.">
+        <defs>
+          <marker id="ar1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#697277" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+        </defs>
+        <text class="th" x="0" y="40">Coalesced access</text>
+        <text class="ts" x="0" y="58">threads read consecutive words</text>
+
+        <g>
+          <rect class="bx-blue" x="80" y="80" width="52" height="30" rx="6"/><text class="th tx-blue" x="106" y="95" text-anchor="middle" dominant-baseline="central">T0</text>
+          <rect class="bx-blue" x="144" y="80" width="52" height="30" rx="6"/><text class="th tx-blue" x="170" y="95" text-anchor="middle" dominant-baseline="central">T1</text>
+          <rect class="bx-blue" x="208" y="80" width="52" height="30" rx="6"/><text class="th tx-blue" x="234" y="95" text-anchor="middle" dominant-baseline="central">T2</text>
+          <rect class="bx-blue" x="272" y="80" width="52" height="30" rx="6"/><text class="th tx-blue" x="298" y="95" text-anchor="middle" dominant-baseline="central">T3</text>
+          <rect class="bx-blue" x="336" y="80" width="52" height="30" rx="6"/><text class="th tx-blue" x="362" y="95" text-anchor="middle" dominant-baseline="central">T4</text>
+          <rect class="bx-blue" x="400" y="80" width="52" height="30" rx="6"/><text class="th tx-blue" x="426" y="95" text-anchor="middle" dominant-baseline="central">T5</text>
+          <rect class="bx-blue" x="464" y="80" width="52" height="30" rx="6"/><text class="th tx-blue" x="490" y="95" text-anchor="middle" dominant-baseline="central">T6</text>
+          <rect class="bx-blue" x="528" y="80" width="52" height="30" rx="6"/><text class="th tx-blue" x="554" y="95" text-anchor="middle" dominant-baseline="central">T7</text>
+        </g>
+        <line class="ar" x1="106" y1="112" x2="106" y2="152" marker-end="url(#ar1)"/>
+        <line class="ar" x1="170" y1="112" x2="170" y2="152" marker-end="url(#ar1)"/>
+        <line class="ar" x1="234" y1="112" x2="234" y2="152" marker-end="url(#ar1)"/>
+        <line class="ar" x1="298" y1="112" x2="298" y2="152" marker-end="url(#ar1)"/>
+        <line class="ar" x1="362" y1="112" x2="362" y2="152" marker-end="url(#ar1)"/>
+        <line class="ar" x1="426" y1="112" x2="426" y2="152" marker-end="url(#ar1)"/>
+        <line class="ar" x1="490" y1="112" x2="490" y2="152" marker-end="url(#ar1)"/>
+        <line class="ar" x1="554" y1="112" x2="554" y2="152" marker-end="url(#ar1)"/>
+        <g>
+          <rect class="bx-teal" x="80" y="154" width="52" height="34" rx="4"/><text class="ts tx-teal" x="106" y="171" text-anchor="middle" dominant-baseline="central">w0</text>
+          <rect class="bx-teal" x="144" y="154" width="52" height="34" rx="4"/><text class="ts tx-teal" x="170" y="171" text-anchor="middle" dominant-baseline="central">w1</text>
+          <rect class="bx-teal" x="208" y="154" width="52" height="34" rx="4"/><text class="ts tx-teal" x="234" y="171" text-anchor="middle" dominant-baseline="central">w2</text>
+          <rect class="bx-teal" x="272" y="154" width="52" height="34" rx="4"/><text class="ts tx-teal" x="298" y="171" text-anchor="middle" dominant-baseline="central">w3</text>
+          <rect class="bx-teal" x="336" y="154" width="52" height="34" rx="4"/><text class="ts tx-teal" x="362" y="171" text-anchor="middle" dominant-baseline="central">w4</text>
+          <rect class="bx-teal" x="400" y="154" width="52" height="34" rx="4"/><text class="ts tx-teal" x="426" y="171" text-anchor="middle" dominant-baseline="central">w5</text>
+          <rect class="bx-teal" x="464" y="154" width="52" height="34" rx="4"/><text class="ts tx-teal" x="490" y="171" text-anchor="middle" dominant-baseline="central">w6</text>
+          <rect class="bx-teal" x="528" y="154" width="52" height="34" rx="4"/><text class="ts tx-teal" x="554" y="171" text-anchor="middle" dominant-baseline="central">w7</text>
+        </g>
+        <rect class="dash" x="72" y="148" width="516" height="46" rx="8"/>
+        <text class="ts" x="330" y="214" text-anchor="middle">1 transaction · 128 B fetched, 128 B used</text>
+
+        <text class="th" x="0" y="252">Strided access (stride 2)</text>
+        <text class="ts" x="0" y="270">threads skip every other word</text>
+
+        <g>
+          <rect class="bx-blue" x="80" y="286" width="52" height="30" rx="6"/><text class="th tx-blue" x="106" y="301" text-anchor="middle" dominant-baseline="central">T0</text>
+          <rect class="bx-blue" x="144" y="286" width="52" height="30" rx="6"/><text class="th tx-blue" x="170" y="301" text-anchor="middle" dominant-baseline="central">T1</text>
+          <rect class="bx-blue" x="208" y="286" width="52" height="30" rx="6"/><text class="th tx-blue" x="234" y="301" text-anchor="middle" dominant-baseline="central">T2</text>
+          <rect class="bx-blue" x="272" y="286" width="52" height="30" rx="6"/><text class="th tx-blue" x="298" y="301" text-anchor="middle" dominant-baseline="central">T3</text>
+          <rect class="bx-blue" x="336" y="286" width="52" height="30" rx="6"/><text class="th tx-blue" x="362" y="301" text-anchor="middle" dominant-baseline="central">T4</text>
+          <rect class="bx-blue" x="400" y="286" width="52" height="30" rx="6"/><text class="th tx-blue" x="426" y="301" text-anchor="middle" dominant-baseline="central">T5</text>
+          <rect class="bx-blue" x="464" y="286" width="52" height="30" rx="6"/><text class="th tx-blue" x="490" y="301" text-anchor="middle" dominant-baseline="central">T6</text>
+          <rect class="bx-blue" x="528" y="286" width="52" height="30" rx="6"/><text class="th tx-blue" x="554" y="301" text-anchor="middle" dominant-baseline="central">T7</text>
+        </g>
+        <line class="ar" x1="106" y1="318" x2="94"  y2="354" marker-end="url(#ar1)"/>
+        <line class="ar" x1="170" y1="318" x2="158" y2="354" marker-end="url(#ar1)"/>
+        <line class="ar" x1="234" y1="318" x2="222" y2="354" marker-end="url(#ar1)"/>
+        <line class="ar" x1="298" y1="318" x2="286" y2="354" marker-end="url(#ar1)"/>
+        <line class="ar" x1="362" y1="318" x2="350" y2="354" marker-end="url(#ar1)"/>
+        <line class="ar" x1="426" y1="318" x2="414" y2="354" marker-end="url(#ar1)"/>
+        <line class="ar" x1="490" y1="318" x2="478" y2="354" marker-end="url(#ar1)"/>
+        <line class="ar" x1="554" y1="318" x2="542" y2="354" marker-end="url(#ar1)"/>
+        <g>
+          <rect class="bx-teal" x="80"  y="356" width="28" height="34" rx="3"/>
+          <rect class="bx-teal" x="144" y="356" width="28" height="34" rx="3"/>
+          <rect class="bx-teal" x="208" y="356" width="28" height="34" rx="3"/>
+          <rect class="bx-teal" x="272" y="356" width="28" height="34" rx="3"/>
+          <rect class="bx-teal" x="336" y="356" width="28" height="34" rx="3"/>
+          <rect class="bx-teal" x="400" y="356" width="28" height="34" rx="3"/>
+          <rect class="bx-teal" x="464" y="356" width="28" height="34" rx="3"/>
+          <rect class="bx-teal" x="528" y="356" width="28" height="34" rx="3"/>
+        </g>
+        <g>
+          <rect class="bx-gray" x="112" y="356" width="28" height="34" rx="3"/>
+          <rect class="bx-gray" x="176" y="356" width="28" height="34" rx="3"/>
+          <rect class="bx-gray" x="240" y="356" width="28" height="34" rx="3"/>
+          <rect class="bx-gray" x="304" y="356" width="28" height="34" rx="3"/>
+          <rect class="bx-gray" x="368" y="356" width="28" height="34" rx="3"/>
+          <rect class="bx-gray" x="432" y="356" width="28" height="34" rx="3"/>
+          <rect class="bx-gray" x="496" y="356" width="28" height="34" rx="3"/>
+          <rect class="bx-gray" x="560" y="356" width="28" height="34" rx="3"/>
+        </g>
+        <rect class="dash" x="74"  y="350" width="258" height="46" rx="8"/>
+        <rect class="dash" x="334" y="350" width="258" height="46" rx="8"/>
+        <text class="ts" x="203" y="414" text-anchor="middle">transaction 1</text>
+        <text class="ts" x="463" y="414" text-anchor="middle">transaction 2</text>
+        <text class="ts" x="330" y="440" text-anchor="middle">16 words fetched, 8 used → 50% bandwidth wasted</text>
+      </svg>
+      <div class="legend">
+        <span><i class="sw b"></i> warp thread (8 shown, 32 real)</span>
+        <span><i class="sw t"></i> word actually used</span>
+        <span><i class="sw g"></i> fetched but wasted</span>
+      </div>
+    </div>
+
+    <p>The fix is almost always to make <code class="inl">threadIdx.x</code> drive the contiguous dimension. In a row-major array <code class="inl">A[row*N + col]</code>, you want the fastest-varying thread index on <code class="inl">col</code>:</p>
+
+    <div class="code">
+      <div class="code-bar"><span>coalescing.cu</span><span class="dot"><i style="background:#ff5f56"></i><i style="background:#ffbd2e"></i><i style="background:#27c93f"></i></span></div>
+      <pre><code class="cu">int col = blockIdx.x * blockDim.x + threadIdx.x;   // varies fastest within warp
+int row = blockIdx.y * blockDim.y + threadIdx.y;
+
+float v = A[row * N + col];   // coalesced: T0..T31 -> A[..0], A[..1], ...
+// float v = A[col * N + row]; // strided by N: each thread N words apart</code></pre>
+    </div>
+  </section>
+
+  <section class="reveal" style="animation-delay:.05s">
+    <span class="num">02 — shared memory</span>
+    <h2>Bank conflicts</h2>
+    <p class="space">space: shared / SRAM</p>
+    <p>Shared memory is physically split into <b style="color:var(--ink);font-weight:500">32 banks</b>, each 4 bytes wide. Successive 32-bit words land in successive banks, so word <code class="inl">w</code> lives in bank <code class="inl">w % 32</code>. A warp resolves its access in a single cycle <em>only if</em> the 32 threads hit 32 distinct banks (or all read the identical word, which broadcasts for free). If <code class="inl">k</code> threads hit different words in the <em>same</em> bank, the hardware serializes them into <code class="inl">k</code> cycles — a <span class="bad">k-way conflict</span>.</p>
+
+    <div class="panel">
+      <p class="cap">Conflict-free vs bank conflict</p>
+      <svg viewBox="0 0 680 450" role="img" aria-label="Top: one word per bank, served in one cycle. Bottom: all words map to bank zero, serialized into eight cycles while seven banks sit idle.">
+        <text class="th" x="0" y="40">Conflict-free — stride 1, one word per bank</text>
+        <g>
+          <rect class="bx-teal" x="80"  y="72" width="60" height="44" rx="6"/><text class="th tx-teal" x="110" y="90" text-anchor="middle" dominant-baseline="central">bank 0</text><text class="ts tx-teal" x="110" y="106" text-anchor="middle" dominant-baseline="central">w0</text>
+          <rect class="bx-teal" x="150" y="72" width="60" height="44" rx="6"/><text class="th tx-teal" x="180" y="90" text-anchor="middle" dominant-baseline="central">bank 1</text><text class="ts tx-teal" x="180" y="106" text-anchor="middle" dominant-baseline="central">w1</text>
+          <rect class="bx-teal" x="220" y="72" width="60" height="44" rx="6"/><text class="th tx-teal" x="250" y="90" text-anchor="middle" dominant-baseline="central">bank 2</text><text class="ts tx-teal" x="250" y="106" text-anchor="middle" dominant-baseline="central">w2</text>
+          <rect class="bx-teal" x="290" y="72" width="60" height="44" rx="6"/><text class="th tx-teal" x="320" y="90" text-anchor="middle" dominant-baseline="central">bank 3</text><text class="ts tx-teal" x="320" y="106" text-anchor="middle" dominant-baseline="central">w3</text>
+          <rect class="bx-teal" x="360" y="72" width="60" height="44" rx="6"/><text class="th tx-teal" x="390" y="90" text-anchor="middle" dominant-baseline="central">bank 4</text><text class="ts tx-teal" x="390" y="106" text-anchor="middle" dominant-baseline="central">w4</text>
+          <rect class="bx-teal" x="430" y="72" width="60" height="44" rx="6"/><text class="th tx-teal" x="460" y="90" text-anchor="middle" dominant-baseline="central">bank 5</text><text class="ts tx-teal" x="460" y="106" text-anchor="middle" dominant-baseline="central">w5</text>
+          <rect class="bx-teal" x="500" y="72" width="60" height="44" rx="6"/><text class="th tx-teal" x="530" y="90" text-anchor="middle" dominant-baseline="central">bank 6</text><text class="ts tx-teal" x="530" y="106" text-anchor="middle" dominant-baseline="central">w6</text>
+          <rect class="bx-teal" x="570" y="72" width="60" height="44" rx="6"/><text class="th tx-teal" x="600" y="90" text-anchor="middle" dominant-baseline="central">bank 7</text><text class="ts tx-teal" x="600" y="106" text-anchor="middle" dominant-baseline="central">w7</text>
+        </g>
+        <text class="ts" x="355" y="142" text-anchor="middle">8 banks busy in parallel → served in 1 cycle</text>
+
+        <text class="th" x="0" y="184">Bank conflict — stride 8, all words in bank 0</text>
+        <text class="ts" x="110" y="206" text-anchor="middle">bank 0</text>
+        <text class="ts" x="180" y="206" text-anchor="middle">bank 1</text>
+        <text class="ts" x="250" y="206" text-anchor="middle">bank 2</text>
+        <text class="ts" x="320" y="206" text-anchor="middle">bank 3</text>
+        <text class="ts" x="390" y="206" text-anchor="middle">bank 4</text>
+        <text class="ts" x="460" y="206" text-anchor="middle">bank 5</text>
+        <text class="ts" x="530" y="206" text-anchor="middle">bank 6</text>
+        <text class="ts" x="600" y="206" text-anchor="middle">bank 7</text>
+        <g>
+          <rect class="bx-coral" x="80" y="212" width="60" height="24" rx="3"/><text class="ts tx-coral" x="110" y="224" text-anchor="middle" dominant-baseline="central">w0</text>
+          <rect class="bx-coral" x="80" y="236" width="60" height="24" rx="3"/><text class="ts tx-coral" x="110" y="248" text-anchor="middle" dominant-baseline="central">w8</text>
+          <rect class="bx-coral" x="80" y="260" width="60" height="24" rx="3"/><text class="ts tx-coral" x="110" y="272" text-anchor="middle" dominant-baseline="central">w16</text>
+          <rect class="bx-coral" x="80" y="284" width="60" height="24" rx="3"/><text class="ts tx-coral" x="110" y="296" text-anchor="middle" dominant-baseline="central">w24</text>
+          <rect class="bx-coral" x="80" y="308" width="60" height="24" rx="3"/><text class="ts tx-coral" x="110" y="320" text-anchor="middle" dominant-baseline="central">w32</text>
+          <rect class="bx-coral" x="80" y="332" width="60" height="24" rx="3"/><text class="ts tx-coral" x="110" y="344" text-anchor="middle" dominant-baseline="central">w40</text>
+          <rect class="bx-coral" x="80" y="356" width="60" height="24" rx="3"/><text class="ts tx-coral" x="110" y="368" text-anchor="middle" dominant-baseline="central">w48</text>
+          <rect class="bx-coral" x="80" y="380" width="60" height="24" rx="3"/><text class="ts tx-coral" x="110" y="392" text-anchor="middle" dominant-baseline="central">w56</text>
+        </g>
+        <g>
+          <rect class="bx-gray" x="150" y="212" width="60" height="192" rx="6"/><text class="ts tx-gray" x="180" y="308" text-anchor="middle" dominant-baseline="central">idle</text>
+          <rect class="bx-gray" x="220" y="212" width="60" height="192" rx="6"/><text class="ts tx-gray" x="250" y="308" text-anchor="middle" dominant-baseline="central">idle</text>
+          <rect class="bx-gray" x="290" y="212" width="60" height="192" rx="6"/><text class="ts tx-gray" x="320" y="308" text-anchor="middle" dominant-baseline="central">idle</text>
+          <rect class="bx-gray" x="360" y="212" width="60" height="192" rx="6"/><text class="ts tx-gray" x="390" y="308" text-anchor="middle" dominant-baseline="central">idle</text>
+          <rect class="bx-gray" x="430" y="212" width="60" height="192" rx="6"/><text class="ts tx-gray" x="460" y="308" text-anchor="middle" dominant-baseline="central">idle</text>
+          <rect class="bx-gray" x="500" y="212" width="60" height="192" rx="6"/><text class="ts tx-gray" x="530" y="308" text-anchor="middle" dominant-baseline="central">idle</text>
+          <rect class="bx-gray" x="570" y="212" width="60" height="192" rx="6"/><text class="ts tx-gray" x="600" y="308" text-anchor="middle" dominant-baseline="central">idle</text>
+        </g>
+        <text class="ts" x="355" y="428" text-anchor="middle">bank 0 serializes 8 accesses → 8 cycles, 7 banks wasted</text>
+      </svg>
+      <div class="legend">
+        <span><i class="sw t"></i> bank active this cycle</span>
+        <span><i class="sw c"></i> piled into one bank (serialized)</span>
+        <span><i class="sw g"></i> idle bank</span>
+      </div>
+    </div>
+
+    <p>The bank a thread touches is pure address arithmetic. For a 2D shared tile <code class="inl">tile[R][C]</code> of floats, element <code class="inl">tile[r][c]</code> sits at word index <code class="inl">r*C + c</code>, so its bank is <code class="inl">(r*C + c) % 32</code>:</p>
+
+    <div class="code">
+      <div class="code-bar"><span>banks.cu</span><span class="dot"><i style="background:#ff5f56"></i><i style="background:#ffbd2e"></i><i style="background:#27c93f"></i></span></div>
+      <pre><code class="cu">// Row access -- vary c across the warp, r fixed:
+//   bank = (r*C + c) % 32  ->  c, c+1, c+2, ...   all distinct   [ok]
+//
+// Column access -- vary r across the warp, c fixed:
+//   bank = (r*C + c) % 32
+//   if C is a multiple of 32 (e.g. C = 32): r*32 % 32 = 0 always
+//   -> every thread hits the SAME bank -> 32-way conflict        [bad]</code></pre>
+    </div>
+  </section>
+
+  <section class="reveal" style="animation-delay:.05s">
+    <span class="num">03 — the payoff</span>
+    <h2>The transpose trap &amp; padding fix</h2>
+    <p class="space">both rules at once</p>
+    <p>A shared-memory transpose loads a tile coalesced, then reads it back <em>transposed</em> — which is a column access. With a square <code class="inl">tile[32][32]</code>, every thread in the warp lands on bank 0. The classic fix costs one wasted column: pad the inner dimension to <span class="ok">33</span>. The row stride becomes <code class="inl">33</code>, and since <code class="inl">33 % 32 == 1</code>, each successive row shifts the bank by one.</p>
+
+    <div class="panel">
+      <p class="cap">Why +1 padding works</p>
+      <svg viewBox="0 0 680 372" role="img" aria-label="Left: an unpadded 32-wide tile sends every column element to bank zero. Right: padding the width to 33 sends each row to a distinct bank.">
+        <text class="th" x="200" y="42" text-anchor="middle">tile[32][32] — no padding</text>
+        <text class="ts" x="200" y="62" text-anchor="middle">addr = row × 32 + col</text>
+        <g>
+          <rect class="bx-coral" x="140" y="82"  width="120" height="40" rx="6"/><text class="t tx-coral" x="200" y="102" text-anchor="middle" dominant-baseline="central">row 0 → bank 0</text>
+          <rect class="bx-coral" x="140" y="128" width="120" height="40" rx="6"/><text class="t tx-coral" x="200" y="148" text-anchor="middle" dominant-baseline="central">row 1 → bank 0</text>
+          <rect class="bx-coral" x="140" y="174" width="120" height="40" rx="6"/><text class="t tx-coral" x="200" y="194" text-anchor="middle" dominant-baseline="central">row 2 → bank 0</text>
+          <rect class="bx-coral" x="140" y="220" width="120" height="40" rx="6"/><text class="t tx-coral" x="200" y="240" text-anchor="middle" dominant-baseline="central">row 3 → bank 0</text>
+          <rect class="bx-coral" x="140" y="266" width="120" height="40" rx="6"/><text class="t tx-coral" x="200" y="286" text-anchor="middle" dominant-baseline="central">row 4 → bank 0</text>
+        </g>
+        <text class="ts tx-coral" x="200" y="334" text-anchor="middle">column read → 32-way conflict</text>
+
+        <line class="lead" x1="340" y1="86" x2="340" y2="312"/>
+
+        <text class="th" x="480" y="42" text-anchor="middle">tile[32][33] — +1 padding</text>
+        <text class="ts" x="480" y="62" text-anchor="middle">addr = row × 33 + col</text>
+        <g>
+          <rect class="bx-teal" x="420" y="82"  width="120" height="40" rx="6"/><text class="t tx-teal" x="480" y="102" text-anchor="middle" dominant-baseline="central">row 0 → bank 0</text>
+          <rect class="bx-teal" x="420" y="128" width="120" height="40" rx="6"/><text class="t tx-teal" x="480" y="148" text-anchor="middle" dominant-baseline="central">row 1 → bank 1</text>
+          <rect class="bx-teal" x="420" y="174" width="120" height="40" rx="6"/><text class="t tx-teal" x="480" y="194" text-anchor="middle" dominant-baseline="central">row 2 → bank 2</text>
+          <rect class="bx-teal" x="420" y="220" width="120" height="40" rx="6"/><text class="t tx-teal" x="480" y="240" text-anchor="middle" dominant-baseline="central">row 3 → bank 3</text>
+          <rect class="bx-teal" x="420" y="266" width="120" height="40" rx="6"/><text class="t tx-teal" x="480" y="286" text-anchor="middle" dominant-baseline="central">row 4 → bank 4</text>
+        </g>
+        <text class="ts tx-teal" x="480" y="334" text-anchor="middle">column read → conflict-free</text>
+      </svg>
+    </div>
+
+    <p>Here is the canonical transpose with both optimizations in place — coalesced global reads <em>and</em> writes, plus the padded tile that removes the shared-memory conflict:</p>
+
+    <div class="code">
+      <div class="code-bar"><span>transpose.cu</span><span class="dot"><i style="background:#ff5f56"></i><i style="background:#ffbd2e"></i><i style="background:#27c93f"></i></span></div>
+      <pre><code class="cu">#define TILE 32
+
+__global__ void transpose(float* out, const float* in, int N) {
+    __shared__ float tile[TILE][TILE + 1];   // +1 padding -> conflict-free columns
+
+    int x = blockIdx.x * TILE + threadIdx.x;
+    int y = blockIdx.y * TILE + threadIdx.y;
+
+    // Coalesced global READ: consecutive threadIdx.x -> consecutive in[] addrs.
+    // Write into shared by ROW (no bank conflict on the write).
+    tile[threadIdx.y][threadIdx.x] = in[y * N + x];
+
+    __syncthreads();
+
+    // Remap to the transposed block so the global WRITE is also coalesced.
+    x = blockIdx.y * TILE + threadIdx.x;
+    y = blockIdx.x * TILE + threadIdx.y;
+
+    // Read shared by COLUMN (tile[tx][ty]); padding makes this conflict-free.
+    out[y * N + x] = tile[threadIdx.x][threadIdx.y];
+}</code></pre>
+    </div>
+
+    <div class="note warn"><b>The pitfall.</b> Drop the <code class="inl">+ 1</code> and that final <code class="inl">tile[threadIdx.x][threadIdx.y]</code> read becomes a column access where all 32 threads collide on one bank — measurably the difference between a transpose that runs near memory bandwidth and one that crawls.</div>
+  </section>
+
+  <section class="reveal" style="animation-delay:.05s">
+    <span class="num">04 — at a glance</span>
+    <h2>Opposite-sounding, same access pattern</h2>
+    <div class="compare">
+      <div class="ccard glob">
+        <h3>Memory coalescing</h3>
+        <p class="sub">global memory</p>
+        <p>Diagnosed from the global index expression: is <code class="inl">threadIdx.x</code> driving the contiguous dimension?</p>
+        <p>Hurt by strided or column-major indexing that scatters a warp across cache lines.</p>
+        <p class="want">want: warp threads packed onto consecutive addresses</p>
+      </div>
+      <div class="ccard shar">
+        <h3>Bank conflicts</h3>
+        <p class="sub">shared memory</p>
+        <p>Diagnosed by computing <code class="inl">(linear_index) % 32</code> across the warp — do any two threads share a bank?</p>
+        <p>Hurt by power-of-two strides; the escape hatch is padding an array by one element.</p>
+        <p class="want">want: warp threads spread across distinct banks</p>
+      </div>
+    </div>
+    <div class="note tip"><b>Profiler metrics.</b> Watch <code class="inl">gld_efficiency</code> / <code class="inl">gst_efficiency</code> for coalescing, and <code class="inl">shared_ld/st_bank_conflicts</code> (the “Shared Memory” section in Nsight Compute) for bank conflicts — they tell you exactly how much you’re leaving on the table.</div>
+  </section>
+
+  <footer class="reveal" style="animation-delay:.05s">
+    Diagrams use 8 threads / 8 banks to stand in for the real 32-wide warp and 32 banks. Concepts apply to all recent NVIDIA architectures.
+  </footer>
+
+</div>
+
+<script>
+(function(){
+  function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+  function hl(code){
+    code = esc(code);
+    var store = [];
+    function stash(html){ var ph = String.fromCharCode(0xE000 + store.length); store.push(html); return ph; }
+    code = code.replace(/\/\/.*$/gm, function(m){ return stash('<span class="cm">'+m+'</span>'); });
+    code = code.replace(/\/\*[\s\S]*?\*\//g, function(m){ return stash('<span class="cm">'+m+'</span>'); });
+    code = code.replace(/^(\s*)(#\w+)/gm, function(m,s,p){ return s + stash('<span class="pp">'+p+'</span>'); });
+    code = code.replace(/\b(__global__|__shared__|__syncthreads|__device__|__host__|const|return|for|if|else|void|int|float|double|unsigned|char|struct)\b/g, '<span class="kw">$1</span>');
+    code = code.replace(/\b(blockIdx|threadIdx|blockDim|gridDim)\b/g, '<span class="bi">$1</span>');
+    code = code.replace(/\b(\d+)\b/g, '<span class="nm">$1</span>');
+    for (var i=0;i<store.length;i++){
+      code = code.replace(String.fromCharCode(0xE000+i), (function(h){ return function(){ return h; }; })(store[i]));
+    }
+    return code;
+  }
+  document.querySelectorAll('code.cu').forEach(function(el){
+    el.innerHTML = hl(el.textContent);
+  });
+})();
+</script>
+</body>
+</html>
