@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>cuDF — A Systems Deep Dive</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=IBM+Plex+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0e0a;
+    --bg-2:#0f150f;
+    --panel:#121a12;
+    --panel-2:#16201666;
+    --ink:#d8e6d4;
+    --ink-dim:#90a48c;
+    --ink-faint:#5f6f5c;
+    --green:#76b900;        /* NVIDIA green */
+    --green-bright:#9ee63a;
+    --cyan:#46d6c4;
+    --amber:#e8b339;
+    --rose:#e0607a;
+    --line:#23311f;
+    --line-bright:#33491f;
+    --code-bg:#0c120c;
+    --radius:10px;
+    --maxw:920px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;background:
+      radial-gradient(900px 500px at 85% -5%, #14210e 0%, transparent 60%),
+      radial-gradient(700px 400px at 0% 100%, #0e1812 0%, transparent 55%),
+      var(--bg);
+    color:var(--ink);
+    font-family:'IBM Plex Sans',sans-serif;
+    font-weight:300;
+    line-height:1.62;
+    -webkit-font-smoothing:antialiased;
+  }
+  body::before{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+    background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
+    background-size:46px 46px;opacity:.13;
+    mask-image:radial-gradient(ellipse at 50% 0%, #000 0%, transparent 75%);
+  }
+  .wrap{position:relative;z-index:1;display:flex;gap:40px;max-width:1280px;margin:0 auto;padding:0 28px}
+
+  /* ---- sidebar ---- */
+  nav.toc{
+    width:248px;flex:none;position:sticky;top:0;align-self:flex-start;
+    height:100vh;overflow-y:auto;padding:34px 0 60px;
+    border-right:1px solid var(--line);
+  }
+  nav.toc::-webkit-scrollbar{width:7px}
+  nav.toc::-webkit-scrollbar-thumb{background:var(--line-bright);border-radius:4px}
+  .brand{font-family:'Chakra Petch',sans-serif;font-weight:700;font-size:1.45rem;letter-spacing:.5px;color:var(--ink);margin:0 0 2px}
+  .brand .accent{color:var(--green)}
+  .brand-sub{font-family:'JetBrains Mono',monospace;font-size:.66rem;color:var(--ink-faint);letter-spacing:2px;text-transform:uppercase;margin-bottom:26px}
+  nav.toc a{
+    display:block;color:var(--ink-dim);text-decoration:none;font-size:.84rem;
+    padding:5px 14px 5px 16px;border-left:2px solid transparent;transition:.15s;
+  }
+  nav.toc a:hover{color:var(--green-bright);border-left-color:var(--line-bright)}
+  nav.toc a.active{color:var(--green);border-left-color:var(--green)}
+  nav.toc .num{font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--ink-faint);margin-right:8px}
+  nav.toc a.active .num{color:var(--green)}
+
+  /* ---- main ---- */
+  main{flex:1;min-width:0;max-width:var(--maxw);padding:46px 0 140px}
+  header.hero{margin-bottom:54px}
+  .eyebrow{font-family:'JetBrains Mono',monospace;font-size:.72rem;letter-spacing:3px;text-transform:uppercase;color:var(--green);margin-bottom:16px}
+  h1{font-family:'Chakra Petch',sans-serif;font-weight:700;font-size:2.9rem;line-height:1.05;margin:0 0 18px;letter-spacing:-.5px}
+  h1 .stroke{color:transparent;-webkit-text-stroke:1.5px var(--green)}
+  .lede{font-size:1.12rem;color:var(--ink-dim);max-width:62ch;font-weight:300}
+
+  section{margin:0 0 58px;scroll-margin-top:24px}
+  h2{font-family:'Chakra Petch',sans-serif;font-weight:600;font-size:1.62rem;margin:0 0 6px;letter-spacing:-.2px}
+  .h2line{display:flex;align-items:baseline;gap:14px;border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:24px}
+  .h2num{font-family:'JetBrains Mono',monospace;color:var(--green);font-size:.95rem;font-weight:700}
+  h3{font-family:'Chakra Petch',sans-serif;font-weight:600;font-size:1.16rem;color:var(--ink);margin:30px 0 10px}
+  h4{font-family:'JetBrains Mono',monospace;font-weight:500;font-size:.82rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--cyan);margin:24px 0 8px}
+  p{margin:0 0 14px}
+  strong{color:var(--ink);font-weight:600}
+  em.t{font-style:normal;color:var(--green-bright)}
+  a.link{color:var(--cyan);text-decoration:none;border-bottom:1px dotted var(--line-bright)}
+  a.link:hover{color:var(--green-bright)}
+
+  ul,ol{margin:0 0 16px;padding-left:22px}
+  li{margin:6px 0}
+  li::marker{color:var(--green)}
+
+  /* ---- code ---- */
+  pre{
+    background:var(--code-bg);border:1px solid var(--line);border-left:3px solid var(--green);
+    border-radius:8px;padding:16px 18px;overflow-x:auto;margin:14px 0 18px;
+    font-family:'JetBrains Mono',monospace;font-size:.82rem;line-height:1.6;
+  }
+  pre::-webkit-scrollbar{height:8px}
+  pre::-webkit-scrollbar-thumb{background:var(--line-bright);border-radius:4px}
+  code{font-family:'JetBrains Mono',monospace;font-size:.86em;color:var(--green-bright);
+    background:#13201380;padding:1px 5px;border-radius:4px;border:1px solid var(--line)}
+  pre code{background:none;border:none;padding:0;color:var(--ink);font-size:1em}
+  .c{color:var(--ink-faint);font-style:italic}      /* comment */
+  .k{color:var(--cyan)}                              /* keyword */
+  .s{color:var(--amber)}                             /* string */
+  .f{color:var(--green-bright)}                      /* function/type */
+  .n{color:var(--rose)}                              /* number/special */
+  .lang{display:block;font-family:'JetBrains Mono',monospace;font-size:.64rem;letter-spacing:2px;
+    text-transform:uppercase;color:var(--ink-faint);margin-bottom:8px}
+
+  /* ---- callouts ---- */
+  .note{border:1px solid var(--line);background:var(--panel-2);border-radius:8px;padding:14px 18px;margin:18px 0;
+    border-left:3px solid var(--cyan)}
+  .note.key{border-left-color:var(--green)}
+  .note.warn{border-left-color:var(--amber)}
+  .note .tag{font-family:'JetBrains Mono',monospace;font-size:.66rem;letter-spacing:2px;text-transform:uppercase;
+    color:var(--cyan);display:block;margin-bottom:4px}
+  .note.key .tag{color:var(--green)}
+  .note.warn .tag{color:var(--amber)}
+  .note p:last-child{margin-bottom:0}
+
+  /* ---- tables ---- */
+  .tbl{overflow-x:auto;margin:18px 0;border:1px solid var(--line);border-radius:8px}
+  table{border-collapse:collapse;width:100%;font-size:.86rem;min-width:540px}
+  th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-family:'JetBrains Mono',monospace;font-size:.7rem;letter-spacing:1px;text-transform:uppercase;
+    color:var(--green);background:#0e160e;font-weight:500}
+  tr:last-child td{border-bottom:none}
+  td:first-child{color:var(--ink)}
+  .vs th:nth-child(2){color:var(--green-bright)}
+  .vs th:nth-child(3){color:var(--cyan)}
+
+  /* ---- diagram (stack) ---- */
+  .stack{margin:22px 0;display:flex;flex-direction:column;gap:8px;font-family:'JetBrains Mono',monospace}
+  .layer{border:1px solid var(--line-bright);border-radius:8px;padding:13px 18px;background:var(--panel);position:relative;overflow:hidden}
+  .layer::after{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--lc,var(--green))}
+  .layer .ln{font-weight:700;font-size:.92rem;color:var(--ink)}
+  .layer .ld{font-family:'IBM Plex Sans',sans-serif;font-size:.82rem;color:var(--ink-dim);margin-top:3px;font-weight:300}
+  .layer .tier{position:absolute;right:14px;top:12px;font-size:.62rem;letter-spacing:1.5px;color:var(--ink-faint);text-transform:uppercase}
+  .arrowdown{text-align:center;color:var(--line-bright);font-size:1.1rem;line-height:.4}
+
+  /* memory cells diagram */
+  .colviz{margin:18px 0;font-family:'JetBrains Mono',monospace;font-size:.74rem}
+  .colviz .row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:7px 0}
+  .colviz .lbl{width:96px;flex:none;color:var(--cyan);font-size:.7rem}
+  .cell{border:1px solid var(--line-bright);background:var(--panel);padding:6px 0;width:38px;text-align:center;border-radius:5px}
+  .cell.null{color:var(--rose);border-color:#43232b;background:#1a1012}
+  .cell.bit{width:26px;color:var(--green-bright)}
+  .cell.off{color:var(--amber);width:30px}
+
+  hr{border:none;border-top:1px solid var(--line);margin:34px 0}
+  .top{display:inline-block;margin-top:10px;font-family:'JetBrains Mono',monospace;font-size:.7rem;
+    color:var(--ink-faint);text-decoration:none;letter-spacing:1px}
+  .top:hover{color:var(--green)}
+  footer{border-top:1px solid var(--line);padding-top:22px;color:var(--ink-faint);font-size:.8rem;font-family:'JetBrains Mono',monospace}
+
+  .pill{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:.66rem;letter-spacing:1px;
+    padding:2px 9px;border-radius:20px;border:1px solid var(--line-bright);color:var(--green);margin:2px 4px 2px 0}
+
+  @media (max-width:880px){
+    nav.toc{display:none}
+    .wrap{padding:0 18px}
+    h1{font-size:2.1rem}
+    main{padding-top:30px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="toc" id="toc">
+    <div class="brand">cu<span class="accent">DF</span></div>
+    <div class="brand-sub">systems deep dive</div>
+    <a href="#intro"><span class="num">00</span>What &amp; Why</a>
+    <a href="#columnar"><span class="num">01</span>The Columnar Model</a>
+    <a href="#arch"><span class="num">02</span>Architecture Layers</a>
+    <a href="#libcudf"><span class="num">03</span>libcudf C++ Core</a>
+    <a href="#compute"><span class="num">04</span>How Compute Hits CUDA</a>
+    <a href="#memory"><span class="num">05</span>Memory: RMM</a>
+    <a href="#comms"><span class="num">06</span>Comms &amp; Scale-Out</a>
+    <a href="#using"><span class="num">07</span>Using It: Patterns</a>
+    <a href="#frontends"><span class="num">08</span>Three Front-Ends</a>
+    <a href="#torch"><span class="num">09</span>cuDF vs PyTorch</a>
+    <a href="#interview"><span class="num">10</span>Interview Topics</a>
+    <a href="#resources"><span class="num">11</span>Resources</a>
+  </nav>
+
+  <main>
+    <header class="hero" id="top">
+      <div class="eyebrow">RAPIDS · GPU DataFrames · libcudf</div>
+      <h1>cuDF, <span class="stroke">decoded</span><br>from kernel to API.</h1>
+      <p class="lede">A GPU-accelerated DataFrame library with a pandas-shaped surface and a CUDA/C++ engine underneath. This guide takes you from the columnar memory model up through the layered architecture, the path computation takes to the GPU, memory management, scale-out, and how its paradigm differs from PyTorch.</p>
+    </header>
+
+    <!-- ============ 00 ============ -->
+    <section id="intro">
+      <div class="h2line"><span class="h2num">00</span><h2>What cuDF Is &amp; Why It Exists</h2></div>
+      <p><strong>cuDF</strong> (&ldquo;KOO-dee-eff&rdquo;) is a GPU DataFrame library for loading, joining, aggregating, filtering, and otherwise manipulating <em class="t">tabular</em> data. It is one library in the broader <strong>RAPIDS</strong> suite (cuML for ML, cuGraph for graphs, cuSpatial, cuVS, etc.), all of which share the same memory manager and CUDA foundations.</p>
+      <p>The motivating problem: pandas is the lingua franca of data work but is single-threaded, CPU-bound, and row-oriented in spirit. As datasets grow into the tens of GBs, pandas spends its life waiting on a CPU. cuDF keeps the familiar API but executes on thousands of GPU threads against a columnar layout built for parallelism, frequently delivering <strong>10&ndash;150&times;</strong> speedups on ETL-style workloads.</p>
+
+      <h4>What lives under the "cuDF" umbrella</h4>
+      <div class="tbl"><table>
+        <tr><th>Component</th><th>What it is</th></tr>
+        <tr><td><strong>libcudf</strong></td><td>CUDA/C++ library: Arrow-compliant data structures + the actual algorithms (joins, groupby, sort, string ops, IO). The real engine.</td></tr>
+        <tr><td><strong>pylibcudf</strong></td><td>Thin Cython bindings exposing libcudf to Python with near-zero overhead. The new foundation layer.</td></tr>
+        <tr><td><strong>cudf (classic)</strong></td><td>The pandas-like Python package: <code>DataFrame</code>, <code>Series</code>, <code>Index</code>. What you <code>import cudf</code>.</td></tr>
+        <tr><td><strong>cudf.pandas</strong></td><td>Zero-code-change accelerator: it transparently swaps pandas for cuDF with CPU fallback.</td></tr>
+        <tr><td><strong>cudf.polars</strong></td><td>A GPU execution engine for Polars LazyFrames.</td></tr>
+        <tr><td><strong>dask-cudf</strong></td><td>Multi-GPU / multi-node scale-out via Dask, with cuDF partitions.</td></tr>
+      </table></div>
+      <div class="note key"><span class="tag">Mental model</span><p>Think of cuDF as <strong>"the database/ETL engine on the GPU,"</strong> not "NumPy on the GPU." Its workloads are relational algebra (selects, joins, group-bys, sorts) over heterogeneous typed columns &mdash; a fundamentally different shape of computation than the dense linear algebra PyTorch is built for. Hold onto this distinction; it explains almost every design decision.</p></div>
+      <p class="pill">CUDA 11.2+ / 12.x</p><p class="pill">Compute Capability ≥ 7.0 (Volta+)</p><p class="pill">Apache 2.0</p><p class="pill">Calendar-versioned (YY.MM, e.g. 26.04)</p>
+      <a class="top" href="#top">↑ top</a>
+    </section>
+
+    <!-- ============ 01 ============ -->
+    <section id="columnar">
+      <div class="h2line"><span class="h2num">01</span><h2>The Columnar Model (Apache Arrow)</h2></div>
+      <p>Everything in cuDF rests on the <strong>Apache Arrow</strong> columnar memory format. Understanding a single <em class="t">column</em> is the key that unlocks the whole library, because every algorithm is ultimately written against this physical layout.</p>
+      <p>A column stores values of one type contiguously (Struct-of-Arrays), so a GPU warp reading element <code>i</code> across 32 threads reads 32 adjacent addresses &mdash; a <strong>coalesced</strong> memory access. That coalescing is the physical reason columnar layouts are fast on GPUs.</p>
+
+      <h3>Anatomy of a column</h3>
+      <p>A libcudf column is a small bundle of GPU buffers:</p>
+      <ul>
+        <li><strong>Data buffer</strong> &mdash; the values, packed contiguously.</li>
+        <li><strong>Validity (null) bitmask</strong> &mdash; 1 bit per element; <code>1</code> = valid, <code>0</code> = null. Lets cuDF represent missing data without sentinel values, and skip nulls in a branch-light way.</li>
+        <li><strong>Null count</strong> &mdash; cached count of zeros in the mask.</li>
+        <li><strong>Type + size</strong> &mdash; a runtime <code>data_type</code> and element count.</li>
+        <li><strong>Child columns</strong> &mdash; for nested/variable-length types.</li>
+      </ul>
+
+      <div class="colviz">
+        <div class="row"><span class="lbl">values</span>
+          <span class="cell">12</span><span class="cell">7</span><span class="cell null">×</span><span class="cell">31</span><span class="cell">5</span><span class="cell null">×</span></div>
+        <div class="row"><span class="lbl">null mask</span>
+          <span class="cell bit">1</span><span class="cell bit">1</span><span class="cell bit">0</span><span class="cell bit">1</span><span class="cell bit">1</span><span class="cell bit">0</span></div>
+      </div>
+      <p style="font-size:.85rem;color:var(--ink-dim)">Above: an <code>int</code> column of length 6 with two nulls. The data slots under a null may hold garbage &mdash; only the mask defines validity.</p>
+
+      <h3>Variable-length &amp; nested types</h3>
+      <p>Strings and lists can't be fixed-width, so they use <strong>offsets + a child buffer</strong>:</p>
+      <div class="colviz">
+        <div class="row"><span class="lbl">offsets</span>
+          <span class="cell off">0</span><span class="cell off">3</span><span class="cell off">8</span><span class="cell off">10</span></div>
+        <div class="row"><span class="lbl">chars</span>
+          <span class="cell" style="width:auto;padding:6px 10px;letter-spacing:3px">G P U c u D F i s</span></div>
+      </div>
+      <p style="font-size:.85rem;color:var(--ink-dim)">A string column <code>["GPU","cuDF","is"]</code>: the offsets child says string <code>i</code> spans <code>chars[offset[i] : offset[i+1]]</code>. Length is implied by the difference of consecutive offsets &mdash; computing all lengths is a single vectorized subtraction.</p>
+      <ul>
+        <li><strong>String</strong> = offsets child + character data.</li>
+        <li><strong>List</strong> = offsets child + a child column of elements.</li>
+        <li><strong>Struct</strong> = N child columns (one per field), sharing a null mask.</li>
+        <li><strong>Dictionary / categorical</strong> = integer indices column + a keys child.</li>
+        <li><strong>Decimal</strong> = fixed-point (<code>decimal32/64/128</code>) integers + a scale.</li>
+      </ul>
+      <div class="note"><span class="tag">Why this matters in an interview</span><p>If asked &ldquo;how does cuDF compute string lengths fast?&rdquo; the answer is structural: it's <code>offsets[i+1] - offsets[i]</code>, a fully parallel elementwise op &mdash; no scanning of characters needed. Most string-algorithm performance comes from exploiting the offsets layout.</p></div>
+      <a class="top" href="#top">↑ top</a>
+    </section>
+
+    <!-- ============ 02 ============ -->
+    <section id="arch">
+      <div class="h2line"><span class="h2num">02</span><h2>The Architecture, Layer by Layer</h2></div>
+      <p>cuDF is deliberately stratified. Data and control flow down through layers that each translate from a friendlier abstraction to a faster, narrower one. From the top (your Python) to the metal (CUDA):</p>
+
+      <div class="stack">
+        <div class="layer" style="--lc:var(--green)"><span class="tier">Python / user-facing</span><div class="ln">Frame layer &mdash; cudf.DataFrame / Series / Index</div><div class="ln" style="display:none"></div><div class="ld">pandas-compatible API, alignment, indexing, dtype coercion, the &ldquo;feel&rdquo; of pandas.</div></div>
+        <div class="arrowdown">▼</div>
+        <div class="layer" style="--lc:var(--green)"><span class="tier">Python / internal</span><div class="ln">Column layer &mdash; cudf.core.column</div><div class="ld">Internal typed-column objects; bridges pandas semantics to the GPU buffers. Being slimmed down over time.</div></div>
+        <div class="arrowdown">▼</div>
+        <div class="layer" style="--lc:var(--cyan)"><span class="tier">Cython</span><div class="ln">pylibcudf &mdash; near-zero-overhead bindings</div><div class="ld">Pythonic <code>Table</code>/<code>Column</code>/<code>DataType</code> wrappers calling straight into libcudf. Both cudf.pandas and cudf.polars are built directly on this.</div></div>
+        <div class="arrowdown">▼</div>
+        <div class="layer" style="--lc:var(--amber)"><span class="tier">C++ / CUDA</span><div class="ln">libcudf &mdash; the engine</div><div class="ld">Owning types (<code>column</code>, <code>table</code>), views, the <code>type_dispatcher</code>, and every algorithm. This is where data actually gets processed.</div></div>
+        <div class="arrowdown">▼</div>
+        <div class="layer" style="--lc:var(--rose)"><span class="tier">CUDA primitives</span><div class="ln">CCCL (Thrust + CUB) · cuco · cuda kernels</div><div class="ld">Device-wide sort/scan/reduce, block/warp primitives, concurrent hash tables, and hand-written kernels. The actual GPU execution.</div></div>
+      </div>
+
+      <p>The historical &ldquo;Cython layer&rdquo; has largely <strong>migrated into pylibcudf</strong>. The intent is that pylibcudf becomes a first-class, standalone way to drive libcudf from Python &mdash; even exposing libcudf features pandas has no concept of (e.g. specialized text ops) &mdash; while cuDF-classic becomes a thinner pandas-compatibility shell on top.</p>
+
+      <div class="note key"><span class="tag">The one-sentence architecture</span><p>cuDF-classic gives you the pandas API → pylibcudf gives Python near-direct access to → libcudf, a C++/CUDA library of Arrow-shaped data structures and algorithms → built on CCCL/cuco/custom kernels → all memory allocated through RMM.</p></div>
+      <a class="top" href="#top">↑ top</a>
+    </section>
+
+    <!-- ============ 03 ============ -->
+    <section id="libcudf">
+      <div class="h2line"><span class="h2num">03</span><h2>Inside libcudf: The C++ Core</h2></div>
+      <p>This is the heart of the system and the part interviewers probe hardest. Three ideas define it: the <strong>owning-vs-view ownership model</strong>, the <strong>type_dispatcher</strong>, and the <strong>functional (immutable) algorithm style</strong>.</p>
+
+      <h3>Owning types vs. views</h3>
+      <p>libcudf uses modern C++ (RAII, smart pointers) and draws a hard line between memory <em class="t">owners</em> and non-owning <em class="t">views</em>:</p>
+      <div class="tbl"><table>
+        <tr><th>Type</th><th>Owns memory?</th><th>Role</th></tr>
+        <tr><td><code>rmm::device_buffer</code></td><td>Yes</td><td>Untyped owned device memory.</td></tr>
+        <tr><td><code>cudf::column</code></td><td>Yes</td><td>A typed column: data buffer + null mask + children.</td></tr>
+        <tr><td><code>cudf::table</code></td><td>Yes</td><td>An owned set of columns.</td></tr>
+        <tr><td><code>cudf::column_view</code></td><td>No</td><td>Read-only descriptor: pointer, size, type, null mask, offset, children.</td></tr>
+        <tr><td><code>cudf::mutable_column_view</code></td><td>No</td><td>Writable view.</td></tr>
+        <tr><td><code>cudf::table_view</code></td><td>No</td><td>Non-owning set of column_views (lets tables share columns cheaply).</td></tr>
+        <tr><td><code>cudf::scalar</code></td><td>Yes</td><td>A single typed value living in device memory.</td></tr>
+      </table></div>
+
+      <p>The convention that follows from this is the <strong>signature you'll see everywhere</strong>: algorithms take <em class="t">views</em> as input and return freshly-allocated <em class="t">owning</em> outputs.</p>
+      <pre><span class="lang">C++ · libcudf</span><code><span class="c">// Canonical libcudf signature shape.</span>
+<span class="c">// Inputs are non-owning views; output is a newly-allocated owned column.</span>
+<span class="c">// The last two params are ALWAYS a stream and a memory resource.</span>
+std::unique_ptr&lt;cudf::<span class="f">column</span>&gt; <span class="f">my_op</span>(
+    cudf::<span class="f">column_view</span> <span class="k">const</span>&amp; input,
+    rmm::cuda_stream_view stream      = cudf::<span class="f">get_default_stream</span>(),
+    rmm::device_async_resource_ref mr = cudf::<span class="f">get_current_device_resource_ref</span>());
+</code></pre>
+      <div class="note"><span class="tag">Interview-grade detail</span><p>Why <em>views in, owners out</em>? It makes ownership unambiguous, makes functions composable, and means operations don't mutate their inputs &mdash; which is exactly what enables safe parallelism and copy-on-write semantics. The cost is that nearly every op <strong>allocates</strong>, which is precisely why a fast allocator (RMM, §05) is not optional but load-bearing.</p></div>
+
+      <h3>The type_dispatcher</h3>
+      <p>A column's type is a <em class="t">runtime</em> value (<code>cudf::data_type</code>), but CUDA kernels are <em class="t">compile-time</em> templates. The <code>type_dispatcher</code> bridges that gap: given a runtime type, it instantiates and invokes a templated functor for the matching concrete type. This is how a single API like <code>cudf::sort</code> works across int32, float64, strings, timestamps, etc., without a giant switch in every algorithm.</p>
+      <pre><span class="lang">C++ · libcudf</span><code><span class="k">struct</span> <span class="f">size_of_functor</span> {
+  <span class="k">template</span> &lt;<span class="k">typename</span> T&gt;
+  <span class="f">__device__</span> int <span class="f">operator()</span>() { <span class="k">return</span> <span class="k">sizeof</span>(T); }
+};
+
+<span class="c">// runtime data_type  ->  compile-time T  ->  functor invoked</span>
+int n = cudf::<span class="f">type_dispatcher</span>(col.<span class="f">type</span>(), size_of_functor{});
+</code></pre>
+      <p>Internally it's a <code>switch</code> over the type id that maps each case to <code>functor.operator()&lt;ConcreteType&gt;()</code>. Write your kernel once as a template; the dispatcher selects the instantiation. This single mechanism keeps libcudf from drowning in per-type code.</p>
+
+      <h3>Algorithms are compositions of primitives</h3>
+      <p>libcudf rarely hand-rolls kernels from scratch. Most algorithms are <strong>compositions of parallel primitives</strong> over the columnar buffers:</p>
+      <div class="tbl"><table>
+        <tr><th>DataFrame op</th><th>How it's realized on the GPU</th></tr>
+        <tr><td><strong>filter / boolean mask</strong></td><td>elementwise predicate → stream compaction (<code>copy_if</code> / gather of surviving indices)</td></tr>
+        <tr><td><strong>sort</strong></td><td>CUB device radix sort (fixed-width) or comparator sort; reorder via gather</td></tr>
+        <tr><td><strong>groupby + agg</strong></td><td>hash-based (build a <code>cuco</code> concurrent hash map keyed on group cols, scatter-reduce) <em>or</em> sort-based (sort by key, then segmented reduce)</td></tr>
+        <tr><td><strong>join</strong></td><td>build a hash table on the smaller side, probe with the other, gather matched row indices from both</td></tr>
+        <tr><td><strong>reduction / scan</strong></td><td>CUB device-wide reduce / prefix-scan</td></tr>
+        <tr><td><strong>gather / scatter</strong></td><td>the universal &ldquo;reorder/select rows&rdquo; primitive underpinning sort, join, filter, take</td></tr>
+      </table></div>
+      <p>Two primitives do an outsized amount of work: <strong>gather</strong> (output[i] = input[map[i]]) and <strong>scatter</strong> (output[map[i]] = input[i]). Once you see that selecting, sorting, joining, and shuffling are all &ldquo;produce an index map, then gather,&rdquo; libcudf's design clicks into place.</p>
+      <div class="note key"><span class="tag">The core power, decoded</span><p>cuDF's speed isn't one magic kernel. It's: (1) a columnar layout that makes memory accesses coalesced and operations vectorizable, (2) a small set of extremely-optimized data-parallel primitives (sort/scan/reduce/gather/scatter/hash) from CCCL and cuco, (3) a type-dispatch mechanism to apply them generically, and (4) an allocator fast enough that the allocate-heavy functional style stays cheap.</p></div>
+      <a class="top" href="#top">↑ top</a>
+    </section>
+
+    <!-- ============ 04 ============ -->
+    <section id="compute">
+      <div class="h2line"><span class="h2num">04</span><h2>How Computation Actually Reaches CUDA</h2></div>
+      <p>There are two distinct paths from &ldquo;a Python call&rdquo; to &ldquo;a running CUDA kernel.&rdquo;</p>
+
+      <h3>Path A — Precompiled libcudf kernels (the common case)</h3>
+      <p>When you call <code>df.groupby(...).mean()</code>, the work routes Python → pylibcudf → a <em class="t">precompiled</em> libcudf function. libcudf ships compiled CUDA kernels (and CCCL/cuco templates instantiated at libcudf build time). Your call just launches them on a stream against your column buffers. No compilation happens at runtime; it's a library call into shipped machine code.</p>
+
+      <h3>Path B — JIT-compiled user code (UDFs &amp; expressions)</h3>
+      <p>When you write a custom Python function and apply it, cuDF must turn <em class="t">your</em> Python into a GPU kernel at runtime. The pipeline:</p>
+      <pre><span class="lang">pipeline</span><code>Your Python UDF
+   │  Numba parses + type-infers
+   ▼
+Numba IR  ──►  LLVM IR  ──►  <span class="n">PTX</span>  (CUDA assembly)
+   │
+   ▼  (for row-wise libcudf integration)
+Jitify JIT-compiles &amp; links the PTX device function
+into a native CUDA C++ kernel, then launches it.
+</code></pre>
+      <p>So <strong>Numba</strong> lowers your Python to PTX, and <strong>Jitify</strong> (libcudf's runtime CUDA JIT) inlines that device function into a templated kernel and compiles/caches it. The first call pays a one-time compilation cost; subsequent calls reuse the cached kernel. The same JIT machinery powers <code>transform</code> with string expressions and some groupby-apply paths.</p>
+
+      <h3>Streams &amp; asynchrony</h3>
+      <p>Every libcudf API takes a <code>cuda_stream_view</code>. Kernel launches and RMM allocations are <strong>stream-ordered</strong>: enqueued onto a stream and executed asynchronously with respect to the host. This lets independent operations overlap and lets allocation/free participate in the same ordering as compute (critical for correctness with async allocators). libcudf supports <strong>per-thread default stream (PTDS)</strong> so multi-threaded host code doesn't serialize on the legacy default stream.</p>
+      <div class="note warn"><span class="tag">Gotcha</span><p>Because GPU work is async, a microbenchmark that doesn't <code>synchronize()</code> before stopping the timer measures launch latency, not execution. Always synchronize when timing GPU code.</p></div>
+      <a class="top" href="#top">↑ top</a>
+    </section>
+
+    <!-- ============ 05 ============ -->
+    <section id="memory">
+      <div class="h2line"><span class="h2num">05</span><h2>Memory Management: RMM</h2></div>
+      <p>The <strong>RAPIDS Memory Manager (RMM)</strong> is the shared allocation layer for all of RAPIDS (cuDF, cuML, cuGraph) and interops with CuPy and Numba. It exists because raw <code>cudaMalloc</code>/<code>cudaFree</code> are <strong>slow and synchronizing</strong> &mdash; and recall from §03 that cuDF's functional style allocates constantly. A naive allocator would dominate runtime.</p>
+
+      <h3>Memory resources (the core abstraction)</h3>
+      <p>RMM is built around the <code>device_memory_resource</code> interface &mdash; an <code>allocate(bytes, stream)</code> / <code>deallocate(...)</code> pair. Concrete resources and composable adaptors let you assemble exactly the allocation behavior you want:</p>
+      <div class="tbl"><table>
+        <tr><th>Resource</th><th>Behavior</th></tr>
+        <tr><td><code>cuda_memory_resource</code></td><td>Plain <code>cudaMalloc</code>/<code>cudaFree</code>. Simple, slow, synchronous.</td></tr>
+        <tr><td><code>pool_memory_resource</code></td><td>Allocates one big block up front, then sub-allocates from it. <strong>The classic perf win</strong> &mdash; avoids per-op driver calls.</td></tr>
+        <tr><td><code>cuda_async_memory_resource</code></td><td>Uses <code>cudaMallocAsync</code> + the CUDA driver's built-in stream-ordered memory pool. Modern, integrates with stream ordering.</td></tr>
+        <tr><td><code>managed_memory_resource</code></td><td><code>cudaMallocManaged</code> (unified memory): pages migrate between host and device on demand, enabling <strong>oversubscription</strong> beyond GPU RAM.</td></tr>
+        <tr><td><code>arena_memory_resource</code></td><td>Per-thread arenas to reduce contention in multi-threaded allocation.</td></tr>
+        <tr><td><code>pinned_memory_resource</code></td><td>Page-locked host memory for fast async H↔D transfers.</td></tr>
+        <tr><td>adaptors</td><td><code>logging</code>, <code>tracking</code>, <code>statistics</code>, <code>limiting</code>, <code>failure_callback</code>, <code>prefetch</code> — wrap any resource to add behavior. They compose (a tracking pool with logging, etc.).</td></tr>
+      </table></div>
+
+      <h3>Turning on the pool (the single biggest knob)</h3>
+      <pre><span class="lang">Python</span><code><span class="k">import</span> rmm
+<span class="c"># One large up-front allocation; sub-allocate from it thereafter.</span>
+rmm.<span class="f">reinitialize</span>(
+    pool_allocator=<span class="k">True</span>,
+    initial_pool_size=<span class="s">"10GB"</span>,   <span class="c"># grab 10 GB once</span>
+)
+<span class="k">import</span> cudf            <span class="c"># cuDF now allocates from the RMM pool</span>
+<span class="c"># Real-world: switching the pool on alone can yield multi-x speedups,</span>
+<span class="c"># because alloc/free stop hitting the slow CUDA driver path.</span>
+</code></pre>
+      <p>cuDF doesn't manage memory itself &mdash; it asks RMM's <em class="t">current device resource</em>. Swap that resource (pool, async, managed, logging) and all of cuDF's allocations change behavior with zero cuDF code changes. That decoupling is the whole point of RMM.</p>
+
+      <h3>Running larger-than-GPU-memory</h3>
+      <ul>
+        <li><strong>Managed memory</strong> — unified-memory pages migrate automatically; you can process datasets bigger than VRAM, paying paging cost when you exceed it.</li>
+        <li><strong>Spilling</strong> — cuDF can spill device buffers to host (or disk) under pressure (e.g. <code>CUDF_SPILL=on</code>), and Dask-CUDA orchestrates spilling across workers.</li>
+        <li><strong>Chunked / streaming readers</strong> — the Parquet/ORC readers can process files in chunks so you never materialize the whole table at once.</li>
+      </ul>
+      <div class="note"><span class="tag">Python ↔ C++ lifetime trap</span><p>A subtle, interview-worthy detail: an <code>rmm::device_buffer</code> holds only a <em>reference</em> to its memory resource, not ownership of it. When Python takes ownership of a buffer allocated by a C++ library, you must ensure the memory resource outlives the buffer &mdash; otherwise you free against a dead resource. The guidance is to pass in a resource whose lifetime <em>you</em> control.</p></div>
+      <a class="top" href="#top">↑ top</a>
+    </section>
+
+    <!-- ============ 06 ============ -->
+    <section id="comms">
+      <div class="h2line"><span class="h2num">06</span><h2>Communication &amp; Scale-Out</h2></div>
+      <p>A single cuDF DataFrame lives on one GPU. Going beyond one GPU &mdash; or beyond one node &mdash; is where <em class="t">communication</em> becomes the dominant cost, and RAPIDS has a stack purpose-built to keep data on the GPU and off the slow CPU/PCIe path.</p>
+
+      <h3>Multi-GPU / multi-node: dask-cudf</h3>
+      <p><strong>dask-cudf</strong> partitions a logical DataFrame into many cuDF DataFrames spread across GPUs/workers. Embarrassingly-parallel ops (elementwise, filters, partition-local reductions) need no communication. The expensive ones &mdash; <strong>joins, group-bys, sorts</strong> &mdash; require a <em class="t">shuffle</em>: rows are repartitioned by key across all workers so that matching keys land together. Shuffle is the network-bound bottleneck of distributed dataframes, so the transport matters enormously.</p>
+
+      <h3>The transport: UCX, NVLink, RDMA, GPUDirect</h3>
+      <ul>
+        <li><strong>UCX-py / UCXX</strong> — unified communication layer that auto-selects the fastest path between two endpoints: shared memory, <strong>NVLink/NVSwitch</strong> for GPU↔GPU inside a node, or <strong>InfiniBand/RDMA</strong> across nodes.</li>
+        <li><strong>GPUDirect RDMA</strong> — sends data directly from one GPU's memory to another over the network, <em>bypassing host staging buffers</em> (no GPU→CPU→NIC→CPU→GPU bounce).</li>
+        <li><strong>Dask-CUDA</strong> — provides <code>LocalCUDACluster</code>, sets up one worker per GPU, configures the RMM pool per worker, enables spilling, and wires up UCX.</li>
+      </ul>
+
+      <h3>Storage &amp; compression</h3>
+      <ul>
+        <li><strong>KvikIO + GPUDirect Storage (GDS)</strong> — read files from NVMe/storage <em>straight into GPU memory</em>, skipping the CPU bounce buffer. cuDF's Parquet/ORC readers can use this path.</li>
+        <li><strong>nvCOMP</strong> — GPU-accelerated (de)compression used inside the Parquet/ORC readers/writers, so decompression itself runs on the GPU rather than choking the CPU.</li>
+      </ul>
+      <div class="note key"><span class="tag">The throughline</span><p>Every layer of the comms/IO stack chases the same goal: <strong>keep bytes on the GPU and avoid the CPU/PCIe bottleneck.</strong> GDS for reads, nvCOMP for decompress, NVLink/RDMA + GPUDirect for transfers. In distributed cuDF, your performance story is almost always a shuffle/transport story.</p></div>
+      <a class="top" href="#top">↑ top</a>
+    </section>
+
+    <!-- ============ 07 ============ -->
+    <section id="using">
+      <div class="h2line"><span class="h2num">07</span><h2>Using It: The Important Patterns</h2></div>
+
+      <h4>Construct &amp; inspect</h4>
+      <pre><span class="lang">Python</span><code><span class="k">import</span> cudf
+df = cudf.<span class="f">DataFrame</span>({
+    <span class="s">"user"</span>: [<span class="s">"a"</span>, <span class="s">"b"</span>, <span class="s">"a"</span>, <span class="s">"c"</span>, <span class="s">"b"</span>],
+    <span class="s">"spend"</span>: [<span class="n">12.0</span>, <span class="n">7.5</span>, <span class="n">31.0</span>, <span class="n">5.0</span>, <span class="n">9.0</span>],
+    <span class="s">"region"</span>: [<span class="s">"NA"</span>, <span class="s">"EU"</span>, <span class="s">"NA"</span>, <span class="s">"EU"</span>, <span class="s">"NA"</span>],
+})
+df.dtypes; df.head()     <span class="c"># API mirrors pandas</span></code></pre>
+
+      <h4>IO &mdash; the fast on-ramp (Parquet is king)</h4>
+      <pre><span class="lang">Python</span><code><span class="c"># Columnar files map perfectly onto cuDF's columnar memory.</span>
+df = cudf.<span class="f">read_parquet</span>(<span class="s">"events.parquet"</span>,
+                     columns=[<span class="s">"user"</span>, <span class="s">"spend"</span>])   <span class="c"># projection pushdown</span>
+df.<span class="f">to_parquet</span>(<span class="s">"out.parquet"</span>)
+cudf.<span class="f">read_csv</span>(<span class="s">"big.csv"</span>)   <span class="c"># GPU-parallel CSV parser</span></code></pre>
+
+      <h4>Filter, groupby, join &mdash; the ETL trinity</h4>
+      <pre><span class="lang">Python</span><code>big = df[df[<span class="s">"spend"</span>] &gt; <span class="n">8</span>]                       <span class="c"># boolean-mask filter</span>
+
+agg = (df.<span class="f">groupby</span>(<span class="s">"region"</span>)
+         .<span class="f">agg</span>({<span class="s">"spend"</span>: [<span class="s">"sum"</span>, <span class="s">"mean"</span>, <span class="s">"count"</span>]}))  <span class="c"># hash groupby</span>
+
+dim = cudf.<span class="f">DataFrame</span>({<span class="s">"region"</span>:[<span class="s">"NA"</span>,<span class="s">"EU"</span>], <span class="s">"tax"</span>:[<span class="n">0.07</span>,<span class="n">0.20</span>]})
+joined = df.<span class="f">merge</span>(dim, on=<span class="s">"region"</span>, how=<span class="s">"left"</span>)        <span class="c"># hash join</span></code></pre>
+
+      <h4>String &amp; datetime accessors (a cuDF strength)</h4>
+      <pre><span class="lang">Python</span><code>s = cudf.<span class="f">Series</span>([<span class="s">"  GPU "</span>, <span class="s">"cuDF"</span>, <span class="s">"rapids"</span>])
+s.str.<span class="f">strip</span>().str.<span class="f">upper</span>().str.<span class="f">contains</span>(<span class="s">"U"</span>)   <span class="c"># vectorized on offsets+chars</span>
+
+ts = cudf.<span class="f">Series</span>(cudf.<span class="f">to_datetime</span>([<span class="s">"2026-01-01"</span>, <span class="s">"2026-05-30"</span>]))
+ts.dt.<span class="f">day_of_year</span>; ts.dt.<span class="f">month</span></code></pre>
+
+      <h4>Rolling / window</h4>
+      <pre><span class="lang">Python</span><code>df[<span class="s">"spend"</span>].<span class="f">rolling</span>(window=<span class="n">3</span>).<span class="f">mean</span>()        <span class="c"># segmented window reduction</span></code></pre>
+
+      <h4>UDFs &mdash; when you need custom logic (triggers JIT, §04)</h4>
+      <pre><span class="lang">Python</span><code><span class="c"># Numba compiles this to PTX, then it runs as a real CUDA kernel.</span>
+<span class="k">def</span> <span class="f">bonus</span>(x):
+    <span class="k">return</span> x * <span class="n">1.1</span> <span class="k">if</span> x &gt; <span class="n">10</span> <span class="k">else</span> x
+df[<span class="s">"adj"</span>] = df[<span class="s">"spend"</span>].<span class="f">apply</span>(bonus)
+
+<span class="c"># Or drop to an explicit Numba CUDA kernel over the raw column:</span>
+<span class="k">from</span> numba <span class="k">import</span> cuda
+<span class="f">@cuda.jit</span>
+<span class="k">def</span> <span class="f">mul5</span>(x, out):
+    i = cuda.<span class="f">grid</span>(<span class="n">1</span>)
+    <span class="k">if</span> i &lt; x.size:
+        out[i] = x[i] * <span class="n">5</span>
+out = cudf.<span class="f">Series</span>(cudf.<span class="f">zeros</span>... )   <span class="c"># allocate output</span>
+mul5.<span class="f">forall</span>(len(s))(s, out)            <span class="c"># launch over the Series</span></code></pre>
+
+      <h4>Driving libcudf directly via pylibcudf</h4>
+      <pre><span class="lang">Python · pylibcudf</span><code><span class="k">import</span> pylibcudf <span class="k">as</span> plc
+src   = plc.io.<span class="f">SourceInfo</span>([<span class="s">"dataset.parquet"</span>])
+opts  = plc.io.parquet.<span class="f">ParquetReaderOptions</span>.<span class="f">builder</span>(src).<span class="f">build</span>()
+table = plc.io.parquet.<span class="f">read_parquet</span>(opts)   <span class="c"># near-direct libcudf call</span></code></pre>
+      <p>Notice how closely that mirrors the C++:</p>
+      <pre><span class="lang">C++ · libcudf</span><code><span class="c">#include &lt;cudf/io/parquet.hpp&gt;</span>
+<span class="k">auto</span> source  = cudf::io::<span class="f">source_info</span>(<span class="s">"dataset.parquet"</span>);
+<span class="k">auto</span> options = cudf::io::parquet_reader_options::<span class="f">builder</span>(source).<span class="f">build</span>();
+<span class="k">auto</span> table   = cudf::io::<span class="f">read_parquet</span>(options);</code></pre>
+      <a class="top" href="#top">↑ top</a>
+    </section>
+
+    <!-- ============ 08 ============ -->
+    <section id="frontends">
+      <div class="h2line"><span class="h2num">08</span><h2>The Three Front-Ends</h2></div>
+      <p>One engine (libcudf), three ways to drive it &mdash; a key thing to articulate in an interview.</p>
+
+      <h3>1 · cudf-classic &mdash; explicit GPU dataframes</h3>
+      <p>You <code>import cudf</code> and write GPU-native code. Maximum control; you know everything is on the GPU; unsupported ops raise rather than silently fall back.</p>
+
+      <h3>2 · cudf.pandas &mdash; zero code change</h3>
+      <p>Accelerate <em>existing</em> pandas code (and third-party libraries that use pandas) with no edits:</p>
+      <pre><span class="lang">Python</span><code><span class="c"># notebook:</span>  %load_ext cudf.pandas
+<span class="c"># script:  </span>  python -m cudf.pandas script.py
+<span class="c"># explicit:</span>  <span class="k">import</span> cudf.pandas; cudf.pandas.<span class="f">install</span>()   <span class="c"># BEFORE importing pandas</span>
+<span class="k">import</span> pandas <span class="k">as</span> pd     <span class="c"># pd is now a proxy module</span></code></pre>
+      <p><strong>How it works:</strong> cudf.pandas <em>hijacks the import</em> of pandas via a <code>ModuleAccelerator(fast=cudf, slow=pandas)</code>. Every pandas object becomes a <strong>proxy</strong> wrapping both a GPU (cuDF) and CPU (pandas) implementation. Each attribute lookup / method call is <em>attempted on the GPU first</em> (copying from CPU if needed); if that fails (an unsupported op, an exotic dtype), it <strong>transparently falls back to CPU</strong> (copying back from GPU), synchronizing data under the hood. A profiler tells you which lines ran where.</p>
+      <div class="note warn"><span class="tag">Trade-offs to name</span><p>Fallback means hidden GPU↔CPU copies, so favor immutable operations (mutability isn't always preserved across a fallback). Join row-ordering may differ from pandas for performance. And <code>cudf.pandas</code> is not meant to be mixed with a direct <code>import cudf</code>.</p></div>
+
+      <h3>3 · cudf.polars &mdash; GPU engine for Polars</h3>
+      <p>Polars builds a <em class="t">lazy</em> logical query plan; cudf.polars translates that plan (its IR) into <strong>pylibcudf</strong> operations and executes on the GPU, falling back to CPU Polars for unsupported nodes:</p>
+      <pre><span class="lang">Python</span><code><span class="k">import</span> polars <span class="k">as</span> pl
+lf = pl.<span class="f">scan_parquet</span>(<span class="s">"events.parquet"</span>).<span class="f">filter</span>(pl.col(<span class="s">"spend"</span>) &gt; <span class="n">8</span>)
+lf.<span class="f">collect</span>(engine=<span class="s">"gpu"</span>)        <span class="c"># execute the plan on the GPU via libcudf</span></code></pre>
+      <p>This is the most &ldquo;query-optimizer&rdquo; flavored front-end: because Polars is lazy, it can do plan-level optimization (predicate/projection pushdown, etc.) <em>before</em> lowering to kernels &mdash; closer to a real database query engine than imperative pandas.</p>
+      <a class="top" href="#top">↑ top</a>
+    </section>
+
+    <!-- ============ 09 ============ -->
+    <section id="torch">
+      <div class="h2line"><span class="h2num">09</span><h2>cuDF vs. PyTorch: Two GPU Worldviews</h2></div>
+      <p>Both move computation onto CUDA, both have caching allocators, both are async on streams &mdash; but they solve <em>different problems</em> and embody <em>different paradigms</em>. This comparison is gold for an interview because it forces you to articulate cuDF's identity.</p>
+
+      <div class="tbl"><table class="vs">
+        <tr><th>Dimension</th><th>cuDF</th><th>PyTorch</th></tr>
+        <tr><td><strong>Data model</strong></td><td>Table of <em>heterogeneous</em>, typed columns (Struct-of-Arrays). Nulls, strings, lists, structs, categoricals, decimals, datetimes.</td><td>Dense, <em>homogeneous</em> N-D <code>Tensor</code> of one numeric dtype, strided.</td></tr>
+        <tr><td><strong>Domain</strong></td><td>ETL / analytics: joins, group-bys, sorts, filters, string &amp; time ops, IO.</td><td>Deep learning / numerics: matmul, conv, activations, gradients.</td></tr>
+        <tr><td><strong>Computation kind</strong></td><td>Relational algebra: gather/scatter, hashing, segmented &amp; variable-length ops. Often <em>memory-bandwidth-bound</em> &amp; irregular.</td><td>Dense linear algebra: regular access patterns, often <em>FLOP-bound</em>.</td></tr>
+        <tr><td><strong>Kernel libraries</strong></td><td>CCCL (Thrust/CUB), cuco hash tables, custom kernels.</td><td>cuBLAS, cuDNN, CUTLASS, custom kernels.</td></tr>
+        <tr><td><strong>Paradigm</strong></td><td>Mostly <em>declarative / functional</em>: immutable columns, ops return new columns; the &ldquo;graph&rdquo; (in cudf.polars) is a <em>query plan</em>.</td><td><em>Imperative tensor algebra</em>: you compose differentiable ops; a dynamic compute graph is recorded.</td></tr>
+        <tr><td><strong>Autodiff</strong></td><td>None. No gradients; not its job.</td><td>Core feature: <code>autograd</code> records ops for backprop.</td></tr>
+        <tr><td><strong>Mutability</strong></td><td>Columns largely immutable; copy-on-write; ops allocate outputs.</td><td>In-place ops common (<code>x.add_()</code>); views share storage.</td></tr>
+        <tr><td><strong>Runtime compile</strong></td><td>Precompiled libcudf + Numba/Jitify JIT for UDFs &amp; expressions; cudf.polars optimizes the plan.</td><td><code>torch.compile</code> / TorchInductor fuses op graphs.</td></tr>
+        <tr><td><strong>Allocator</strong></td><td>RMM (pluggable, shared across all RAPIDS).</td><td>Built-in CUDA caching allocator.</td></tr>
+      </table></div>
+
+      <h3>The deep difference, in one line</h3>
+      <p><strong>PyTorch asks &ldquo;what arithmetic do I do to these dense numbers (and how do I differentiate it)?&rdquo; cuDF asks &ldquo;how do I reorganize, match, and aggregate these heterogeneous rows?&rdquo;</strong> One is calculus over tensors; the other is relational algebra over tables. That's why cuDF leans on sort/hash/gather and PyTorch leans on matmul/conv.</p>
+
+      <h3>They're complementary &mdash; and interop is zero-copy</h3>
+      <p>The real-world pattern is to use them <em>together</em>: GPU ETL/feature-engineering in cuDF, then feed a model in PyTorch &mdash; <strong>without ever leaving the GPU.</strong> Numeric columns can move zero-copy because both honor the <code>__cuda_array_interface__</code> and <strong>DLPack</strong> protocols:</p>
+      <pre><span class="lang">Python</span><code><span class="k">import</span> cudf, cupy <span class="k">as</span> cp, torch
+
+gdf = cudf.<span class="f">read_parquet</span>(<span class="s">"features.parquet"</span>)   <span class="c"># GPU ETL in cuDF</span>
+feats = gdf[[<span class="s">"f0"</span>,<span class="s">"f1"</span>,<span class="s">"f2"</span>]]
+
+<span class="c"># zero-copy: cuDF -&gt; CuPy -&gt; torch, all on-device, no host round-trip</span>
+arr = feats.<span class="f">to_cupy</span>()                         <span class="c"># or .values</span>
+t   = torch.<span class="f">as_tensor</span>(arr, device=<span class="s">"cuda"</span>)      <span class="c"># shares GPU memory</span>
+<span class="c"># ...train / infer in PyTorch...</span></code></pre>
+      <div class="note"><span class="tag">Boundary of interop</span><p>Only <em>numeric, fixed-width</em> columns map cleanly to tensors. Strings, lists, structs, and nulls have no tensor equivalent &mdash; you encode/embed/impute them in cuDF <em>first</em>, then hand the resulting numeric block to PyTorch. That handoff point is itself a great thing to discuss: feature engineering is cuDF's job; learning is PyTorch's.</p></div>
+      <a class="top" href="#top">↑ top</a>
+    </section>
+
+    <!-- ============ 10 ============ -->
+    <section id="interview">
+      <div class="h2line"><span class="h2num">10</span><h2>High-Value Topics for the Interview</h2></div>
+      <p>If you can speak fluently to these, you'll demonstrate real depth beyond API familiarity.</p>
+
+      <h4>Data &amp; layout</h4>
+      <ul>
+        <li><strong>Why columnar wins on GPUs</strong> — coalesced memory access, SIMT vectorization, better compression, projection pushdown.</li>
+        <li><strong>Null handling</strong> — validity bitmask, cached null count, null-aware kernels; why this beats sentinel values.</li>
+        <li><strong>String/list/struct representation</strong> — offsets + child buffers; computing lengths as offset differences; why nested types share/compose null masks.</li>
+        <li><strong>Decimal / fixed-point</strong> — <code>decimal32/64/128</code> as scaled integers (exactness for money).</li>
+      </ul>
+
+      <h4>Engine internals</h4>
+      <ul>
+        <li><strong>Owning vs view types</strong>; the &ldquo;views in, owned out&rdquo; signature convention; the (stream, mr) trailing params.</li>
+        <li><strong>type_dispatcher</strong> — runtime type → compile-time template; how one API covers all dtypes.</li>
+        <li><strong>Primitive decomposition</strong> — express filter/sort/join/groupby in terms of gather/scatter/scan/reduce/hash; name CCCL and cuco.</li>
+        <li><strong>Hash-based vs sort-based</strong> groupby/join trade-offs.</li>
+        <li><strong>Stream ordering &amp; PTDS</strong> — async execution; stream-ordered allocation; why timing needs synchronization.</li>
+        <li><strong>JIT path</strong> — Numba → PTX → Jitify for UDFs/expressions; one-time compile cost + caching.</li>
+      </ul>
+
+      <h4>Memory &amp; scale</h4>
+      <ul>
+        <li><strong>RMM resources &amp; adaptors</strong> — pool vs async vs managed; composing logging/tracking; why the pool is the headline knob.</li>
+        <li><strong>Larger-than-memory</strong> — managed memory oversubscription, spilling, chunked Parquet reader.</li>
+        <li><strong>Distributed cuDF</strong> — dask-cudf partitions; the <em>shuffle</em> as the bottleneck; UCX/NVLink/RDMA/GPUDirect.</li>
+        <li><strong>IO acceleration</strong> — KvikIO + GPUDirect Storage; nvCOMP in Parquet/ORC.</li>
+      </ul>
+
+      <h4>Engineering &amp; ecosystem</h4>
+      <ul>
+        <li><strong>Build &amp; deps</strong> — CMake, CCCL (Thrust + CUB + libcudacxx), conda + pip wheels, separate CUDA 11/12 builds, calendar versioning (YY.MM).</li>
+        <li><strong>Testing</strong> — GoogleTest in libcudf (where algorithm correctness is validated), pytest + pandas-equivalence checks in Python, pylibcudf tests that only verify the <em>bindings</em> (not re-test the algorithm).</li>
+        <li><strong>Interop protocols</strong> — <code>__cuda_array_interface__</code>, DLPack, Arrow C Data Interface; how cuDF plays with CuPy, Numba, PyTorch, Spark (Spark-RAPIDS plugin).</li>
+        <li><strong>pandas-compatibility tax</strong> — the semantic gaps (index alignment, mutation, dtype edge cases) cuDF-classic must paper over, and why pylibcudf exists to escape that tax.</li>
+      </ul>
+      <div class="note key"><span class="tag">If you remember one framing</span><p>cuDF is a <strong>relational/analytical engine</strong> whose performance comes from a columnar Arrow layout, a compact set of world-class data-parallel primitives, a type-dispatch mechanism to apply them generically, and an allocator (RMM) fast enough to make its allocate-heavy functional style cheap &mdash; all wrapped in a pandas-shaped API, with two alternative front-ends (zero-code pandas, and a Polars GPU engine) sharing the same libcudf core.</p></div>
+      <a class="top" href="#top">↑ top</a>
+    </section>
+
+    <!-- ============ 11 ============ -->
+    <section id="resources">
+      <div class="h2line"><span class="h2num">11</span><h2>Where to Go Next</h2></div>
+      <ul>
+        <li><a class="link" href="https://docs.rapids.ai/api/cudf/stable/">cuDF docs</a> — user guide + the <strong>Developer Guide → Library Design</strong> page (read this; it's the canonical layer breakdown).</li>
+        <li><a class="link" href="https://docs.rapids.ai/api/cudf/stable/pylibcudf/">pylibcudf docs</a> — the binding layer; great for seeing libcudf's surface from Python.</li>
+        <li><a class="link" href="https://docs.rapids.ai/api/libcudf/stable/">libcudf C++ docs</a> — column/table/view types, the type_dispatcher, algorithm reference.</li>
+        <li><a class="link" href="https://github.com/rapidsai/cudf">github.com/rapidsai/cudf</a> — read <code>CONTRIBUTING.md</code> and a few merged PRs; understanding the contribution workflow is itself interview signal.</li>
+        <li><a class="link" href="https://github.com/rapidsai/rmm">github.com/rapidsai/rmm</a> + the NVIDIA blog &ldquo;Fast, Flexible Allocation … with RAPIDS Memory Manager.&rdquo;</li>
+        <li><a class="link" href="https://github.com/NVIDIA/cccl">NVIDIA/cccl</a> — Thrust + CUB + libcudacxx, the primitive library cuDF stands on.</li>
+        <li><a class="link" href="https://github.com/NVIDIA/cuCollections">NVIDIA/cuCollections (cuco)</a> — the GPU hash tables behind joins/group-bys.</li>
+        <li>NVIDIA blogs: &ldquo;cuDF accelerates pandas ~150&times; with zero code changes&rdquo; and &ldquo;The Life of a Numba Kernel&rdquo; (the UDF JIT pipeline).</li>
+      </ul>
+      <p style="color:var(--ink-dim)"><strong>Hands-on suggestion:</strong> spin up the free RAPIDS Colab/Paperspace environment, load a Parquet dataset, profile a groupby with the RMM pool off vs on, then try moving the numeric output zero-copy into a small PyTorch model. Doing the cuDF→PyTorch handoff yourself will cement the paradigm contrast better than any reading.</p>
+      <a class="top" href="#top">↑ top</a>
+    </section>
+
+    <footer>
+      cuDF Systems Deep Dive · self-contained reference · generated May 2026 · versions/specifics evolve with each YY.MM RAPIDS release — verify against the live docs before relying on exact APIs.
+    </footer>
+  </main>
+</div>
+
+<script>
+  // active-section highlighting in the TOC
+  const links = [...document.querySelectorAll('nav.toc a')];
+  const map = {};
+  links.forEach(a => { const id = a.getAttribute('href').slice(1); map[id] = a; });
+  const obs = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        links.forEach(l => l.classList.remove('active'));
+        if (map[e.target.id]) map[e.target.id].classList.add('active');
+      }
+    });
+  }, { rootMargin: '-10% 0px -80% 0px', threshold: 0 });
+  document.querySelectorAll('section[id]').forEach(s => obs.observe(s));
+</script>
+</body>
+</html>
