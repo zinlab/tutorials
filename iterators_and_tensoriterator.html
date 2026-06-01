@@ -145,13 +145,15 @@
   <a href="#gpu-perblock">15 · Why "per-block" only</a>
   <a href="#gpu-parallel">16 · Parallel? grid/block geometry</a>
   <a href="#gpu-cuda">17 · Talking to CUDA</a>
+  <a href="#blockidx-flow">18 · blockIdx → the math</a>
+  <a href="#vs-raw">19 · This vs. a raw kernel launch</a>
   <h2>Beyond PyTorch</h2>
-  <a href="#cudf">18 · cuDF — the Thrust way</a>
+  <a href="#cudf">20 · cuDF — the Thrust way</a>
   <h2>Practice</h2>
-  <a href="#generalize">19 · Generalizing the pattern</a>
-  <a href="#limits">20 · Assumptions &amp; limits</a>
-  <a href="#tips">21 · Tips &amp; gotchas</a>
-  <a href="#cheat">22 · Cheat sheet</a>
+  <a href="#generalize">21 · Generalizing the pattern</a>
+  <a href="#limits">22 · Assumptions &amp; limits</a>
+  <a href="#tips">23 · Tips &amp; gotchas</a>
+  <a href="#cheat">24 · Cheat sheet</a>
 </nav>
 
 <main>
@@ -749,8 +751,153 @@ __device__ <span class="kw">void</span> interp_weno5_impl(T* out, T* inp, T* coe
 </section>
 
 <!-- ============================================================= -->
+<section id="blockidx-flow">
+  <h2 class="sec"><span class="num">18</span>From <code>blockIdx</code> to the math — how the index reaches your calculation<a class="anchor-h" href="#blockidx-flow">#</a></h2>
+  <div class="key"><b>The clarification that resolves the confusion</b>
+  <code>TensorIterator</code> <b>never computes <code>blockIdx</code></b>. <code>blockIdx</code> is a hardware-provided built-in register the CUDA runtime stamps onto every block at launch. What <code>TensorIterator</code> does is make that <code>blockIdx</code> <em>mean something</em> — it supplies the <code>OffsetCalculator</code> that converts a block index into the correct memory address for every operand.</div>
+
+  <h3>Who walks which axis</h3>
+  <p>The squash (§12) splits the work into three lanes — and <code>blockIdx</code> only ever addresses the third:</p>
+  <table>
+    <tr><th>Axis</th><th>Who walks it</th><th>Mechanism</th></tr>
+    <tr><td>recon axis <code>dim</code> <span class="tag">squashed</span></td><td><b>threads in a block</b></td><td><code>threadIdx.x × stride_in1</code>, inside the device fn</td></tr>
+    <tr><td>variables <code>nvar</code> <span class="tag">squashed</span></td><td><b>serial loop in-thread</b></td><td><code>for j × stride_in2</code>, inside the device fn</td></tr>
+    <tr><td>all other spatial axes</td><td><b>blocks in the grid</b></td><td><code>blockIdx → bid → OffsetCalculator</code></td></tr>
+  </table>
+  <div class="note"><b>The clean rule</b>
+  The <b>squashed axes are exactly the ones the kernel walks by hand</b>; the <b>non-squashed axes are exactly the iteration space the <code>OffsetCalculator</code> covers</b>. <code>blockIdx</code> indexes only that second group.</div>
+
+  <h3>The five-step chain</h3>
+  <pre><span class="cap">1 · build time — iterator captures strides + base pointers</span><code><span class="kw">auto</span> offset_calc = ::make_offset_calculator&lt;Arity&gt;(iter);   <span class="com">// POD struct, copyable to device</span>
+std::array&lt;<span class="kw">char</span>*, Arity&gt; data;
+<span class="kw">for</span> (<span class="kw">int</span> i=<span class="num">0</span>;i&lt;Arity;i++) data[i] = (<span class="kw">char</span>*)iter.data_ptr(i);  <span class="com">// base ptrs</span></code></pre>
+  <pre><span class="cap">2 · launch geometry — iterator sizes → grid/block</span><code>dim3 block(len[<span class="num">2</span>], len[<span class="num">1</span>], len[<span class="num">0</span>]);                        <span class="com">// threads = recon-axis length</span>
+dim3 grid(len[<span class="num">2</span>]/block.x, len[<span class="num">1</span>]/block.y, len[<span class="num">0</span>]/block.z); <span class="com">// blocks = iteration columns</span>
+reduce_kernel&lt;scalar_t&gt;&lt;&lt;&lt;grid, block, shared, stream&gt;&gt;&gt;(numel, <span class="com">/*lambda*/</span>);
+<span class="com">// #blocks == iteration numel  ⇒  one block = one reconstruction line</span></code></pre>
+  <pre><span class="cap">3 · launch — CUDA assigns blockIdx; reduce_kernel linearizes it</span><code>__global__ <span class="kw">void</span> reduce_kernel(<span class="kw">int64_t</span> numel, func_t f) {
+  <span class="kw">int</span> bid = blockIdx.x
+          + blockIdx.y * gridDim.x
+          + blockIdx.z * gridDim.x * gridDim.y;   <span class="com">// 3-D blockIdx → 1-D linear index</span>
+  <span class="kw">extern</span> __shared__ <span class="kw">unsigned</span> <span class="kw">char</span> memory[];
+  scalar_t* smem = <span class="kw">reinterpret_cast</span>&lt;scalar_t*&gt;(memory);
+  <span class="kw">if</span> (tid &lt; numel) f(bid, smem);                  <span class="com">// bid handed to the captured lambda</span>
+}</code></pre>
+  <pre><span class="cap">4 · bid → per-operand byte offsets</span><code>numel, [=] __device__(<span class="kw">int</span> bid, scalar_t* smem) {
+  <span class="kw">auto</span> offsets = offset_calc.get(bid);   <span class="com">// linear bid → {offset_out, offset_in}</span>
+  f(data.data(), offsets.data(), smem);  <span class="com">// pass base ptrs + offsets to the body</span>
+}</code></pre>
+  <pre><span class="cap">5 · offsets → pointers → the WENO math</span><code>[=] __device__ (<span class="kw">char</span>* <span class="kw">const</span> data[<span class="num">2</span>], <span class="kw">unsigned</span> <span class="kw">int</span> strides[<span class="num">2</span>], scalar_t* smem) {
+  <span class="kw">auto</span> out = <span class="kw">reinterpret_cast</span>&lt;scalar_t*&gt;(data[<span class="num">0</span>] + strides[<span class="num">0</span>]);  <span class="com">// base + this block's offset</span>
+  <span class="kw">auto</span> w   = <span class="kw">reinterpret_cast</span>&lt;scalar_t*&gt;(data[<span class="num">1</span>] + strides[<span class="num">1</span>]);
+  interp_weno5_impl(out, w, c, nvar, stride_in1, stride_in2, ...);    <span class="com">// threadIdx.x walks inside</span>
+}</code></pre>
+
+  <div class="warn"><b>Naming gotcha</b>
+  That parameter is declared <code>unsigned int strides[2]</code> but it actually receives <code>offsets.data()</code> — they are the <b>byte offsets from <code>offset_calc.get(bid)</code>, not strides</b>. The real strides (<code>stride_in1</code>, <code>stride_in2</code>) are computed separately from the iterator and passed alongside for the in-block <code>threadIdx.x</code> / <code>j</code> walks.</div>
+
+  <div class="viz">
+    <div class="vtitle">Visual · the index pipeline</div>
+    <div class="flow" style="margin:0">
+      <div class="box"><div class="t">TensorIterator</div>shape + strides + base ptrs → <code>OffsetCalculator</code></div>
+      <div class="arrow">→</div>
+      <div class="box"><div class="t">stencil_kernel</div>sizes grid so <b>#blocks = iter.numel()</b>, launches</div>
+      <div class="arrow">→</div>
+      <div class="box"><div class="t">CUDA hardware</div>stamps <code>blockIdx</code> on each block</div>
+      <div class="arrow">→</div>
+      <div class="box"><div class="t">reduce_kernel</div>linearize → <code>bid</code></div>
+      <div class="arrow">→</div>
+      <div class="box"><div class="t">offset_calc.get(bid)</div><code>data[i] + offset[i]</code> → this line's ptrs</div>
+      <div class="arrow">→</div>
+      <div class="box"><div class="t">device fn</div><code>threadIdx.x</code> · <code>j</code> → WENO</div>
+    </div>
+    <p class="vcap"><b>In one line:</b> <code>TensorIterator</code> computes the <code>OffsetCalculator</code> and base pointers; the CUDA grid (sized from the iterator) produces <code>blockIdx</code>; <code>reduce_kernel</code> linearizes it into <code>bid</code>; and <code>offset_calc.get(bid)</code> is the step that "passes the block index into the calculation" by turning it into the offsets the device function dereferences.</p>
+  </div>
+
+  <div class="warn"><b>The fragile assumption</b>
+  Correctness hinges on the <code>bid</code> linearization order (<code>blockIdx.x + blockIdx.y·gridDim.x + …</code>) matching the dimension order the <code>OffsetCalculator</code> uses to decode the index. <code>stencil_kernel</code> builds the grid from the <em>same</em> iterator sizes (the <code>len[]</code> packing + <code>_left_shift</code>), so they agree by construction — but that packing is the under-commented part, and it assumes the non-squashed extents divide evenly into the grid (§16, §22).</div>
+</section>
+
+<!-- ============================================================= -->
+<section id="vs-raw">
+  <h2 class="sec"><span class="num">19</span>This vs. launching a raw CUDA kernel — what the manual path must add<a class="anchor-h" href="#vs-raw">#</a></h2>
+  <div class="key"><b>First, dispel a myth</b>
+  The <code>TensorIterator</code> approach does <b>not</b> replace the kernel launch. snapy still fires a raw <code>reduce_kernel&lt;&lt;&lt;grid,block,shared,stream&gt;&gt;&gt;</code> inside <code>stencil_kernel</code>. The difference is everything <em>wrapped around</em> that launch — addressing, dtype, device/stream, and multi-backend routing. So the real question is: if you launched directly, what would you have to re-implement by hand?</div>
+
+  <h3>The two paths, side by side</h3>
+  <div class="grid2">
+    <div>
+      <h4>Raw direct launch</h4>
+      <pre><span class="cap">cuda · the naive direct version</span><code>__global__ <span class="kw">void</span> weno5_raw(<span class="kw">float</span>* out, <span class="kw">const</span> <span class="kw">float</span>* in,
+                          <span class="kw">float</span>* coeff, <span class="kw">int</span> nvar,
+                          <span class="kw">int</span> ncol, <span class="kw">int</span> nx) {
+  <span class="kw">int</span> col = blockIdx.x;        <span class="com">// assumes contiguous layout!</span>
+  <span class="kw">int</span> i   = threadIdx.x;
+  <span class="kw">const</span> <span class="kw">float</span>* line = in + col * nx;  <span class="com">// hard-coded stride</span>
+  <span class="com">// ... weno math ...</span>
+}
+<span class="com">// caller:</span>
+weno5_raw&lt;&lt;&lt;ncol, nx&gt;&gt;&gt;(out_ptr, in_ptr, c_ptr, nvar, ncol, nx);</code></pre>
+    </div>
+    <div>
+      <h4>TensorIterator-wrapped (snapy)</h4>
+      <pre><span class="cap">cuda · the snapy version</span><code>at::cuda::CUDAGuard g(iter.device());          <span class="com">// device</span>
+AT_DISPATCH_FLOATING_TYPES(iter.common_dtype(), <span class="str">"…"</span>, [&]{
+  <span class="com">// strides pulled from the iterator, any layout</span>
+  <span class="kw">int</span> s1 = ensure_nonempty_stride(iter.input(), dim);
+  native::stencil_kernel&lt;scalar_t,<span class="num">2</span>&gt;(iter, dim, c.numel(),
+    [=] __device__(<span class="kw">char</span>* <span class="kw">const</span> d[<span class="num">2</span>], <span class="kw">unsigned</span> <span class="kw">int</span> o[<span class="num">2</span>], scalar_t* sm){
+      <span class="com">// d[i]+o[i] correct for strided/transposed/sliced too</span>
+    });
+});</code></pre>
+    </div>
+  </div>
+
+  <h3>What the direct path must do for itself</h3>
+  <table>
+    <tr><th>Concern</th><th>TensorIterator path</th><th>Raw launch must…</th></tr>
+    <tr><td><b>Strided / non-contiguous tensors</b></td><td><code>OffsetCalculator</code> handles arbitrary strides automatically.</td><td>Either call <code>.contiguous()</code> first (<span class="copybadge yes">copies memory</span>) or pass every stride and replicate the divmod offset math.</td></tr>
+    <tr><td><b>dtype dispatch</b></td><td><code>AT_DISPATCH_FLOATING_TYPES(iter.common_dtype(),…)</code> generates <code>float</code>/<code>double</code> and binds <code>scalar_t</code>.</td><td>Hard-code one type, or hand-write the <code>if (dtype==kFloat)…</code> ladder + template instantiations.</td></tr>
+    <tr><td><b>Device + stream</b></td><td><code>CUDAGuard(iter.device())</code> + <code>getCurrentCUDAStream()</code> baked into the runner.</td><td>Remember <code>cudaSetDevice</code> and to launch on PyTorch's current stream — forget it → wrong-GPU / sync bugs.</td></tr>
+    <tr><td><b>Shape / dtype / device checks</b></td><td>Validated at <code>build()</code>; mismatches throw.</td><td>No safety net — wrong sizes/dtypes are silent UB.</td></tr>
+    <tr><td><b>Broadcasting &amp; promotion</b> (general ops)</td><td>Free for element-wise ops.</td><td>Validate and handle by hand.</td></tr>
+    <tr><td><b>Output allocation</b></td><td>Can allocate/resize the output operand.</td><td>Allocate the buffer yourself.</td></tr>
+    <tr><td><b>Multi-backend</b></td><td>One call site routes CPU/CUDA/MPS via <code>DispatchStub</code>.</td><td>CUDA only — write separate CPU plumbing yourself.</td></tr>
+    <tr><td><b>Grid/block sizing</b></td><td><em>Still manual</em> in <code>stencil_kernel</code>.</td><td><em>Also manual</em> — no saving here.</td></tr>
+    <tr><td><b>The math, shared mem, <code>__syncthreads</code></b></td><td><em>You write it</em> (the device fn).</td><td><em>You write it too</em> — identical.</td></tr>
+  </table>
+
+  <div class="note"><b>So what does TensorIterator actually buy?</b>
+  Everything in the top seven rows: <b>layout-agnostic addressing, dtype dispatch, device/stream management, build-time safety checks, broadcasting, output handling, and multi-backend routing</b>. The kernel itself (geometry + math + shared memory) is the same work either way — <code>TensorIterator</code> wraps it, it does not write it.</div>
+
+  <h3>The honest trade-off</h3>
+  <div class="grid2">
+    <div>
+      <div class="tip"><b>Why the iterator path wins</b>
+      <ul style="margin:6px 0 0">
+        <li>Works on any layout without a defensive <code>.contiguous()</code> copy.</li>
+        <li>Handles <code>float</code>/<code>double</code> from one source.</li>
+        <li>Multi-GPU- and stream-correct by default.</li>
+        <li>Slots into ATen dispatch &amp; the rest of the model.</li>
+      </ul></div>
+    </div>
+    <div>
+      <div class="warn"><b>Why a direct launch can still be right</b>
+      <ul style="margin:6px 0 0">
+        <li>No iterator-build overhead per call.</li>
+        <li>For <em>known-contiguous</em> data, <code>idx = blockIdx*blockDim + threadIdx</code> is cheaper than the <code>OffsetCalculator</code>'s per-element divmod.</li>
+        <li>Full control, simplest mental model, no hidden behavior.</li>
+        <li>Fine when you own the layout, dtype, and stream yourself.</li>
+      </ul></div>
+    </div>
+  </div>
+  <div class="key"><b>Bottom line</b>
+  Combining <code>TensorIterator</code> + a custom runner trades a little overhead (iterator build, an indirection of offset arithmetic) for <em>generality and PyTorch integration</em>. A raw launch trades that generality away for <em>control and minimal overhead</em>. snapy chose the iterator because its tensors can arrive transposed/sliced from the solver and must run on CPU, CUDA, and MPS from one call — exactly the cases where the manual path's "extra work" becomes error-prone.</div>
+</section>
+
+<!-- ============================================================= -->
 <section id="cudf">
-  <h2 class="sec"><span class="num">18</span>cuDF — iterators the Thrust way<a class="anchor-h" href="#cudf">#</a></h2>
+  <h2 class="sec"><span class="num">20</span>cuDF — iterators the Thrust way<a class="anchor-h" href="#cudf">#</a></h2>
   <p>Does the RAPIDS GPU dataframe library <b>cuDF</b> have its own iterator? <b>Yes — but with the opposite philosophy to <code>TensorIterator</code>.</b> Where PyTorch ships one heavyweight object that plans <em>and</em> drives the whole op, cuDF (its C++ core <code>libcudf</code>) builds many small composable <b>"fancy iterators"</b> in the Thrust / STL sense — the random-access iterator concept from §3 — and hands them to off-the-shelf <b>Thrust and CUB algorithms</b> that do the launch.</p>
 
   <div class="flow">
@@ -824,7 +971,7 @@ thrust::transform(rmm::exec_policy(stream),
 
 <!-- ============================================================= -->
 <section id="generalize">
-  <h2 class="sec"><span class="num">19</span>Generalizing the pattern — your reusable recipe<a class="anchor-h" href="#generalize">#</a></h2>
+  <h2 class="sec"><span class="num">21</span>Generalizing the pattern — your reusable recipe<a class="anchor-h" href="#generalize">#</a></h2>
   <p>To add a new strided / stencil operator to a repo like snapy, repeat this five-part skeleton:</p>
   <ol>
     <li><b>Declare the dispatch slot</b> — <code>using fn = void(*)(TensorIterator&amp;, …); DECLARE_DISPATCH(fn, my_op);</code> in a header.</li>
@@ -844,7 +991,7 @@ thrust::transform(rmm::exec_policy(stream),
 
 <!-- ============================================================= -->
 <section id="limits">
-  <h2 class="sec"><span class="num">20</span>Assumptions &amp; limitations to respect<a class="anchor-h" href="#limits">#</a></h2>
+  <h2 class="sec"><span class="num">22</span>Assumptions &amp; limitations to respect<a class="anchor-h" href="#limits">#</a></h2>
   <ul>
     <li><b>Dtype homogeneity</b> — <code>check_all_same_dtype(true)</code> means you must pass operands of one floating type; mixed types throw. <code>AT_DISPATCH_FLOATING_TYPES</code> only covers <code>float</code>/<code>double</code> (no half/bfloat16 here).</li>
     <li><b>Output is pre-sized</b> — <code>resize_outputs(false)</code> assumes you allocated <code>out</code> with exactly the reduced shape (<code>size(dim) − (stencils−1)</code>). A wrong-sized buffer is UB, not an error.</li>
@@ -859,7 +1006,7 @@ thrust::transform(rmm::exec_policy(stream),
 
 <!-- ============================================================= -->
 <section id="tips">
-  <h2 class="sec"><span class="num">21</span>Tips &amp; gotchas for using the iterator well<a class="anchor-h" href="#tips">#</a></h2>
+  <h2 class="sec"><span class="num">23</span>Tips &amp; gotchas for using the iterator well<a class="anchor-h" href="#tips">#</a></h2>
   <div class="grid2">
     <div>
       <h4>Building</h4>
@@ -892,7 +1039,7 @@ std::cout &lt;&lt; iter.ndim() &lt;&lt; <span class="str">" "</span> &lt;&lt; it
 
 <!-- ============================================================= -->
 <section id="cheat">
-  <h2 class="sec"><span class="num">22</span>One-screen cheat sheet<a class="anchor-h" href="#cheat">#</a></h2>
+  <h2 class="sec"><span class="num">24</span>One-screen cheat sheet<a class="anchor-h" href="#cheat">#</a></h2>
   <table>
     <tr><th>Question</th><th>Answer</th></tr>
     <tr><td>What does TensorIterator do on GPU?</td><td>Nothing iterative — it produces base pointers + an <code>OffsetCalculator</code> (addressing only). The CUDA grid does the iterating.</td></tr>
