@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Iterators &amp; TensorIterator — from NumPy to the Weno5 CUDA kernel</title>
+<style>
+  :root{
+    --bg:#0f1419; --panel:#161b22; --panel2:#1c2430; --ink:#d7dee8; --muted:#8b97a8;
+    --accent:#5cc8ff; --accent2:#7ee787; --warn:#ffb454; --danger:#ff7b72; --mauve:#d2a8ff;
+    --line:#27313f; --code-bg:#0b0f14; --kw:#ff7b72; --fn:#d2a8ff; --str:#a5d6ff; --num:#79c0ff; --com:#6b7686; --type:#7ee787;
+    --radius:12px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:linear-gradient(180deg,#0d1117,#0f1419 40%); color:var(--ink);
+    font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .layout{display:grid;grid-template-columns:288px minmax(0,1fr);max-width:1400px;margin:0 auto}
+  /* Sidebar */
+  nav.toc{
+    position:sticky;top:0;align-self:start;height:100vh;overflow-y:auto;
+    padding:26px 18px 60px;border-right:1px solid var(--line);background:rgba(13,17,23,.6);
+  }
+  nav.toc h2{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:18px 8px 8px}
+  nav.toc a{display:block;color:var(--muted);padding:5px 10px;border-radius:8px;font-size:13.5px;border-left:2px solid transparent}
+  nav.toc a:hover{color:var(--ink);background:var(--panel)}
+  nav.toc a.active{color:var(--accent);background:var(--panel);border-left-color:var(--accent)}
+  .brand{font-weight:700;font-size:18px;color:var(--ink);padding:0 8px 6px}
+  .brand small{display:block;font-weight:400;color:var(--muted);font-size:12px;margin-top:4px}
+  /* Content */
+  main{padding:42px 52px 120px;min-width:0}
+  header.hero{margin-bottom:34px;padding-bottom:26px;border-bottom:1px solid var(--line)}
+  header.hero h1{font-size:34px;line-height:1.2;margin:0 0 12px;background:linear-gradient(90deg,#5cc8ff,#7ee787);-webkit-background-clip:text;background-clip:text;color:transparent}
+  header.hero p.lead{color:var(--muted);font-size:17px;margin:0;max-width:75ch}
+  section{margin:50px 0;scroll-margin-top:20px}
+  h2.sec{font-size:25px;margin:0 0 6px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+  h2.sec .num{color:var(--accent);font-variant-numeric:tabular-nums;margin-right:10px;font-size:18px}
+  h3{font-size:19px;margin:30px 0 10px;color:#eaf1f8}
+  h4{font-size:15.5px;margin:22px 0 8px;color:var(--accent2);letter-spacing:.01em}
+  p{max-width:80ch}
+  ul,ol{max-width:80ch}
+  li{margin:5px 0}
+  code{font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.88em;background:#1b2230;padding:.12em .4em;border-radius:5px;color:#e6c07b}
+  pre{background:var(--code-bg);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;overflow-x:auto;margin:14px 0;position:relative}
+  pre code{background:none;padding:0;color:#c9d4e1;font-size:13px;line-height:1.6;display:block}
+  pre .cap{position:absolute;top:0;right:0;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--panel2);padding:3px 9px;border-bottom-left-radius:8px;border-left:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .kw{color:var(--kw)} .fn{color:var(--fn)} .str{color:var(--str)} .num{color:var(--num)} .com{color:var(--com);font-style:italic} .ty{color:var(--type)} .mac{color:var(--warn)}
+  /* callouts */
+  .note,.warn,.tip,.key{border-radius:var(--radius);padding:14px 18px;margin:18px 0;border:1px solid var(--line);background:var(--panel)}
+  .note{border-left:4px solid var(--accent)}
+  .warn{border-left:4px solid var(--danger);background:#1d1517}
+  .tip{border-left:4px solid var(--accent2);background:#121a16}
+  .key{border-left:4px solid var(--mauve);background:#181522}
+  .note b,.warn b,.tip b,.key b{display:block;margin-bottom:4px;text-transform:uppercase;font-size:12px;letter-spacing:.08em}
+  .note b{color:var(--accent)} .warn b{color:var(--danger)} .tip b{color:var(--accent2)} .key b{color:var(--mauve)}
+  /* tables */
+  table{border-collapse:collapse;width:100%;margin:18px 0;font-size:14px;display:block;overflow-x:auto}
+  th,td{border:1px solid var(--line);padding:9px 12px;text-align:left;vertical-align:top}
+  th{background:var(--panel2);color:#eaf1f8;font-weight:600}
+  tr:nth-child(even) td{background:rgba(255,255,255,.015)}
+  /* misc */
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:1000px){.grid2{grid-template-columns:1fr} .layout{grid-template-columns:1fr} nav.toc{display:none} main{padding:28px 22px 80px}}
+  .pill{display:inline-block;font-size:11px;padding:2px 9px;border-radius:999px;background:var(--panel2);border:1px solid var(--line);color:var(--muted);margin-right:6px}
+  .pill.gpu{color:var(--accent2);border-color:#27513a}
+  .pill.cpu{color:var(--accent);border-color:#1d3a52}
+  .pill.mps{color:var(--mauve);border-color:#3a2a55}
+  .flow{display:flex;flex-wrap:wrap;gap:10px;align-items:stretch;margin:18px 0}
+  .flow .box{flex:1;min-width:150px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .flow .box .t{font-size:12px;color:var(--accent);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+  .flow .arrow{display:flex;align-items:center;color:var(--muted);font-size:22px}
+  .anchor-h{color:var(--muted);opacity:0;margin-left:8px;font-weight:400;font-size:.7em}
+  h2.sec:hover .anchor-h,h3:hover .anchor-h{opacity:1}
+  footer{border-top:1px solid var(--line);margin-top:60px;padding-top:22px;color:var(--muted);font-size:13px}
+  .toc-prog{height:3px;background:linear-gradient(90deg,var(--accent),var(--accent2));position:fixed;top:0;left:0;z-index:50;width:0}
+  .mono-small{font-family:ui-monospace,monospace;font-size:12.5px;color:var(--muted)}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin:10px 0}
+  .dim{color:var(--muted)}
+  .emph{color:var(--accent2);font-weight:600}
+</style>
+</head>
+<body>
+<div class="toc-prog" id="prog"></div>
+<div class="layout">
+<nav class="toc" id="toc">
+  <div class="brand">Iterators &amp; TensorIterator<small>NumPy · C++ · Torch · snapy Weno5 CUDA</small></div>
+  <h2>Foundations</h2>
+  <a href="#what">1 · What an iterator is</a>
+  <a href="#numpy">2 · Iterators in NumPy</a>
+  <a href="#cpp">3 · Iterators in C++</a>
+  <a href="#torch-iter">4 · Iterators in Torch</a>
+  <h2>TensorIterator</h2>
+  <a href="#ti-what">5 · What TensorIterator is</a>
+  <a href="#ti-build">6 · The build pipeline</a>
+  <a href="#ti-run">7 · The iteration phase</a>
+  <a href="#ti-benefit">8 · Benefits &amp; common issues</a>
+  <h2>snapy Weno5 case study</h2>
+  <a href="#weno-math">9 · What Weno5 computes</a>
+  <a href="#weno-dispatch">10 · The dispatch stack</a>
+  <a href="#weno-config">11 · The iterator config + squash</a>
+  <a href="#weno-kernel">12 · stencil_kernel internals</a>
+  <a href="#weno-device">13 · The device functions</a>
+  <h2>GPU mechanics</h2>
+  <a href="#gpu-perblock">14 · Why "per-block" only</a>
+  <a href="#gpu-parallel">15 · Parallel? grid/block geometry</a>
+  <a href="#gpu-cuda">16 · Talking to CUDA</a>
+  <h2>Practice</h2>
+  <a href="#generalize">17 · Generalizing the pattern</a>
+  <a href="#limits">18 · Assumptions &amp; limits</a>
+  <a href="#tips">19 · Tips &amp; gotchas</a>
+  <a href="#cheat">20 · Cheat sheet</a>
+</nav>
+
+<main>
+<header class="hero">
+  <h1>Iterators &amp; TensorIterator</h1>
+  <p class="lead">A systematic walk from the humble loop abstraction in NumPy and C++ up to PyTorch's <code>TensorIterator</code>, and then all the way down into how snapy's Weno5 CUDA reconstruction kernel uses it to launch every block in parallel on the GPU while you only ever write a per-block device function.</p>
+</header>
+
+<!-- ============================================================= -->
+<section id="what">
+  <h2 class="sec"><span class="num">1</span>What an iterator actually is<a class="anchor-h" href="#what">#</a></h2>
+  <p>An <b>iterator</b> is an abstraction that <em>separates the act of traversal from the work done at each element</em>. Instead of every algorithm hard-coding how to walk a data structure (where the next element lives, when to stop, how to handle strides/gaps), the iterator owns that knowledge and hands the algorithm one element at a time.</p>
+  <p>This buys three things that recur at every level we will discuss:</p>
+  <ul>
+    <li><b>Decoupling</b> — the same loop body runs over an array, a file, a strided view, or a GPU tensor.</li>
+    <li><b>Uniformity</b> — broadcasting, type promotion, memory layout, and bounds become the iterator's job, not the kernel's.</li>
+    <li><b>Performance hooks</b> — because the iterator <em>plans</em> the traversal, it can collapse/reorder dimensions, vectorize, and parallelize without the kernel author knowing.</li>
+  </ul>
+  <div class="key"><b>The one idea to carry through</b>
+  Every iterator in this document — <code>np.nditer</code>, a C++ <code>RandomAccessIterator</code>, and ATen's <code>TensorIterator</code> — is doing the same job: <em>turn an N-dimensional, possibly-strided, possibly-broadcast layout into a flat stream of "here is the address of element <code>i</code> for every operand," so the compute kernel can stay tiny.</em></p>
+</div>
+</section>
+
+<!-- ============================================================= -->
+<section id="numpy">
+  <h2 class="sec"><span class="num">2</span>Iterators in NumPy<a class="anchor-h" href="#numpy">#</a></h2>
+  <p>NumPy's user-facing iterator is <code>numpy.nditer</code>, a Python wrapper over the C engine <code>NpyIter</code> that powers every ufunc (<code>np.add</code>, <code>np.sin</code>, …). It is the direct conceptual ancestor of ATen's <code>TensorIterator</code>.</p>
+
+  <h3>What <code>NpyIter</code> handles for you</h3>
+  <table>
+    <tr><th>Concern</th><th>What the iterator does</th></tr>
+    <tr><td><b>Broadcasting</b></td><td>Aligns shapes by stretching size-1 axes; sets the corresponding stride to 0 so re-reading the same element is free.</td></tr>
+    <tr><td><b>Dtype coercion</b></td><td>Computes a common dtype, optionally buffering casts so the inner loop sees one type.</td></tr>
+    <tr><td><b>Layout / order</b></td><td><code>order='K'</code> keeps memory order; the engine reorders axes so the inner loop strides are smallest → best cache behavior.</td></tr>
+    <tr><td><b>Dimension coalescing</b></td><td>Adjacent axes that are contiguous get fused into one longer axis, shrinking loop overhead.</td></tr>
+    <tr><td><b>Buffering / <code>external_loop</code></b></td><td>Hands the inner body a <em>contiguous chunk</em> instead of one scalar, enabling vectorized C loops.</td></tr>
+  </table>
+
+  <pre><span class="cap">python · nditer</span><code><span class="kw">import</span> numpy <span class="kw">as</span> np
+a = np.arange(<span class="num">6</span>).reshape(<span class="num">2</span>,<span class="num">3</span>)
+b = np.array([<span class="num">10</span>,<span class="num">20</span>,<span class="num">30</span>])              <span class="com"># shape (3,) broadcast against (2,3)</span>
+
+it = np.nditer([a, b, <span class="kw">None</span>],            <span class="com"># None = let the iterator allocate the output</span>
+               flags=[<span class="str">'external_loop'</span>, <span class="str">'buffered'</span>],
+               op_flags=[[<span class="str">'readonly'</span>],[<span class="str">'readonly'</span>],[<span class="str">'writeonly'</span>,<span class="str">'allocate'</span>]],
+               order=<span class="str">'C'</span>)
+<span class="kw">with</span> it:
+    <span class="kw">for</span> x, y, z <span class="kw">in</span> it:        <span class="com"># x,y,z are 1-D contiguous chunks, not scalars</span>
+        z[...] = x + y          <span class="com"># the "kernel" — broadcasting/strides already gone</span>
+    result = it.operands[<span class="num">2</span>]</code></pre>
+
+  <div class="note"><b>Read this</b>
+  Notice the kernel is just <code>z[...] = x + y</code>. The broadcast of <code>b</code>, the allocation of the output, the dtype, and the traversal order were all decided by the iterator before the loop body ran. That separation is exactly what <code>TensorIterator</code> reproduces in C++.</div>
+
+  <h4>Stride tricks: the 0-stride broadcast</h4>
+  <p>The mechanism that makes broadcasting free is the <b>0 stride</b>. A broadcast axis advances the data pointer by 0 bytes per step, so the same memory is re-read. <code>TensorIterator</code> and snapy's Weno5 config use this same idea (an "expanded"/squashed axis whose stride the kernel reads but does not iterate over).</p>
+</section>
+
+<!-- ============================================================= -->
+<section id="cpp">
+  <h2 class="sec"><span class="num">3</span>Iterators in C++<a class="anchor-h" href="#cpp">#</a></h2>
+  <p>C++ took the iterator idea and made it a <b>compile-time concept</b> rather than a runtime object. An STL iterator is anything that supports a defined set of operations (<code>*it</code>, <code>++it</code>, comparison). Algorithms are written against those operations, so <code>std::sort</code>, <code>std::accumulate</code>, etc. work on any container.</p>
+
+  <h3>The iterator category hierarchy</h3>
+  <table>
+    <tr><th>Category</th><th>Adds</th><th>Canonical source</th></tr>
+    <tr><td>Input / Output</td><td>single-pass <code>*it</code>, <code>++it</code></td><td><code>istream_iterator</code></td></tr>
+    <tr><td>Forward</td><td>multi-pass, re-readable</td><td><code>forward_list</code></td></tr>
+    <tr><td>Bidirectional</td><td><code>--it</code></td><td><code>std::list</code>, <code>map</code></td></tr>
+    <tr><td>Random Access</td><td><code>it+n</code>, <code>it[n]</code>, <code>it1-it2</code> in O(1)</td><td><code>std::vector</code>, raw pointers</td></tr>
+    <tr><td>Contiguous <span class="mono-small">(C++17/20)</span></td><td>elements physically adjacent in memory</td><td><code>std::array</code>, <code>span</code></td></tr>
+  </table>
+
+  <pre><span class="cap">c++ · the STL contract</span><code><span class="kw">template</span> &lt;<span class="kw">typename</span> It, <span class="kw">typename</span> T&gt;
+T accumulate(It first, It last, T init) {     <span class="com">// works for ANY iterator type</span>
+  <span class="kw">for</span> (; first != last; ++first)             <span class="com">// traversal contract: !=, ++, *</span>
+    init = init + *first;
+  <span class="kw">return</span> init;
+}</code></pre>
+
+  <div class="key"><b>Why this matters for CUDA</b>
+  A raw pointer <code>char*</code> <em>is</em> a contiguous random-access iterator. In the Weno5 GPU kernel you will see the iterator's job reduced to exactly this: produce a <code>char* data[]</code> base pointer plus a byte <code>offset</code> for each operand. ATen's <code>OffsetCalculator</code> is "random-access iteration" expressed as arithmetic on a linear index — perfect for a GPU where every thread computes its own offset independently.</div>
+
+  <h4>Pointer-arithmetic iteration = strided access</h4>
+  <p>The macros in snapy's device code — <code>INP(j,i) = inp[(j)*stride2 + (i)*stride1]</code> — are hand-written strided iterators. The kernel is literally doing the address arithmetic an iterator would normally hide, because on the GPU you want that arithmetic inlined and register-resident.</p>
+</section>
+
+<!-- ============================================================= -->
+<section id="torch-iter">
+  <h2 class="sec"><span class="num">4</span>Iterators in PyTorch / Torch C++<a class="anchor-h" href="#torch-iter">#</a></h2>
+  <p>PyTorch has iterators at two altitudes:</p>
+  <ul>
+    <li><b>Python level</b> — <code>for x in tensor</code> yields slices along dim 0; <code>DataLoader</code> is an iterator over batches; <code>torch.Tensor.unfold</code> creates a <em>strided sliding-window view</em> (used by snapy's MPS path, §10). These are convenience iterators, not the compute engine.</li>
+    <li><b>ATen C++ level</b> — <code>at::TensorIterator</code>, the workhorse behind nearly every element-wise and reduction operator (<code>add</code>, <code>mul</code>, <code>copy_</code>, <code>sum</code>, comparison ops…). This is what snapy plugs into.</li>
+  </ul>
+  <div class="note"><b>The mental model</b>
+  When you write <code>a + b</code> in PyTorch on CPU or CUDA, ATen builds a <code>TensorIterator</code> over <code>{out, a, b}</code>, and a device-specific <em>loop runner</em> (<code>cpu_kernel</code>, <code>gpu_kernel</code>) walks it applying <code>[](x,y){return x+y;}</code>. snapy's Weno5 hijacks this exact machinery: it builds its own <code>TensorIterator</code> and supplies its own loop runner (<code>stencil_kernel</code>) and its own per-element body (a WENO reconstruction instead of an add).</div>
+</section>
+
+<!-- ============================================================= -->
+<section id="ti-what">
+  <h2 class="sec"><span class="num">5</span>What <code>TensorIterator</code> is, precisely<a class="anchor-h" href="#ti-what">#</a></h2>
+  <p><code>at::TensorIterator</code> is a C++ object that, given a set of input and output tensors, <b>plans and describes a unified iteration</b> over them. It does <em>not</em> by itself run your math — it produces the metadata (shape, per-operand strides, base pointers, dtype) that a separate loop runner consumes.</p>
+
+  <div class="flow">
+    <div class="box"><div class="t">You give it</div>outputs + inputs, flags</div>
+    <div class="arrow">→</div>
+    <div class="box"><div class="t">It computes</div>common shape, common dtype, per-operand strides, output allocation</div>
+    <div class="arrow">→</div>
+    <div class="box"><div class="t">It optimizes</div>reorder + coalesce dims for locality</div>
+    <div class="arrow">→</div>
+    <div class="box"><div class="t">A runner walks it</div>cpu_kernel / gpu_kernel / your stencil_kernel</div>
+  </div>
+
+  <h4>The data it exposes (the API snapy actually calls)</h4>
+  <table>
+    <tr><th>Member</th><th>Meaning</th></tr>
+    <tr><td><code>iter.ninputs()/noutputs()</code></td><td>Operand counts; the "arity" of the op.</td></tr>
+    <tr><td><code>iter.numel()</code></td><td>Number of elements in the (collapsed) iteration space.</td></tr>
+    <tr><td><code>iter.data_ptr(i)</code></td><td>Base pointer of operand <code>i</code> (output = 0).</td></tr>
+    <tr><td><code>iter.common_dtype()</code> / <code>iter.dtype()</code></td><td>The promoted scalar type to dispatch on.</td></tr>
+    <tr><td><code>iter.input()/output()</code></td><td>The operand tensors (used to read sizes/strides).</td></tr>
+    <tr><td><code>iter.for_each(loop, grain)</code></td><td>CPU driver: chops the space into chunks and runs <code>loop</code> (in parallel above <code>grain</code>).</td></tr>
+    <tr><td><code>make_offset_calculator&lt;N&gt;(iter)</code></td><td>Builds the object that maps a linear index → N byte offsets (GPU).</td></tr>
+  </table>
+</section>
+
+<!-- ============================================================= -->
+<section id="ti-build">
+  <h2 class="sec"><span class="num">6</span>The build pipeline — what happens inside <code>.build()</code><a class="anchor-h" href="#ti-build">#</a></h2>
+  <p><code>TensorIteratorConfig(...).build()</code> runs a fixed sequence of passes. Knowing them explains every flag snapy sets.</p>
+  <ol>
+    <li><b>populate_operands</b> — record each tensor + whether it is in/out.</li>
+    <li><b>mark_outputs / mark_resize</b> — decide if outputs may be resized. snapy sets <code>resize_outputs(false)</code> because the output buffer is pre-allocated with an exact shape.</li>
+    <li><b>compute_types</b> — promote dtypes, optionally insert casts. snapy sets <code>check_all_same_dtype(true)</code>: no hidden casts, fail loudly if mismatched.</li>
+    <li><b>compute_shape</b> — broadcast all operand shapes to one common shape. snapy instead pins it with <code>declare_static_shape(out.sizes(), squash_dims)</code> (next section).</li>
+    <li><b>compute_strides</b> — for each operand, per-dimension byte stride (0 for broadcast axes).</li>
+    <li><b>reorder_dimensions</b> — permute axes so the fastest-varying memory dim is innermost (cache/coalescing win).</li>
+    <li><b>allocate_or_resize_outputs</b> — if an output was passed as undefined, allocate it now.</li>
+    <li><b>coalesce_dimensions</b> — fuse adjacent dims whose strides are compatible, lowering N-D to as-few-D as possible.</li>
+  </ol>
+
+  <pre><span class="cap">c++ · a vanilla element-wise build (for contrast)</span><code><span class="kw">auto</span> iter = at::TensorIteratorConfig()
+    .add_output(out)
+    .add_input(a)
+    .add_input(b)
+    .build();                 <span class="com">// broadcasting + dtype promotion happen here</span></code></pre>
+
+  <h4>The "static shape + squash" override</h4>
+  <p>snapy does <em>not</em> want broadcasting. It wants total control of which axes are iterated and which are handed to the kernel whole. That is the role of <code>declare_static_shape(shape, squash_dims)</code>:</p>
+  <ul>
+    <li><b>declare_static_shape(shape)</b> — pin the iteration shape, skip broadcast inference (faster build, deterministic).</li>
+    <li><b>squash_dims</b> — list of axes to <em>collapse out of the iteration</em>. Their size becomes 1 in the iteration count, but their stride is preserved so the kernel can walk them itself. This is how snapy says: <em>"don't iterate the variable axis or the reconstruction axis — give those to my device function as a block."</em></li>
+  </ul>
+</section>
+
+<!-- ============================================================= -->
+<section id="ti-run">
+  <h2 class="sec"><span class="num">7</span>The iteration phase — how the plan gets walked<a class="anchor-h" href="#ti-run">#</a></h2>
+
+  <h3>CPU: <code>for_each</code> + grain size</h3>
+  <pre><span class="cap">c++ · ATen CPU loop driver pattern (mirrors snapy call_weno5_cpu)</span><code><span class="kw">int</span> grain = iter.numel() / at::get_num_threads();      <span class="com">// work per thread</span>
+iter.for_each([&](<span class="kw">char</span>** data, <span class="kw">const</span> <span class="kw">int64_t</span>* strides, <span class="kw">int64_t</span> n){
+  <span class="kw">for</span> (<span class="kw">int</span> i = <span class="num">0</span>; i &lt; n; i++) {                       <span class="com">// inner contiguous run of n elems</span>
+    <span class="kw">auto</span> out = <span class="kw">reinterpret_cast</span>&lt;scalar_t*&gt;(data[<span class="num">0</span>] + i*strides[<span class="num">0</span>]);
+    <span class="kw">auto</span> w   = <span class="kw">reinterpret_cast</span>&lt;scalar_t*&gt;(data[<span class="num">1</span>] + i*strides[<span class="num">1</span>]);
+    interp_weno5_impl(out, w, c, stride1, stride2, stride_out, nvar, scale);
+  }
+}, grain);                                              <span class="com">// >grain ⇒ at::parallel_for splits across threads</span></code></pre>
+  <p>So on CPU the iterator is walked <b>in parallel across threads</b> (via <code>at::parallel_for</code> / TBB or OpenMP), each thread getting a contiguous sub-range; within a thread the inner <code>for</code> is serial and auto-vectorizable.</p>
+
+  <h3>GPU: offset calculator + a launched kernel</h3>
+  <p>On CUDA there is no "for loop" walking elements on the host. Instead the iterator produces an <code>OffsetCalculator</code>, and a kernel is <em>launched</em> so that <b>every element index is computed by a different thread simultaneously</b>. The vanilla ATen pattern (snapy's <code>gpu_kernel</code> in <code>loops.cuh</code> reproduces it):</p>
+  <pre><span class="cap">cuda · the canonical element-wise GPU driver</span><code><span class="kw">auto</span> offset_calc = make_offset_calculator&lt;Arity&gt;(iter);   <span class="com">// linear idx → N offsets</span>
+<span class="kw">int64_t</span> numel = iter.numel();
+launch_legacy_kernel&lt;<span class="num">128</span>,<span class="num">1</span>&gt;(numel, [=] __device__(<span class="kw">int</span> idx){
+    <span class="kw">auto</span> offsets = offset_calc.get(idx);                  <span class="com">// runs on each thread</span>
+    f(data.data(), offsets.data());                       <span class="com">// your per-element body</span>
+});</code></pre>
+  <div class="key"><b>The pivot point of this whole document</b>
+  On the GPU the <code>TensorIterator</code> never iterates. It is a <em>compile-time-ish description</em> that gets baked into an <code>OffsetCalculator</code> and shipped (by value, <code>[=]</code>) into a kernel. The actual "iteration" is the CUDA grid: thousands of threads each call <code>offset_calc.get(my_index)</code> in parallel. The iterator's role is purely <em>addressing</em>.</div>
+</section>
+
+<!-- ============================================================= -->
+<section id="ti-benefit">
+  <h2 class="sec"><span class="num">8</span>Benefits &amp; common issues<a class="anchor-h" href="#ti-benefit">#</a></h2>
+  <div class="grid2">
+    <div>
+      <h4>Why teams reach for it</h4>
+      <ul>
+        <li><b>Write the kernel once, run everywhere</b> — same body for CPU/CUDA, strided/contiguous, broadcast/not.</li>
+        <li><b>Free broadcasting &amp; dtype promotion</b> — no manual shape-matching.</li>
+        <li><b>Layout optimization</b> — dim reorder + coalesce gives near-optimal memory access for free.</li>
+        <li><b>Built-in parallelism</b> — CPU threading and GPU launch handled by the runner.</li>
+        <li><b>Autograd / dispatcher fit</b> — slots straight into ATen's device dispatch (the <code>REGISTER_*_DISPATCH</code> macros).</li>
+      </ul>
+    </div>
+    <div>
+      <h4>Where people get burned</h4>
+      <ul>
+        <li><b>Dim coalescing surprises</b> — you can't assume operand <code>ndim</code> or axis order survive; snapy sidesteps this with <code>declare_static_shape</code> + <code>squash</code>.</li>
+        <li><b>Hidden casts</b> — if dtypes differ, buffered casting silently appears; <code>check_all_same_dtype(true)</code> guards it.</li>
+        <li><b>Resize footguns</b> — an output left resizable can be reallocated under you; snapy uses <code>resize_outputs(false)</code>.</li>
+        <li><b>0-stride aliasing</b> — broadcast inputs share memory; writing to a broadcast operand is undefined.</li>
+        <li><b>Not for stencils out of the box</b> — element-wise runners give one element; neighbor access (WENO needs ±2) requires a custom runner, which is exactly why snapy wrote <code>stencil_kernel</code>.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================= -->
+<section id="weno-math">
+  <h2 class="sec"><span class="num">9</span>What Weno5 computes (just enough)<a class="anchor-h" href="#weno-math">#</a></h2>
+  <p>WENO5 = <b>Weighted Essentially Non-Oscillatory, 5th order</b> reconstruction. In a finite-volume fluid solver it takes cell-averaged values along one spatial axis and reconstructs the value at a cell interface, using a 5-point stencil, blending three candidate 3-point polynomials with <em>smoothness-dependent</em> weights so the scheme avoids ringing near shocks.</p>
+  <p>For each interface it needs the 5 neighbors <span class="mono-small">φ₀…φ₄</span>, computes 3 candidate polynomials <span class="mono-small">p0,p1,p2</span>, 3 smoothness indicators <span class="mono-small">β0,β1,β2</span>, nonlinear weights <span class="mono-small">α</span>, and outputs the convex combination. The coefficients live in a 9×5 matrix <code>cm</code> (and its flip <code>cp</code> for the other-biased stencil):</p>
+  <pre><span class="cap">snapy · weno5.cpp — the coefficient buffers</span><code>cm = register_buffer(<span class="str">"cm"</span>, torch::tensor({
+   {<span class="num">-1./6, 5./6, 1./3, 0, 0</span>},   <span class="com">// p0 reconstruction row</span>
+   {<span class="num">0, 1./3, 5./6, -1./6, 0</span>},   <span class="com">// p1</span>
+   {<span class="num">0, 0, 11./6, -7./6, 1./3</span>},  <span class="com">// p2</span>
+   {<span class="num">1,-2,1,0,0</span>}, {<span class="num">1,-4,3,0,0</span>},      <span class="com">// β0 (two quadratic forms)</span>
+   {<span class="num">0,1,-2,1,0</span>}, {<span class="num">0,-1,0,1,0</span>},     <span class="com">// β1</span>
+   {<span class="num">0,0,1,-2,1</span>}, {<span class="num">0,0,3,-4,1</span>}},     <span class="com">// β2</span>
+   torch::kFloat64));
+cp = register_buffer(<span class="str">"cp"</span>, cm.flip({<span class="num">1</span>}));   <span class="com">// mirror stencil for right/left bias</span></code></pre>
+  <div class="note"><b>The shape of the problem</b>
+  The input tensor <code>w</code> is laid out as <span class="emph">(nvar, …spatial…)</span>: axis <code>0</code> is the physical variable (ρ, momentum, energy…), and one of the spatial axes <code>dim</code> is the reconstruction direction. The output along <code>dim</code> is shorter by <code>stencils()-1 = 4</code>. Every interface is independent — embarrassingly parallel. That independence is what the iterator exploits.</div>
+</section>
+
+<!-- ============================================================= -->
+<section id="weno-dispatch">
+  <h2 class="sec"><span class="num">10</span>The dispatch stack — one call, three backends<a class="anchor-h" href="#weno-dispatch">#</a></h2>
+  <p>snapy reuses ATen's <code>DispatchStub</code> mechanism so a single high-level call routes to the right backend (CPU / CUDA / MPS) by the tensor's device.</p>
+  <pre><span class="cap">snapy · recon_dispatch.hpp — declare the function-pointer slot</span><code><span class="kw">using</span> recon_weno_fn = <span class="kw">void</span> (*)(at::TensorIterator&amp; iter, at::Tensor payload,
+                              <span class="kw">int</span> dim, <span class="kw">bool</span> scale);
+DECLARE_DISPATCH(recon_weno_fn, call_weno5);   <span class="com">// a typed, device-indexed slot</span></code></pre>
+  <pre><span class="cap">snapy · registration — each backend fills its slot</span><code><span class="com">// recon_dispatch.cpp</span>
+DEFINE_DISPATCH(call_weno5);
+REGISTER_ALL_CPU_DISPATCH(call_weno5, &amp;snap::call_weno5_cpu);   <span class="pill cpu">CPU</span>
+REGISTER_MPS_DISPATCH(call_weno5,     &amp;snap::call_weno5_mps);   <span class="pill mps">MPS</span>
+<span class="com">// recon_dispatch.cu</span>
+REGISTER_CUDA_DISPATCH(call_weno5,    &amp;snap::call_weno5_cuda);  <span class="pill gpu">CUDA</span></code></pre>
+  <pre><span class="cap">snapy · weno5.cpp — the one call site, device decided at runtime</span><code>at::native::call_weno5(out.device().type(), iter, cm, dim, options-&gt;scale());
+<span class="com">//                     ^^^^^^^^^^^^^^^^^^^ picks cpu/cuda/mps impl</span></code></pre>
+  <div class="tip"><b>Backend contrast worth noting</b>
+  The <span class="pill mps">MPS</span> path doesn't write a kernel at all — it expresses WENO5 with high-level tensor ops (<code>w.unfold(dim,5,1)</code> to make the sliding window, then <code>matmul</code> with the coefficient rows). That is the "iterator as a Python-level view" idea from §4. The <span class="pill cpu">CPU</span> and <span class="pill gpu">CUDA</span> paths instead drive a low-level <code>TensorIterator</code> with a hand-written body — faster and shared-memory-aware, but more code.</div>
+</section>
+
+<!-- ============================================================= -->
+<section id="weno-config">
+  <h2 class="sec"><span class="num">11</span>The iterator config + the squash trick<a class="anchor-h" href="#weno-config">#</a></h2>
+  <pre><span class="cap">snapy · weno5.cpp — building the iterator</span><code><span class="kw">void</span> Weno5InterpImpl::left(torch::Tensor w, <span class="kw">int</span> dim, torch::Tensor <span class="kw">const</span>&amp; out) {
+  std::vector&lt;<span class="kw">int64_t</span>&gt; squash_dim = {<span class="num">0</span>};                 <span class="com">// always squash the variable axis</span>
+  <span class="kw">if</span> (w.device().is_cuda()) squash_dim.push_back(dim); <span class="com">// on GPU also squash the recon axis</span>
+
+  <span class="kw">auto</span> iter = at::TensorIteratorConfig()
+      .resize_outputs(<span class="kw">false</span>)              <span class="com">// out is pre-sized exactly</span>
+      .check_all_same_dtype(<span class="kw">true</span>)         <span class="com">// no silent casts</span>
+      .declare_static_shape(out.sizes(), squash_dim)  <span class="com">// pin shape, remove squashed axes</span>
+      .add_output(out)
+      .add_input(w)
+      .build();
+
+  at::native::call_weno5(out.device().type(), iter, cm, dim, options-&gt;scale());
+}</code></pre>
+
+  <h4>What "squash" buys, axis by axis</h4>
+  <table>
+    <tr><th>Axis</th><th>Role</th><th>Squashed?</th><th>Consequence</th></tr>
+    <tr><td><code>0</code> (nvar)</td><td>physical variables</td><td>always</td><td>The device/CPU body loops over <code>nvar</code> itself (<code>for j&lt;nvar</code>), reusing the loaded stencil for every variable.</td></tr>
+    <tr><td><code>dim</code> (recon)</td><td>direction being reconstructed</td><td>CUDA only</td><td>The whole reconstruction axis is handed to <b>one CUDA block</b>; <code>threadIdx.x</code> walks it in shared memory so neighbors (±2) are cheap.</td></tr>
+    <tr><td>other spatial</td><td>independent columns</td><td>no</td><td>These become the <b>iteration space</b> → the CUDA grid (one block per column), or the CPU parallel range.</td></tr>
+  </table>
+  <div class="key"><b>Why CPU does <em>not</em> squash <code>dim</code></b>
+  On CPU there is no shared memory and no block notion; the body just walks neighbors via raw strides (<code>INP(j,i)=inp[j*stride2 + i*stride1]</code>) over the full contiguous buffer. Squashing only dim 0 is enough. On GPU, squashing <code>dim</code> is what makes "one block = one reconstruction line" possible.</div>
+</section>
+
+<!-- ============================================================= -->
+<section id="weno-kernel">
+  <h2 class="sec"><span class="num">12</span><code>stencil_kernel</code> internals — the custom GPU runner<a class="anchor-h" href="#weno-kernel">#</a></h2>
+  <p>This is the heart. ATen's stock <code>gpu_kernel</code> gives you <em>one element</em>; WENO needs a neighborhood and shared memory. So <code>loops.cuh</code> defines a custom runner that still consumes the <code>TensorIterator</code>'s offsets but launches a 3-D block grid and hands each block a shared-memory scratchpad.</p>
+
+  <pre><span class="cap">snapy · loops.cuh — stencil_kernel (annotated, trimmed)</span><code><span class="kw">template</span> &lt;<span class="kw">typename</span> scalar_t, <span class="kw">int</span> Arity, <span class="kw">typename</span> func_t&gt;
+<span class="kw">void</span> stencil_kernel(at::TensorIterator&amp; iter, <span class="kw">int</span> dim, <span class="kw">int</span> buffers, <span class="kw">const</span> func_t&amp; f) {
+  TORCH_CHECK(iter.ninputs() + iter.noutputs() == Arity);     <span class="com">// here Arity = 2 (out,in)</span>
+
+  std::array&lt;<span class="kw">char</span>*, Arity&gt; data;
+  <span class="kw">for</span> (<span class="kw">int</span> i=<span class="num">0</span>;i&lt;Arity;i++) data[i] = (<span class="kw">char</span>*)iter.data_ptr(i);  <span class="com">// base ptrs from iterator</span>
+
+  <span class="kw">auto</span> offset_calc = make_offset_calculator&lt;Arity&gt;(iter);     <span class="com">// linear blockId → byte offsets</span>
+  <span class="kw">int64_t</span> numel = iter.input().numel();                       <span class="com">// # of squashed-out "blocks"</span>
+
+  <span class="com">// ---- derive a 3-D block (the squashed recon axis) and grid (the rest) ----</span>
+  <span class="kw">int</span> len[<span class="num">3</span>] = {<span class="num">1</span>,<span class="num">1</span>,<span class="num">1</span>};
+  <span class="kw">int</span> ndim = iter.input().dim();
+  len[<span class="num">3</span>+dim-ndim] = ensure_nonempty_size(iter.input(), dim);   <span class="com">// recon axis length → block.x</span>
+  _left_shift&lt;<span class="num">3</span>&gt;(len, dim+<span class="num">1</span>-ndim);
+  dim3 block(len[<span class="num">2</span>], len[<span class="num">1</span>], len[<span class="num">0</span>]);                       <span class="com">// threads = points along recon axis</span>
+  <span class="com">// ... recompute len[] from the non-squashed sizes ...</span>
+  dim3 grid(len[<span class="num">2</span>]/block.x, len[<span class="num">1</span>]/block.y, len[<span class="num">0</span>]/block.z); <span class="com">// blocks = independent columns</span>
+
+  <span class="kw">int</span> nvar  = ensure_nonempty_size(iter.output(), <span class="num">0</span>);
+  <span class="kw">size_t</span> shared = (block.x*nvar + buffers) * <span class="kw">sizeof</span>(scalar_t);   <span class="com">// scratch: stencil + coeffs</span>
+  <span class="kw">auto</span> stream = at::cuda::getCurrentCUDAStream();                 <span class="com">// the op's CUDA stream</span>
+
+  reduce_kernel&lt;scalar_t&gt;&lt;&lt;&lt;grid, block, shared, stream&gt;&gt;&gt;(       <span class="com">// LAUNCH all blocks at once</span>
+      numel, [=] __device__(<span class="kw">int</span> bid, scalar_t* smem) {
+        <span class="kw">auto</span> offsets = offset_calc.get(bid);                     <span class="com">// this block's operand offsets</span>
+        f(data.data(), offsets.data(), smem);                  <span class="com">// → your weno5 device fn</span>
+      });
+  C10_CUDA_KERNEL_LAUNCH_CHECK();
+}</code></pre>
+
+  <pre><span class="cap">snapy · loops.cuh — reduce_kernel (the launched __global__)</span><code><span class="kw">template</span> &lt;<span class="kw">typename</span> scalar_t, <span class="kw">typename</span> func_t&gt;
+__global__ <span class="kw">void</span> reduce_kernel(<span class="kw">int64_t</span> numel, func_t f) {
+  <span class="com">// global thread id across the whole grid…</span>
+  <span class="kw">int</span> tid = /* x + y*… + z*… */;
+  <span class="com">// …and the BLOCK id — this is the index fed to the offset calculator</span>
+  <span class="kw">int</span> bid = blockIdx.x + blockIdx.y*gridDim.x + blockIdx.z*gridDim.x*gridDim.y;
+
+  <span class="kw">extern</span> __shared__ <span class="kw">unsigned</span> <span class="kw">char</span> memory[];        <span class="com">// dynamic shared mem</span>
+  scalar_t* smem = <span class="kw">reinterpret_cast</span>&lt;scalar_t*&gt;(memory);
+  <span class="kw">if</span> (tid &lt; numel) f(bid, smem);                  <span class="com">// every block runs the body concurrently</span>
+}</code></pre>
+
+  <div class="note"><b>How the pieces line up</b>
+  <ul style="margin:6px 0 0">
+    <li><code>offset_calc.get(bid)</code> turns the <em>block index</em> into a byte offset per operand — this is the <code>TensorIterator</code> doing its one job: addressing. It is what lets the kernel handle non-contiguous / arbitrarily strided tensors without knowing the layout.</li>
+    <li><code>block.x</code> = number of points along the reconstruction axis → each thread owns one interface; neighbors live in the same block's shared memory.</li>
+    <li><code>grid</code> = every other (non-squashed) column → all launched at once.</li>
+    <li><code>shared = block.x*nvar + buffers</code> → room to stage the stencil for all variables plus the coefficient table.</li>
+  </ul></div>
+</section>
+
+<!-- ============================================================= -->
+<section id="weno-device">
+  <h2 class="sec"><span class="num">13</span>The device function — what one block does<a class="anchor-h" href="#weno-device">#</a></h2>
+  <p>The lambda registered by <code>call_weno5_cuda</code> unpacks the offsets into typed pointers and calls <code>interp_weno5_impl</code>. The CUDA dispatch wrapper:</p>
+  <pre><span class="cap">snapy · recon_dispatch.cu — wiring the body to the runner</span><code>native::stencil_kernel&lt;scalar_t, <span class="num">2</span>&gt;(
+    iter, dim, coeff.numel(),
+    [=] __device__ (<span class="kw">char</span>* <span class="kw">const</span> data[<span class="num">2</span>], <span class="kw">unsigned</span> <span class="kw">int</span> strides[<span class="num">2</span>], scalar_t* smem) {
+      <span class="kw">auto</span> out = <span class="kw">reinterpret_cast</span>&lt;scalar_t*&gt;(data[<span class="num">0</span>] + strides[<span class="num">0</span>]);   <span class="com">// base + offset</span>
+      <span class="kw">auto</span> w   = <span class="kw">reinterpret_cast</span>&lt;scalar_t*&gt;(data[<span class="num">1</span>] + strides[<span class="num">1</span>]);
+      interp_weno5_impl(out, w, c, nvar, stride_in1, stride_in2,
+                        stride_out1, stride_out2, scale, smem);
+    });</code></pre>
+
+  <pre><span class="cap">snapy · interp_impl.cuh — the per-block device fn (trimmed)</span><code><span class="kw">template</span> &lt;<span class="kw">typename</span> T&gt;
+__device__ <span class="kw">void</span> interp_weno5_impl(T* out, T* inp, T* coeff, <span class="kw">int</span> nvar, ... , T* smem) {
+  <span class="kw">int</span> id = threadIdx.x;          <span class="com">// this thread = one interface along recon axis</span>
+  <span class="kw">int</span> nt = blockDim.x;           <span class="com">// block width = recon-axis length</span>
+
+  <span class="com">// 1) cooperatively stage the stencil line for every variable into shared mem</span>
+  T* sinp = smem;
+  <span class="kw">for</span> (<span class="kw">int</span> j=<span class="num">0</span>;j&lt;nvar;j++) sinp[id + j*nt] = INP(j, id);
+
+  <span class="com">// 2) cooperatively load the 45 coefficients once per block</span>
+  T* scoeff = smem + nt*nvar;
+  <span class="kw">constexpr</span> <span class="kw">int</span> N = <span class="num">45</span>;
+  <span class="kw">for</span> (<span class="kw">int</span> i=id;i&lt;N;i+=nt) scoeff[i] = coeff[i];
+
+  <span class="kw">if</span> (id &gt; nt - <span class="num">5</span>) <span class="kw">return</span>;       <span class="com">// last 4 threads have no full 5-pt stencil → drop</span>
+  __syncthreads();              <span class="com">// barrier: shared mem now fully populated</span>
+
+  <span class="com">// 3) each remaining thread does the full WENO5 math from shared mem</span>
+  <span class="kw">for</span> (<span class="kw">int</span> j=<span class="num">0</span>;j&lt;nvar;j++) {
+    <span class="kw">int</span> i = id + j*nt; T phi[<span class="num">5</span>];
+    <span class="com">// optional rescale, candidates p0..p2, smoothness β0..β2, weights α…</span>
+    OUT(j,id) = vscale*(a0*p0 + a1*p1 + a2*p2)/(a0+a1+a2);
+  }
+}</code></pre>
+
+  <div class="key"><b>The "you only write per-block ops" insight</b>
+  Your code never says "launch 4096 blocks" or "loop over every column." You write what <b>one block of one reconstruction line</b> does — load its stencil to shared memory, sync, compute. The <code>TensorIterator</code> + <code>stencil_kernel</code> replicate that body across the entire grid, each block addressed by <code>offset_calc.get(bid)</code>. Composition of <em>(iterator = where)</em> × <em>(device fn = what)</em> = the full sweep.</div>
+</section>
+
+<!-- ============================================================= -->
+<section id="gpu-perblock">
+  <h2 class="sec"><span class="num">14</span>Why you only need to write per-block operations<a class="anchor-h" href="#gpu-perblock">#</a></h2>
+  <p>Three layers cooperate, each erasing a concern from the layer above:</p>
+  <div class="flow">
+    <div class="box"><div class="t">Layer 3 — your body</div>"For one stencil line: stage to shared mem, sync, compute WENO over nvar." No indices into global memory, no grid math.</div>
+    <div class="arrow">→</div>
+    <div class="box"><div class="t">Layer 2 — stencil_kernel</div>Turns the iteration space into a grid; gives each block a shared-mem scratchpad and the right base offset via the iterator.</div>
+    <div class="arrow">→</div>
+    <div class="box"><div class="t">Layer 1 — TensorIterator</div>Knows every operand's strides &amp; base pointer; produces <code>offset_calc</code> so any layout maps to correct addresses.</div>
+  </div>
+  <p>Because Layer 1 guarantees addressing and Layer 2 guarantees replication + parallel launch, Layer 3 can be written as if it were the <em>only</em> block in existence. That is the entire ergonomic payoff.</p>
+  <div class="warn"><b>The boundary you still own</b>
+  Two things the iterator can't decide for you and that the device fn must handle: (1) <b>halo/edge threads</b> — the <code>if (id &gt; nt-5) return;</code> drops threads without a full 5-point stencil; (2) <b>shared-memory cooperation</b> — staging + <code>__syncthreads()</code> is your responsibility because the iterator has no concept of a block.</div>
+</section>
+
+<!-- ============================================================= -->
+<section id="gpu-parallel">
+  <h2 class="sec"><span class="num">15</span>Sequential or parallel? The grid/block geometry<a class="anchor-h" href="#gpu-parallel">#</a></h2>
+  <p><b>Parallel — fully.</b> The iterator itself does not loop on the GPU. The parallelism comes from the CUDA launch <code>reduce_kernel&lt;&lt;&lt;grid, block, shared, stream&gt;&gt;&gt;</code>, which schedules <em>all blocks at once</em> (subject to the GPU's SM occupancy). Mapping:</p>
+  <table>
+    <tr><th>Concept</th><th>CUDA entity</th><th>Built from</th></tr>
+    <tr><td>One reconstruction line (the squashed <code>dim</code>)</td><td><b>block</b> (<code>blockDim.x</code> = line length)</td><td><code>ensure_nonempty_size(input, dim)</code></td></tr>
+    <tr><td>One interface within a line</td><td><b>thread</b> (<code>threadIdx.x</code>)</td><td>—</td></tr>
+    <tr><td>All independent columns (non-squashed spatial axes)</td><td><b>grid</b> (<code>gridDim.{x,y,z}</code>)</td><td>iteration <code>numel</code> / block</td></tr>
+    <tr><td>Per-variable inner work (<code>nvar</code>)</td><td>serial <code>for j</code> inside each thread</td><td>squashed dim 0</td></tr>
+  </table>
+  <p>So the traversal is parallel <b>across lines</b> (grid) and <b>across interfaces within a line</b> (threads), and serial only over the handful of physical variables inside each thread. Every block runs <code>f(bid, smem)</code> independently and concurrently; there is no host-side loop launching them one by one.</p>
+  <div class="note"><b>The <code>_left_shift</code> rotation</b>
+  The fiddly <code>len[3+dim-ndim]</code> + <code>_left_shift&lt;3&gt;</code> dance is just packing an arbitrary-rank tensor's relevant axes into CUDA's fixed 3-slot <code>dim3</code> while making the reconstruction axis land on <code>block.x</code> (the contiguous, warp-friendly dimension). It is bookkeeping to keep neighbors adjacent in threads.</div>
+</section>
+
+<!-- ============================================================= -->
+<section id="gpu-cuda">
+  <h2 class="sec"><span class="num">16</span>How it talks to the CUDA system<a class="anchor-h" href="#gpu-cuda">#</a></h2>
+  <table>
+    <tr><th>Touchpoint</th><th>Code</th><th>Why</th></tr>
+    <tr><td><b>Device selection</b></td><td><code>at::cuda::CUDAGuard guard(iter.device());</code></td><td>Pins all subsequent CUDA calls to the tensor's GPU; restores on scope exit. Multi-GPU safe.</td></tr>
+    <tr><td><b>Stream</b></td><td><code>at::cuda::getCurrentCUDAStream()</code></td><td>Launches on PyTorch's current stream so the op orders correctly with the rest of the graph and overlaps async.</td></tr>
+    <tr><td><b>Type dispatch</b></td><td><code>AT_DISPATCH_FLOATING_TYPES(iter.common_dtype(), …)</code></td><td>Generates a <code>float</code> and a <code>double</code> specialization; <code>scalar_t</code> is bound inside the lambda.</td></tr>
+    <tr><td><b>Addressing</b></td><td><code>make_offset_calculator&lt;2&gt;(iter)</code></td><td>Captured by value into the <code>__device__</code> lambda; each thread computes its own offsets — no global sync, no atomics.</td></tr>
+    <tr><td><b>Dynamic shared mem</b></td><td>3rd launch param <code>shared</code></td><td>Sized at launch from <code>block.x*nvar + buffers</code>; the kernel reinterprets the raw <code>extern __shared__</code> bytes.</td></tr>
+    <tr><td><b>Error check</b></td><td><code>C10_CUDA_KERNEL_LAUNCH_CHECK()</code></td><td>Surfaces launch-config errors (e.g. too much shared mem, bad grid) immediately instead of silently.</td></tr>
+  </table>
+  <div class="tip"><b>Capture-by-value is the contract</b>
+  The <code>[=] __device__</code> lambdas copy <code>data</code> (base pointers), the <code>offset_calc</code>, and small scalars (<code>nvar</code>, strides, <code>scale</code>) into the kernel by value. That is mandatory: host-stack references would be invalid on the device. The only thing read from "global state" inside the kernel is the tensor memory those base pointers address.</div>
+</section>
+
+<!-- ============================================================= -->
+<section id="generalize">
+  <h2 class="sec"><span class="num">17</span>Generalizing the pattern — your reusable recipe<a class="anchor-h" href="#generalize">#</a></h2>
+  <p>To add a new strided / stencil operator to a repo like snapy, repeat this five-part skeleton:</p>
+  <ol>
+    <li><b>Declare the dispatch slot</b> — <code>using fn = void(*)(TensorIterator&amp;, …); DECLARE_DISPATCH(fn, my_op);</code> in a header.</li>
+    <li><b>Build the iterator at the call site</b> — <code>TensorIteratorConfig().resize_outputs(false).check_all_same_dtype(true).declare_static_shape(out.sizes(), squash_dims).add_output(out).add_input(w).build();</code></li>
+    <li><b>Write the device/CPU body</b> — a function that takes typed pointers + strides + (GPU) shared mem and computes one block / one element.</li>
+    <li><b>Pick a runner</b> — element-wise → ATen <code>gpu_kernel</code>/<code>cpu_kernel</code>; neighbor-aware → a custom <code>stencil_kernel</code>.</li>
+    <li><b>Register per backend</b> — <code>REGISTER_ALL_CPU_DISPATCH</code>, <code>REGISTER_CUDA_DISPATCH</code>, optionally <code>REGISTER_MPS_DISPATCH</code> (high-level tensor ops).</li>
+  </ol>
+  <table>
+    <tr><th>If your op is…</th><th>Squash</th><th>Runner</th><th>Body shape</th></tr>
+    <tr><td>pure element-wise (add, activation)</td><td>nothing</td><td><code>gpu_kernel&lt;Arity&gt;</code></td><td><code>f(data, offsets)</code> → one element</td></tr>
+    <tr><td>per-variable reduction over an axis</td><td>that axis (+ var axis)</td><td>custom, loop the axis in-thread</td><td><code>f(data, offsets[, smem])</code> → one column</td></tr>
+    <tr><td>stencil / sliding window (WENO, conv1d)</td><td>recon axis + var axis</td><td><code>stencil_kernel</code> + shared mem</td><td>one line, cooperative staging</td></tr>
+    <tr><td>prototype / Apple GPU</td><td>—</td><td>high-level ops (<code>unfold</code>+<code>matmul</code>)</td><td>no kernel; tensor algebra</td></tr>
+  </table>
+</section>
+
+<!-- ============================================================= -->
+<section id="limits">
+  <h2 class="sec"><span class="num">18</span>Assumptions &amp; limitations to respect<a class="anchor-h" href="#limits">#</a></h2>
+  <ul>
+    <li><b>Dtype homogeneity</b> — <code>check_all_same_dtype(true)</code> means you must pass operands of one floating type; mixed types throw. <code>AT_DISPATCH_FLOATING_TYPES</code> only covers <code>float</code>/<code>double</code> (no half/bfloat16 here).</li>
+    <li><b>Output is pre-sized</b> — <code>resize_outputs(false)</code> assumes you allocated <code>out</code> with exactly the reduced shape (<code>size(dim) − (stencils−1)</code>). A wrong-sized buffer is UB, not an error.</li>
+    <li><b>Block dimension limits</b> — the reconstruction axis maps to <code>blockDim.x</code>, capped at 1024 threads and by shared-memory budget (<code>block.x*nvar + 45</code> scalars). Very long lines need tiling (not implemented here).</li>
+    <li><b>Grid divisibility</b> — <code>grid = len/block</code> uses integer division; the geometry assumes the non-squashed extents divide evenly. Shapes that don't fit the assumed packing can silently drop work.</li>
+    <li><b>Stencil staging is per-block</b> — neighbors must live within one block (one line). Cross-block halos are <em>not</em> exchanged; the squash puts the entire line in a block precisely to avoid that.</li>
+    <li><b>Edge threads dropped</b> — the last <code>stencils−1</code> threads <code>return</code> early; the output axis being shorter must match exactly or you read past the buffer.</li>
+    <li><b>No autograd through the custom kernel</b> — this is a raw forward kernel; gradients (if needed) require a separate backward.</li>
+    <li><b>32-bit index assumption</b> — <code>stencil_kernel</code> asserts <code>numel ≤ INT32_MAX</code>; enormous tensors would overflow the offset math.</li>
+  </ul>
+</section>
+
+<!-- ============================================================= -->
+<section id="tips">
+  <h2 class="sec"><span class="num">19</span>Tips &amp; gotchas for using the iterator well<a class="anchor-h" href="#tips">#</a></h2>
+  <div class="grid2">
+    <div>
+      <h4>Building</h4>
+      <ul>
+        <li>Prefer <code>declare_static_shape</code> + <code>squash</code> when you know the layout — it skips broadcast inference and prevents dim-reorder surprises that would scramble your hand strides.</li>
+        <li>Pull strides from the <em>operand tensors</em> (<code>ensure_nonempty_stride(iter.input(), dim)</code>), not from assumptions — they survive coalescing.</li>
+        <li>Use <code>iter.common_dtype()</code> (GPU) vs <code>iter.dtype()</code> (CPU output) to match what the dispatch macro expects.</li>
+      </ul>
+    </div>
+    <div>
+      <h4>Launching</h4>
+      <ul>
+        <li>Always wrap CUDA work in <code>CUDAGuard(iter.device())</code> and launch on <code>getCurrentCUDAStream()</code> — never the default stream.</li>
+        <li>Capture by value (<code>[=]</code>) into <code>__device__</code> lambdas; capturing references to host stack = garbage on device.</li>
+        <li>Compute shared-mem size from real extents (<code>block.x*nvar + buffers</code>) and check it against the device limit before scaling up.</li>
+        <li>Keep <code>__syncthreads()</code> after cooperative staging and <em>before</em> any thread reads a neighbor's slot.</li>
+      </ul>
+    </div>
+  </div>
+  <pre><span class="cap">debugging recipe</span><code><span class="com">// 1) verify the iterator sees what you think</span>
+std::cout &lt;&lt; iter.ndim() &lt;&lt; <span class="str">" "</span> &lt;&lt; iter.numel() &lt;&lt; <span class="str">" "</span> &lt;&lt; iter.common_dtype() &lt;&lt; <span class="str">"\n"</span>;
+<span class="com">// 2) cross-check CUDA result against the CPU path (same body, no shared mem)</span>
+<span class="com">//    snapy keeps call_weno5_cpu as the reference — diff them on a small tensor.</span>
+<span class="com">// 3) run under compute-sanitizer for OOB shared-mem / global reads:</span>
+<span class="com">//    compute-sanitizer --tool memcheck python test_weno.py</span>
+<span class="com">// 4) printf-from-thread-0 (the commented block in interp_weno5_impl) dumps smem.</span></code></pre>
+  <div class="tip"><b>Validation that actually exists in this repo</b>
+  <code>tests/test_weno.cpp</code> and <code>tests/test_reconstruct.cpp</code> exercise these paths. The right command from the snapy repo is your build's test entry (e.g. <code>ctest -R weno</code> or <code>pytest tests/test_weno.py</code> if a Python binding wraps it). Because the CPU and CUDA implementations share <code>interp_weno5_impl</code>'s math, a CPU/GPU numerical diff is the cheapest correctness check.</div>
+</section>
+
+<!-- ============================================================= -->
+<section id="cheat">
+  <h2 class="sec"><span class="num">20</span>One-screen cheat sheet<a class="anchor-h" href="#cheat">#</a></h2>
+  <table>
+    <tr><th>Question</th><th>Answer</th></tr>
+    <tr><td>What does TensorIterator do on GPU?</td><td>Nothing iterative — it produces base pointers + an <code>OffsetCalculator</code> (addressing only). The CUDA grid does the iterating.</td></tr>
+    <tr><td>Sequential or parallel?</td><td>Parallel. All blocks launch at once; threads within a block run concurrently; only the <code>nvar</code> loop is serial per thread.</td></tr>
+    <tr><td>Why per-block code only?</td><td>The iterator guarantees correct addressing and <code>stencil_kernel</code> replicates your body across the grid, so you write one block's worth of work.</td></tr>
+    <tr><td>What is "squash"?</td><td>Axes removed from the iteration space (size→1, stride kept). nvar always; recon <code>dim</code> on GPU so a whole line lands in one block.</td></tr>
+    <tr><td>How does a block reuse work?</td><td>Cooperative shared-memory staging of the stencil + 45 coefficients, one <code>__syncthreads()</code>, then per-thread WENO over all variables.</td></tr>
+    <tr><td>How is the right backend chosen?</td><td><code>DispatchStub</code>: <code>call_weno5(device_type, …)</code> jumps to the CPU/CUDA/MPS function registered with <code>REGISTER_*_DISPATCH</code>.</td></tr>
+    <tr><td>Biggest footguns?</td><td>Wrong-sized output (no resize), mixed dtypes, block/shared-mem limits, assuming dim order without static shape.</td></tr>
+  </table>
+
+  <div class="key"><b>The whole story in one sentence</b>
+  snapy builds a <code>TensorIterator</code> that squashes the variable and reconstruction axes, hands its offset calculator to a custom <code>stencil_kernel</code> that maps every remaining column to a CUDA block (with the reconstruction line on <code>threadIdx.x</code> and a shared-memory scratchpad), and you supply only <code>interp_weno5_impl</code> — the math one block performs — so the GPU runs every block of every column in parallel from a single per-block function.</div>
+</section>
+
+<footer>
+  <p>Generated for the <code>snapy</code> repo · sources: <code>src/recon/weno5.cpp</code>, <code>recon_dispatch.{cpp,cu,hpp}</code>, <code>interp_impl.{h,cuh}</code>, <code>utils/loops.cuh</code>. Code excerpts are trimmed/annotated for clarity — see the files for the exact text.</p>
+</footer>
+</main>
+</div>
+
+<script>
+  // scroll progress bar
+  const prog = document.getElementById('prog');
+  const onScroll = () => {
+    const h = document.documentElement;
+    const max = h.scrollHeight - h.clientHeight;
+    prog.style.width = (max>0 ? (h.scrollTop/max*100) : 0) + '%';
+  };
+  document.addEventListener('scroll', onScroll, {passive:true}); onScroll();
+
+  // active section highlight in TOC
+  const links = [...document.querySelectorAll('nav.toc a')];
+  const map = new Map(links.map(a => [a.getAttribute('href').slice(1), a]));
+  const obs = new IntersectionObserver((entries)=>{
+    entries.forEach(e=>{
+      if(e.isIntersecting){
+        links.forEach(l=>l.classList.remove('active'));
+        const a = map.get(e.target.id);
+        if(a){ a.classList.add('active'); }
+      }
+    });
+  }, {rootMargin:'-10% 0px -80% 0px', threshold:0});
+  document.querySelectorAll('section[id]').forEach(s=>obs.observe(s));
+</script>
+</body>
+</html>
