@@ -82,13 +82,48 @@
   .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin:10px 0}
   .dim{color:var(--muted)}
   .emph{color:var(--accent2);font-weight:600}
+  /* ---- visual diagrams ---- */
+  .viz{margin:22px 0;padding:18px 20px;background:radial-gradient(120% 120% at 0 0,#141c26,#10151c);border:1px solid var(--line);border-radius:var(--radius)}
+  .viz .vtitle{font-size:12px;text-transform:uppercase;letter-spacing:.09em;color:var(--accent);margin-bottom:16px;font-weight:600}
+  .viz .vcap{font-size:13px;color:var(--muted);margin-top:14px;max-width:78ch}
+  .vrow{display:flex;gap:22px;align-items:center;flex-wrap:wrap}
+  .vcol{display:flex;flex-direction:column;gap:6px}
+  .vlabel{font:11px/1.3 ui-monospace,monospace;color:var(--muted);margin-bottom:2px;letter-spacing:.02em}
+  .cell{display:flex;align-items:center;justify-content:center;height:36px;min-width:36px;padding:0 6px;border-radius:7px;
+        font:13px/1 ui-monospace,SFMono-Regular,monospace;border:1px solid var(--line);background:var(--panel2);color:#cdd9e6}
+  .cell.blue{background:#15324a;border-color:#2f6e9e;color:#bfe4ff}
+  .cell.green{background:#163525;border-color:#2f7a4e;color:#bff0d0}
+  .cell.amber{background:#3a2a12;border-color:#7a5a2f;color:#ffd9a0}
+  .cell.red{background:#3a1717;border-color:#9e3f3f;color:#ffc4c0}
+  .cell.mauve{background:#241a39;border-color:#5a40a0;color:#e3d2ff}
+  .cell.zero{opacity:.5;border-style:dashed;color:var(--muted)}
+  .cell.sm{height:28px;min-width:28px;font-size:11px;border-radius:5px}
+  .gridrow{display:flex;gap:5px}
+  .gridcol{display:flex;flex-direction:column;gap:5px}
+  .varrow{color:var(--mauve);font-size:24px;line-height:1;padding:0 2px;align-self:center}
+  .vplus{color:var(--accent2);font-size:20px;align-self:center;padding:0 2px}
+  .linmem{display:flex;gap:4px;flex-wrap:wrap;align-items:flex-end}
+  .cline{display:inline-flex;gap:4px;padding:5px;border:2px dashed #7a5a2f;border-radius:9px}
+  .legend2{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:14px}
+  .legend2 span{display:inline-flex;align-items:center;gap:7px}
+  .sw{width:14px;height:14px;border-radius:4px;display:inline-block;border:1px solid var(--line)}
+  .callbox{display:inline-flex;align-items:center;justify-content:center;min-width:46px;height:34px;border-radius:7px;
+           border:1px solid #2f6e9e;background:#15324a;color:#bfe4ff;font:12px/1 ui-monospace,monospace;margin:2px}
+  .bigbox{border:1px solid #2f7a4e;background:#163525;border-radius:10px;padding:10px 14px;display:inline-flex;flex-direction:column;gap:8px;color:#bff0d0}
+  .arith{font:13px/1.9 ui-monospace,monospace;color:#cdd9e6}
+  .arith .hl{color:var(--accent)} .arith .hl2{color:var(--accent2)} .arith .hl3{color:var(--mauve)}
+  .tag{display:inline-block;font:10.5px/1 ui-monospace,monospace;color:var(--muted);background:var(--panel2);border:1px solid var(--line);
+       padding:3px 7px;border-radius:5px;margin-left:8px;letter-spacing:.03em}
+  .copybadge{display:inline-block;font-size:11px;font-weight:600;padding:2px 9px;border-radius:999px;letter-spacing:.04em}
+  .copybadge.no{color:#bff0d0;background:#163525;border:1px solid #2f7a4e}
+  .copybadge.yes{color:#ffc4c0;background:#3a1717;border:1px solid #9e3f3f}
 </style>
 </head>
 <body>
 <div class="toc-prog" id="prog"></div>
 <div class="layout">
 <nav class="toc" id="toc">
-  <div class="brand">Iterators &amp; TensorIterator<small>NumPy · C++ · Torch · snapy Weno5 CUDA</small></div>
+  <div class="brand">Iterators &amp; TensorIterator<small>NumPy · C++ · Torch · cuDF · snapy Weno5 CUDA</small></div>
   <h2>Foundations</h2>
   <a href="#what">1 · What an iterator is</a>
   <a href="#numpy">2 · Iterators in NumPy</a>
@@ -97,29 +132,32 @@
   <h2>TensorIterator</h2>
   <a href="#ti-what">5 · What TensorIterator is</a>
   <a href="#ti-build">6 · The build pipeline</a>
-  <a href="#ti-run">7 · The iteration phase</a>
-  <a href="#ti-benefit">8 · Benefits &amp; common issues</a>
+  <a href="#ti-mem">7 · Coalesce / reorder / squash</a>
+  <a href="#ti-run">8 · The iteration phase</a>
+  <a href="#ti-benefit">9 · Benefits &amp; common issues</a>
   <h2>snapy Weno5 case study</h2>
-  <a href="#weno-math">9 · What Weno5 computes</a>
-  <a href="#weno-dispatch">10 · The dispatch stack</a>
-  <a href="#weno-config">11 · The iterator config + squash</a>
-  <a href="#weno-kernel">12 · stencil_kernel internals</a>
-  <a href="#weno-device">13 · The device functions</a>
+  <a href="#weno-math">10 · What Weno5 computes</a>
+  <a href="#weno-dispatch">11 · The dispatch stack</a>
+  <a href="#weno-config">12 · The iterator config + squash</a>
+  <a href="#weno-kernel">13 · stencil_kernel internals</a>
+  <a href="#weno-device">14 · The device functions</a>
   <h2>GPU mechanics</h2>
-  <a href="#gpu-perblock">14 · Why "per-block" only</a>
-  <a href="#gpu-parallel">15 · Parallel? grid/block geometry</a>
-  <a href="#gpu-cuda">16 · Talking to CUDA</a>
+  <a href="#gpu-perblock">15 · Why "per-block" only</a>
+  <a href="#gpu-parallel">16 · Parallel? grid/block geometry</a>
+  <a href="#gpu-cuda">17 · Talking to CUDA</a>
+  <h2>Beyond PyTorch</h2>
+  <a href="#cudf">18 · cuDF — the Thrust way</a>
   <h2>Practice</h2>
-  <a href="#generalize">17 · Generalizing the pattern</a>
-  <a href="#limits">18 · Assumptions &amp; limits</a>
-  <a href="#tips">19 · Tips &amp; gotchas</a>
-  <a href="#cheat">20 · Cheat sheet</a>
+  <a href="#generalize">19 · Generalizing the pattern</a>
+  <a href="#limits">20 · Assumptions &amp; limits</a>
+  <a href="#tips">21 · Tips &amp; gotchas</a>
+  <a href="#cheat">22 · Cheat sheet</a>
 </nav>
 
 <main>
 <header class="hero">
   <h1>Iterators &amp; TensorIterator</h1>
-  <p class="lead">A systematic walk from the humble loop abstraction in NumPy and C++ up to PyTorch's <code>TensorIterator</code>, and then all the way down into how snapy's Weno5 CUDA reconstruction kernel uses it to launch every block in parallel on the GPU while you only ever write a per-block device function.</p>
+  <p class="lead">A systematic walk from the humble loop abstraction in NumPy and C++ up to PyTorch's <code>TensorIterator</code> — with visual guides for broadcasting, dim coalescing/reordering, cache behavior, and offset arithmetic — then down into how snapy's Weno5 CUDA kernel launches every block in parallel while you write only a per-block device function, and finally a contrast with how <code>cuDF</code> solves the same problem the Thrust way.</p>
 </header>
 
 <!-- ============================================================= -->
@@ -170,6 +208,74 @@ it = np.nditer([a, b, <span class="kw">None</span>],            <span class="com
 
   <h4>Stride tricks: the 0-stride broadcast</h4>
   <p>The mechanism that makes broadcasting free is the <b>0 stride</b>. A broadcast axis advances the data pointer by 0 bytes per step, so the same memory is re-read. <code>TensorIterator</code> and snapy's Weno5 config use this same idea (an "expanded"/squashed axis whose stride the kernel reads but does not iterate over).</p>
+
+  <div class="viz">
+    <div class="vtitle">Visual · broadcasting = align shapes from the right, stretch size-1 axes with stride 0</div>
+    <p style="margin:0 0 14px;font-size:14px">Adding <code>a</code> of shape <code>(2,3)</code> to <code>b</code> of shape <code>(3,)</code>. Step 1 right-aligns the shapes and pads <code>b</code>'s missing leading axis with a <code>1</code>. Step 2 "stretches" that size-1 axis to 2 — but no data is copied; the axis just gets <b>stride 0</b>, so both output rows re-read <code>b</code>'s single row.</p>
+    <div class="vrow">
+      <div class="vcol">
+        <div class="vlabel">a&nbsp;&nbsp;shape (2,3)</div>
+        <div class="gridcol">
+          <div class="gridrow"><div class="cell blue">a00</div><div class="cell blue">a01</div><div class="cell blue">a02</div></div>
+          <div class="gridrow"><div class="cell blue">a10</div><div class="cell blue">a11</div><div class="cell blue">a12</div></div>
+        </div>
+      </div>
+      <div class="vplus">+</div>
+      <div class="vcol">
+        <div class="vlabel">b&nbsp;&nbsp;(3,) → pad → (1,3)</div>
+        <div class="gridcol">
+          <div class="gridrow"><div class="cell green">b0</div><div class="cell green">b1</div><div class="cell green">b2</div></div>
+        </div>
+        <div class="vlabel" style="margin-top:8px">stretch axis0: 1 → 2, <b>stride[0]=0</b></div>
+        <div class="gridcol">
+          <div class="gridrow"><div class="cell green">b0</div><div class="cell green">b1</div><div class="cell green">b2</div><span class="tag">real row</span></div>
+          <div class="gridrow"><div class="cell green zero">b0</div><div class="cell green zero">b1</div><div class="cell green zero">b2</div><span class="tag">stride-0 re-read ↑</span></div>
+        </div>
+      </div>
+      <div class="varrow">→</div>
+      <div class="vcol">
+        <div class="vlabel">result (2,3)</div>
+        <div class="gridcol">
+          <div class="gridrow"><div class="cell amber">a00+b0</div><div class="cell amber">a01+b1</div><div class="cell amber">a02+b2</div></div>
+          <div class="gridrow"><div class="cell amber">a10+b0</div><div class="cell amber">a11+b1</div><div class="cell amber">a12+b2</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="legend2">
+      <span><i class="sw" style="background:#15324a;border-color:#2f6e9e"></i> a (full data)</span>
+      <span><i class="sw" style="background:#163525;border-color:#2f7a4e"></i> b (one row of real data)</span>
+      <span><i class="sw" style="background:#163525;border-color:#2f7a4e;opacity:.5;border-style:dashed"></i> b virtual copy (stride 0, no memory)</span>
+      <span><i class="sw" style="background:#3a2a12;border-color:#7a5a2f"></i> result</span>
+    </div>
+    <p class="vcap"><b>Rules:</b> align trailing dims; each axis pair must be <em>equal</em> or one must be <em>1</em>; a <code>1</code> is stretched to the other's size at <b>zero memory cost</b> by setting its stride to 0. Mismatched non-1 axes (e.g. 3 vs 4) are an error.</p>
+  </div>
+
+  <h4>"Hands the inner body a contiguous chunk instead of one scalar"</h4>
+  <p>Without buffering, the iterator would invoke your kernel <em>once per element</em> — a function call (or Python round-trip) for every scalar, and the compiler can't vectorize across calls. With <code>external_loop</code>/buffering, the iterator finds the longest run of elements that is contiguous in <em>every</em> operand and hands your body a <b>base pointer + stride + length n</b> for that whole run. Your body then runs a tight inner <code>for i in 0..n</code> loop the compiler can SIMD-vectorize (AVX/NEON), and the per-call overhead is paid once per run instead of once per element.</p>
+  <div class="viz">
+    <div class="vtitle">Visual · scalar dispatch vs contiguous-chunk dispatch (8 elements)</div>
+    <div class="vrow" style="align-items:flex-start;gap:46px">
+      <div class="vcol">
+        <div class="vlabel">scalar mode — 8 calls, no SIMD</div>
+        <div class="gridrow" style="flex-wrap:wrap;max-width:340px">
+          <span class="callbox">f(e0)</span><span class="callbox">f(e1)</span><span class="callbox">f(e2)</span><span class="callbox">f(e3)</span>
+          <span class="callbox">f(e4)</span><span class="callbox">f(e5)</span><span class="callbox">f(e6)</span><span class="callbox">f(e7)</span>
+        </div>
+        <div class="vlabel" style="margin-top:8px;color:var(--danger)">call overhead × 8 · each f sees one value</div>
+      </div>
+      <div class="varrow" style="align-self:center">vs</div>
+      <div class="vcol">
+        <div class="vlabel">chunk mode — 1 call, vectorizable</div>
+        <div class="bigbox">
+          <div style="font:12px/1 ui-monospace,monospace;color:var(--muted)">f(ptr, stride, n=8)</div>
+          <div class="gridrow"><div class="cell green sm">e0</div><div class="cell green sm">e1</div><div class="cell green sm">e2</div><div class="cell green sm">e3</div><div class="cell green sm">e4</div><div class="cell green sm">e5</div><div class="cell green sm">e6</div><div class="cell green sm">e7</div></div>
+          <div style="font:11px/1 ui-monospace,monospace;color:#bff0d0">for(i=0;i&lt;n;i++) out[i]=…  ⟶  SIMD lanes</div>
+        </div>
+        <div class="vlabel" style="margin-top:8px;color:var(--accent2)">1 call · inner loop fused &amp; auto-vectorized</div>
+      </div>
+    </div>
+    <p class="vcap">This is exactly snapy's CPU path (§8): <code>iter.for_each([](char** data, const int64_t* strides, int64_t n){ for(i&lt;n) … })</code> — the iterator hands a run of <code>n</code>, and the inner loop is the vectorizable hot path. The "operations involved" are: (1) pick the contiguous inner dimension, (2) emit <code>base_ptr</code>, <code>strides[]</code>, <code>n</code>, (3) your loop does <code>data[k] + i*strides[k]</code> addressing per element.</p>
+  </div>
 </section>
 
 <!-- ============================================================= -->
@@ -197,6 +303,33 @@ T accumulate(It first, It last, T init) {     <span class="com">// works for ANY
   <div class="key"><b>Why this matters for CUDA</b>
   A raw pointer <code>char*</code> <em>is</em> a contiguous random-access iterator. In the Weno5 GPU kernel you will see the iterator's job reduced to exactly this: produce a <code>char* data[]</code> base pointer plus a byte <code>offset</code> for each operand. ATen's <code>OffsetCalculator</code> is "random-access iteration" expressed as arithmetic on a linear index — perfect for a GPU where every thread computes its own offset independently.</div>
 
+  <h4>"Random-access iteration expressed as arithmetic on a linear index"</h4>
+  <p>A <em>forward</em> iterator only knows "give me the next one" (<code>++it</code>) — it must step from where it is. A <em>random-access</em> iterator can jump straight to element <code>k</code> in O(1) (<code>it + k</code>). On a GPU you <b>need</b> the random-access flavour: thread #7341 must find <em>its</em> element with no knowledge of any other thread and no sequential walking. The trick is to never keep an iterator object at all — instead, give every thread one integer (its linear index) and a pure function that turns that integer into a memory offset. That function is ATen's <code>OffsetCalculator</code>.</p>
+  <div class="viz">
+    <div class="vtitle">Visual · linear index → coordinates → per-operand byte offset</div>
+    <p style="margin:0 0 12px;font-size:14px">A tensor of shape <code>(2,4)</code> with element strides <code>(4,1)</code>. Thread is handed the single number <code>idx = 7</code>. It recovers the 2-D coordinates by repeated divmod against the shape, then dots them with the strides. No stepping, no shared state — pure arithmetic, perfectly parallel.</p>
+    <div class="vrow">
+      <div class="vcol">
+        <div class="vlabel">logical (2,4) — idx shown in each cell</div>
+        <div class="gridcol">
+          <div class="gridrow"><div class="cell sm">0</div><div class="cell sm">1</div><div class="cell sm">2</div><div class="cell sm">3</div></div>
+          <div class="gridrow"><div class="cell sm">4</div><div class="cell sm">5</div><div class="cell sm">6</div><div class="cell mauve sm">7</div></div>
+        </div>
+      </div>
+      <div class="varrow">→</div>
+      <div class="vcol">
+        <div class="arith">
+<span class="hl3">idx = 7</span>,&nbsp; shape = (2, 4),&nbsp; stride = (4, 1)<br>
+i1 = <span class="hl">7 % 4</span> = <span class="hl2">3</span>&nbsp;&nbsp;&nbsp;&nbsp;idx ← 7 / 4 = 1<br>
+i0 = <span class="hl">1 % 2</span> = <span class="hl2">1</span><br>
+offset = <span class="hl2">1</span>·stride0 + <span class="hl2">3</span>·stride1<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;= 1·4 + 3·1 = <span class="hl3">7</span> elements
+        </div>
+      </div>
+    </div>
+    <p class="vcap"><b>Why one offset per operand:</b> each tensor has its own strides (a broadcast input carries a 0; a transposed view carries swapped strides), so the calculator stores a stride table per operand and returns <code>offsets[]</code> — one byte offset for <code>out</code>, one for each input — all from the same <code>idx</code>. That is precisely what snapy captures into its GPU lambda: <code>auto offsets = offset_calc.get(bid);</code> (§13). Decoding a linear index is the GPU-friendly restatement of <code>it + k</code>.</p>
+  </div>
+
   <h4>Pointer-arithmetic iteration = strided access</h4>
   <p>The macros in snapy's device code — <code>INP(j,i) = inp[(j)*stride2 + (i)*stride1]</code> — are hand-written strided iterators. The kernel is literally doing the address arithmetic an iterator would normally hide, because on the GPU you want that arithmetic inlined and register-resident.</p>
 </section>
@@ -206,7 +339,7 @@ T accumulate(It first, It last, T init) {     <span class="com">// works for ANY
   <h2 class="sec"><span class="num">4</span>Iterators in PyTorch / Torch C++<a class="anchor-h" href="#torch-iter">#</a></h2>
   <p>PyTorch has iterators at two altitudes:</p>
   <ul>
-    <li><b>Python level</b> — <code>for x in tensor</code> yields slices along dim 0; <code>DataLoader</code> is an iterator over batches; <code>torch.Tensor.unfold</code> creates a <em>strided sliding-window view</em> (used by snapy's MPS path, §10). These are convenience iterators, not the compute engine.</li>
+    <li><b>Python level</b> — <code>for x in tensor</code> yields slices along dim 0; <code>DataLoader</code> is an iterator over batches; <code>torch.Tensor.unfold</code> creates a <em>strided sliding-window view</em> (used by snapy's MPS path, §11). These are convenience iterators, not the compute engine.</li>
     <li><b>ATen C++ level</b> — <code>at::TensorIterator</code>, the workhorse behind nearly every element-wise and reduction operator (<code>add</code>, <code>mul</code>, <code>copy_</code>, <code>sum</code>, comparison ops…). This is what snapy plugs into.</li>
   </ul>
   <div class="note"><b>The mental model</b>
@@ -271,8 +404,86 @@ T accumulate(It first, It last, T init) {     <span class="com">// works for ANY
 </section>
 
 <!-- ============================================================= -->
+<section id="ti-mem">
+  <h2 class="sec"><span class="num">7</span>Coalesce, reorder, squash — and why none of them copy memory<a class="anchor-h" href="#ti-mem">#</a></h2>
+  <div class="key"><b>The headline answer</b>
+  <b>Coalescing, reordering, and squashing are all metadata-only.</b> They rewrite the iterator's internal <em>shape</em> and <em>stride</em> arrays — the loop bounds and the per-step pointer increments — and never touch, move, or allocate the tensor's data buffer. The base data pointers are identical before and after. A physical copy only happens elsewhere, when an output must be <em>allocated</em> (§6 step 7) or when you explicitly call <code>.contiguous()</code> / <code>.clone()</code>.</div>
+
+  <p>Each operation is a small transformation of two little arrays the iterator carries: <code>shape[]</code> (how many steps per axis) and, per operand, <code>strides[]</code> (how many bytes one step on that axis costs). The data stays put; only the <em>description of how to walk it</em> changes.</p>
+
+  <table>
+    <tr><th>Pass</th><th>What it rewrites</th><th>Allocates memory?</th><th>In place?</th></tr>
+    <tr><td><b>coalesce_dimensions</b></td><td>Fuses adjacent axes whose strides are contiguous across the boundary into one longer axis (fewer loop levels).</td><td><span class="copybadge no">NO</span></td><td>Yes — metadata only</td></tr>
+    <tr><td><b>reorder_dimensions</b></td><td>Permutes axis order so the smallest-stride axis is innermost. Just sorts the shape/stride arrays.</td><td><span class="copybadge no">NO</span></td><td>Yes — metadata only</td></tr>
+    <tr><td><b>squash (declare_static_shape)</b></td><td>Drops chosen axes from the iteration count (size→1) while keeping their stride for the kernel to walk.</td><td><span class="copybadge no">NO</span></td><td>Yes — metadata only</td></tr>
+    <tr><td>allocate outputs</td><td>Creates the output buffer if you passed an undefined one.</td><td><span class="copybadge yes">YES</span></td><td>New buffer</td></tr>
+    <tr><td><code>.contiguous()</code> (not part of TI)</td><td>Physically repacks data into row-major order.</td><td><span class="copybadge yes">YES</span></td><td>New buffer</td></tr>
+  </table>
+
+  <h3>Coalescing: fuse adjacent contiguous axes</h3>
+  <p>A C-contiguous <code>(3,4)</code> tensor has element strides <code>(4,1)</code>. Walking axis 1 advances by 1, and after 4 steps you've advanced exactly to the next row — so the two axes describe one unbroken run of 12. Coalescing replaces shape <code>(3,4)</code>/stride <code>(4,1)</code> with shape <code>(12,)</code>/stride <code>(1,)</code>: same bytes, one loop instead of two.</p>
+  <div class="viz">
+    <div class="vtitle">Visual · (3,4) contiguous ⟶ coalesced (12,), data untouched</div>
+    <div class="vrow">
+      <div class="vcol">
+        <div class="vlabel">logical (3,4), strides (4,1)</div>
+        <div class="gridcol">
+          <div class="gridrow"><div class="cell blue sm">0</div><div class="cell blue sm">1</div><div class="cell blue sm">2</div><div class="cell blue sm">3</div></div>
+          <div class="gridrow"><div class="cell blue sm">4</div><div class="cell blue sm">5</div><div class="cell blue sm">6</div><div class="cell blue sm">7</div></div>
+          <div class="gridrow"><div class="cell blue sm">8</div><div class="cell blue sm">9</div><div class="cell blue sm">10</div><div class="cell blue sm">11</div></div>
+        </div>
+      </div>
+      <div class="varrow">≡</div>
+      <div class="vcol">
+        <div class="vlabel">same bytes in memory (1 contiguous run)</div>
+        <div class="linmem">
+          <div class="cell green sm">0</div><div class="cell green sm">1</div><div class="cell green sm">2</div><div class="cell green sm">3</div><div class="cell green sm">4</div><div class="cell green sm">5</div><div class="cell green sm">6</div><div class="cell green sm">7</div><div class="cell green sm">8</div><div class="cell green sm">9</div><div class="cell green sm">10</div><div class="cell green sm">11</div>
+        </div>
+        <div class="vlabel" style="margin-top:8px">iterator now loops once: <code>for k in 0..12</code></div>
+      </div>
+    </div>
+    <p class="vcap">If the tensor were a <em>non-contiguous</em> view (e.g. a sliced column with stride gaps), the boundary stride wouldn't match and the axes would <b>not</b> coalesce — the iterator keeps them separate. Coalescing is opportunistic, never forced.</p>
+  </div>
+
+  <h3>Reorder: put the smallest stride innermost — why it wins the cache</h3>
+  <p>CPUs (and GPUs) don't fetch one element at a time; they pull a whole <b>cache line</b> (~64 bytes ≈ 16 floats) on every miss. If the innermost loop walks memory with <b>stride 1</b>, each fetched line serves the next ~16 iterations → near-100% line utilization. If the innermost loop strides by a whole row, every iteration lands on a different line, evicting data you'll need again → "cache thrashing." Reorder sorts axes so the hot inner loop always has the smallest stride, regardless of the logical axis order you wrote.</p>
+  <div class="viz">
+    <div class="vtitle">Visual · same (3,4) data, two loop orders, one cache line = 4 cells</div>
+    <div class="vrow" style="gap:40px;align-items:flex-start">
+      <div class="vcol">
+        <div class="vlabel" style="color:var(--accent2)">inner = columns (stride 1) — GOOD</div>
+        <div class="linmem">
+          <div class="cline"><div class="cell green sm">0</div><div class="cell green sm">1</div><div class="cell green sm">2</div><div class="cell green sm">3</div></div>
+          <div class="cline"><div class="cell green sm">4</div><div class="cell green sm">5</div><div class="cell green sm">6</div><div class="cell green sm">7</div></div>
+          <div class="cline"><div class="cell green sm">8</div><div class="cell green sm">9</div><div class="cell green sm">10</div><div class="cell green sm">11</div></div>
+        </div>
+        <div class="vlabel" style="margin-top:8px">access 0,1,2,3 → 1 line serves 4 hits</div>
+      </div>
+      <div class="vcol">
+        <div class="vlabel" style="color:var(--danger)">inner = rows first (stride 4) — BAD</div>
+        <div class="linmem">
+          <div class="cline"><div class="cell red sm">0</div><div class="cell sm">1</div><div class="cell sm">2</div><div class="cell sm">3</div></div>
+          <div class="cline"><div class="cell red sm">4</div><div class="cell sm">5</div><div class="cell sm">6</div><div class="cell sm">7</div></div>
+          <div class="cline"><div class="cell red sm">8</div><div class="cell sm">9</div><div class="cell sm">10</div><div class="cell sm">11</div></div>
+        </div>
+        <div class="vlabel" style="margin-top:8px">access 0,4,8 → 3 lines, 3 cells wasted each</div>
+      </div>
+    </div>
+    <div class="legend2">
+      <span><i class="sw" style="background:#163525;border-color:#2f7a4e"></i> used from the loaded line</span>
+      <span><i class="sw" style="background:#3a1717;border-color:#9e3f3f"></i> the one cell you wanted</span>
+      <span><i class="sw" style="background:var(--panel2);border-color:var(--line)"></i> loaded but wasted</span>
+      <span>⬚ dashed = one 64-byte cache line</span>
+    </div>
+    <p class="vcap"><b>Same idea on GPU = "memory coalescing":</b> when the 32 threads of a warp read 32 <em>consecutive</em> addresses, the hardware merges them into one wide transaction. Strided/scattered reads split into many transactions. snapy's <code>stencil_kernel</code> deliberately maps the reconstruction axis onto <code>threadIdx.x</code> (§13/§16) so neighbouring threads read neighbouring memory — the GPU twin of putting the smallest stride innermost.</p>
+  </div>
+  <div class="note"><b>So: is it in place?</b>
+  Yes — reorder/coalesce/squash mutate the iterator's own metadata in place and reuse the existing data pointers. Your tensor is not transposed, copied, or re-laid-out. This is what makes building a <code>TensorIterator</code> cheap enough to do on <em>every</em> <code>a + b</code>.</div>
+</section>
+
+<!-- ============================================================= -->
 <section id="ti-run">
-  <h2 class="sec"><span class="num">7</span>The iteration phase — how the plan gets walked<a class="anchor-h" href="#ti-run">#</a></h2>
+  <h2 class="sec"><span class="num">8</span>The iteration phase — how the plan gets walked<a class="anchor-h" href="#ti-run">#</a></h2>
 
   <h3>CPU: <code>for_each</code> + grain size</h3>
   <pre><span class="cap">c++ · ATen CPU loop driver pattern (mirrors snapy call_weno5_cpu)</span><code><span class="kw">int</span> grain = iter.numel() / at::get_num_threads();      <span class="com">// work per thread</span>
@@ -299,7 +510,7 @@ launch_legacy_kernel&lt;<span class="num">128</span>,<span class="num">1</span>&
 
 <!-- ============================================================= -->
 <section id="ti-benefit">
-  <h2 class="sec"><span class="num">8</span>Benefits &amp; common issues<a class="anchor-h" href="#ti-benefit">#</a></h2>
+  <h2 class="sec"><span class="num">9</span>Benefits &amp; common issues<a class="anchor-h" href="#ti-benefit">#</a></h2>
   <div class="grid2">
     <div>
       <h4>Why teams reach for it</h4>
@@ -326,7 +537,7 @@ launch_legacy_kernel&lt;<span class="num">128</span>,<span class="num">1</span>&
 
 <!-- ============================================================= -->
 <section id="weno-math">
-  <h2 class="sec"><span class="num">9</span>What Weno5 computes (just enough)<a class="anchor-h" href="#weno-math">#</a></h2>
+  <h2 class="sec"><span class="num">10</span>What Weno5 computes (just enough)<a class="anchor-h" href="#weno-math">#</a></h2>
   <p>WENO5 = <b>Weighted Essentially Non-Oscillatory, 5th order</b> reconstruction. In a finite-volume fluid solver it takes cell-averaged values along one spatial axis and reconstructs the value at a cell interface, using a 5-point stencil, blending three candidate 3-point polynomials with <em>smoothness-dependent</em> weights so the scheme avoids ringing near shocks.</p>
   <p>For each interface it needs the 5 neighbors <span class="mono-small">φ₀…φ₄</span>, computes 3 candidate polynomials <span class="mono-small">p0,p1,p2</span>, 3 smoothness indicators <span class="mono-small">β0,β1,β2</span>, nonlinear weights <span class="mono-small">α</span>, and outputs the convex combination. The coefficients live in a 9×5 matrix <code>cm</code> (and its flip <code>cp</code> for the other-biased stencil):</p>
   <pre><span class="cap">snapy · weno5.cpp — the coefficient buffers</span><code>cm = register_buffer(<span class="str">"cm"</span>, torch::tensor({
@@ -344,7 +555,7 @@ cp = register_buffer(<span class="str">"cp"</span>, cm.flip({<span class="num">1
 
 <!-- ============================================================= -->
 <section id="weno-dispatch">
-  <h2 class="sec"><span class="num">10</span>The dispatch stack — one call, three backends<a class="anchor-h" href="#weno-dispatch">#</a></h2>
+  <h2 class="sec"><span class="num">11</span>The dispatch stack — one call, three backends<a class="anchor-h" href="#weno-dispatch">#</a></h2>
   <p>snapy reuses ATen's <code>DispatchStub</code> mechanism so a single high-level call routes to the right backend (CPU / CUDA / MPS) by the tensor's device.</p>
   <pre><span class="cap">snapy · recon_dispatch.hpp — declare the function-pointer slot</span><code><span class="kw">using</span> recon_weno_fn = <span class="kw">void</span> (*)(at::TensorIterator&amp; iter, at::Tensor payload,
                               <span class="kw">int</span> dim, <span class="kw">bool</span> scale);
@@ -363,7 +574,7 @@ REGISTER_CUDA_DISPATCH(call_weno5,    &amp;snap::call_weno5_cuda);  <span class=
 
 <!-- ============================================================= -->
 <section id="weno-config">
-  <h2 class="sec"><span class="num">11</span>The iterator config + the squash trick<a class="anchor-h" href="#weno-config">#</a></h2>
+  <h2 class="sec"><span class="num">12</span>The iterator config + the squash trick<a class="anchor-h" href="#weno-config">#</a></h2>
   <pre><span class="cap">snapy · weno5.cpp — building the iterator</span><code><span class="kw">void</span> Weno5InterpImpl::left(torch::Tensor w, <span class="kw">int</span> dim, torch::Tensor <span class="kw">const</span>&amp; out) {
   std::vector&lt;<span class="kw">int64_t</span>&gt; squash_dim = {<span class="num">0</span>};                 <span class="com">// always squash the variable axis</span>
   <span class="kw">if</span> (w.device().is_cuda()) squash_dim.push_back(dim); <span class="com">// on GPU also squash the recon axis</span>
@@ -392,7 +603,7 @@ REGISTER_CUDA_DISPATCH(call_weno5,    &amp;snap::call_weno5_cuda);  <span class=
 
 <!-- ============================================================= -->
 <section id="weno-kernel">
-  <h2 class="sec"><span class="num">12</span><code>stencil_kernel</code> internals — the custom GPU runner<a class="anchor-h" href="#weno-kernel">#</a></h2>
+  <h2 class="sec"><span class="num">13</span><code>stencil_kernel</code> internals — the custom GPU runner<a class="anchor-h" href="#weno-kernel">#</a></h2>
   <p>This is the heart. ATen's stock <code>gpu_kernel</code> gives you <em>one element</em>; WENO needs a neighborhood and shared memory. So <code>loops.cuh</code> defines a custom runner that still consumes the <code>TensorIterator</code>'s offsets but launches a 3-D block grid and hands each block a shared-memory scratchpad.</p>
 
   <pre><span class="cap">snapy · loops.cuh — stencil_kernel (annotated, trimmed)</span><code><span class="kw">template</span> &lt;<span class="kw">typename</span> scalar_t, <span class="kw">int</span> Arity, <span class="kw">typename</span> func_t&gt;
@@ -449,7 +660,7 @@ __global__ <span class="kw">void</span> reduce_kernel(<span class="kw">int64_t</
 
 <!-- ============================================================= -->
 <section id="weno-device">
-  <h2 class="sec"><span class="num">13</span>The device function — what one block does<a class="anchor-h" href="#weno-device">#</a></h2>
+  <h2 class="sec"><span class="num">14</span>The device function — what one block does<a class="anchor-h" href="#weno-device">#</a></h2>
   <p>The lambda registered by <code>call_weno5_cuda</code> unpacks the offsets into typed pointers and calls <code>interp_weno5_impl</code>. The CUDA dispatch wrapper:</p>
   <pre><span class="cap">snapy · recon_dispatch.cu — wiring the body to the runner</span><code>native::stencil_kernel&lt;scalar_t, <span class="num">2</span>&gt;(
     iter, dim, coeff.numel(),
@@ -491,7 +702,7 @@ __device__ <span class="kw">void</span> interp_weno5_impl(T* out, T* inp, T* coe
 
 <!-- ============================================================= -->
 <section id="gpu-perblock">
-  <h2 class="sec"><span class="num">14</span>Why you only need to write per-block operations<a class="anchor-h" href="#gpu-perblock">#</a></h2>
+  <h2 class="sec"><span class="num">15</span>Why you only need to write per-block operations<a class="anchor-h" href="#gpu-perblock">#</a></h2>
   <p>Three layers cooperate, each erasing a concern from the layer above:</p>
   <div class="flow">
     <div class="box"><div class="t">Layer 3 — your body</div>"For one stencil line: stage to shared mem, sync, compute WENO over nvar." No indices into global memory, no grid math.</div>
@@ -507,7 +718,7 @@ __device__ <span class="kw">void</span> interp_weno5_impl(T* out, T* inp, T* coe
 
 <!-- ============================================================= -->
 <section id="gpu-parallel">
-  <h2 class="sec"><span class="num">15</span>Sequential or parallel? The grid/block geometry<a class="anchor-h" href="#gpu-parallel">#</a></h2>
+  <h2 class="sec"><span class="num">16</span>Sequential or parallel? The grid/block geometry<a class="anchor-h" href="#gpu-parallel">#</a></h2>
   <p><b>Parallel — fully.</b> The iterator itself does not loop on the GPU. The parallelism comes from the CUDA launch <code>reduce_kernel&lt;&lt;&lt;grid, block, shared, stream&gt;&gt;&gt;</code>, which schedules <em>all blocks at once</em> (subject to the GPU's SM occupancy). Mapping:</p>
   <table>
     <tr><th>Concept</th><th>CUDA entity</th><th>Built from</th></tr>
@@ -523,7 +734,7 @@ __device__ <span class="kw">void</span> interp_weno5_impl(T* out, T* inp, T* coe
 
 <!-- ============================================================= -->
 <section id="gpu-cuda">
-  <h2 class="sec"><span class="num">16</span>How it talks to the CUDA system<a class="anchor-h" href="#gpu-cuda">#</a></h2>
+  <h2 class="sec"><span class="num">17</span>How it talks to the CUDA system<a class="anchor-h" href="#gpu-cuda">#</a></h2>
   <table>
     <tr><th>Touchpoint</th><th>Code</th><th>Why</th></tr>
     <tr><td><b>Device selection</b></td><td><code>at::cuda::CUDAGuard guard(iter.device());</code></td><td>Pins all subsequent CUDA calls to the tensor's GPU; restores on scope exit. Multi-GPU safe.</td></tr>
@@ -538,8 +749,82 @@ __device__ <span class="kw">void</span> interp_weno5_impl(T* out, T* inp, T* coe
 </section>
 
 <!-- ============================================================= -->
+<section id="cudf">
+  <h2 class="sec"><span class="num">18</span>cuDF — iterators the Thrust way<a class="anchor-h" href="#cudf">#</a></h2>
+  <p>Does the RAPIDS GPU dataframe library <b>cuDF</b> have its own iterator? <b>Yes — but with the opposite philosophy to <code>TensorIterator</code>.</b> Where PyTorch ships one heavyweight object that plans <em>and</em> drives the whole op, cuDF (its C++ core <code>libcudf</code>) builds many small composable <b>"fancy iterators"</b> in the Thrust / STL sense — the random-access iterator concept from §3 — and hands them to off-the-shelf <b>Thrust and CUB algorithms</b> that do the launch.</p>
+
+  <div class="flow">
+    <div class="box"><div class="t">PyTorch</div>one <code>TensorIterator</code> = plan + strides + a chosen runner that launches the kernel.</div>
+    <div class="arrow">vs</div>
+    <div class="box"><div class="t">cuDF</div>compose a fancy iterator (value + <em>validity</em>) → hand to <code>thrust::transform</code> / <code>cub::DeviceReduce</code>, which launches.</div>
+  </div>
+
+  <h3>The foundation: "STL-on-GPU"</h3>
+  <table>
+    <tr><th>Layer</th><th>Role</th><th>PyTorch analogue</th></tr>
+    <tr><td><b>Thrust</b></td><td>iterator concept + algorithms (<code>transform</code>, <code>reduce</code>, <code>copy_if</code>, <code>gather</code>, <code>scan</code>, <code>sort</code>)</td><td>TensorIterator + loop runners</td></tr>
+    <tr><td><b>CUB</b></td><td>tuned device-wide primitives (<code>DeviceReduce</code>, <code>DeviceScan</code>, segmented ops)</td><td>ATen's reduction kernels</td></tr>
+    <tr><td><b>RMM</b></td><td>device memory pool + <code>cuda_stream_view</code></td><td>the c10 CUDA caching allocator + stream</td></tr>
+    <tr><td><b><code>type_dispatcher</code></b></td><td>runtime <code>data_type</code> → compile-time <code>T</code></td><td><code>AT_DISPATCH_*</code></td></tr>
+  </table>
+
+  <h3>The distinguishing problem: nullability</h3>
+  <p>This is <em>why</em> cuDF needs custom iterators rather than raw pointers. A cuDF column is Arrow-style: a data buffer <b>plus a validity bitmask</b> (one bit per element = "is this null?"). A dense tensor has no such concept. cuDF's iterators exist mainly to <b>thread nullability through</b> a plain Thrust algorithm — presenting a nullable column as a stream of <code>optional&lt;T&gt;</code> or <code>(value, is_valid)</code> pairs.</p>
+  <div class="viz">
+    <div class="vtitle">Visual · a cuDF column = data buffer + validity bitmask</div>
+    <div class="vcol">
+      <div class="vlabel">data</div>
+      <div class="gridrow"><div class="cell blue sm">5</div><div class="cell blue sm">9</div><div class="cell sm zero">·</div><div class="cell blue sm">2</div><div class="cell sm zero">·</div><div class="cell blue sm">7</div></div>
+      <div class="vlabel" style="margin-top:8px">validity bits</div>
+      <div class="gridrow"><div class="cell green sm">1</div><div class="cell green sm">1</div><div class="cell red sm">0</div><div class="cell green sm">1</div><div class="cell red sm">0</div><div class="cell green sm">1</div></div>
+      <div class="vlabel" style="margin-top:8px">iterator view → <code>{5,T} {9,T} {_,F} {2,T} {_,F} {7,T}</code></div>
+    </div>
+    <p class="vcap">A <code>make_pair_iterator</code> yields <code>(value, is_valid)</code> so a reduction can skip the <code>0</code>-bit (null) slots; a <code>make_null_replacement_iterator</code> substitutes a constant for them so an element-wise op sees a clean stream.</p>
+  </div>
+
+  <h3>The building blocks</h3>
+  <ul>
+    <li><b><code>column_device_view</code></b> — the device-side accessor captured into kernels: <code>.element&lt;T&gt;(i)</code>, <code>.is_valid(i)</code>, <code>.data&lt;T&gt;()</code>. Created host-side with <code>column_device_view::create(col, stream)</code>.</li>
+    <li><b><code>cudf::detail::make_*_iterator</code></b> — built on <code>thrust::counting_iterator</code> + <code>thrust::transform_iterator</code>:</li>
+  </ul>
+  <table>
+    <tr><th>Iterator</th><th>Yields</th><th>Use</th></tr>
+    <tr><td><code>make_counting_transform_iterator(0, fn)</code></td><td><code>fn(i)</code> for index <code>i</code></td><td>the workhorse — compute anything from an index</td></tr>
+    <tr><td><code>make_null_replacement_iterator(col, repl)</code></td><td>value, or <code>repl</code> if null</td><td>element-wise ops over nullable data</td></tr>
+    <tr><td><code>make_validity_iterator(col)</code></td><td><code>bool</code></td><td>walk the mask alone</td></tr>
+    <tr><td><code>make_pair_iterator&lt;T, has_nulls&gt;(col)</code></td><td><code>thrust::pair&lt;T,bool&gt;</code></td><td>null-aware reductions</td></tr>
+    <tr><td><code>make_optional_iterator(col, …)</code></td><td><code>thrust::optional&lt;T&gt;</code></td><td>newer preferred nullable interface</td></tr>
+  </table>
+
+  <h3>How the work actually runs</h3>
+  <pre><span class="cap">libcudf · fancy iterator + Thrust algorithm = the launch</span><code><span class="com">// 1. device-side accessor for the column (+ its null mask)</span>
+<span class="kw">auto</span> d_col = cudf::column_device_view::create(input, stream);
+
+<span class="com">// 2. a fancy iterator: index -> value, substituting 0 for nulls</span>
+<span class="kw">auto</span> it = cudf::detail::make_null_replacement_iterator(*d_col, T{<span class="num">0</span>});
+
+<span class="com">// 3. hand it to a Thrust algorithm — THIS launches the kernel,</span>
+<span class="com">//    sizes the grid, and runs on the RMM-provided stream</span>
+thrust::transform(rmm::exec_policy(stream),
+                  it, it + input.size(),
+                  d_out.begin&lt;T&gt;(),
+                  [] __device__ (T x){ <span class="kw">return</span> x * <span class="num">2</span>; });</code></pre>
+  <pre><span class="cap">libcudf · null-aware reduction via the pair iterator</span><code><span class="kw">auto</span> it = cudf::detail::make_pair_iterator&lt;T, <span class="com">/*has_nulls=*/</span><span class="kw">true</span>&gt;(*d_col);
+<span class="com">// fed to cub::DeviceReduce / thrust::reduce with an op that ignores</span>
+<span class="com">// elements whose .second (is_valid) is false  →  nulls skipped, no branches in your math</span></code></pre>
+  <pre><span class="cap">libcudf · the dtype dispatcher (cuDF's AT_DISPATCH)</span><code>cudf::type_dispatcher(input.type(), my_functor{}, input, ...);
+<span class="com">// instantiates my_functor::operator()&lt;float&gt;(), &lt;int32_t&gt;(), &lt;timestamp&gt;()…</span></code></pre>
+
+  <div class="key"><b>The contrast in one line</b>
+  In cuDF the iterator is pure <em>addressing + value + validity</em>; the <b>parallelism and kernel launch live entirely inside Thrust/CUB</b>, not in the iterator. That mirrors §3 (the C++ iterator <em>concept</em>) + §5's "a runner walks it" split — whereas PyTorch fuses planning and running into one <code>TensorIterator</code> object and lets you swap the runner (snapy's <code>stencil_kernel</code>). When Thrust can't express the access pattern, cuDF — exactly like snapy — drops to a hand-written <code>__global__</code> kernel that captures <code>column_device_view</code>s directly.</div>
+
+  <div class="warn"><b>Version caveat</b>
+  The <code>cudf::detail::make_*_iterator</code> names and signatures live in internal <code>detail::</code> headers and have shifted across RAPIDS releases (the move toward <code>optional</code>-based iterators and <code>nullate</code> policy types is recent). The <em>architecture</em> above — Thrust/CUB + fancy iterators + <code>column_device_view</code> + <code>type_dispatcher</code> + RMM — is stable and correct; treat exact spellings as version-dependent.</div>
+</section>
+
+<!-- ============================================================= -->
 <section id="generalize">
-  <h2 class="sec"><span class="num">17</span>Generalizing the pattern — your reusable recipe<a class="anchor-h" href="#generalize">#</a></h2>
+  <h2 class="sec"><span class="num">19</span>Generalizing the pattern — your reusable recipe<a class="anchor-h" href="#generalize">#</a></h2>
   <p>To add a new strided / stencil operator to a repo like snapy, repeat this five-part skeleton:</p>
   <ol>
     <li><b>Declare the dispatch slot</b> — <code>using fn = void(*)(TensorIterator&amp;, …); DECLARE_DISPATCH(fn, my_op);</code> in a header.</li>
@@ -559,7 +844,7 @@ __device__ <span class="kw">void</span> interp_weno5_impl(T* out, T* inp, T* coe
 
 <!-- ============================================================= -->
 <section id="limits">
-  <h2 class="sec"><span class="num">18</span>Assumptions &amp; limitations to respect<a class="anchor-h" href="#limits">#</a></h2>
+  <h2 class="sec"><span class="num">20</span>Assumptions &amp; limitations to respect<a class="anchor-h" href="#limits">#</a></h2>
   <ul>
     <li><b>Dtype homogeneity</b> — <code>check_all_same_dtype(true)</code> means you must pass operands of one floating type; mixed types throw. <code>AT_DISPATCH_FLOATING_TYPES</code> only covers <code>float</code>/<code>double</code> (no half/bfloat16 here).</li>
     <li><b>Output is pre-sized</b> — <code>resize_outputs(false)</code> assumes you allocated <code>out</code> with exactly the reduced shape (<code>size(dim) − (stencils−1)</code>). A wrong-sized buffer is UB, not an error.</li>
@@ -574,7 +859,7 @@ __device__ <span class="kw">void</span> interp_weno5_impl(T* out, T* inp, T* coe
 
 <!-- ============================================================= -->
 <section id="tips">
-  <h2 class="sec"><span class="num">19</span>Tips &amp; gotchas for using the iterator well<a class="anchor-h" href="#tips">#</a></h2>
+  <h2 class="sec"><span class="num">21</span>Tips &amp; gotchas for using the iterator well<a class="anchor-h" href="#tips">#</a></h2>
   <div class="grid2">
     <div>
       <h4>Building</h4>
@@ -607,7 +892,7 @@ std::cout &lt;&lt; iter.ndim() &lt;&lt; <span class="str">" "</span> &lt;&lt; it
 
 <!-- ============================================================= -->
 <section id="cheat">
-  <h2 class="sec"><span class="num">20</span>One-screen cheat sheet<a class="anchor-h" href="#cheat">#</a></h2>
+  <h2 class="sec"><span class="num">22</span>One-screen cheat sheet<a class="anchor-h" href="#cheat">#</a></h2>
   <table>
     <tr><th>Question</th><th>Answer</th></tr>
     <tr><td>What does TensorIterator do on GPU?</td><td>Nothing iterative — it produces base pointers + an <code>OffsetCalculator</code> (addressing only). The CUDA grid does the iterating.</td></tr>
@@ -616,6 +901,11 @@ std::cout &lt;&lt; iter.ndim() &lt;&lt; <span class="str">" "</span> &lt;&lt; it
     <tr><td>What is "squash"?</td><td>Axes removed from the iteration space (size→1, stride kept). nvar always; recon <code>dim</code> on GPU so a whole line lands in one block.</td></tr>
     <tr><td>How does a block reuse work?</td><td>Cooperative shared-memory staging of the stencil + 45 coefficients, one <code>__syncthreads()</code>, then per-thread WENO over all variables.</td></tr>
     <tr><td>How is the right backend chosen?</td><td><code>DispatchStub</code>: <code>call_weno5(device_type, …)</code> jumps to the CPU/CUDA/MPS function registered with <code>REGISTER_*_DISPATCH</code>.</td></tr>
+    <tr><td>Do coalesce / reorder / squash copy memory?</td><td>No — all metadata-only (rewrite shape/stride arrays, reuse the same data pointer). Copies happen only on output allocation or <code>.contiguous()</code>.</td></tr>
+    <tr><td>Why does reorder help cache?</td><td>Smallest-stride axis innermost ⇒ consecutive accesses share a cache line (CPU) / coalesce into one warp transaction (GPU).</td></tr>
+    <tr><td>What is a "contiguous chunk" dispatch?</td><td>The runner hands your body <code>(ptr, stride, n)</code> for a whole run instead of one scalar — one call, an inner SIMD-vectorizable loop.</td></tr>
+    <tr><td>"Random-access iteration as arithmetic"?</td><td>Each thread turns its linear <code>idx</code> into coords via divmod, dots with strides → byte offset. No stepping, perfectly parallel (<code>OffsetCalculator</code>).</td></tr>
+    <tr><td>Does cuDF have its own iterator?</td><td>Yes — lightweight Thrust "fancy iterators" (value + <em>validity</em>) handed to Thrust/CUB algorithms that launch. Opposite of one monolithic TensorIterator.</td></tr>
     <tr><td>Biggest footguns?</td><td>Wrong-sized output (no resize), mixed dtypes, block/shared-mem limits, assuming dim order without static shape.</td></tr>
   </table>
 
