@@ -1,0 +1,1273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>From 13.6s to 0.11s — A 124× CUDA Walkthrough of LeNet-5's Convolution</title>
+<style>
+  :root {
+    --bg: #fbf9f4;
+    --bg-card: #ffffff;
+    --bg-soft: #f4f1e8;
+    --ink: #1a1a1a;
+    --ink-soft: #4a4a4a;
+    --ink-mute: #6e6a5e;
+    --rule: #d9d3c0;
+    --accent: #0b6b66;
+    --accent-soft: #d9ebe9;
+    --warm: #b3651e;
+    --warm-soft: #f7e7d3;
+    --crit: #9b1d1d;
+    --crit-soft: #f4dcd9;
+    --code-bg: #1d2533;
+    --code-ink: #e6e1cf;
+    --code-key: #6cb6ff;
+    --code-str: #d39e3a;
+    --code-com: #8b9bb4;
+    --code-num: #b5cea8;
+    --code-fn:  #f2c879;
+    --shadow: 0 1px 0 rgba(0,0,0,0.04), 0 8px 24px rgba(40,30,10,0.06);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Iowan Old Style', 'Charter', 'Georgia', 'Times New Roman', serif;
+    font-size: 17px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 56px 32px 96px;
+  }
+  /* ---- Header ---- */
+  header.cover {
+    border-top: 4px solid var(--ink);
+    padding-top: 28px;
+    margin-bottom: 40px;
+  }
+  .eyebrow {
+    font-family: 'JetBrains Mono', 'IBM Plex Mono', 'SF Mono', Menlo, monospace;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    margin-bottom: 8px;
+  }
+  h1 {
+    font-size: 42px;
+    line-height: 1.15;
+    margin: 0 0 18px;
+    letter-spacing: -0.01em;
+    font-weight: 600;
+  }
+  .lede {
+    font-size: 19px;
+    color: var(--ink-soft);
+    max-width: 78ch;
+    margin: 0 0 28px;
+  }
+  .meta-row {
+    display: flex;
+    gap: 32px;
+    font-size: 13px;
+    color: var(--ink-mute);
+    font-family: 'JetBrains Mono', 'IBM Plex Mono', monospace;
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+    padding: 12px 0;
+    flex-wrap: wrap;
+  }
+  .meta-row span strong {
+    color: var(--ink);
+    font-weight: 600;
+  }
+  /* ---- Headline strip ---- */
+  .strip {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin: 36px 0 48px;
+  }
+  .strip .cell {
+    background: var(--bg-card);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 16px 16px 18px;
+    box-shadow: var(--shadow);
+  }
+  .strip .label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+  }
+  .strip .num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 26px;
+    color: var(--accent);
+    margin-top: 6px;
+    line-height: 1.1;
+  }
+  .strip .sub {
+    font-size: 13px;
+    color: var(--ink-soft);
+    margin-top: 4px;
+  }
+
+  /* ---- TOC ---- */
+  nav.toc {
+    background: var(--bg-soft);
+    border-left: 3px solid var(--accent);
+    padding: 18px 22px;
+    margin: 0 0 48px;
+    font-size: 15px;
+  }
+  nav.toc h4 {
+    margin: 0 0 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    font-weight: 600;
+  }
+  nav.toc ol {
+    margin: 0;
+    padding-left: 24px;
+    columns: 2;
+    column-gap: 28px;
+  }
+  nav.toc li { margin: 4px 0; break-inside: avoid; }
+  nav.toc a { color: var(--ink); text-decoration: none; border-bottom: 1px dotted var(--rule); }
+  nav.toc a:hover { color: var(--accent); }
+
+  /* ---- Sections ---- */
+  section {
+    margin: 64px 0;
+  }
+  section h2 {
+    font-size: 28px;
+    margin: 0 0 6px;
+    letter-spacing: -0.005em;
+    font-weight: 600;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--ink);
+  }
+  section h2 .num {
+    color: var(--accent);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 18px;
+    margin-right: 10px;
+    vertical-align: middle;
+  }
+  section h3 {
+    font-size: 21px;
+    margin: 30px 0 8px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  section h4 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    font-weight: 600;
+    margin: 22px 0 6px;
+  }
+  p { margin: 12px 0; }
+  ul, ol { padding-left: 22px; }
+  li { margin: 6px 0; }
+
+  /* ---- Code blocks ---- */
+  pre {
+    background: var(--code-bg);
+    color: var(--code-ink);
+    padding: 18px 20px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-family: 'JetBrains Mono', 'IBM Plex Mono', 'SF Mono', Menlo, monospace;
+    font-size: 13.5px;
+    line-height: 1.55;
+    box-shadow: var(--shadow);
+  }
+  pre .k { color: var(--code-key); }
+  pre .s { color: var(--code-str); }
+  pre .c { color: var(--code-com); font-style: italic; }
+  pre .n { color: var(--code-num); }
+  pre .f { color: var(--code-fn); }
+  pre .h { color: #ff8c8c; }   /* highlight changed */
+  pre .d { color: #f0d68a; }
+  code.inline {
+    font-family: 'JetBrains Mono', monospace;
+    background: var(--bg-soft);
+    border: 1px solid var(--rule);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 0.9em;
+    color: var(--ink);
+  }
+  .caption {
+    font-size: 13px;
+    color: var(--ink-mute);
+    margin: 6px 0 0;
+    font-style: italic;
+  }
+
+  /* ---- Callouts ---- */
+  .callout {
+    background: var(--bg-card);
+    border: 1px solid var(--rule);
+    border-left: 4px solid var(--accent);
+    border-radius: 4px;
+    padding: 14px 18px;
+    margin: 18px 0;
+    font-size: 15.5px;
+  }
+  .callout.warn { border-left-color: var(--warm); background: var(--warm-soft); }
+  .callout.crit { border-left-color: var(--crit); background: var(--crit-soft); }
+  .callout.idea { border-left-color: var(--accent); background: var(--accent-soft); }
+  .callout strong.tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  /* ---- Tables ---- */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 18px 0;
+    font-size: 14.5px;
+    background: var(--bg-card);
+    box-shadow: var(--shadow);
+  }
+  th, td {
+    text-align: left;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--rule);
+  }
+  th {
+    background: var(--bg-soft);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    font-weight: 600;
+  }
+  tbody tr:hover { background: rgba(11,107,102,0.04); }
+  td .delta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--accent);
+  }
+  td .delta.neg { color: var(--warm); }
+
+  /* ---- Two column ---- */
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 22px;
+    margin: 18px 0;
+  }
+  .col h5 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    margin: 0 0 8px;
+  }
+  @media (max-width: 720px) {
+    .two-col { grid-template-columns: 1fr; }
+    .strip { grid-template-columns: 1fr 1fr; }
+    nav.toc ol { columns: 1; }
+    h1 { font-size: 32px; }
+    .wrap { padding: 36px 18px; }
+  }
+
+  /* ---- ASCII diagrams ---- */
+  .diagram {
+    background: var(--bg-soft);
+    border: 1px dashed var(--rule);
+    border-radius: 6px;
+    padding: 14px 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px;
+    line-height: 1.45;
+    white-space: pre;
+    overflow-x: auto;
+    color: var(--ink-soft);
+  }
+
+  /* ---- Pill ---- */
+  .pill {
+    display: inline-block;
+    background: var(--accent-soft);
+    color: var(--accent);
+    padding: 2px 9px;
+    border-radius: 99px;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .pill.warm { background: var(--warm-soft); color: var(--warm); }
+  .pill.crit { background: var(--crit-soft); color: var(--crit); }
+
+  /* ---- footer ---- */
+  footer {
+    margin-top: 80px;
+    border-top: 1px solid var(--rule);
+    padding-top: 18px;
+    font-size: 13px;
+    color: var(--ink-mute);
+    font-family: 'JetBrains Mono', monospace;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="cover">
+  <div class="eyebrow">CUDA Performance Walkthrough · EECS 471 Final Project</div>
+  <h1>From 13.6 s to 0.11 s — A 124× Walkthrough of LeNet-5's Convolution on the GPU</h1>
+  <p class="lede">
+    This is a guided tour of the optimization staircase that takes a naïve CUDA convolution kernel
+    from <strong>13.59 s</strong> down to <strong>0.1095 s</strong> for a full pass over 10,000 LeNet-5 images.
+    We cover what every step really does to the hardware, why each step is the right next step,
+    where the floor is, and how the same problem looks if you let cuDNN / cuBLAS do the work for you.
+  </p>
+  <div class="meta-row">
+    <span><strong>Hardware:</strong> NVIDIA Volta-class GPU</span>
+    <span><strong>Framework:</strong> MXNet · custom forward kernel</span>
+    <span><strong>Batch:</strong> 10,000 images · 2 conv layers</span>
+    <span><strong>Final speedup:</strong> 124×</span>
+  </div>
+</header>
+
+<div class="strip">
+  <div class="cell">
+    <div class="label">Baseline</div>
+    <div class="num">13.59 s</div>
+    <div class="sub">Naïve kernel, 1 thread per output pixel, global-memory reads everywhere.</div>
+  </div>
+  <div class="cell">
+    <div class="label">After Step 1</div>
+    <div class="num">0.186 s</div>
+    <div class="sub">Just from parallelizing across batch &amp; output maps: <strong>~73×</strong>.</div>
+  </div>
+  <div class="cell">
+    <div class="label">After GEMM</div>
+    <div class="num">0.128 s</div>
+    <div class="sub">Implicit im2col + tiled matrix multiply in shared memory.</div>
+  </div>
+  <div class="cell">
+    <div class="label">Final</div>
+    <div class="num">0.110 s</div>
+    <div class="sub">Per-layer tuned kernels (TILE_WIDTH = 16 / 24).</div>
+  </div>
+</div>
+
+<nav class="toc">
+  <h4>Contents</h4>
+  <ol>
+    <li><a href="#problem">The problem we are solving</a></li>
+    <li><a href="#lenet">LeNet-5 in one page</a></li>
+    <li><a href="#conv">What a convolution layer really is</a></li>
+    <li><a href="#dims">The actual tensor shapes</a></li>
+    <li><a href="#naive">The naïve kernel — and why it's slow</a></li>
+    <li><a href="#step1">Step 1 · Exploit parallelism (3D grid)</a></li>
+    <li><a href="#step2">Step 2 · Sweep tile width</a></li>
+    <li><a href="#step3">Step 3 · Weights into constant memory</a></li>
+    <li><a href="#step4">Step 4 · Unroll + tiled GEMM (the big one)</a></li>
+    <li><a href="#step5">Step 5 · Two kernels, two tile sizes</a></li>
+    <li><a href="#caveats">Caveats &amp; what's left on the table</a></li>
+    <li><a href="#libs">Raw CUDA vs cuDNN / cuBLAS</a></li>
+  </ol>
+</nav>
+
+<!-- ===================== 1 ===================== -->
+<section id="problem">
+  <h2><span class="num">01</span>The problem we are solving</h2>
+  <p>
+    The forward pass of a convolutional neural network is dominated, in both
+    FLOPs and wall time, by its convolutional layers. In a 2D conv layer every
+    output pixel is a dot product between a small filter and a local window of
+    the input — and that dot product is performed at every spatial location, for
+    every input channel, for every output channel, for every image in the batch.
+    The arithmetic is embarrassingly parallel, but it is also <em>memory bound</em>
+    if you do it carelessly: the same input pixel and the same filter weight are
+    re-read from DRAM hundreds of times.
+  </p>
+  <p>
+    The starting point here is a textbook one-thread-per-output-pixel kernel
+    (<code class="inline">new-forward-original.cuh</code>) that takes <strong>13.59 s</strong>
+    to run two convolution layers over 10,000 images. The goal is to make it
+    fast without changing the mathematics or the model accuracy (which stays
+    exactly at 0.7955 across every step — a good sanity guard).
+  </p>
+  <div class="callout idea">
+    <strong class="tag">Why this matters</strong>
+    Every technique here — tiling, shared memory, constant memory, im2col,
+    per-shape kernels — is the <em>same toolkit</em> production CUDA kernels
+    (cuDNN, cuBLAS, TensorRT, FlashAttention) use. The shapes are toy; the
+    mechanics are not.
+  </div>
+</section>
+
+<!-- ===================== 2 ===================== -->
+<section id="lenet">
+  <h2><span class="num">02</span>LeNet-5 in one page</h2>
+  <p>
+    LeNet-5 (Yann LeCun, 1998) was the first widely successful CNN. It was
+    designed to recognise handwritten digits and reads like the prototype
+    every modern CNN was carved out of: <em>convolve → pool → convolve → pool → flatten → fully-connected → classify</em>.
+  </p>
+
+  <div class="diagram">
+   Input image  ─▶  Conv1  ─▶  Pool  ─▶  Conv2  ─▶  Pool  ─▶  FC  ─▶  FC  ─▶  Softmax
+   (H × W × 1)      ↑                    ↑                          ↑
+                 12 filters          24 filters                   10 classes
+                  (7 × 7)            (7 × 7 × 12)
+  </div>
+
+  <p>
+    The "5" in LeNet-5 is the number of trainable layers. The genius of the
+    architecture, then and now, is two ideas glued together:
+  </p>
+  <ul>
+    <li><strong>Local receptive fields</strong> — each filter only looks at a tiny
+      spatial neighbourhood (here 7 × 7), so it learns translation-equivariant
+      features (an edge is an edge wherever it appears).</li>
+    <li><strong>Weight sharing</strong> — the same filter slides across the whole
+      image, dramatically reducing parameter count and acting as a strong
+      prior that the world is spatially stationary.</li>
+  </ul>
+  <p>
+    The version used in this project is a slightly larger MXNet variant: input
+    images are 72 × 72, kernels are 7 × 7, and the two conv layers produce 12
+    and 24 output feature maps respectively. The dimensions are not the
+    canonical 1998 ones, but the structure is.
+  </p>
+</section>
+
+<!-- ===================== 3 ===================== -->
+<section id="conv">
+  <h2><span class="num">03</span>What a convolution layer really is</h2>
+  <p>
+    Strip away the visual metaphor and a 2D convolution layer is a 6-level
+    nested loop. Given an input tensor <code class="inline">x[B, C, H, W]</code>
+    and a filter bank <code class="inline">w[M, C, K, K]</code>, it produces
+    output <code class="inline">y[B, M, H_out, W_out]</code> where
+    <code class="inline">H_out = H − K + 1</code> (no padding, stride 1):
+  </p>
+
+<pre><span class="k">for</span> b <span class="k">in</span> 0..B:                <span class="c">// image in the batch</span>
+  <span class="k">for</span> m <span class="k">in</span> 0..M:              <span class="c">// output feature map</span>
+    <span class="k">for</span> h <span class="k">in</span> 0..H_out:        <span class="c">// output row</span>
+      <span class="k">for</span> w <span class="k">in</span> 0..W_out:      <span class="c">// output col</span>
+        acc = 0
+        <span class="k">for</span> c <span class="k">in</span> 0..C:        <span class="c">// input channel</span>
+          <span class="k">for</span> p <span class="k">in</span> 0..K:      <span class="c">// kernel row</span>
+            <span class="k">for</span> q <span class="k">in</span> 0..K:    <span class="c">// kernel col</span>
+              acc += x[b,c,h+p,w+q] * w[m,c,p,q]
+        y[b,m,h,w] = acc
+</pre>
+
+  <p>
+    Every output element is independent of every other output element — that
+    is what makes the layer GPU-friendly. The challenge is that each element
+    is also <em>cheap</em>: only <code class="inline">C·K·K</code>
+    multiply-adds. With C=1, K=7 (Layer 1) that's 49 MACs per output, but
+    those 49 MACs require 49 reads from <code class="inline">x</code> and 49
+    reads from <code class="inline">w</code>. A naïve implementation does all
+    98 reads from DRAM, where each read costs hundreds of cycles. The
+    arithmetic intensity is approximately 1 FLOP / 4 bytes loaded — the
+    classic memory-bound regime.
+  </p>
+  <div class="callout">
+    <strong class="tag">Mental model</strong>
+    Convolution is "a lot of tiny dot products that share their operands with
+    their neighbours." The whole optimization story is about <em>not loading
+    those shared operands twice</em>.
+  </div>
+</section>
+
+<!-- ===================== 4 ===================== -->
+<section id="dims">
+  <h2><span class="num">04</span>The actual tensor shapes</h2>
+  <p>
+    Knowing the exact shapes is essential: they decide which optimizations
+    pay off and which don't. The authors instrumented the network and printed:
+  </p>
+
+  <table>
+    <thead>
+      <tr><th>Layer</th><th>B</th><th>C</th><th>M</th><th>H, W</th><th>K</th><th>H_out, W_out</th><th>Output pixels / image</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Conv 1</td><td>10 000</td><td>1</td><td>12</td><td>72</td><td>7</td><td>66</td><td>4 356</td></tr>
+      <tr><td>Conv 2</td><td>10 000</td><td>12</td><td>24</td><td>33</td><td>7</td><td>27</td><td>729</td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    Three things to notice in advance, because they drive every later choice:
+  </p>
+  <ol>
+    <li>
+      <strong>M is small</strong> — only 12 and 24. This is the row dimension of
+      the GEMM we'll eventually build. A 32 × 32 tile wastes most of its rows
+      on Layer 1. That's exactly why Step 5 picks <code class="inline">TILE_WIDTH = 16</code>
+      for Layer 1 and <code class="inline">TILE_WIDTH = 24</code> for Layer 2.
+    </li>
+    <li>
+      <strong>The weight tensor is tiny</strong> — Layer 1 is 12·1·49 = 588 floats,
+      Layer 2 is 24·12·49 = 14 112 floats. Both fit in the 64 KB CUDA constant
+      memory. That's the entire premise of Step 3.
+    </li>
+    <li>
+      <strong>The batch is huge</strong> (10 000). There is no shortage of
+      independent work to throw at the GPU — the question is whether the
+      kernel can <em>accept</em> that work in parallel. Step 1 fixes that.
+    </li>
+  </ol>
+</section>
+
+<!-- ===================== 5 ===================== -->
+<section id="naive">
+  <h2><span class="num">05</span>The naïve kernel — and why it's slow</h2>
+
+  <div class="callout warn">
+    <strong class="tag">Two files, not one</strong>
+    The project ships two starting points. <code class="inline">new-forward-v0.cuh</code>
+    is the <em>true</em> baseline that produces the 13.59 s number in the
+    report. <code class="inline">new-forward-original.cuh</code> is a
+    partially-optimized version that already has Steps 1–3 applied (3D grid,
+    16×16 tiles, constant memory). The walkthrough below uses <strong>v0</strong>
+    — that's the version the 124× is measured against.
+  </div>
+
+  <p>
+    The v0 kernel is brutally simple: one thread handles <em>one entire image</em>
+    and walks the full six-loop for it serially.
+  </p>
+
+<pre><span class="c">// new-forward-v0.cuh — the actual 13.59 s baseline</span>
+
+<span class="k">dim3</span> gridDim((B + 511) / 512);   <span class="c">// ceil(B/512) blocks</span>
+<span class="k">dim3</span> blockDim(512);              <span class="c">// ← THIS is where "512" comes from</span>
+forward_kernel&lt;&lt;&lt;gridDim, blockDim&gt;&gt;&gt;(...);
+
+<span class="c">// inside the kernel:</span>
+<span class="k">int</span> b = blockDim.x * blockIdx.x + threadIdx.x;   <span class="c">// one thread == one image</span>
+
+<span class="k">if</span> (b &lt; B) {
+    <span class="k">for</span> (<span class="k">int</span> m = 0; m &lt; M; m++)               <span class="c">// every output map,</span>
+      <span class="k">for</span> (<span class="k">int</span> h = 0; h &lt; H_out; h++)         <span class="c">// every output row,</span>
+        <span class="k">for</span> (<span class="k">int</span> w = 0; w &lt; W_out; w++) {     <span class="c">// every output col,</span>
+            <span class="f">y4d</span>(b,m,h,w) = 0;
+            <span class="k">for</span> (<span class="k">int</span> c = 0; c &lt; C; c++)
+              <span class="k">for</span> (<span class="k">int</span> p = 0; p &lt; K; p++)
+                <span class="k">for</span> (<span class="k">int</span> q = 0; q &lt; K; q++)
+                    <span class="f">y4d</span>(b,m,h,w) += <span class="f">x4d</span>(b,c,h+p,w+q)
+                                  * <span class="f">k4d</span>(m,c,p,q);
+        }
+}
+</pre>
+
+  <p class="caption">
+    The 512 is just the chosen thread-block size. With B = 10 000 it launches
+    only <code class="inline">⌈10 000/512⌉ = 20</code> blocks of 512 threads
+    each — about 10 000 threads total — to do all the work.
+  </p>
+
+  <h4>What this kernel is actually doing</h4>
+  <p>
+    Each of those ~10 000 threads runs the full six-loop for its one image.
+    For Layer 1 that's <code class="inline">M·H_out·W_out·C·K·K = 12·66·66·1·49 ≈ 2.6 M</code>
+    multiply-adds, performed by a single thread, in sequence. For Layer 2 it's
+    <code class="inline">24·27·27·12·49 ≈ 10.3 M</code> per thread.
+  </p>
+
+  <h4>Why this is so slow, mechanistically</h4>
+
+  <ul>
+    <li>
+      <strong>The GPU is almost empty.</strong> Volta has ~80 SMs × 2 048
+      resident threads = ~160 000 thread slots. v0 launches ~10 000 threads
+      total — about <strong>6 % occupancy</strong>. The remaining 94 % of the
+      hardware sits idle.
+    </li>
+    <li>
+      <strong>Each thread's work is serial.</strong> The 2.6 M MACs for one
+      Layer 1 image are done one after another — there is no parallelism
+      <em>within</em> an image. You've taken an embarrassingly parallel problem
+      and serialised the inside of it.
+    </li>
+    <li>
+      <strong>Accumulator lives in DRAM, not a register.</strong> Look at the
+      inner body: <code class="inline">y4d(b,m,h,w) += ...</code>. That
+      <code class="inline">+=</code> is a read-modify-write to global memory
+      for every single MAC — 2.6 M DRAM round-trips per Layer 1 image.
+      Hundreds of cycles each. This alone explains most of the 13.59 s.
+    </li>
+    <li>
+      <strong>Zero data reuse.</strong> Adjacent output pixels share ~6/7 of
+      their input window when K = 7, but the kernel re-fetches each input
+      pixel ~K² = 49 times. The filter weights are re-fetched
+      <code class="inline">H_out·W_out</code> times per <code class="inline">m</code>.
+    </li>
+    <li>
+      <strong>Warp divergence is harmless here</strong> — but only because
+      every thread is doing the same massive sequential work. The "warps" are
+      effectively running 32 independent serial programs side by side.
+    </li>
+  </ul>
+
+  <div class="callout crit">
+    <strong class="tag">The diagnosis in one line</strong>
+    v0 is slow because it expresses the problem as ~10 000 independent serial
+    programs instead of ~500 million parallel multiply-adds. Step 1 doesn't
+    "optimize" anything — it just lets the GPU see all the parallelism that
+    was always there.
+  </div>
+</section>
+
+<!-- ===================== 6 ===================== -->
+<section id="step1">
+  <h2><span class="num">06</span>Step 1 · Exploit parallelism (3D grid)
+    <span class="pill">73× from baseline</span></h2>
+  <p>
+    Time: <strong>13.589 s → 0.186 s</strong>. This single step buys you ~99% of
+    the eventual win — and it costs almost nothing. The trick is just to launch
+    enough threads.
+  </p>
+
+  <h4>The mechanism</h4>
+  <p>
+    Reinterpret the work as a 3D grid: <code class="inline">(tile_x_y, batch, output_map)</code>.
+    Now the GPU sees <code class="inline">B · M · ⌈H_out·W_out / TILE²⌉</code>
+    blocks of work and can schedule them across all SMs simultaneously.
+    Each block uses <code class="inline">TILE×TILE</code> threads, <strong>one
+    thread per output pixel</strong> instead of one thread per image.
+  </p>
+
+<pre><span class="c">// grid: spatial tiles along x, batch along y, output-map along z</span>
+<span class="k">dim3</span> gridDim(<span class="f">ceil</span>(H/TILE_WIDTH) * <span class="f">ceil</span>(W/TILE_WIDTH), B, M);
+<span class="k">dim3</span> blockDim(TILE_WIDTH, TILE_WIDTH, 1);
+
+forward_kernel&lt;&lt;&lt;gridDim, blockDim&gt;&gt;&gt;(y.dptr_, x.dptr_,
+                                     B, M, C, H, W, K);
+</pre>
+
+  <h4>The parallelism multiplier</h4>
+  <p>
+    The whole improvement is captured in this one comparison:
+  </p>
+
+  <table>
+    <thead>
+      <tr><th></th><th>v0 (baseline)</th><th>Step 1</th><th>Multiplier</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Total threads launched</td>
+        <td>~10 000 (one per image)</td>
+        <td>B·M·H_out·W_out ≈ 522 M (L1) / 175 M (L2)</td>
+        <td>~50 000× more</td>
+      </tr>
+      <tr>
+        <td>Serial work per thread</td>
+        <td>M·H·W·C·K·K ≈ 2.6 M ops (L1)</td>
+        <td>C·K·K = 49 ops (L1)</td>
+        <td>52 000× less</td>
+      </tr>
+      <tr>
+        <td>Accumulator location</td>
+        <td>Global memory (R-M-W per MAC)</td>
+        <td>Register (<code class="inline">float pValue</code>)</td>
+        <td>~100× cheaper per MAC</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h4>Why this is the biggest single win</h4>
+  <ol>
+    <li>
+      <strong>Occupancy explodes.</strong> v0 used ~6 % of the GPU's thread
+      slots; Step 1 fills them many times over. The GPU is finally a parallel
+      machine. Threads that stall on memory get hidden behind other threads
+      that are issuing arithmetic.
+    </li>
+    <li>
+      <strong>The accumulator moves to a register.</strong> v0 did
+      <code class="inline">y4d(...) += x*w</code> — a read-modify-write to
+      DRAM for every MAC. Step 1 keeps the running sum in
+      <code class="inline">float pValue</code> and writes
+      <code class="inline">y</code> exactly once at the end. That alone
+      eliminates ~2.6 M global-memory round trips per image on Layer 1.
+    </li>
+    <li>
+      <strong>Per-thread work becomes warp-friendly.</strong> Each thread now
+      does 49 (Layer 1) or 588 (Layer 2) MACs instead of millions. Warps
+      finish at predictable rates, the scheduler can pack them densely.
+    </li>
+  </ol>
+
+  <div class="callout idea">
+    <strong class="tag">Why so much speedup so fast</strong>
+    The naïve kernel wasn't slow because of bad memory access patterns — it
+    was slow because <em>almost no threads were running</em>. The GPU is a
+    latency-hiding machine; if there's nothing to switch to, every DRAM
+    stall is exposed. Filling the machine recovers a 70× factor before any
+    "real" optimization has been done.
+  </div>
+
+  <h4>Caveats</h4>
+  <ul>
+    <li>You now do <strong>more</strong> arithmetic — every thread re-reads
+      the same input pixels its neighbours need. We haven't fixed reuse yet.
+    </li>
+    <li>The 6-loop inner body is still pulling from global memory every
+      iteration. That's the next four optimizations.
+    </li>
+  </ul>
+</section>
+
+<!-- ===================== 7 ===================== -->
+<section id="step2">
+  <h2><span class="num">07</span>Step 2 · Sweep the tile width
+    <span class="pill">0.186 s → 0.144 s</span></h2>
+  <p>
+    "Choose the right block size" sounds boring; it isn't. Tile width controls
+    three independent things at the same time:
+  </p>
+  <ul>
+    <li><strong>Threads per block</strong>, which determines how many warps a
+      block contributes to its SM.</li>
+    <li><strong>Register pressure</strong> per thread (more threads ⇒ fewer
+      registers each ⇒ possible spill).</li>
+    <li><strong>Shared-memory footprint</strong> per block (only relevant once
+      we add tiling — see Step 4).</li>
+  </ul>
+
+  <p>The authors swept three sizes:</p>
+
+  <table>
+    <thead>
+      <tr><th>Tile</th><th>Threads / block</th><th>Total time</th><th>Verdict</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>32 × 32</td><td>1024</td><td>0.186 s</td><td>Hits the per-block max; only 2 blocks per SM ⇒ low occupancy.</td></tr>
+      <tr><td>16 × 16</td><td>256</td><td><strong>0.170 s</strong></td><td>Sweet spot: 8 blocks per SM = 2048 threads — full occupancy.</td></tr>
+      <tr><td>8 × 8</td><td>64</td><td>0.220 s</td><td>Too small — warp scheduler runs out of work, launch overhead dominates.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout">
+    <strong class="tag">The mechanism</strong>
+    Volta SMs cap at 2 048 resident threads and 32 resident blocks. 16 × 16
+    blocks contain 256 threads (= 8 warps), so you can fit exactly
+    2 048 / 256 = 8 blocks per SM — the maximum useful number. At 32 × 32 you
+    get only 2 blocks; at 8 × 8 the per-block overhead dominates.
+  </div>
+  <p>
+    The lesson is that "more threads per block" and "more total threads" are
+    different axes. You want enough threads to amortise per-block scheduling
+    cost, but small enough that several blocks fit per SM so that when one
+    block stalls on memory another can run.
+  </p>
+</section>
+
+<!-- ===================== 8 ===================== -->
+<section id="step3">
+  <h2><span class="num">08</span>Step 3 · Weights into constant memory
+    <span class="pill">0.144 s → 0.141 s</span></h2>
+  <p>
+    The filter bank <code class="inline">w</code> has two properties that make
+    it a perfect candidate for constant memory:
+  </p>
+  <ul>
+    <li><strong>It's read-only during a forward pass.</strong></li>
+    <li><strong>Every thread reads exactly the same address at the same time</strong>
+      — when thread <code class="inline">(tx, ty)</code> is processing output
+      map <code class="inline">m</code>, every other thread on that block is
+      also using <code class="inline">w[m, c, p, q]</code> at the same
+      <code class="inline">(c, p, q)</code> step of the inner loop.</li>
+  </ul>
+
+  <p>
+    CUDA constant memory is 64 KB of off-chip DRAM with a dedicated on-chip
+    cache. The cache is optimised for <em>broadcast</em>: when every thread in
+    a warp reads the same constant address, the hardware serves it in a
+    single cycle — like a register, but shared across all threads.
+  </p>
+
+<pre><span class="c">// reserve room — 64 KB / 4 bytes − 20 spare floats for safety</span>
+<span class="k">#define</span> CMem_SIZE (64 * 1024 / 4 - 20)
+<span class="k">__constant__</span> <span class="k">float</span> k[CMem_SIZE];
+
+...
+
+<span class="c">// once per forward pass, before the kernel launch</span>
+<span class="f">cudaMemcpyToSymbol</span>(k, w.dptr_, M * C * K * K * <span class="k">sizeof</span>(<span class="k">float</span>));
+</pre>
+
+  <h4>Why it actually helps here</h4>
+  <p>
+    Layer 1's weights are 588 floats and Layer 2's are 14 112 — comfortably
+    inside 64 KB. Every thread in the same warp reads the same
+    <code class="inline">k[m, c, p, q]</code> at the same inner-loop step, so
+    the constant cache broadcasts a single load to all 32 lanes. That's a
+    factor of 32 in read traffic for the filter, and you avoid trashing the
+    L1 cache (which is now free to hold input pixels).
+  </p>
+
+  <div class="callout warn">
+    <strong class="tag">Caveat</strong>
+    Constant-memory broadcast only beats global memory when the access is
+    <em>uniform within a warp</em>. If different threads in a warp read
+    different constant addresses, the loads <em>serialize</em> — one cycle per
+    distinct address. Constant memory is not "free fast memory"; it's a
+    broadcast device.
+  </div>
+
+  <p>
+    The gain is small in absolute terms (3 ms) because by Step 3 the kernel is
+    no longer filter-bandwidth-bound — but the path it opens, freeing the L1
+    cache and reducing pressure on global memory, is what makes Step 4 work.
+  </p>
+</section>
+
+<!-- ===================== 9 ===================== -->
+<section id="step4">
+  <h2><span class="num">09</span>Step 4 · Unroll + tiled GEMM
+    <span class="pill">0.141 s → 0.128 s</span>
+    <span class="pill warm">The conceptual big idea</span></h2>
+
+  <p>
+    This is the technique that every production framework eventually settles
+    on: <strong>convolution as matrix multiplication</strong>. It is also
+    sometimes called <em>im2col + GEMM</em>. The trick: rearrange the input so
+    that the convolution becomes a single matrix product, then apply 50 years
+    of GEMM optimization to it.
+  </p>
+
+  <h4>Step 4a · The reshape (im2col, implicit)</h4>
+  <p>
+    Think of the filter bank as a matrix <strong>W</strong> of shape
+    <code class="inline">M × (C·K·K)</code> — each row is one filter, flattened.
+    Think of the input as an <em>unrolled</em> matrix <strong>X_unroll</strong>
+    of shape <code class="inline">(C·K·K) × (H_out·W_out)</code> — each column
+    is one receptive field (the K×K×C patch that produces one output pixel),
+    flattened.
+  </p>
+
+  <div class="diagram">
+              W                      X_unroll                  Y
+   ┌─────────────────┐      ┌─────────────────────┐    ┌────────────────┐
+   │  M × (C·K·K)    │  ×   │  (C·K·K) × (H_o·W_o)│  = │ M × (H_o·W_o)  │
+   └─────────────────┘      └─────────────────────┘    └────────────────┘
+     each row = one          each col = one              each cell = one
+     flattened filter        flattened input window      output pixel
+  </div>
+
+  <p>
+    The cleverness in this code: <strong>X_unroll is never materialised</strong>.
+    There is no separate <code class="inline">cudaMalloc</code> for it. Instead,
+    when a thread needs <code class="inline">X_unroll[row, col]</code> it
+    computes back what the original <code class="inline">x[b, c, h+p, w+q]</code>
+    coordinate would have been and loads from there directly:
+  </p>
+
+<pre><span class="c">// reverse the im2col mapping on the fly</span>
+<span class="k">int</span> X_c = row_t / Ksq;       <span class="c">// which input channel</span>
+<span class="k">int</span> X_p = (row_t % Ksq) / K;  <span class="c">// kernel row</span>
+<span class="k">int</span> X_q = (row_t % Ksq) % K;  <span class="c">// kernel col</span>
+<span class="k">int</span> X_h = col / W_out;        <span class="c">// output row → input row base</span>
+<span class="k">int</span> X_w = col % W_out;        <span class="c">// output col → input col base</span>
+
+<span class="k">if</span> (row_t &lt; unrollColumn &amp;&amp; col &lt; H_out*W_out)
+    X_tile[ty][tx] = <span class="f">x4d</span>(X_b, X_c, X_h + X_p, X_w + X_q);
+<span class="k">else</span>
+    X_tile[ty][tx] = 0;
+</pre>
+
+  <p class="caption">Layer-2 kernel · the four lines above are im2col compressed into address arithmetic.</p>
+
+  <p>
+    This saves the memory and bandwidth that an explicit im2col would have
+    spent rewriting <code class="inline">x</code> into a much larger buffer
+    (the expansion factor is K² = 49×).
+  </p>
+
+  <h4>Step 4b · The tiled matrix multiply</h4>
+  <p>
+    Once you've expressed the work as a matrix product, you use the classic
+    shared-memory tiled GEMM: each block computes a <code class="inline">TILE × TILE</code>
+    tile of the output by streaming <code class="inline">TILE × TILE</code>
+    sub-tiles of W and X_unroll through shared memory.
+  </p>
+
+<pre><span class="k">__shared__</span> <span class="k">float</span> W_tile[TILE_WIDTH][TILE_WIDTH];
+<span class="k">__shared__</span> <span class="k">float</span> X_tile[TILE_WIDTH][TILE_WIDTH];
+
+<span class="k">float</span> pValue = 0.0;
+<span class="k">int</span> num_blocks = <span class="f">ceil</span>(unrollColumn / (1.0 * TILE_WIDTH));
+
+<span class="k">for</span> (<span class="k">int</span> i = 0; i &lt; num_blocks; i++) {
+    <span class="c">// every thread loads ONE element of W and ONE of X_unroll</span>
+    <span class="c">// into shared memory (see im2col arithmetic above)</span>
+    ...
+    <span class="f">__syncthreads</span>();
+
+    <span class="c">// each thread now performs TILE_WIDTH multiply-adds</span>
+    <span class="c">// against data that lives in shared memory, not DRAM</span>
+    <span class="k">for</span> (<span class="k">int</span> j = 0; j &lt; TILE_WIDTH; j++)
+        pValue += W_tile[ty][j] * X_tile[j][tx];
+
+    <span class="f">__syncthreads</span>();
+}
+</pre>
+
+  <h4>Why this works — the arithmetic-intensity argument</h4>
+  <p>
+    Without tiling, each multiply-add reads 2 floats from global memory ⇒
+    8 B per FLOP. With TILE_WIDTH = 16, each block loads
+    2·16·16 = 512 floats from DRAM and performs 16·16·16 = 4 096 FLOPs ⇒
+    8 FLOPs per byte. That's a <strong>32×</strong> reduction in DRAM traffic
+    per FLOP, which moves the kernel from memory-bound toward
+    compute-bound territory.
+  </p>
+
+  <div class="diagram">
+   Without tiling                With TILE = 16
+   ─────────────────────        ──────────────────────────
+   FLOP : byte = 1 : 8           FLOP : byte = 8 : 1   (32×)
+   Each pixel re-loaded          Each pixel re-loaded
+     ~K² ≈ 49 times                ~K²/TILE ≈ 3 times
+  </div>
+
+  <h4>Why "implicit im2col" beats explicit im2col here</h4>
+  <ul>
+    <li>No extra DRAM write/read pass to materialise X_unroll (which would be
+      ~49× larger than X).</li>
+    <li>The address arithmetic is a few integer ops per shared-memory load —
+      cheap compared to the avoided DRAM transfer.</li>
+    <li>The accumulator stays in a register through the whole inner loop.</li>
+  </ul>
+
+  <div class="callout warn">
+    <strong class="tag">Caveat: bank conflicts</strong>
+    The expression <code class="inline">W_tile[ty][j] * X_tile[j][tx]</code>
+    is a typical tiled-GEMM access pattern. For TILE_WIDTH = 16 on a 32-bank
+    shared memory, this is conflict-free for X_tile but can have 2-way
+    conflicts for W_tile depending on the stride. Padding the shared array
+    to <code class="inline">[TILE][TILE+1]</code> is a common one-line fix
+    not used here.
+  </div>
+</section>
+
+<!-- ===================== 10 ===================== -->
+<section id="step5">
+  <h2><span class="num">10</span>Step 5 · Two kernels, two tile sizes
+    <span class="pill">0.128 s → 0.110 s</span></h2>
+  <p>
+    With the GEMM in place, the kernel's performance now depends on how well
+    the tile shape matches the matrix shape. The two layers have very
+    different shapes:
+  </p>
+
+  <div class="two-col">
+    <div class="col">
+      <h5>Layer 1 GEMM</h5>
+      <ul>
+        <li><strong>M = 12</strong> rows</li>
+        <li>C·K·K = <strong>49</strong> inner</li>
+        <li>H·W = <strong>4 356</strong> cols</li>
+        <li>Best tile: <code class="inline">TILE_WIDTH = 16</code></li>
+      </ul>
+    </div>
+    <div class="col">
+      <h5>Layer 2 GEMM</h5>
+      <ul>
+        <li><strong>M = 24</strong> rows</li>
+        <li>C·K·K = <strong>588</strong> inner</li>
+        <li>H·W = <strong>729</strong> cols</li>
+        <li>Best tile: <code class="inline">TILE_WIDTH = 24</code></li>
+      </ul>
+    </div>
+  </div>
+
+  <p>
+    A single 32 × 32 tile wastes 5/8 of its rows on Layer 1 (only 12 of 32 are
+    real) and 1/4 on Layer 2. A 24 × 24 tile fits Layer 2 <em>exactly</em>:
+    M = 24 means the row dimension is fully used and no boundary check is wasted.
+  </p>
+
+<pre><span class="k">if</span> (M &lt;= 16) {
+    <span class="c">// Layer 1: M = 12, use a 16x16 tile</span>
+    <span class="k">dim3</span> blockDim(TILE_WIDTH, TILE_WIDTH, 1);            <span class="c">// 16x16 = 256</span>
+    <span class="k">dim3</span> gridDim(<span class="f">ceil</span>(H_out*W_out/16.0),
+                 <span class="f">ceil</span>(M/16.0), B);
+    forward_kernel_layer2&lt;&lt;&lt;gridDim, blockDim&gt;&gt;&gt;(...);
+} <span class="k">else</span> {
+    <span class="c">// Layer 2: M = 24, use a 24x24 tile that fits M exactly</span>
+    <span class="k">dim3</span> blockDim(TILE_WIDTH2, TILE_WIDTH2, 1);           <span class="c">// 24x24 = 576</span>
+    <span class="k">dim3</span> gridDim(<span class="f">ceil</span>(H_out*W_out/24.0),
+                 <span class="f">ceil</span>(M/24.0), B);
+    forward_kernel_layer1&lt;&lt;&lt;gridDim, blockDim&gt;&gt;&gt;(...);
+}
+</pre>
+
+  <p>Why 24 and not 32 for Layer 2?</p>
+  <ul>
+    <li><strong>Row fit:</strong> M = 24 fits in one row-tile. With 32, eight
+      threads per row would be idle and you'd need to bounds-check them.</li>
+    <li><strong>Occupancy:</strong> 24×24 = 576 threads/block lets ~3 blocks
+      fit per SM (under 2048 max). 32×32 = 1024 lets only ~2 — less latency
+      hiding.</li>
+    <li><strong>Shared-mem footprint:</strong> 2·24·24·4 B = 4.5 KB/block fits
+      comfortably; 32×32 would need 8 KB and bump up against per-SM limits.</li>
+  </ul>
+
+  <div class="callout idea">
+    <strong class="tag">The shape-matching principle</strong>
+    Generic kernels are convenient; tuned kernels are fast. The 15% win in
+    this step comes purely from acknowledging that the two layers are
+    different. Production libraries take this to the extreme — cuDNN ships
+    dozens of kernel variants and picks one at runtime based on the exact
+    shape, dtype, and hardware generation.
+  </div>
+</section>
+
+<!-- ===================== 11 ===================== -->
+<section id="caveats">
+  <h2><span class="num">11</span>Caveats &amp; what's left on the table</h2>
+  <p>
+    0.11 s is good but not where the hardware can take this. Concrete next steps,
+    roughly in order of expected payoff:
+  </p>
+
+  <table>
+    <thead>
+      <tr><th>Technique</th><th>Estimated win</th><th>What it changes</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>FP16 / TensorCore</strong></td>
+        <td>3–8×</td>
+        <td>Use <code class="inline">wmma</code> intrinsics to run the inner GEMM on Volta TensorCores. 4×4×4 FP16 MAC blocks at full throughput.</td>
+      </tr>
+      <tr>
+        <td><strong>Register tiling</strong></td>
+        <td>1.5–2×</td>
+        <td>Make each thread compute 2×2 or 4×4 output elements instead of one. Re-uses register-held operands and reduces shared-memory pressure.</td>
+      </tr>
+      <tr>
+        <td><strong>Double buffering</strong></td>
+        <td>1.2–1.4×</td>
+        <td>Two shared-memory tiles per buffer; load the next tile while computing on the current one. Hides DRAM latency more aggressively.</td>
+      </tr>
+      <tr>
+        <td><strong>Padded shared memory</strong></td>
+        <td>1.05–1.15×</td>
+        <td><code class="inline">__shared__ float tile[TILE][TILE+1]</code> to kill bank conflicts.</td>
+      </tr>
+      <tr>
+        <td><strong>Asynchronous copy (<code class="inline">cp.async</code>)</strong></td>
+        <td>1.1–1.3×</td>
+        <td>Ampere+ only. DRAM → shared without going through registers.</td>
+      </tr>
+      <tr>
+        <td><strong>Winograd / FFT conv</strong></td>
+        <td>1.5–3×</td>
+        <td>For 3×3 filters, Winograd F(2,3) reduces MAC count by 2.25×. Less useful at K = 7 but worth knowing.</td>
+      </tr>
+      <tr>
+        <td><strong>Filter in registers</strong></td>
+        <td>1.1–1.3×</td>
+        <td>Layer 1's filter is 588 floats — small enough to cache entirely in a per-block register file. Eliminates the W shared-memory tile.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h4>Hidden assumptions worth questioning</h4>
+  <ul>
+    <li>The current Step-4 kernel uses <strong>row-major X_tile loads</strong>
+      driven by the unrolled index, which can lead to non-coalesced global
+      reads when adjacent threads land on non-adjacent input pixels. Profiling
+      with <code class="inline">nvprof --metrics gld_efficiency</code> would
+      tell you exactly how much.</li>
+    <li>The <code class="inline">if (M &lt;= 16)</code> dispatch is fragile —
+      any future layer with M = 8 or M = 48 falls onto a wrong-sized kernel.
+      A real production pipeline does either runtime auto-tuning or template
+      specialization on common shapes.</li>
+    <li>Constant memory was kept for the simple kernels but dropped in the
+      GEMM kernels — the GEMM versions read W from global memory through
+      shared. Re-introducing constant memory for W would cost nothing and
+      reduce global-load traffic by ~15% on Layer 1.</li>
+  </ul>
+</section>
+
+<!-- ===================== 12 ===================== -->
+<section id="libs">
+  <h2><span class="num">12</span>Raw CUDA vs cuDNN / cuBLAS — which approach is better?</h2>
+  <p>
+    Short answer: <strong>for production, use the libraries</strong>. For
+    learning, building a custom kernel, or for shapes the libraries handle
+    poorly, write your own. Here is what's actually happening under the hood
+    in each case.
+  </p>
+
+  <h3>cuBLAS — the GEMM monolith</h3>
+  <p>
+    cuBLAS provides industrial-strength GEMM (and a few cousins). What it
+    actually does is essentially Step 4 of this report, but pushed orders of
+    magnitude further:
+  </p>
+  <ul>
+    <li><strong>Multi-level tiling:</strong> a hierarchy of block tile →
+      warp tile → thread tile, each carrying its own register-resident
+      operand cache.</li>
+    <li><strong>TensorCore <code class="inline">wmma</code> instructions</strong>
+      for FP16/BF16/TF32 — performs a 16×16×16 matrix MAC in one instruction.</li>
+    <li><strong>Double / triple buffered <code class="inline">cp.async</code></strong>
+      pipeline so a tile's compute fully overlaps the next tile's load.</li>
+    <li><strong>Heuristic kernel selection</strong> based on M, N, K, dtype,
+      transpose state, and SM generation — picks one of dozens of pre-tuned
+      variants.</li>
+  </ul>
+
+  <p>
+    To use cuBLAS you'd still need an explicit (or implicit) im2col first,
+    because cuBLAS doesn't know about convolutions:
+  </p>
+
+<pre><span class="c">// (1) materialise X_unroll, then (2) call SGEMM</span>
+<span class="f">im2col_kernel</span>&lt;&lt;&lt;...&gt;&gt;&gt;(x, X_unroll, B, C, H, W, K);
+
+<span class="f">cublasSgemm</span>(handle,
+            CUBLAS_OP_N, CUBLAS_OP_N,
+            H_out*W_out, M, C*K*K,   <span class="c">// dims</span>
+            &amp;alpha,
+            X_unroll, H_out*W_out,
+            W,        C*K*K,
+            &amp;beta,
+            y,        H_out*W_out);
+</pre>
+
+  <h3>cuDNN — the convolution monolith</h3>
+  <p>
+    cuDNN is a convolution-specific library that picks <em>which algorithm</em>
+    to use under the hood, including:
+  </p>
+
+  <table>
+    <thead><tr><th>Algorithm</th><th>When it's chosen</th><th>What it is</th></tr></thead>
+    <tbody>
+      <tr><td><code class="inline">IMPLICIT_GEMM</code></td><td>Most shapes — the safe default.</td><td>Exactly Step 4 here: implicit im2col + GEMM, no extra buffer.</td></tr>
+      <tr><td><code class="inline">IMPLICIT_PRECOMP_GEMM</code></td><td>When K is small and reused.</td><td>Pre-computes index tables to skip address arithmetic.</td></tr>
+      <tr><td><code class="inline">GEMM</code></td><td>Large K, irregular shapes.</td><td>Explicit im2col into a workspace buffer, then cuBLAS.</td></tr>
+      <tr><td><code class="inline">DIRECT</code></td><td>Tiny shapes where GEMM has too much overhead.</td><td>A custom direct-conv kernel.</td></tr>
+      <tr><td><code class="inline">FFT</code></td><td>Large K (≥5) and large feature maps.</td><td>Convolution as element-wise product in frequency domain.</td></tr>
+      <tr><td><code class="inline">FFT_TILING</code></td><td>FFT but per-tile to fit memory.</td><td>Same idea, tiled.</td></tr>
+      <tr><td><code class="inline">WINOGRAD</code></td><td>K=3, stride 1.</td><td>F(2,3) or F(4,3) — reduces MACs by 2.25–4×.</td></tr>
+      <tr><td><code class="inline">WINOGRAD_NONFUSED</code></td><td>Same idea, separate transforms.</td><td>Better for some shapes; eats more memory.</td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    The selection is done either by heuristic (fast, can be suboptimal) or by
+    the <code class="inline">cudnnFindConvolutionForwardAlgorithm()</code>
+    benchmarker (slow, exhaustive — runs each algorithm on dummy data and
+    times them). PyTorch's <code class="inline">torch.backends.cudnn.benchmark = True</code>
+    is exactly this.
+  </p>
+
+  <h3>Which approach wins?</h3>
+
+  <table>
+    <thead><tr><th>Concern</th><th>Hand-written kernel</th><th>cuDNN / cuBLAS</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Peak performance on common shapes</td>
+        <td>Hard to beat by hand</td>
+        <td><strong>Wins — within a few % of hardware roofline</strong></td>
+      </tr>
+      <tr>
+        <td>Performance on weird / tiny shapes</td>
+        <td><strong>Can be 2–10× faster</strong> (no overhead, exact tiling)</td>
+        <td>Loses to kernel-launch + heuristic overhead</td>
+      </tr>
+      <tr>
+        <td>Engineering cost</td>
+        <td>Weeks per kernel variant</td>
+        <td><strong>One function call</strong></td>
+      </tr>
+      <tr>
+        <td>Portability across GPU gens</td>
+        <td>Re-tune per generation</td>
+        <td><strong>Vendor updates handle it</strong></td>
+      </tr>
+      <tr>
+        <td>Operator fusion</td>
+        <td><strong>You control the loop body</strong> — fuse conv+bias+ReLU</td>
+        <td>Fixed kernel boundaries; limited fusion</td>
+      </tr>
+      <tr>
+        <td>Auditability / determinism</td>
+        <td><strong>You see every line</strong></td>
+        <td>Algorithm changes between cuDNN versions</td>
+      </tr>
+      <tr>
+        <td>Numeric precision quirks</td>
+        <td><strong>Yours</strong></td>
+        <td>Inherited from library</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout idea">
+    <strong class="tag">The honest answer</strong>
+    Use cuDNN/cuBLAS by default. Drop to a hand-written kernel only when
+    profiling shows the library leaving real performance on the table —
+    usually for unusual shapes, fused epilogues (conv → bias → ReLU →
+    quantize as one kernel), or when you need bit-for-bit determinism. The
+    real research frontier is somewhere in between: tools like CUTLASS,
+    Triton, and CUDA Graphs let you compose library-grade kernels with the
+    fusion freedom of hand-written code.
+  </div>
+
+  <h3>What that means for LeNet-5 specifically</h3>
+  <p>
+    On this exact workload, cuDNN's <code class="inline">IMPLICIT_PRECOMP_GEMM</code>
+    or <code class="inline">WINOGRAD</code> would land in the 30–60 ms range — a
+    further 2–3× over the hand-tuned 110 ms here, mostly thanks to TensorCore
+    use and aggressive double-buffering. The hand-tuned kernel's value isn't
+    that it's faster — it's that you understand every cycle of what it's
+    doing, and that the same five techniques are exactly what's hiding inside
+    those library calls.
+  </p>
+</section>
+
+<footer>
+  Source: <code>new-forward-original.cuh</code> · <code>LeNet-5 CUDA optimization-cuda-new-forward.cuh</code> · EECS 471 Final Project Report (Fall 2022, Hu &amp; Zhang)
+</footer>
+
+</div>
+</body>
+</html>
