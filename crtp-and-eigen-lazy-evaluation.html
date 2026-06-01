@@ -1,0 +1,970 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CRTP &amp; Eigen Lazy Evaluation — A Field Manual</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#0b0d11;
+  --ink-2:#11141b;
+  --panel:#141822;
+  --panel-2:#1a1f2b;
+  --line:#262d3b;
+  --line-soft:#1e2532;
+  --fg:#e8e6df;
+  --fg-dim:#a7adba;
+  --fg-faint:#6e7686;
+  --cyan:#54d6e6;
+  --cyan-deep:#2aa7b8;
+  --amber:#f2a65a;
+  --amber-deep:#d9822b;
+  --violet:#b39cf6;
+  --rose:#f07a8c;
+  --green:#8fd694;
+  --blueprint: rgba(84,214,230,.10);
+  --mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --disp:"Archivo","Archivo Black",system-ui,sans-serif;
+  --serif:"Source Serif 4",Georgia,"Times New Roman",serif;
+  --maxw:1180px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;
+  background:
+    radial-gradient(1200px 600px at 80% -10%, rgba(84,214,230,.06), transparent 60%),
+    radial-gradient(900px 500px at -5% 10%, rgba(179,156,246,.05), transparent 55%),
+    var(--ink);
+  color:var(--fg);
+  font-family:var(--serif);
+  font-size:18px;
+  line-height:1.7;
+  -webkit-font-smoothing:antialiased;
+}
+/* blueprint grid texture */
+body::before{
+  content:"";
+  position:fixed;inset:0;
+  background-image:
+    linear-gradient(var(--line-soft) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line-soft) 1px, transparent 1px);
+  background-size:46px 46px;
+  opacity:.22;
+  pointer-events:none;
+  mask-image:radial-gradient(circle at 50% 30%, black, transparent 90%);
+  z-index:0;
+}
+.wrap{position:relative;z-index:1;max-width:var(--maxw);margin:0 auto;padding:0 28px;
+  display:grid;grid-template-columns:248px 1fr;gap:48px;}
+a{color:var(--cyan);text-decoration:none}
+a:hover{color:#bdeef4}
+
+/* ---------- Sidebar / TOC ---------- */
+aside{
+  position:sticky;top:0;align-self:start;height:100vh;overflow-y:auto;
+  padding:34px 8px 60px 0;border-right:1px solid var(--line-soft);
+  scrollbar-width:thin;scrollbar-color:var(--line) transparent;
+}
+aside::-webkit-scrollbar{width:7px}
+aside::-webkit-scrollbar-thumb{background:var(--line);border-radius:8px}
+.brand{font-family:var(--disp);font-weight:900;letter-spacing:-.02em;font-size:20px;
+  line-height:1.05;margin-bottom:4px;color:var(--fg)}
+.brand b{color:var(--cyan)}
+.brand-sub{font-family:var(--mono);font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--fg-faint);margin-bottom:26px}
+nav ol{list-style:none;margin:0;padding:0;counter-reset:nav}
+nav li{counter-increment:nav}
+nav a{display:flex;gap:10px;align-items:baseline;font-family:var(--mono);font-size:12.5px;
+  color:var(--fg-dim);padding:6px 10px;border-radius:7px;border:1px solid transparent;
+  line-height:1.35;transition:.15s}
+nav a::before{content:counter(nav,decimal-leading-zero);color:var(--fg-faint);font-size:10.5px;
+  flex:0 0 auto;padding-top:1px}
+nav a:hover{background:var(--panel);color:var(--fg)}
+nav a.active{background:var(--blueprint);border-color:rgba(84,214,230,.35);color:var(--cyan)}
+nav a.active::before{color:var(--cyan-deep)}
+
+/* ---------- Main ---------- */
+main{padding:34px 0 140px;min-width:0}
+header.hero{padding:34px 0 26px;border-bottom:1px solid var(--line);margin-bottom:14px}
+.kicker{font-family:var(--mono);font-size:12px;letter-spacing:.26em;text-transform:uppercase;
+  color:var(--cyan);margin-bottom:18px;display:flex;align-items:center;gap:12px}
+.kicker::after{content:"";height:1px;flex:1;background:linear-gradient(90deg,var(--cyan-deep),transparent)}
+h1{font-family:var(--disp);font-weight:900;letter-spacing:-.03em;line-height:1.0;
+  font-size:clamp(38px,6vw,68px);margin:0 0 18px;color:var(--fg)}
+h1 .gl{color:transparent;-webkit-text-stroke:1.4px var(--amber);text-stroke:1.4px var(--amber)}
+.lede{font-size:21px;color:var(--fg-dim);max-width:62ch;margin:0}
+.lede b{color:var(--fg)}
+
+section{padding-top:52px;scroll-margin-top:20px}
+h2{font-family:var(--disp);font-weight:800;letter-spacing:-.02em;font-size:clamp(26px,3.4vw,38px);
+  line-height:1.08;margin:0 0 6px;color:var(--fg);display:flex;align-items:baseline;gap:14px}
+h2 .num{font-family:var(--mono);font-size:14px;font-weight:700;color:var(--cyan);
+  border:1px solid var(--line);border-radius:6px;padding:3px 8px;letter-spacing:.05em;
+  flex:0 0 auto;align-self:center;background:var(--panel)}
+h3{font-family:var(--disp);font-weight:700;font-size:22px;letter-spacing:-.01em;
+  margin:38px 0 4px;color:var(--fg)}
+h4{font-family:var(--mono);font-size:13px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--amber);margin:26px 0 2px}
+.sec-rule{height:1px;background:linear-gradient(90deg,var(--line),transparent);margin:6px 0 22px}
+p{margin:14px 0;max-width:70ch}
+strong{color:var(--fg);font-weight:600}
+em{color:var(--cyan)}
+ul,ol.list{max-width:70ch;padding-left:22px}
+li{margin:7px 0}
+ul li::marker{color:var(--cyan-deep)}
+code.inl{font-family:var(--mono);font-size:.84em;background:var(--panel);border:1px solid var(--line-soft);
+  padding:1.5px 6px;border-radius:5px;color:var(--amber);white-space:nowrap}
+
+/* ---------- Code blocks ---------- */
+figure.code{margin:22px 0;border:1px solid var(--line);border-radius:12px;overflow:hidden;
+  background:var(--ink-2);box-shadow:0 18px 40px -28px rgba(0,0,0,.9);}
+.code-bar{display:flex;align-items:center;gap:10px;padding:9px 14px;background:var(--panel);
+  border-bottom:1px solid var(--line);font-family:var(--mono);font-size:11.5px;color:var(--fg-faint)}
+.dots{display:flex;gap:6px;margin-right:4px}
+.dots i{width:10px;height:10px;border-radius:50%;display:block}
+.dots i:nth-child(1){background:#ff5f57}.dots i:nth-child(2){background:#febc2e}.dots i:nth-child(3){background:#28c840}
+.code-bar .fname{color:var(--fg-dim)}
+.code-bar .lang{margin-left:auto;color:var(--cyan-deep);letter-spacing:.1em;text-transform:uppercase;font-size:10px}
+.copy{cursor:pointer;border:1px solid var(--line);background:var(--ink-2);color:var(--fg-faint);
+  font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+  padding:4px 9px;border-radius:6px;transition:.15s}
+.copy:hover{color:var(--cyan);border-color:var(--cyan-deep)}
+pre{margin:0;padding:16px 18px;overflow-x:auto;font-family:var(--mono);font-size:13.3px;line-height:1.62;
+  scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+pre::-webkit-scrollbar{height:9px}
+pre::-webkit-scrollbar-thumb{background:var(--line);border-radius:8px}
+code.block{font-family:var(--mono);color:#d6d9e0;white-space:pre}
+.tok-com{color:#5f6b7a;font-style:italic}
+.tok-str{color:var(--green)}
+.tok-num{color:var(--amber)}
+.tok-kw{color:var(--violet);font-weight:500}
+.tok-typ{color:var(--cyan)}
+.tok-pre{color:var(--rose)}
+.tok-fn{color:#e9d27a}
+
+/* ---------- Callouts ---------- */
+.call{margin:22px 0;border-radius:11px;padding:16px 18px 16px 20px;border:1px solid var(--line);
+  background:var(--panel);position:relative;border-left-width:3px}
+.call .lab{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+  font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.call p{margin:6px 0;font-size:16.5px;color:var(--fg-dim)}
+.call.key{border-left-color:var(--cyan)} .call.key .lab{color:var(--cyan)}
+.call.tip{border-left-color:var(--green)} .call.tip .lab{color:var(--green)}
+.call.warn{border-left-color:var(--amber)} .call.warn .lab{color:var(--amber)}
+.call.trap{border-left-color:var(--rose)} .call.trap .lab{color:var(--rose)}
+
+/* ---------- Tables ---------- */
+.tbl{margin:22px 0;border:1px solid var(--line);border-radius:11px;overflow:hidden;overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:15px}
+th,td{text-align:left;padding:11px 15px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+th{font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--cyan);background:var(--panel)}
+tr:last-child td{border-bottom:none}
+td:first-child{font-family:var(--mono);font-size:13px;color:var(--amber);white-space:nowrap}
+.tbl.plain td:first-child{color:var(--fg);font-family:var(--serif);white-space:normal}
+.yes{color:var(--green)} .no{color:var(--rose)}
+
+/* ---------- Diagrams ---------- */
+.diagram{margin:24px 0;border:1px solid var(--line);border-radius:12px;background:var(--ink-2);
+  padding:22px;}
+.diagram .cap{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--fg-faint);margin-top:14px;text-align:center}
+.diagram svg{width:100%;height:auto;display:block}
+
+/* ---------- Misc ---------- */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:22px 0}
+.grid2 figure.code{margin:0}
+.pill{display:inline-block;font-family:var(--mono);font-size:11px;letter-spacing:.06em;
+  padding:3px 9px;border-radius:20px;border:1px solid var(--line);color:var(--fg-dim);margin:2px 4px 2px 0}
+.pill.c{border-color:var(--cyan-deep);color:var(--cyan)}
+.pill.a{border-color:var(--amber-deep);color:var(--amber)}
+footer{border-top:1px solid var(--line);margin-top:90px;padding:30px 0;color:var(--fg-faint);
+  font-family:var(--mono);font-size:12px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px}
+
+.mobnav{display:none}
+@media(max-width:920px){
+  body::before{background-size:34px 34px}
+  .wrap{grid-template-columns:1fr;gap:0;padding:0 18px}
+  aside{position:static;height:auto;border-right:none;border-bottom:1px solid var(--line);
+    padding:18px 0;max-height:0;overflow:hidden;transition:max-height .35s ease}
+  aside.open{max-height:80vh;overflow-y:auto}
+  .mobnav{display:flex;position:sticky;top:0;z-index:30;align-items:center;justify-content:space-between;
+    background:rgba(11,13,17,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);
+    padding:12px 18px;margin:0 -18px}
+  .mobnav .brand{margin:0;font-size:16px}
+  .mobnav button{font-family:var(--mono);font-size:12px;color:var(--cyan);background:var(--panel);
+    border:1px solid var(--line);border-radius:8px;padding:8px 12px;cursor:pointer}
+  .grid2{grid-template-columns:1fr}
+  main{padding-top:18px}
+  body{font-size:17px}
+}
+</style>
+</head>
+<body>
+
+<div class="mobnav">
+  <div class="brand"><b>CRTP</b> &amp; Eigen</div>
+  <button id="navToggle">Contents ▾</button>
+</div>
+
+<div class="wrap">
+  <aside id="sidebar">
+    <div class="brand"><b>CRTP</b> &amp; the<br>Eigen engine</div>
+    <div class="brand-sub">A field manual · C++</div>
+    <nav>
+      <ol>
+        <li><a href="#intro">Orientation</a></li>
+        <li><a href="#pattern">The pattern &amp; its mechanics</a></li>
+        <li><a href="#dispatch">Static vs dynamic dispatch</a></li>
+        <li><a href="#incomplete">The incomplete-type trap &amp; traits</a></li>
+        <li><a href="#usecases">Canonical use cases</a></li>
+        <li><a href="#eigen">Eigen: expression templates &amp; lazy eval</a></li>
+        <li><a href="#when">When to reach for it</a></li>
+        <li><a href="#limits">Limitations</a></li>
+        <li><a href="#pitfalls">Pitfalls &amp; classic bugs</a></li>
+        <li><a href="#debug">Debugging tactics</a></li>
+        <li><a href="#modern">Modern alternatives (C++20/23)</a></li>
+        <li><a href="#cheat">Cheat sheet</a></li>
+      </ol>
+    </nav>
+  </aside>
+
+  <main>
+    <header class="hero" id="top">
+      <div class="kicker">Static polymorphism · zero-overhead abstraction</div>
+      <h1>The Curiously Recurring<br>Template Pattern <span class="gl">&amp;</span> how Eigen<br>spends nothing at runtime</h1>
+      <p class="lede">A base class parameterized on its own derived class. From that one twist falls compile-time dispatch, mixins, and the <b>expression templates</b> that let <code class="inl">a + b + c</code> run as a single fused loop with no temporaries. This is the whole tour — mechanics, the Eigen engine, the gotchas, and what replaces it in modern C++.</p>
+    </header>
+
+    <!-- ============================================================= -->
+    <section id="intro">
+      <h2><span class="num">01</span> Orientation</h2>
+      <div class="sec-rule"></div>
+      <p>CRTP is one line of structure with outsized consequences:</p>
+
+      <figure class="code">
+        <div class="code-bar"><span class="dots"><i></i><i></i><i></i></span><span class="fname">crtp.hpp</span><button class="copy">copy</button><span class="lang">cpp</span></div>
+<pre><code class="block">template &lt;typename Derived&gt;
+struct Base {
+    // Base can call into Derived because it *knows* Derived's type.
+    void interface() { static_cast&lt;Derived*&gt;(this)-&gt;implementation(); }
+};
+
+struct Widget : Base&lt;Widget&gt; {            // &lt;-- the "curious" recursion
+    void implementation() { /* real work */ }
+};</code></pre>
+      </figure>
+
+      <p>The base class takes the derived class as a <em>template parameter</em>, and the derived class passes <em>itself</em> as that parameter. The recursion looks paradoxical but isn't: when the compiler sees <code class="inl">Widget</code>, the name <code class="inl">Widget</code> already exists (it is being declared), so <code class="inl">Base&lt;Widget&gt;</code> is a perfectly legal base. Because <code class="inl">Base</code> statically knows the exact derived type, it can downcast and call derived members <strong>at compile time</strong> — no virtual table, no indirection, fully inlinable.</p>
+
+      <div class="call key">
+        <div class="lab">◆ The one idea</div>
+        <p>Inheritance normally lets a <em>derived</em> class reach <em>up</em> to the base. CRTP additionally lets the <em>base</em> reach <em>down</em> into a specific derived class — known at compile time. That inversion is the entire engine: it turns runtime polymorphism into compile-time polymorphism, and it is how a library can hand you an operator like <code class="inl">+</code> that builds a description of work instead of doing the work.</p>
+      </div>
+
+      <p><strong>What it buys you, in one breath:</strong> static (vtable-free) polymorphism, reusable behavior mixed into many types, method chaining that returns the right derived type, and — the headline act — <strong>expression templates</strong>, the technique behind Eigen's lazy evaluation. We build to that.</p>
+    </section>
+
+    <!-- ============================================================= -->
+    <section id="pattern">
+      <h2><span class="num">02</span> The pattern &amp; its mechanics</h2>
+      <div class="sec-rule"></div>
+
+      <h3>Why the downcast is safe</h3>
+      <p>Inside <code class="inl">Base&lt;Derived&gt;</code>, <code class="inl">this</code> has type <code class="inl">Base&lt;Derived&gt;*</code>. The <code class="inl">static_cast&lt;Derived*&gt;(this)</code> is valid <em>provided</em> the actual object really is a <code class="inl">Derived</code> — which the pattern guarantees, because <code class="inl">Derived</code> publicly inherits <code class="inl">Base&lt;Derived&gt;</code> and is the most-derived type. There is no runtime check and none is needed; the type relationship is fixed at compile time.</p>
+
+      <p>You'll see this downcast factored into a tiny helper so the cast appears once:</p>
+
+      <figure class="code">
+        <div class="code-bar"><span class="dots"><i></i><i></i><i></i></span><span class="fname">self_cast.hpp</span><button class="copy">copy</button><span class="lang">cpp</span></div>
+<pre><code class="block">template &lt;typename Derived&gt;
+class Shape {
+public:
+    double area() const { return self().area_impl(); }
+    void describe() const {
+        std::cout &lt;&lt; "area = " &lt;&lt; area() &lt;&lt; "\n";   // calls Derived::area_impl
+    }
+private:
+    // Factor the cast into named accessors; const + non-const overloads.
+          Derived&amp; self()       { return static_cast&lt;      Derived&amp;&gt;(*this); }
+    const Derived&amp; self() const { return static_cast&lt;const Derived&amp;&gt;(*this); }
+};
+
+class Circle : public Shape&lt;Circle&gt; {
+    double r;
+public:
+    explicit Circle(double r) : r(r) {}
+    double area_impl() const { return 3.14159265 * r * r; }
+};</code></pre>
+      </figure>
+
+      <div class="call warn">
+        <div class="lab">▲ Protect the base destructor</div>
+        <p>There is no virtual dispatch here, so deleting a <code class="inl">Derived</code> through a <code class="inl">Base&lt;Derived&gt;*</code> would be undefined behavior. Make the base destructor <strong>protected and non-virtual</strong> (<code class="inl">protected: ~Base() = default;</code>). This forbids polymorphic deletion through the base entirely — exactly what you want, since you should never be holding a <code class="inl">Base*</code> as a runtime handle in the first place.</p>
+      </div>
+
+      <h3>The "static interface" contract</h3>
+      <p>The base defines the public surface (<code class="inl">area()</code>, <code class="inl">describe()</code>) and delegates the variable part to a named hook (<code class="inl">area_impl()</code>) that every derived type must supply. If a derived class forgets the hook, you get a compile error — but only at the point the templated member is <em>instantiated</em> (i.e. actually called), which is worth remembering when reading errors.</p>
+    </section>
+
+    <!-- ============================================================= -->
+    <section id="dispatch">
+      <h2><span class="num">03</span> Static vs dynamic dispatch</h2>
+      <div class="sec-rule"></div>
+      <p>The closest cousin to CRTP is the classic virtual-function interface. They solve overlapping problems with opposite trade-offs.</p>
+
+      <div class="diagram">
+        <svg viewBox="0 0 760 230" xmlns="http://www.w3.org/2000/svg" font-family="JetBrains Mono, monospace">
+          <defs>
+            <marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+              <path d="M0,0 L7,3 L0,6 Z" fill="#54d6e6"/>
+            </marker>
+            <marker id="arA" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+              <path d="M0,0 L7,3 L0,6 Z" fill="#f2a65a"/>
+            </marker>
+          </defs>
+          <!-- dynamic -->
+          <text x="20" y="26" fill="#f07a8c" font-size="12" letter-spacing="2">DYNAMIC (virtual)</text>
+          <rect x="20" y="40" width="120" height="40" rx="7" fill="#141822" stroke="#262d3b"/>
+          <text x="80" y="65" fill="#e8e6df" font-size="12" text-anchor="middle">call f()</text>
+          <line x1="140" y1="60" x2="190" y2="60" stroke="#f07a8c" stroke-width="1.5" marker-end="url(#ar)"/>
+          <rect x="190" y="40" width="120" height="40" rx="7" fill="#1a1f2b" stroke="#3a2530"/>
+          <text x="250" y="58" fill="#f07a8c" font-size="11" text-anchor="middle">vtable lookup</text>
+          <text x="250" y="72" fill="#6e7686" font-size="9.5" text-anchor="middle">ptr → ptr → fn</text>
+          <line x1="310" y1="60" x2="360" y2="60" stroke="#f07a8c" stroke-width="1.5" marker-end="url(#ar)"/>
+          <rect x="360" y="40" width="150" height="40" rx="7" fill="#141822" stroke="#262d3b"/>
+          <text x="435" y="65" fill="#a7adba" font-size="11" text-anchor="middle">run target (opaque)</text>
+          <text x="540" y="55" fill="#6e7686" font-size="10">• indirect call</text>
+          <text x="540" y="71" fill="#6e7686" font-size="10">• no inlining</text>
+          <!-- static -->
+          <text x="20" y="138" fill="#54d6e6" font-size="12" letter-spacing="2">STATIC (CRTP)</text>
+          <rect x="20" y="152" width="120" height="40" rx="7" fill="#141822" stroke="#262d3b"/>
+          <text x="80" y="177" fill="#e8e6df" font-size="12" text-anchor="middle">call f()</text>
+          <line x1="140" y1="172" x2="360" y2="172" stroke="#54d6e6" stroke-width="1.5" marker-end="url(#arA)"/>
+          <text x="250" y="165" fill="#54d6e6" font-size="10" text-anchor="middle">resolved at compile time</text>
+          <rect x="360" y="152" width="150" height="40" rx="7" fill="#10211f" stroke="#2aa7b8"/>
+          <text x="435" y="177" fill="#8fd694" font-size="11" text-anchor="middle">inlined &amp; optimized</text>
+          <text x="540" y="167" fill="#6e7686" font-size="10">• direct call</text>
+          <text x="540" y="183" fill="#6e7686" font-size="10">• fully inlinable</text>
+        </svg>
+        <div class="cap">Same call site, two universes: one walks a pointer table at runtime, the other vanishes into the surrounding code.</div>
+      </div>
+
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Dimension</th><th>Virtual functions</th><th>CRTP</th></tr></thead>
+          <tbody>
+            <tr><td>dispatch</td><td>runtime, via vtable</td><td>compile time, via type</td></tr>
+            <tr><td>cost per call</td><td>indirect jump, usually no inlining</td><td><span class="yes">zero</span> — inlinable, often folds away</td></tr>
+            <tr><td>per-object overhead</td><td>vptr (8 bytes typical)</td><td><span class="yes">none</span></td></tr>
+            <tr><td>heterogeneous containers</td><td><span class="yes">yes</span> — <code class="inl">vector&lt;Base*&gt;</code></td><td><span class="no">no</span> — each <code class="inl">Base&lt;D&gt;</code> is a distinct type</td></tr>
+            <tr><td>dispatch on a runtime value</td><td><span class="yes">yes</span></td><td><span class="no">no</span> — type must be known when compiling</td></tr>
+            <tr><td>binary size</td><td>compact</td><td>can bloat (a template instance per derived type)</td></tr>
+            <tr><td>compile time</td><td>fast</td><td>slower; heavy template machinery</td></tr>
+            <tr><td>error messages</td><td>readable</td><td>can be brutal</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="call key">
+        <div class="lab">◆ The deciding question</div>
+        <p>Is the concrete type known at the call site when you compile? If <strong>yes</strong>, CRTP gives you the abstraction for free. If the type is only known at runtime (you're storing mixed objects in one container and iterating), you need virtual functions — CRTP simply cannot express that, because <code class="inl">Base&lt;Circle&gt;</code> and <code class="inl">Base&lt;Square&gt;</code> share no common base type.</p>
+      </div>
+    </section>
+
+    <!-- ============================================================= -->
+    <section id="incomplete">
+      <h2><span class="num">04</span> The incomplete-type trap &amp; the traits escape hatch</h2>
+      <div class="sec-rule"></div>
+      <p>This is the single most important subtlety, and it is exactly why Eigen is built the way it is. When the compiler is parsing <code class="inl">Base&lt;Derived&gt;</code>, the type <code class="inl">Derived</code> is <strong>incomplete</strong> — its definition hasn't finished yet (the base class is being established as part of defining the derived class). So the base may <em>not</em> touch anything that requires <code class="inl">Derived</code> to be complete:</p>
+
+      <figure class="code">
+        <div class="code-bar"><span class="dots"><i></i><i></i><i></i></span><span class="fname">incomplete.hpp</span><button class="copy">copy</button><span class="lang">cpp</span></div>
+<pre><code class="block">template &lt;typename Derived&gt;
+struct Base {
+    // ✗ ERROR: Derived is incomplete here — cannot name its members,
+    //          take sizeof, or use nested typedefs at class scope.
+    using Scalar = typename Derived::Scalar;   // ill-formed
+    Derived member;                             // ill-formed (needs size)
+
+    // ✓ OK: inside a member function *body*, instantiation is deferred
+    //       until the function is called — by then Derived is complete.
+    void ok() { static_cast&lt;Derived*&gt;(this)-&gt;poke(); }
+};</code></pre>
+      </figure>
+
+      <p>Member-function <em>bodies</em> of a class template are only instantiated when used, by which point <code class="inl">Derived</code> is fully defined — so calling derived methods from the body works. But anything evaluated while the base class is being <em>defined</em> (data members, base-class-scope typedefs, default template arguments depending on <code class="inl">Derived::X</code>) hits the incomplete type and fails.</p>
+
+      <h3>The traits workaround</h3>
+      <p>The fix is to move the compile-time facts the base needs <strong>out of the derived class</strong> and into a separate, independently-specialized <em>traits</em> template. The base reads <code class="inl">traits&lt;Derived&gt;::Scalar</code> instead of <code class="inl">Derived::Scalar</code>, and <code class="inl">traits&lt;Derived&gt;</code> is a complete type even when <code class="inl">Derived</code> is not.</p>
+
+      <figure class="code">
+        <div class="code-bar"><span class="dots"><i></i><i></i><i></i></span><span class="fname">traits.hpp</span><button class="copy">copy</button><span class="lang">cpp</span></div>
+<pre><code class="block">template &lt;typename Derived&gt; struct traits;   // primary template, undefined
+
+template &lt;typename Derived&gt;
+struct MatrixBase {
+    // ✓ Pull the scalar type from the *traits*, not from Derived directly.
+    using Scalar = typename traits&lt;Derived&gt;::Scalar;
+    int rows() const { return static_cast&lt;const Derived*&gt;(this)-&gt;rows(); }
+};
+
+class MyMatrix;                              // forward declare
+
+template &lt;&gt;                                   // specialize traits BEFORE the class
+struct traits&lt;MyMatrix&gt; { using Scalar = double; };
+
+class MyMatrix : public MatrixBase&lt;MyMatrix&gt; {
+    /* ... */                                // MatrixBase&lt;MyMatrix&gt;::Scalar == double
+};</code></pre>
+      </figure>
+
+      <div class="call key">
+        <div class="lab">◆ Why this matters for Eigen</div>
+        <p>Eigen's <code class="inl">MatrixBase&lt;Derived&gt;</code> must know each expression's scalar type, compile-time row/column counts, storage order, and dozens of other flags — all while <code class="inl">Derived</code> is incomplete. So Eigen keeps every one of those facts in <code class="inl">Eigen::internal::traits&lt;Derived&gt;</code>, specialized for <code class="inl">Matrix</code>, <code class="inl">Block</code>, <code class="inl">CwiseBinaryOp</code>, and every other expression node. The traits class isn't an Eigen quirk; it's the necessary consequence of CRTP meeting incomplete types.</p>
+      </div>
+    </section>
+
+    <!-- ============================================================= -->
+    <section id="usecases">
+      <h2><span class="num">05</span> Canonical use cases</h2>
+      <div class="sec-rule"></div>
+      <p>Five patterns cover almost everything you'll meet in the wild.</p>
+
+      <h3>5.1 — Static polymorphism (zero-overhead interfaces)</h3>
+      <p>Already shown: the base provides a public interface and delegates to a derived hook, resolved at compile time. Use it for hot-path interfaces where virtual dispatch would show up in a profile — serializers, visitors over known node types, numeric kernels.</p>
+
+      <h3>5.2 — Mixins: bolt behavior onto many unrelated types</h3>
+      <p>A CRTP base can synthesize a whole cluster of operations from one or two primitives the derived type provides. The classic is deriving all six comparison operators from a single <code class="inl">less_than</code> (pre-C++20, before <code class="inl">operator&lt;=&gt;</code>):</p>
+
+      <figure class="code">
+        <div class="code-bar"><span class="dots"><i></i><i></i><i></i></span><span class="fname">comparable.hpp</span><button class="copy">copy</button><span class="lang">cpp</span></div>
+<pre><code class="block">template &lt;typename D&gt;
+struct Comparable {
+    // Derived supplies just one primitive: bool less(const D&amp;) const.
+    friend bool operator&lt; (const D&amp; a, const D&amp; b) { return  a.less(b); }
+    friend bool operator&gt; (const D&amp; a, const D&amp; b) { return  b.less(a); }
+    friend bool operator&lt;=(const D&amp; a, const D&amp; b) { return !b.less(a); }
+    friend bool operator&gt;=(const D&amp; a, const D&amp; b) { return !a.less(b); }
+    friend bool operator==(const D&amp; a, const D&amp; b) { return !a.less(b) &amp;&amp; !b.less(a); }
+    friend bool operator!=(const D&amp; a, const D&amp; b) { return  a.less(b) ||  b.less(a); }
+};
+
+struct Version : Comparable&lt;Version&gt; {
+    int major, minor;
+    bool less(const Version&amp; o) const {
+        return major != o.major ? major &lt; o.major : minor &lt; o.minor;
+    }
+};   // Version now has all six comparisons, each fully inlined.</code></pre>
+      </figure>
+
+      <h3>5.3 — Per-type instance counters &amp; registries</h3>
+      <p>Because <code class="inl">Base&lt;A&gt;</code> and <code class="inl">Base&lt;B&gt;</code> are different types, each gets its own copy of any static data. That makes "count how many of <em>this exact type</em> exist" trivial:</p>
+
+      <figure class="code">
+        <div class="code-bar"><span class="dots"><i></i><i></i><i></i></span><span class="fname">counter.hpp</span><button class="copy">copy</button><span class="lang">cpp</span></div>
+<pre><code class="block">template &lt;typename D&gt;
+struct Counted {
+    static inline int alive = 0;            // one counter *per derived type*
+    Counted()  { ++alive; }
+    Counted(const Counted&amp;) { ++alive; }
+    ~Counted() { --alive; }
+};
+struct Apple  : Counted&lt;Apple&gt;  {};
+struct Orange : Counted&lt;Orange&gt; {};
+// Apple::alive and Orange::alive are independent.</code></pre>
+      </figure>
+
+      <h3>5.4 — Fluent interfaces that return the right type</h3>
+      <p>A base-class setter normally returns <code class="inl">Base&amp;</code>, which breaks chaining the moment you call a derived setter. With CRTP the base can return <code class="inl">Derived&amp;</code>, preserving the concrete type through the whole chain (the "named parameter idiom"):</p>
+
+      <figure class="code">
+        <div class="code-bar"><span class="dots"><i></i><i></i><i></i></span><span class="fname">builder.hpp</span><button class="copy">copy</button><span class="lang">cpp</span></div>
+<pre><code class="block">template &lt;typename D&gt;
+struct RequestBuilder {
+    D&amp; timeout(int ms)   { ms_ = ms;  return self(); }
+    D&amp; retries(int n)    { n_  = n;   return self(); }
+protected:
+    int ms_ = 0, n_ = 0;
+    D&amp; self() { return static_cast&lt;D&amp;&gt;(*this); }
+};
+struct HttpRequest : RequestBuilder&lt;HttpRequest&gt; {
+    HttpRequest&amp; url(std::string u) { url_ = std::move(u); return *this; }
+    std::string url_;
+};
+// auto r = HttpRequest{}.url("/x").timeout(500).retries(3);  // stays HttpRequest&amp;</code></pre>
+      </figure>
+
+      <h3>5.5 — Polymorphic <code class="inl">clone()</code> without boilerplate</h3>
+      <p>An intermediate CRTP layer can implement <code class="inl">clone()</code> once by copy-constructing the known derived type, so leaf classes don't each rewrite it. (This one combines CRTP with a virtual base for the actual runtime polymorphism — the two patterns compose.)</p>
+
+      <h3>5.6 — Expression templates</h3>
+      <p>The big one. It deserves its own chapter. →</p>
+    </section>
+
+    <!-- ============================================================= -->
+    <section id="eigen">
+      <h2><span class="num">06</span> Eigen: expression templates &amp; lazy evaluation</h2>
+      <div class="sec-rule"></div>
+
+      <h3>The problem: naïve operators allocate temporaries</h3>
+      <p>Write a vector class the obvious way and every binary operator returns a fresh result by value:</p>
+
+      <figure class="code">
+        <div class="code-bar"><span class="dots"><i></i><i></i><i></i></span><span class="fname">naive.cpp</span><button class="copy">copy</button><span class="lang">cpp</span></div>
+<pre><code class="block">Vec operator+(const Vec&amp; a, const Vec&amp; b) {
+    Vec out(a.size());
+    for (int i = 0; i &lt; a.size(); ++i) out[i] = a[i] + b[i];
+    return out;
+}
+
+// d = a + b + c;  with N-element vectors costs:
+//   tmp1 = a + b      → allocate N, one loop
+//   tmp2 = tmp1 + c   → allocate N, one loop
+//   d    = tmp2       → copy N
+// Two heap temporaries and three passes over memory. For large N this is
+// dominated by allocation and memory bandwidth, not arithmetic.</code></pre>
+      </figure>
+
+      <p>The arithmetic is cheap; the <strong>temporaries and the repeated trips through memory</strong> are what hurt. We want the compiler to see the whole expression <code class="inl">a + b + c</code> at once and emit a <em>single</em> loop: <code class="inl">d[i] = a[i] + b[i] + c[i]</code>, no temporaries. That fusion is what expression templates deliver.</p>
+
+      <h3>The idea: <code class="inl">+</code> returns a description, not a result</h3>
+      <p>Instead of computing, <code class="inl">operator+</code> returns a small node object that merely <em>remembers</em> its operands by reference. Each node is itself a CRTP expression that knows how to produce its <code class="inl">i</code>-th element on demand. Nothing is computed until the result is assigned into a real vector — at which point one loop pulls element <code class="inl">i</code> through the entire expression tree.</p>
+
+      <div class="diagram">
+        <svg viewBox="0 0 760 270" xmlns="http://www.w3.org/2000/svg" font-family="JetBrains Mono, monospace">
+          <defs>
+            <marker id="t" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+              <path d="M0,0 L6,3 L0,6 Z" fill="#6e7686"/>
+            </marker>
+          </defs>
+          <text x="20" y="22" fill="#54d6e6" font-size="11" letter-spacing="2">EXPRESSION TYPE OF  d = a + b + c</text>
+          <!-- top node -->
+          <rect x="270" y="40" width="220" height="44" rx="8" fill="#10211f" stroke="#2aa7b8"/>
+          <text x="380" y="60" fill="#8fd694" font-size="11.5" text-anchor="middle">Sum&lt; Sum&lt;Vec,Vec&gt;, Vec &gt;</text>
+          <text x="380" y="76" fill="#6e7686" font-size="9.5" text-anchor="middle">coeff(i) = lhs.coeff(i) + c.coeff(i)</text>
+          <!-- left child -->
+          <line x1="340" y1="84" x2="250" y2="128" stroke="#6e7686" stroke-width="1.3" marker-end="url(#t)"/>
+          <line x1="420" y1="84" x2="510" y2="128" stroke="#6e7686" stroke-width="1.3" marker-end="url(#t)"/>
+          <rect x="140" y="130" width="200" height="44" rx="8" fill="#141822" stroke="#262d3b"/>
+          <text x="240" y="150" fill="#54d6e6" font-size="11.5" text-anchor="middle">Sum&lt; Vec, Vec &gt;</text>
+          <text x="240" y="166" fill="#6e7686" font-size="9.5" text-anchor="middle">coeff(i) = a.coeff(i) + b.coeff(i)</text>
+          <rect x="470" y="130" width="120" height="44" rx="8" fill="#1a1f2b" stroke="#3a3320"/>
+          <text x="530" y="156" fill="#f2a65a" font-size="12" text-anchor="middle">c  (&amp;ref)</text>
+          <!-- leaves -->
+          <line x1="200" y1="174" x2="160" y2="214" stroke="#6e7686" stroke-width="1.3" marker-end="url(#t)"/>
+          <line x1="280" y1="174" x2="320" y2="214" stroke="#6e7686" stroke-width="1.3" marker-end="url(#t)"/>
+          <rect x="110" y="216" width="100" height="40" rx="8" fill="#1a1f2b" stroke="#3a3320"/>
+          <text x="160" y="241" fill="#f2a65a" font-size="12" text-anchor="middle">a (&amp;ref)</text>
+          <rect x="300" y="216" width="100" height="40" rx="8" fill="#1a1f2b" stroke="#3a3320"/>
+          <text x="350" y="241" fill="#f2a65a" font-size="12" text-anchor="middle">b (&amp;ref)</text>
+        </svg>
+        <div class="cap">No data is moved building this tree — only references are captured. The whole tree is a type the compiler knows, so <code class="inl">coeff(i)</code> inlines top-to-bottom into one expression.</div>
+      </div>
+
+      <h3>A minimal expression-template engine</h3>
+      <p>Here is the entire mechanism in ~40 lines. <code class="inl">VecExpr&lt;E&gt;</code> is the CRTP base; <code class="inl">VecSum</code> is an expression node; <code class="inl">Vector</code> is the concrete storage that triggers evaluation on assignment.</p>
+
+      <figure class="code">
+        <div class="code-bar"><span class="dots"><i></i><i></i><i></i></span><span class="fname">expr_templates.hpp</span><button class="copy">copy</button><span class="lang">cpp</span></div>
+<pre><code class="block">// CRTP base: anything that can yield element i and report its size.
+template &lt;typename E&gt;
+struct VecExpr {
+    double operator[](std::size_t i) const { return self()[i]; }
+    std::size_t size() const               { return self().size(); }
+    const E&amp; self() const { return static_cast&lt;const E&amp;&gt;(*this); }
+};
+
+// A lazy node: holds operands by reference, computes nothing yet.
+template &lt;typename L, typename R&gt;
+struct VecSum : VecExpr&lt;VecSum&lt;L, R&gt;&gt; {
+    const L&amp; l; const R&amp; r;
+    VecSum(const L&amp; l, const R&amp; r) : l(l), r(r) {}
+    double operator[](std::size_t i) const { return l[i] + r[i]; } // fused point
+    std::size_t size() const { return l.size(); }
+};
+
+// operator+ accepts ANY two expressions and returns a node — no computation.
+template &lt;typename L, typename R&gt;
+VecSum&lt;L, R&gt; operator+(const VecExpr&lt;L&gt;&amp; l, const VecExpr&lt;R&gt;&amp; r) {
+    return VecSum&lt;L, R&gt;(l.self(), r.self());
+}
+
+// Concrete storage. Assignment from an expression is where work happens.
+struct Vector : VecExpr&lt;Vector&gt; {
+    std::vector&lt;double&gt; data;
+    explicit Vector(std::size_t n) : data(n) {}
+
+    template &lt;typename E&gt;
+    Vector&amp; operator=(const VecExpr&lt;E&gt;&amp; expr) {
+        const E&amp; e = expr.self();
+        for (std::size_t i = 0; i &lt; e.size(); ++i)
+            data[i] = e[i];                 // &lt;-- THE single fused loop
+        return *this;
+    }
+    double operator[](std::size_t i) const { return data[i]; }
+    double&amp; operator[](std::size_t i)      { return data[i]; }
+    std::size_t size() const { return data.size(); }
+};</code></pre>
+      </figure>
+
+      <p>Now trace <code class="inl">d = a + b + c;</code> The type of the right-hand side is <code class="inl">VecSum&lt;VecSum&lt;Vector,Vector&gt;, Vector&gt;</code> — built with zero arithmetic, just captured references. The assignment loop runs once; <code class="inl">e[i]</code> inlines into <code class="inl">(a[i] + b[i]) + c[i]</code>. <strong>No temporaries, one pass, identical to a hand-written loop.</strong> The compiler optimizes the entire tree away.</p>
+
+      <div class="call key">
+        <div class="lab">◆ This is exactly Eigen, scaled up</div>
+        <p>Replace <code class="inl">VecExpr</code> with <code class="inl">MatrixBase&lt;Derived&gt;</code>, <code class="inl">VecSum</code> with <code class="inl">CwiseBinaryOp&lt;op, Lhs, Rhs&gt;</code>, and <code class="inl">operator[]</code> with <code class="inl">coeff(row,col)</code>, and you have Eigen's architecture. Every node — <code class="inl">Matrix</code>, <code class="inl">Block</code>, <code class="inl">Transpose</code>, <code class="inl">CwiseBinaryOp</code>, <code class="inl">CwiseNullaryOp</code> — derives from <code class="inl">MatrixBase</code> via CRTP and exposes <code class="inl">coeff()</code>. Eigen layers on top: SIMD vectorization of the fused loop, unrolling for fixed-size types, cache-aware traversal, and a cost model that decides when fusing actually pays.</p>
+      </div>
+
+      <h3>The hierarchy in real Eigen</h3>
+      <div class="tbl plain">
+        <table>
+          <thead><tr><th>Layer</th><th>Role</th></tr></thead>
+          <tbody>
+            <tr><td><code class="inl">EigenBase&lt;Derived&gt;</code></td><td>Topmost CRTP base; rows/cols, generic evaluation entry points.</td></tr>
+            <tr><td><code class="inl">DenseBase&lt;Derived&gt;</code></td><td>Shared dense functionality (coefficient access, block ops, reductions).</td></tr>
+            <tr><td><code class="inl">MatrixBase&lt;Derived&gt;</code></td><td>Linear-algebra surface: <code class="inl">+ - *</code>, <code class="inl">dot</code>, <code class="inl">norm</code>, <code class="inl">transpose</code>… Returns expression nodes.</td></tr>
+            <tr><td><code class="inl">Matrix&lt;…&gt;</code></td><td>A concrete leaf: owns storage. <code class="inl">CwiseBinaryOp</code>, <code class="inl">Block</code>, <code class="inl">Transpose</code> are other leaves.</td></tr>
+            <tr><td><code class="inl">internal::traits&lt;Derived&gt;</code></td><td>The compile-time fact sheet (Scalar, sizes, flags) the bases read instead of touching the incomplete <code class="inl">Derived</code>.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Aliasing — the price of laziness</h3>
+      <p>Because nodes hold <em>references</em> and evaluation is deferred, the result can overlap an input. For element-wise ops this is harmless: <code class="inl">a = a + b</code> reads and writes <code class="inl">a[i]</code> at the same index, in order, so it's fine. Eigen assumes no aliasing for coefficient-wise expressions by default.</p>
+
+      <p>But operations where output element <code class="inl">i</code> depends on <em>input</em> elements at <em>other</em> positions are dangerous when aliased:</p>
+
+      <figure class="code">
+        <div class="code-bar"><span class="dots"><i></i><i></i><i></i></span><span class="fname">aliasing.cpp</span><button class="copy">copy</button><span class="lang">cpp</span></div>
+<pre><code class="block">#include &lt;Eigen/Dense&gt;
+using namespace Eigen;
+
+MatrixXf m(3,3);
+m = m.transpose();           // ✗ WRONG: aliasing — writes corrupt later reads
+m.transposeInPlace();        // ✓ correct in-place primitive
+MatrixXf t = m.transpose();  // ✓ correct: distinct destination
+m = m.transpose().eval();    // ✓ eval() forces a temporary, breaks the alias
+
+// Matrix products: Eigen plays it safe and evaluates into a temporary by
+// default, because lazy products would recompute shared sub-results and
+// because the result often aliases an operand.
+MatrixXf C(n,n);
+C = A * B;                   // safe; Eigen may use a temporary
+C.noalias() = A * B;         // you PROMISE C doesn't alias A or B → no temp</code></pre>
+      </figure>
+
+      <div class="call warn">
+        <div class="lab">▲ Products are the exception to "lazy by default"</div>
+        <p>Coefficient-wise expressions (<code class="inl">+</code>, <code class="inl">-</code>, scalar <code class="inl">*</code>, <code class="inl">.array()</code> ops) are fused and lazy. <strong>Matrix multiplication is not folded into the same fused loop</strong> — a lazy product would recompute each shared dot-product many times, turning an <em>O(n³)</em> operation into something far worse. So Eigen evaluates products eagerly (often via a temporary). <code class="inl">.noalias()</code> tells Eigen the destination is disjoint from the operands so it can write the product straight into the destination and skip that temporary. Use it only when you are certain there's no overlap.</p>
+      </div>
+
+      <div class="call tip">
+        <div class="lab">✓ Practical controls</div>
+        <p><code class="inl">.eval()</code> forces evaluation of a sub-expression into a concrete temporary — your escape hatch for aliasing and for stopping runaway expression types. <code class="inl">.noalias()</code> on the left side suppresses the safety temporary for products. <code class="inl">auto</code> on an Eigen expression captures the <em>expression type</em>, not a value — convenient for composition but a footgun if the referenced operands die (see §09).</p>
+      </div>
+    </section>
+
+    <!-- ============================================================= -->
+    <section id="when">
+      <h2><span class="num">07</span> When to reach for it</h2>
+      <div class="sec-rule"></div>
+      <p>Good fits — all share "the concrete type is known at compile time and the abstraction is on a hot path or pervasive":</p>
+      <ul>
+        <li><strong>Numeric / array libraries</strong> where temporaries dominate cost — the Eigen scenario. Expression templates are the textbook win.</li>
+        <li><strong>Static interfaces on hot paths</strong> — small methods called in tight loops where a virtual call's missed inlining is measurable.</li>
+        <li><strong>Mixins</strong> that synthesize many operations from a few primitives (comparisons, arithmetic, hashing, serialization) without touching the derived type's storage.</li>
+        <li><strong>Per-type static state</strong> — counters, type registries, type-indexed caches.</li>
+        <li><strong>Fluent builders</strong> that must keep returning the most-derived type through inherited setters.</li>
+        <li><strong>Policy injection</strong> where behavior is selected at compile time and you want it inlined.</li>
+      </ul>
+      <p>Reach for <strong>virtual functions</strong> instead when you store heterogeneous objects together, dispatch on runtime data, cross a stable ABI boundary (plugins, shared libraries), or simply value readable code and fast builds over the last few percent of speed.</p>
+    </section>
+
+    <!-- ============================================================= -->
+    <section id="limits">
+      <h2><span class="num">08</span> Limitations</h2>
+      <div class="sec-rule"></div>
+      <ul>
+        <li><strong>No runtime polymorphism.</strong> <code class="inl">Base&lt;A&gt;</code> and <code class="inl">Base&lt;B&gt;</code> are unrelated types. You cannot put them in one <code class="inl">vector&lt;Base*&gt;</code> or dispatch on a value decided at runtime. This is the hard ceiling.</li>
+        <li><strong>Code bloat.</strong> Each derived type instantiates its own copy of every base member. Many derived types × large bases = large binaries and longer link times.</li>
+        <li><strong>Compile-time cost.</strong> Deep expression-template trees and heavy traits machinery stress the compiler; build times grow.</li>
+        <li><strong>Incomplete-type constraints.</strong> The base can't use the derived type's members at class scope — you must route through traits (§04).</li>
+        <li><strong>Diagnostics.</strong> A small mistake can yield pages of template error spew (§09).</li>
+        <li><strong>Dangling references with <code class="inl">auto</code>.</strong> Lazy nodes hold references; storing an expression in <code class="inl">auto</code> and outliving its operands is undefined behavior.</li>
+        <li><strong>Verbosity &amp; learning curve.</strong> The pattern is non-obvious to readers unfamiliar with it; the recursion reads like a mistake at first glance.</li>
+      </ul>
+    </section>
+
+    <!-- ============================================================= -->
+    <section id="pitfalls">
+      <h2><span class="num">09</span> Pitfalls &amp; classic bugs</h2>
+      <div class="sec-rule"></div>
+
+      <h3>9.1 — The copy-paste parameter bug</h3>
+      <p>The most common CRTP bug, and one the compiler often won't catch immediately:</p>
+      <figure class="code">
+        <div class="code-bar"><span class="dots"><i></i><i></i><i></i></span><span class="fname">copypaste.cpp</span><button class="copy">copy</button><span class="lang">cpp</span></div>
+<pre><code class="block">struct A : Base&lt;A&gt; { void impl() {} };
+struct B : Base&lt;A&gt; { void impl() {} };   // ✗ BUG: should be Base&lt;B&gt;
+// B::interface() now static_casts a B* to A* and calls A::impl on a B object
+// → undefined behavior, frequently *silent*.</code></pre>
+      </figure>
+      <div class="call trap">
+        <div class="lab">✗ Defend against it</div>
+        <p>Guard with a check that fires at instantiation: in a base member, <code class="inl">static_assert(std::is_base_of_v&lt;Base, Derived&gt;, "CRTP misuse");</code> or assert the dynamic type. Even better, make the base constructor <code class="inl">private</code> and <code class="inl">friend Derived;</code> so only the genuine derived type can construct the base — a wrong parameter then fails to compile.</p>
+      </div>
+
+      <figure class="code">
+        <div class="code-bar"><span class="dots"><i></i><i></i><i></i></span><span class="fname">guarded_base.hpp</span><button class="copy">copy</button><span class="lang">cpp</span></div>
+<pre><code class="block">template &lt;typename Derived&gt;
+class Base {
+public:
+    void interface() { static_cast&lt;Derived*&gt;(this)-&gt;impl(); }
+private:
+    Base() = default;        // only Derived can build a Base
+    friend Derived;          // so Base&lt;Wrong&gt; as a base of Right won't compile
+};</code></pre>
+      </figure>
+
+      <h3>9.2 — Dangling expression with <code class="inl">auto</code></h3>
+      <figure class="code">
+        <div class="code-bar"><span class="dots"><i></i><i></i><i></i></span><span class="fname">dangling.cpp</span><button class="copy">copy</button><span class="lang">cpp</span></div>
+<pre><code class="block">auto bad = (MatrixXf::Random(3,3) + MatrixXf::Random(3,3));
+// 'bad' is a CwiseBinaryOp holding references to two TEMPORARIES that
+// have already been destroyed. Using 'bad' reads freed memory. ✗
+MatrixXf good = MatrixXf::Random(3,3) + MatrixXf::Random(3,3); // ✓ evaluated now</code></pre>
+      </figure>
+      <p>Rule of thumb: assign Eigen expressions into a concrete <code class="inl">Matrix</code>/<code class="inl">Vector</code> (or call <code class="inl">.eval()</code>) unless you fully control the lifetime of the operands.</p>
+
+      <h3>9.3 — Two-phase lookup when the derived class is itself a template</h3>
+      <p>If you build a <em>templated</em> derived class on a dependent base, unqualified names aren't found in the dependent base during the first parse phase. Qualify with <code class="inl">this-&gt;</code> or the base name:</p>
+      <figure class="code">
+        <div class="code-bar"><span class="dots"><i></i><i></i><i></i></span><span class="fname">twophase.cpp</span><button class="copy">copy</button><span class="lang">cpp</span></div>
+<pre><code class="block">template &lt;typename T&gt;
+struct Mid : Base&lt;Mid&lt;T&gt;&gt; {
+    void f() {
+        // helper();        // ✗ may not be found: Base&lt;Mid&lt;T&gt;&gt; is dependent
+        this-&gt;helper();      // ✓ defers lookup to instantiation
+    }
+};</code></pre>
+      </figure>
+
+      <h3>9.4 — Forgetting the cast</h3>
+      <p>Calling a hook directly in the base (<code class="inl">impl()</code> instead of <code class="inl">static_cast&lt;Derived*&gt;(this)-&gt;impl()</code>) silently calls the base's own (often non-existent or default) version instead of the derived override — no error, wrong behavior. Always go through the <code class="inl">self()</code> accessor.</p>
+
+      <h3>9.5 — Object slicing &amp; accidental base copies</h3>
+      <p>Copying through a <code class="inl">Base&lt;Derived&gt;</code> reference slices off the derived part. Since you shouldn't be holding base references as handles anyway, keep base constructors/destructor protected to make this hard to do by accident.</p>
+    </section>
+
+    <!-- ============================================================= -->
+    <section id="debug">
+      <h2><span class="num">10</span> Debugging tactics</h2>
+      <div class="sec-rule"></div>
+      <ul>
+        <li><strong>Read template errors bottom-up, then top-down.</strong> The <em>last</em> "required from here" line is usually your actual call site; the <em>first</em> error line names the real constraint that failed. Ignore the middle.</li>
+        <li><strong>Plant <code class="inl">static_assert</code>s at boundaries.</strong> <code class="inl">static_assert(std::is_base_of_v&lt;Base&lt;D&gt;, D&gt;)</code> turns silent CRTP misuse into a one-line, readable message instead of UB.</li>
+        <li><strong>Inspect deduced types.</strong> Force a compile error that prints the type: <code class="inl">template&lt;class&gt; struct Show; Show&lt;decltype(expr)&gt; _;</code> — the error message shows exactly what monstrous expression type <code class="inl">expr</code> became. Invaluable for Eigen.</li>
+        <li><strong>Add <code class="inl">.eval()</code> to bisect.</strong> If a lazy chain misbehaves, sprinkle <code class="inl">.eval()</code> to materialize intermediates; if the bug disappears, you've found an aliasing or lifetime problem.</li>
+        <li><strong>Build sanitizers.</strong> ASan/UBSan catch the dangling-<code class="inl">auto</code> and wrong-downcast bugs that compile cleanly. Run them.</li>
+        <li><strong>Check the assembly.</strong> Drop the snippet into Compiler Explorer (godbolt) at <code class="inl">-O2</code>. Correct CRTP/expression-template code shows a direct call or a single inlined loop; if you see <code class="inl">call</code> through a register or extra loops, fusion didn't happen.</li>
+        <li><strong>Eigen specifically:</strong> compile with <code class="inl">-DEIGEN_NO_DEBUG</code> off during development — Eigen's assertions catch size mismatches and many aliasing mistakes at runtime with clear messages. <code class="inl">EIGEN_RUNTIME_NO_MALLOC</code> + <code class="inl">internal::set_is_malloc_allowed(false)</code> lets you assert that a hot path performs zero heap allocations.</li>
+        <li><strong>Tame error walls</strong> with C++20 <em>concepts</em>: constrain the hook so a missing method reports "constraint not satisfied" rather than a deep instantiation failure (next section).</li>
+      </ul>
+    </section>
+
+    <!-- ============================================================= -->
+    <section id="modern">
+      <h2><span class="num">11</span> Modern alternatives (C++20 / C++23)</h2>
+      <div class="sec-rule"></div>
+      <p>CRTP predates better tools for some of its jobs. Use these where they fit; keep CRTP where they don't (expression templates still want CRTP).</p>
+
+      <h3>Concepts (C++20): document &amp; check the contract</h3>
+      <p>Concepts don't replace CRTP but make it far friendlier — they turn "500 lines of instantiation error" into "your type doesn't satisfy <code class="inl">Shape</code>":</p>
+      <figure class="code">
+        <div class="code-bar"><span class="dots"><i></i><i></i><i></i></span><span class="fname">concept_guard.cpp</span><button class="copy">copy</button><span class="lang">cpp</span></div>
+<pre><code class="block">template &lt;typename D&gt;
+concept HasArea = requires(const D&amp; d) {
+    { d.area_impl() } -&gt; std::convertible_to&lt;double&gt;;
+};
+
+template &lt;typename Derived&gt;
+struct Shape {
+    double area() const requires HasArea&lt;Derived&gt; {
+        return static_cast&lt;const Derived&amp;&gt;(*this).area_impl();
+    }
+};</code></pre>
+      </figure>
+
+      <h3>Deducing <code class="inl">this</code> (C++23): CRTP, retired for most cases</h3>
+      <p>An <em>explicit object parameter</em> lets a base member template deduce the most-derived type directly — no <code class="inl">&lt;Derived&gt;</code> parameter, no <code class="inl">static_cast</code>, no recursion. For static interfaces, mixins, and fluent builders this is a clean replacement:</p>
+
+      <div class="grid2">
+        <figure class="code">
+          <div class="code-bar"><span class="dots"><i></i><i></i><i></i></span><span class="fname">crtp_old.cpp</span><span class="lang">C++17</span></div>
+<pre><code class="block">template &lt;typename D&gt;
+struct Base {
+    void interface() {
+        static_cast&lt;D*&gt;(this)-&gt;impl();
+    }
+};
+struct Widget : Base&lt;Widget&gt; {
+    void impl() { /*...*/ }
+};</code></pre>
+        </figure>
+        <figure class="code">
+          <div class="code-bar"><span class="dots"><i></i><i></i><i></i></span><span class="fname">deducing_this.cpp</span><span class="lang">C++23</span></div>
+<pre><code class="block">struct Base {
+    template &lt;typename Self&gt;
+    void interface(this Self&amp;&amp; self) {
+        self.impl();          // exact type deduced
+    }
+};
+struct Widget : Base {        // no &lt;Widget&gt;!
+    void impl() { /*...*/ }
+};</code></pre>
+        </figure>
+      </div>
+
+      <div class="call key">
+        <div class="lab">◆ What still needs CRTP</div>
+        <p>Deducing <code class="inl">this</code> handles member-function dispatch and mixins beautifully, but it does <strong>not</strong> replace CRTP where the base needs the derived type as a <em>type</em> at class scope — base-class typedefs, return types, <code class="inl">friend</code> declarations, and the traits-driven expression-template machinery in Eigen. So: prefer deducing <code class="inl">this</code> for new static-interface and mixin code; keep CRTP + traits for expression templates and anything that reasons about the derived type at compile time beyond a single call.</p>
+      </div>
+
+      <p>Other adjacent tools worth knowing: <code class="inl">std::variant</code> + <code class="inl">std::visit</code> for closed sets of types (compile-time-known alternatives without inheritance), and <code class="inl">operator&lt;=&gt;</code> (C++20) which retired the comparison-mixin use case entirely.</p>
+    </section>
+
+    <!-- ============================================================= -->
+    <section id="cheat">
+      <h2><span class="num">12</span> Cheat sheet</h2>
+      <div class="sec-rule"></div>
+
+      <div class="tbl plain">
+        <table>
+          <thead><tr><th>Need</th><th>Reach for</th></tr></thead>
+          <tbody>
+            <tr><td>Inline-able interface, type known at compile time</td><td>CRTP (or C++23 deducing <code class="inl">this</code>)</td></tr>
+            <tr><td>Mixed types in one container / runtime dispatch</td><td>virtual functions</td></tr>
+            <tr><td>Avoid temporaries in <code class="inl">a + b + c</code></td><td>expression templates (CRTP + traits)</td></tr>
+            <tr><td>Synthesize many ops from one primitive</td><td>CRTP mixin → today often <code class="inl">operator&lt;=&gt;</code></td></tr>
+            <tr><td>Per-type static counter/registry</td><td>CRTP <code class="inl">Counted&lt;D&gt;</code></td></tr>
+            <tr><td>Fluent builder keeping derived type</td><td>CRTP returning <code class="inl">D&amp;</code></td></tr>
+            <tr><td>Closed set of known types, no inheritance</td><td><code class="inl">std::variant</code> + <code class="inl">std::visit</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>CRTP survival rules</h4>
+      <span class="pill c">cast via a single <code class="inl">self()</code> helper</span>
+      <span class="pill c">protected non-virtual base dtor</span>
+      <span class="pill c">read derived facts from <code class="inl">traits&lt;D&gt;</code>, not <code class="inl">D::X</code></span>
+      <span class="pill a">guard with <code class="inl">static_assert</code> / private base + <code class="inl">friend D</code></span>
+      <span class="pill a">never store an Eigen expr in <code class="inl">auto</code> past its operands</span>
+      <span class="pill a">use <code class="inl">this-&gt;</code> in templated derived classes</span>
+
+      <h4>Eigen evaluation rules</h4>
+      <span class="pill c">coefficient-wise ops are lazy &amp; fused</span>
+      <span class="pill c">products evaluate eagerly (temporary by default)</span>
+      <span class="pill a"><code class="inl">.noalias()</code> drops the product temporary — only if disjoint</span>
+      <span class="pill a"><code class="inl">.eval()</code> forces materialization (fixes aliasing)</span>
+      <span class="pill a">assign into a real <code class="inl">Matrix</code>, not <code class="inl">auto</code></span>
+
+      <div class="call tip" style="margin-top:28px">
+        <div class="lab">✓ The one-sentence summary</div>
+        <p>CRTP gives a base class compile-time knowledge of its derived type, which converts runtime polymorphism into zero-cost static polymorphism — and, in its most powerful form, lets operators return <em>descriptions of work</em> (expression nodes) so a whole expression collapses into one fused, temporary-free loop. That is the engine inside Eigen.</p>
+      </div>
+    </section>
+
+    <footer>
+      <span>CRTP &amp; Eigen — field manual</span>
+      <span>static polymorphism · expression templates · lazy evaluation</span>
+    </footer>
+  </main>
+</div>
+
+<script>
+/* ---------- offline-safe C++ syntax highlighter ---------- */
+(function () {
+  const KW = new Set(("alignas alignof and and_eq asm auto bitand bitor bool break case catch char "+
+    "char8_t char16_t char32_t class compl concept const consteval constexpr constinit const_cast "+
+    "continue co_await co_return co_yield decltype default delete do double dynamic_cast else enum "+
+    "explicit export extern false float for friend goto if inline int long mutable namespace new "+
+    "noexcept not not_eq nullptr operator or or_eq private protected public register reinterpret_cast "+
+    "requires return short signed sizeof static static_assert static_cast struct switch template this "+
+    "thread_local throw true try typedef typeid typename union unsigned using virtual void volatile "+
+    "wchar_t while xor xor_eq").split(/\s+/));
+  const TYP = new Set(("std size_t ptrdiff_t int8_t int16_t int32_t int64_t uint8_t uint16_t uint32_t "+
+    "uint64_t string vector array map unordered_map pair tuple optional variant Vec Vector VecExpr "+
+    "VecSum Matrix MatrixXf MatrixXd VectorXd Vector3d Matrix3f MatrixBase ArrayBase DenseBase "+
+    "EigenBase CwiseBinaryOp CwiseNullaryOp Block Transpose Product Scalar Derived Self Base Shape "+
+    "Circle Comparable Version Counted Apple Orange RequestBuilder HttpRequest traits Widget Mid "+
+    "HasArea convertible_to is_base_of_v Eigen internal").split(/\s+/));
+
+  function esc(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+
+  function highlight(code){
+    const re=/(\/\/[^\n]*|\/\*[\s\S]*?\*\/)|("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')|(^[ \t]*#[^\n]*)|(\b0[xX][0-9a-fA-F']+\b|\b\d[\d'.]*(?:[eE][+-]?\d+)?[fFuUlL]*\b)|([A-Za-z_]\w*)/gm;
+    let out="",last=0,m;
+    while((m=re.exec(code))){
+      out+=esc(code.slice(last,m.index));
+      const t=m[0];
+      if(m[1]) out+='<span class="tok-com">'+esc(t)+'</span>';
+      else if(m[2]) out+='<span class="tok-str">'+esc(t)+'</span>';
+      else if(m[3]) out+='<span class="tok-pre">'+esc(t)+'</span>';
+      else if(m[4]) out+='<span class="tok-num">'+esc(t)+'</span>';
+      else { // identifier
+        if(KW.has(t)) out+='<span class="tok-kw">'+esc(t)+'</span>';
+        else if(TYP.has(t)) out+='<span class="tok-typ">'+esc(t)+'</span>';
+        else if(/^\s*\(/.test(code.slice(re.lastIndex))) out+='<span class="tok-fn">'+esc(t)+'</span>';
+        else out+=esc(t);
+      }
+      last=re.lastIndex;
+    }
+    out+=esc(code.slice(last));
+    return out;
+  }
+
+  document.querySelectorAll("code.block").forEach(function(el){
+    el.innerHTML = highlight(el.textContent);
+  });
+
+  /* ---------- copy buttons ---------- */
+  document.querySelectorAll(".copy").forEach(function(btn){
+    btn.addEventListener("click",function(){
+      const fig=btn.closest("figure.code");
+      const code=fig.querySelector("code.block");
+      const text=code.textContent;
+      navigator.clipboard && navigator.clipboard.writeText(text).then(function(){
+        const old=btn.textContent; btn.textContent="copied"; btn.style.color="#8fd694";
+        setTimeout(function(){btn.textContent=old; btn.style.color="";},1200);
+      });
+    });
+  });
+
+  /* ---------- scrollspy ---------- */
+  const links=[].slice.call(document.querySelectorAll("nav a"));
+  const map={};
+  links.forEach(function(a){ map[a.getAttribute("href").slice(1)]=a; });
+  const obs=new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if(e.isIntersecting){
+        links.forEach(function(l){l.classList.remove("active");});
+        const a=map[e.target.id]; if(a) a.classList.add("active");
+      }
+    });
+  },{rootMargin:"-12% 0px -78% 0px",threshold:0});
+  document.querySelectorAll("section[id]").forEach(function(s){obs.observe(s);});
+
+  /* ---------- mobile nav ---------- */
+  const tgl=document.getElementById("navToggle"), sb=document.getElementById("sidebar");
+  if(tgl){
+    tgl.addEventListener("click",function(){ sb.classList.toggle("open"); });
+    sb.addEventListener("click",function(e){ if(e.target.tagName==="A") sb.classList.remove("open"); });
+  }
+})();
+</script>
+</body>
+</html>
