@@ -143,7 +143,7 @@ tbody tr:hover{background:rgba(78,201,176,.03)}
 .tier-hw{background:rgba(224,108,117,.1);color:var(--red)}
 
 /* decision tree */
-.tree{font-family:var(--mono);font-size:13px;background:#070b12;border:1px solid var(--line);border-radius:10px;padding:22px 24px;margin:22px 0;line-height:1.9;overflow-x:auto}
+.tree{font-family:var(--mono);font-size:13px;background:#070b12;border:1px solid var(--line);border-radius:10px;padding:22px 24px;margin:22px 0;line-height:1.9;overflow-x:auto;white-space:pre-wrap;word-break:normal;overflow-wrap:anywhere;tab-size:2}
 .tree .q{color:var(--cyan-bright)}
 .tree .a{color:var(--amber-soft)}
 .tree .r{color:var(--green)}
@@ -759,8 +759,7 @@ mpirun -x UCX_RNDV_SCHEME=get_zcopy ...       <span class="c-com"># tune GPU ren
 <li><strong>Print the map</strong>: <code>--report-bindings</code> and <code>--display-map</code> to confirm rank→core→node placement.</li>
 </ul>
 
-<div class="tree">
-<span class="c-com"># MPI "it's broken" decision tree</span>
+<div class="tree"><span class="c-com"># MPI "it's broken" decision tree</span>
 <span class="q">Does it hang?</span>
 ├─ <span class="a">yes</span> → <span class="r">deadlock: check Send/Recv pairing, tags, ranks; switch to Sendrecv/nonblocking; gdb-attach stuck rank</span>
 └─ <span class="a">no</span> → <span class="q">Does it crash?</span>
@@ -770,8 +769,7 @@ mpirun -x UCX_RNDV_SCHEME=get_zcopy ...       <span class="c-com"># tune GPU ren
 <span class="q">Runs but slow?</span>
 ├─ <span class="a">check transport</span> → <span class="r">UCX_LOG_LEVEL=info — is it TCP? force pml ucx; verify ibstat Active</span>
 ├─ <span class="a">check binding</span> → <span class="r">--bind-to core --map-by socket</span>
-└─ <span class="a">check protocol</span> → <span class="r">tune eager/rndv thresholds; overlap with Isend/Irecv</span>
-</div>
+└─ <span class="a">check protocol</span> → <span class="r">tune eager/rndv thresholds; overlap with Isend/Irecv</span></div>
 </section>
 
 <section id="pgas" class="layer">
@@ -988,8 +986,7 @@ UCX_LOG_LEVEL=info          <span class="c-com"># show selection decisions</span
 <div class="sectitle">Decision trees & master comparison</div>
 
 <h3>Which library should I use?</h3>
-<div class="tree">
-<span class="q">What am I moving, and what's the pattern?</span>
+<div class="tree"><span class="q">What am I moving, and what's the pattern?</span>
 │
 ├─ <span class="a">CPU data, structured msg-passing (solvers, stencils, HPC)</span>
 │     └─ <span class="r">MPI. Two-sided send/recv + collectives. Let it pick UCX/OFI underneath.</span>
@@ -1008,8 +1005,7 @@ UCX_LOG_LEVEL=info          <span class="c-com"># show selection decisions</span
 
 <span class="br">Note: these compose. Common real stack →</span>
 <span class="r">  MPI (bootstrap + CPU control) + NCCL (GPU collectives) + NVSHMEM (fused kernels),
-  all riding UCX/libfabric → GPUDirect RDMA → NVLink + InfiniBand.</span>
-</div>
+  all riding UCX/libfabric → GPUDirect RDMA → NVLink + InfiniBand.</span></div>
 
 <h3>Master comparison</h3>
 <div class="tbl"><table>
@@ -1054,15 +1050,13 @@ sminfo                  <span class="c-com"># is a subnet manager (OpenSM) runni
 </tbody>
 </table></div>
 
-<div class="tree">
-<span class="c-com"># Universal "is it the network?" triage</span>
+<div class="tree"><span class="c-com"># Universal "is it the network?" triage</span>
 <span class="q">1. Fabric up?</span>      → <span class="r">ibstat Active, sminfo has SM, nvidia-smi topo shows NVLink</span>
 <span class="q">2. Right transport?</span> → <span class="r">turn on INFO logs; confirm RDMA/NVLink, not TCP/PCIe fallback</span>
 <span class="q">3. Right device?</span>    → <span class="r">pin HCA (UCX_NET_DEVICES / NCCL_IB_HCA); avoid docker0/lo</span>
 <span class="q">4. Affinity?</span>        → <span class="r">bind ranks to cores; match GPU↔NIC NUMA locality</span>
 <span class="q">5. Protocol?</span>       → <span class="r">tune eager/rndv thresholds; check registration-cache health</span>
-<span class="q">6. Correctness?</span>    → <span class="r">collectives called in same order/size on all ranks; sanitizers</span>
-</div>
+<span class="q">6. Correctness?</span>    → <span class="r">collectives called in same order/size on all ranks; sanitizers</span></div>
 
 <div class="box warn"><div class="bt">The three bugs you'll actually hit most</div>
 <ol style="margin-bottom:0">
