@@ -1,0 +1,1031 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GPU-Native Analytics — From CUDA to Velox-cuDF & the UCX Exchange</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Serif:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0b0a10;
+  --bg2:#120f1a;
+  --panel:#181425;
+  --panel2:#1e1830;
+  --line:#352a4a;
+  --line2:#473958;
+  --txt:#d2cadd;
+  --txt-dim:#9a8fb0;
+  --txt-faint:#6c6184;
+  --cyan:#e0689f;          /* PRIMARY accent (magenta) */
+  --cyan-bright:#f583b8;   /* bright magenta */
+  --amber:#e8a33d;         /* secondary / eyebrows (gold) */
+  --amber-soft:#f0c075;
+  --red:#e06c75;
+  --violet:#a98be0;        /* GPU callouts / keywords */
+  --blue:#6fb6f0;          /* fns / links */
+  --green:#9bd17a;         /* code strings / tree result (lime) */
+  --mono:'IBM Plex Mono',monospace;
+  --sans:'IBM Plex Sans',system-ui,sans-serif;
+  --serif:'IBM Plex Serif',Georgia,serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg);
+  color:var(--txt);
+  font-family:var(--sans);
+  font-weight:300;
+  font-size:16px;
+  line-height:1.72;
+  -webkit-font-smoothing:antialiased;
+  background-image:
+    linear-gradient(rgba(224,104,159,.020) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(224,104,159,.020) 1px,transparent 1px),
+    radial-gradient(circle at 12% -5%,rgba(224,104,159,.07),transparent 45%),
+    radial-gradient(circle at 92% 6%,rgba(232,163,61,.05),transparent 42%);
+  background-size:46px 46px,46px 46px,100% 100%,100% 100%;
+}
+#progress{position:fixed;top:0;left:0;height:3px;width:0;background:linear-gradient(90deg,var(--cyan),var(--amber));z-index:200;box-shadow:0 0 12px var(--cyan)}
+
+.shell{display:grid;grid-template-columns:312px 1fr;max-width:1520px;margin:0 auto}
+nav{
+  position:sticky;top:0;align-self:start;height:100vh;overflow-y:auto;
+  border-right:1px solid var(--line);
+  padding:30px 18px 60px 28px;
+  background:linear-gradient(180deg,rgba(18,15,26,.94),rgba(11,10,16,.94));
+  backdrop-filter:blur(6px);
+}
+nav .brand{font-family:var(--mono);font-size:13px;letter-spacing:.5px;color:var(--cyan);font-weight:600;margin-bottom:4px}
+nav .brand .arrow{color:var(--amber)}
+nav .sub{font-family:var(--mono);font-size:10.5px;color:var(--txt-faint);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:26px;border-bottom:1px solid var(--line);padding-bottom:18px}
+nav a{display:block;color:var(--txt-dim);text-decoration:none;font-size:13.5px;padding:5px 10px;border-radius:5px;transition:all .15s;border-left:2px solid transparent;line-height:1.4}
+nav a:hover{color:var(--txt);background:var(--panel)}
+nav a.active{color:var(--cyan-bright);border-left-color:var(--cyan);background:rgba(224,104,159,.09)}
+nav a.sec{font-family:var(--mono);font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--txt-faint);margin-top:20px;padding-left:10px;pointer-events:none}
+nav a.lvl2{padding-left:24px;font-size:12.5px;color:var(--txt-faint)}
+nav a.lvl2:hover{color:var(--txt-dim)}
+
+main{padding:0;min-width:0;overflow:hidden}
+.wrap{max-width:930px;padding:60px 56px 140px}
+
+.hero{padding:40px 0 20px;border-bottom:1px solid var(--line);margin-bottom:48px}
+.hero .kicker{font-family:var(--mono);color:var(--amber);font-size:12px;letter-spacing:3px;text-transform:uppercase;margin-bottom:20px}
+.hero h1{font-family:var(--mono);font-weight:700;font-size:42px;line-height:1.12;letter-spacing:-1px;color:#f2ecf8;margin-bottom:22px}
+.hero h1 em{font-style:normal;color:var(--cyan)}
+.hero p{font-size:18px;color:var(--txt-dim);max-width:770px;font-weight:300}
+.hero .meta{display:flex;gap:10px;flex-wrap:wrap;margin-top:28px}
+.hero .meta span{font-family:var(--mono);font-size:11px;color:var(--txt-faint);border:1px solid var(--line);padding:5px 12px;border-radius:20px}
+
+h2{font-family:var(--mono);font-weight:600;font-size:13px;letter-spacing:3px;text-transform:uppercase;color:var(--amber);margin:0 0 6px;display:flex;align-items:center;gap:12px}
+h2::before{content:"";width:34px;height:1px;background:var(--amber);opacity:.6}
+.sectitle{font-family:var(--mono);font-weight:700;font-size:31px;letter-spacing:-.5px;color:#f2ecf8;margin:0 0 28px;line-height:1.16}
+section{padding-top:60px;margin-top:-20px}
+.layer{scroll-margin-top:20px}
+h3{font-family:var(--sans);font-weight:600;font-size:22px;color:#e7def2;margin:42px 0 14px;letter-spacing:-.2px}
+h4{font-family:var(--mono);font-weight:600;font-size:15px;color:var(--cyan-bright);margin:30px 0 10px;letter-spacing:.3px}
+p{margin:0 0 16px}
+a.inl{color:var(--blue);text-decoration:none;border-bottom:1px dotted var(--blue)}
+strong{color:#efe9f6;font-weight:600}
+em.term{font-style:normal;font-family:var(--mono);font-size:.9em;color:var(--amber-soft);background:rgba(232,163,61,.08);padding:1px 6px;border-radius:4px}
+ul,ol{margin:0 0 18px;padding-left:24px}
+li{margin-bottom:8px}
+li::marker{color:var(--cyan)}
+code{font-family:var(--mono);font-size:.88em;background:rgba(150,130,190,.14);color:var(--amber-soft);padding:2px 6px;border-radius:4px;border:1px solid rgba(150,130,190,.13)}
+
+pre{background:#070611;border:1px solid var(--line);border-radius:10px;padding:20px 22px;overflow-x:auto;margin:18px 0 24px;font-family:var(--mono);font-size:13px;line-height:1.65;position:relative}
+pre::before{content:attr(data-lang);position:absolute;top:0;right:0;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--txt-faint);background:var(--panel);padding:3px 11px;border-bottom-left-radius:8px;border-left:1px solid var(--line);border-bottom:1px solid var(--line)}
+pre code{background:none;border:none;padding:0;color:#cdc6dc;font-size:13px}
+.c-kw{color:var(--violet)}.c-fn{color:var(--blue)}.c-str{color:var(--green)}.c-num{color:var(--amber)}.c-com{color:var(--txt-faint);font-style:italic}.c-ty{color:var(--cyan)}.c-mac{color:var(--amber-soft)}
+
+.box{border-radius:10px;padding:18px 22px;margin:22px 0;border:1px solid var(--line);background:var(--panel);position:relative;padding-left:48px}
+.box::before{position:absolute;left:18px;top:18px;font-family:var(--mono);font-weight:700;font-size:16px}
+.box .bt{font-family:var(--mono);font-size:11px;letter-spacing:2px;text-transform:uppercase;font-weight:600;margin-bottom:6px}
+.box p:last-child{margin-bottom:0}
+.box.key{border-color:rgba(224,104,159,.42);background:linear-gradient(180deg,rgba(224,104,159,.08),rgba(224,104,159,.02))}
+.box.key::before{content:"◆";color:var(--cyan)}.box.key .bt{color:var(--cyan)}
+.box.warn{border-color:rgba(232,163,61,.4);background:linear-gradient(180deg,rgba(232,163,61,.07),rgba(232,163,61,.02))}
+.box.warn::before{content:"▲";color:var(--amber)}.box.warn .bt{color:var(--amber)}
+.box.bug{border-color:rgba(224,108,117,.38);background:linear-gradient(180deg,rgba(224,108,117,.06),rgba(224,108,117,.02))}
+.box.bug::before{content:"✦";color:var(--red)}.box.bug .bt{color:var(--red)}
+.box.gpu{border-color:rgba(169,139,224,.42);background:linear-gradient(180deg,rgba(169,139,224,.08),rgba(169,139,224,.02))}
+.box.gpu::before{content:"⬢";color:var(--violet)}.box.gpu .bt{color:var(--violet)}
+
+.tbl{overflow-x:auto;margin:22px 0;border:1px solid var(--line);border-radius:10px}
+table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:560px}
+th{background:var(--panel2);font-family:var(--mono);font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--cyan);text-align:left;padding:12px 16px;font-weight:600;border-bottom:1px solid var(--line)}
+td{padding:11px 16px;border-bottom:1px solid var(--line);color:var(--txt-dim);vertical-align:top}
+tr:last-child td{border-bottom:none}
+td strong{color:var(--amber-soft);font-family:var(--mono);font-size:13px}
+tbody tr:hover{background:rgba(224,104,159,.035)}
+
+.stack{margin:26px 0;border-radius:12px;overflow:hidden;border:1px solid var(--line)}
+.stack .row{display:flex;align-items:stretch;border-bottom:1px solid var(--line)}
+.stack .row:last-child{border-bottom:none}
+.stack .lbl{flex:0 0 140px;font-family:var(--mono);font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--txt-faint);display:flex;align-items:center;padding:0 14px;background:var(--bg2);border-right:1px solid var(--line)}
+.stack .cells{flex:1;display:flex}
+.stack .cell{flex:1;padding:13px 14px;font-family:var(--mono);font-size:12.5px;text-align:center;border-right:1px dashed var(--line);display:flex;flex-direction:column;justify-content:center;gap:3px}
+.stack .cell:last-child{border-right:none}
+.stack .cell small{font-family:var(--sans);font-size:10.5px;color:var(--txt-faint);font-weight:300;letter-spacing:0}
+.tier-app{background:rgba(169,139,224,.12);color:var(--violet)}
+.tier-mid{background:rgba(224,104,159,.11);color:var(--cyan-bright)}
+.tier-abs{background:rgba(111,182,240,.11);color:var(--blue)}
+.tier-low{background:rgba(232,163,61,.11);color:var(--amber-soft)}
+.tier-hw{background:rgba(224,108,117,.11);color:var(--red)}
+.tier-data{background:rgba(155,209,122,.10);color:var(--green)}
+
+.tree{font-family:var(--mono);font-size:13px;background:#070611;border:1px solid var(--line);border-radius:10px;padding:22px 24px;margin:22px 0;line-height:1.9;overflow-x:auto;white-space:pre-wrap;word-break:normal;overflow-wrap:anywhere;tab-size:2}
+.tree .q{color:var(--cyan-bright)}
+.tree .a{color:var(--amber-soft)}
+.tree .r{color:var(--green)}
+.tree .br{color:var(--txt-faint)}
+
+.timeline{position:relative;margin:30px 0 10px;padding-left:32px}
+.timeline::before{content:"";position:absolute;left:7px;top:6px;bottom:6px;width:2px;background:linear-gradient(180deg,var(--cyan),var(--amber))}
+.tl-item{position:relative;margin-bottom:26px}
+.tl-item::before{content:"";position:absolute;left:-31px;top:6px;width:12px;height:12px;border-radius:50%;background:var(--bg);border:2px solid var(--cyan)}
+.tl-item .yr{font-family:var(--mono);font-size:12px;color:var(--amber);letter-spacing:1px;font-weight:600}
+.tl-item .nm{font-weight:600;color:#e7def2;font-size:16px;margin:2px 0 4px}
+.tl-item .ds{font-size:14px;color:var(--txt-dim)}
+
+details{border:1px solid var(--line);border-radius:9px;margin:16px 0;background:var(--panel);overflow:hidden}
+details summary{cursor:pointer;padding:14px 20px;font-family:var(--mono);font-size:13.5px;color:var(--cyan-bright);font-weight:500;list-style:none;display:flex;align-items:center;gap:10px;user-select:none}
+details summary::-webkit-details-marker{display:none}
+details summary::before{content:"▸";color:var(--amber);transition:transform .2s}
+details[open] summary::before{transform:rotate(90deg)}
+details summary:hover{background:var(--panel2)}
+details .body{padding:4px 22px 18px;border-top:1px solid var(--line)}
+
+.pill{display:inline-block;font-family:var(--mono);font-size:10.5px;letter-spacing:.5px;padding:2px 9px;border-radius:20px;border:1px solid var(--line2);color:var(--txt-dim);margin:0 4px 4px 0}
+.pill.me{border-color:rgba(224,104,159,.5);color:var(--cyan-bright);background:rgba(224,104,159,.07)}
+
+hr.div{border:none;border-top:1px solid var(--line);margin:54px 0}
+.foot{border-top:1px solid var(--line);margin-top:80px;padding-top:30px;font-family:var(--mono);font-size:12px;color:var(--txt-faint);line-height:1.8}
+
+@media(max-width:1080px){
+  .shell{grid-template-columns:1fr}
+  nav{position:static;height:auto;border-right:none;border-bottom:1px solid var(--line)}
+  .wrap{padding:40px 24px 100px}
+  .hero h1{font-size:30px}
+}
+::selection{background:rgba(224,104,159,.32);color:#fff}
+nav::-webkit-scrollbar,pre::-webkit-scrollbar,.tbl::-webkit-scrollbar,.tree::-webkit-scrollbar{height:8px;width:8px}
+nav::-webkit-scrollbar-thumb,pre::-webkit-scrollbar-thumb,.tbl::-webkit-scrollbar-thumb,.tree::-webkit-scrollbar-thumb{background:var(--line2);border-radius:4px}
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<div class="shell">
+<nav id="nav">
+  <div class="brand">cuda<span class="arrow"> → </span>velox_cudf</div>
+  <div class="sub">GPU-Native Analytics Field Guide</div>
+
+  <a class="sec">Foundations</a>
+  <a href="#overview">00 · The Stack at a Glance</a>
+  <a href="#why-gpu">01 · Why GPUs for Analytics</a>
+  <a href="#columnar">02 · Columnar Data &amp; Arrow</a>
+
+  <a class="sec">The Platform (red box, bottom)</a>
+  <a href="#cuda">03 · CUDA, Memory &amp; RMM</a>
+  <a href="#primitives">04 · CCCL · cuCollections · nvCOMP</a>
+  <a href="#libcudf">05 · libcudf / cuDF</a>
+
+  <a class="sec">The Engine (red box, top)</a>
+  <a href="#velox">06 · Velox &amp; Velox-cuDF</a>
+  <a href="#compat">07 · Presto C++ · Gluten · Substrait</a>
+  <a href="#distributed">08 · Distributed Runtime</a>
+
+  <a class="sec">Your Mandate</a>
+  <a href="#exchange">09 · The Exchange (UCX)</a>
+  <a href="#hardware">10 · NVL72 · DGX · AWS+S3</a>
+  <a href="#spilling">11 · Spilling to Host</a>
+  <a href="#streaming-agg">12 · Streaming Aggregation</a>
+
+  <a class="sec">Landscape &amp; Practice</a>
+  <a href="#engines">13 · Neighboring Engines</a>
+  <a href="#decisions">14 · Decision Trees</a>
+  <a href="#debugging">15 · Debugging &amp; Profiling</a>
+  <a href="#glossary">16 · Glossary</a>
+</nav>
+
+<main>
+<div class="wrap">
+
+<div class="hero">
+  <div class="kicker">From the silicon up to the query plan</div>
+  <h1>GPU-Native Analytics:<br>from <em>CUDA</em> to <em>Velox-cuDF</em><br>and the <em>UCX Exchange</em></h1>
+  <p>A companion to the interconnect guide. That one ended at the wire — UCX, GPUDirect RDMA, NVLink. This one starts at the wire and climbs up: how columnar data sits in GPU memory, how libcudf turns it into relational operators, how Velox schedules those operators into a query, and how a distributed Presto-on-GPU cluster shuffles columns between GPUs over the very fabric the last guide described. Built around the two red boxes and your roadmap: the UCX exchange, multi-node performance, streaming aggregation, and spilling.</p>
+  <div class="meta">
+    <span>101 → advanced</span><span>low-level mechanisms</span><span>C++ / libcudf examples</span><span>decision trees</span><span>debugging</span><span>open locally, no server</span>
+  </div>
+</div>
+
+<section id="overview" class="layer">
+<h2>Section 00</h2>
+<div class="sectitle">The stack at a glance — what the red boxes actually are</div>
+
+<p>The diagram is a layer cake. Each row is a level of abstraction; reading top-to-bottom is reading from "a user submits SQL" down to "electrons move between GPUs." The two red rectangles enclose the two halves of one system: the <strong>execution engine</strong> (top box) and the <strong>data-processing platform it runs on</strong> (bottom box). The colored boxes off to the right (Spark-RAPIDS, cudf-polars, Sirius, DuckDB) are <em>alternative consumers</em> of that same bottom platform — different front-ends, same GPU engine room. We cover them in §13.</p>
+
+<div class="stack">
+  <div class="row"><div class="lbl">Distributed runtime</div><div class="cells">
+    <div class="cell tier-app">Presto<small>coordinator + workers</small></div>
+    <div class="cell tier-app">Spark<small>driver + executors</small></div>
+    <div class="cell tier-app">Velox Apps<small>e.g. Axiom</small></div>
+  </div></div>
+  <div class="row"><div class="lbl">Compatibility</div><div class="cells">
+    <div class="cell tier-abs">Presto C++<small>"Prestissimo" worker</small></div>
+    <div class="cell tier-abs">Gluten<small>Spark JVM → native</small></div>
+  </div></div>
+  <div class="row"><div class="lbl">Execution engine</div><div class="cells">
+    <div class="cell tier-mid">Velox<small>vectorized C++ operators, drivers, exchange</small></div>
+  </div></div>
+  <div class="row"><div class="lbl">Operators</div><div class="cells">
+    <div class="cell tier-mid">Velox-cuDF<small>GPU operators: TableScan, HashJoin, HashAggregation, FilterProject, OrderBy, Exchange</small></div>
+  </div></div>
+  <div class="row"><div class="lbl">ETL algorithms</div><div class="cells">
+    <div class="cell tier-data">cuDF (libcudf)<small>columnar relational primitives: gather, join, groupby, sort, strings, Parquet/ORC I/O</small></div>
+  </div></div>
+  <div class="row"><div class="lbl">Parallel algos</div><div class="cells">
+    <div class="cell tier-low">CCCL<small>Thrust + CUB + libcu++</small></div>
+    <div class="cell tier-low">cuCollections<small>GPU hash tables</small></div>
+    <div class="cell tier-low">nvCOMP<small>GPU (de)compression</small></div>
+  </div></div>
+  <div class="row"><div class="lbl">Platform</div><div class="cells">
+    <div class="cell tier-hw">CUDA<small>kernels, streams, memory model, the GPU itself</small></div>
+  </div></div>
+</div>
+
+<p>Two facts about this picture matter more than any other, and the whole guide hangs off them:</p>
+
+<div class="box key">
+<div class="bt">The two load-bearing ideas</div>
+<p><strong>1. Everything above CUDA is "just" composition of parallel primitives.</strong> A SQL <code>GROUP BY</code> is a hash table (cuCollections) plus a reduction (CUB) over columnar buffers (libcudf) scheduled by an operator (Velox-cuDF) inside a pipeline (Velox) driven by a plan (Presto). No magic — each layer is a thin, well-defined transform of the layer below.</p>
+<p><strong>2. The data never wants to leave the GPU.</strong> The entire performance thesis is "keep columns resident in GPU memory from Parquet read to final result." The moment data is forced back to host memory — for an unsupported operator, for a naive network shuffle, for spilling — you pay PCIe and serialization costs that can erase the GPU's advantage. Most of your roadmap (UCX exchange, spilling, streaming agg) is really about <em>not breaking GPU residency</em>.</p>
+</div>
+
+<h3>How a query flows through it</h3>
+<p>Concretely, end-to-end on Presto-on-GPU: SQL arrives at the Presto <strong>coordinator</strong> (JVM), which parses, optimizes, and produces a distributed plan of <em class="term">stages</em>. Each worker is a Presto C++ (Prestissimo) process embedding <strong>Velox</strong>. Velox translates its slice of the plan into <em class="term">pipelines</em> of operators. The <strong>cuDF DriverAdapter</strong> then rewrites those pipelines to swap CPU operators for GPU ones. Each GPU operator calls <strong>libcudf</strong>, which calls <strong>CCCL/cuCollections/nvCOMP</strong>, which launch <strong>CUDA</strong> kernels on columns living in GPU memory. When a stage boundary requires repartitioning, the <strong>Exchange</strong> operator moves columns between workers — over HTTP in the legacy path, or GPU-to-GPU over <strong>UCX</strong> (NVLink intra-node, RoCE/InfiniBand inter-node) in the path you own.</p>
+
+<div class="box gpu">
+<div class="bt">Where your roadmap sits</div>
+<p>UcxExchange and "GPU exchange in Velox-cuDF" live in the <strong>Operators / Exchange</strong> row (§09). "Multi-node performance" is about how that row behaves on different <strong>Platform</strong> fabrics — NVL72 vs DGX vs AWS (§10). "Spilling to host" is a <strong>libcudf + RMM</strong> memory-hierarchy concern (§11). "Streaming aggregation" is a <strong>Velox-cuDF operator</strong> design problem on top of libcudf groupby (§12). Four projects, four different layers, one system.</p>
+</div>
+</section>
+
+<section id="why-gpu" class="layer">
+<h2>Section 01</h2>
+<div class="sectitle">Why GPUs for analytics — and when not</div>
+
+<p>Start with the 101, because the rest only makes sense if you know <em>why</em> a GPU wins on analytical queries and, just as important, where it loses.</p>
+
+<h4>The three numbers that decide everything</h4>
+<p>Analytical (OLAP) queries are <strong>bandwidth-bound</strong>, not latency-bound. A typical query scans hundreds of millions of rows, touches a few columns, and produces a small result: filter, join, aggregate, sort. The bottleneck is "how fast can I stream bytes through arithmetic." That favors the GPU on all three axes that matter:</p>
+
+<div class="tbl"><table>
+<thead><tr><th>Axis</th><th>Server CPU (e.g. 64-core)</th><th>Data-center GPU (e.g. H100 / B200)</th><th>Why it matters for OLAP</th></tr></thead>
+<tbody>
+<tr><td><strong>Memory BW</strong></td><td>~0.3–0.5 TB/s (DRAM)</td><td>3–8 TB/s (HBM3/3e)</td><td>Scans &amp; hash probes are pure memory streaming → ~10× headroom</td></tr>
+<tr><td><strong>Parallelism</strong></td><td>tens of cores, SIMD lanes</td><td>tens of thousands of threads (SIMT)</td><td>Per-row work is embarrassingly parallel</td></tr>
+<tr><td><strong>$/throughput</strong></td><td>baseline</td><td>often 5–20× better on heavy joins/aggs</td><td>One GPU replaces a rack of CPU workers on the right workload</td></tr>
+</tbody>
+</table></div>
+
+<p>The published Velox-cuDF numbers make this concrete: on <span class="pill">TPC-H SF1000</span> a single GH200 Grace-Hopper finished 21 of 22 queries in <strong>~100 s</strong> versus <strong>~1,246 s</strong> for Presto C++ on a high-end Threadripper — well over a 10× single-node speedup on compute-heavy queries.</p>
+
+<h4>The columnar + SIMT fit</h4>
+<p>The GPU advantage is unlocked <em>only</em> if data is laid out so that 32 threads in a warp read 32 adjacent values in one memory transaction. That is exactly what a <strong>columnar</strong> layout gives you (§02): a column is a contiguous array, so a warp scanning it gets perfectly <em class="term">coalesced</em> access. Row-major storage would scatter each thread's read across cache lines and waste 90%+ of memory bandwidth. <strong>Columnar storage is not a nice-to-have for GPU analytics; it is the prerequisite.</strong></p>
+
+<h4>Where the GPU loses (be honest about this)</h4>
+<div class="box warn">
+<div class="bt">GPU is the wrong tool when…</div>
+<p><strong>Data is tiny.</strong> Kernel launch + host↔device copy overhead (microseconds to milliseconds) dominates if you're processing a few thousand rows. CPU wins on small queries; this is why Velox-cuDF wants <strong>~1 GiB batches</strong>, not the ~1K-row batches CPU Velox likes.</p>
+<p><strong>The query is latency-critical and trivial.</strong> A point lookup by primary key wants an index on a CPU, not a full-column scan on a GPU.</p>
+<p><strong>It doesn't fit in GPU memory and can't stream.</strong> A 5 TB hash-join build side on an 80 GB GPU forces spilling or partitioning (§11). Sometimes the host-staging cost wins.</p>
+<p><strong>Heavy data-dependent control flow / UDFs.</strong> Branchy row-at-a-time logic causes warp divergence. Some of this is fixable with JIT (Sirius and cuDF both JIT-compile expressions), but not all.</p>
+</div>
+
+<p>The mature mental model: GPUs win <strong>scan-heavy, join-heavy, aggregation-heavy, string-heavy</strong> analytical batch queries on <strong>large</strong> data. That's precisely the OLAP / data-lake / ETL workload these systems target — and precisely why the design fights so hard to keep big columnar batches resident on the device.</p>
+</section>
+
+<section id="columnar" class="layer">
+<h2>Section 02</h2>
+<div class="sectitle">Columnar data &amp; Apache Arrow — the lingua franca</div>
+
+<p>Every layer above CUDA agrees on one data shape: <strong>columnar, Arrow-compatible buffers</strong>. cuDF columns, Velox vectors, and Arrow arrays are deliberately near-identical in memory so that crossing between them is cheap or free. Understanding this layout is non-negotiable: it explains why conversions are sometimes zero-copy and sometimes not, why null handling is a recurring source of bugs, and why a "column" is the atom everything else manipulates.</p>
+
+<h4>Row-major vs column-major</h4>
+<p>Picture a table of <code>(id, price, country)</code>. <em class="term">Row storage</em> (Postgres heap, a CSV line) keeps each record's fields together: <code>[id0,price0,country0][id1,price1,country1]…</code>. <em class="term">Columnar storage</em> keeps each field's values together: <code>[id0,id1,id2,…][price0,price1,…][country0,…]</code>.</p>
+<p>For <code>SELECT avg(price) WHERE country='US'</code>, columnar reads only the <code>price</code> and <code>country</code> arrays — contiguously — and skips <code>id</code> entirely. On a GPU, a warp reading 32 consecutive <code>price</code> values pulls them in one coalesced 128-byte transaction. That is the whole ballgame.</p>
+
+<h4>The Arrow physical layout</h4>
+<p>An Arrow/cuDF <em class="term">column</em> of a primitive type is, at minimum, two buffers plus metadata:</p>
+<ul>
+<li><strong>Data buffer</strong> — a flat, contiguous array of the values (e.g. <code>int32</code> packed end to end). Fixed-width types only; this is what kernels stream over.</li>
+<li><strong>Validity bitmap</strong> — one <em>bit</em> per element: 1 = valid, 0 = null. So nulls cost 1/8 byte each, and "is this null" is a bit test, not a sentinel comparison. A column with no nulls can omit the bitmap entirely (a common fast path).</li>
+<li><strong>Null count + type + length</strong> — cheap metadata.</li>
+</ul>
+<p>Variable-width types add an <strong>offsets buffer</strong>. A <code>STRING</code> column is an offsets array (<code>int32</code>/<code>int64</code>) plus one big <strong>chars buffer</strong> holding all the bytes concatenated. String <em>i</em> is <code>chars[offsets[i] : offsets[i+1]]</code>. No per-string allocation — just two arrays. Nested types (<code>LIST</code>, <code>STRUCT</code>) compose recursively: a list column is offsets + a child column.</p>
+
+<pre data-lang="memory"><code><span class="c-com"># INT32 column: [10, 20, NULL, 40]</span>
+data:     <span class="c-num">[10][20][??][40]</span>      <span class="c-com"># 4 x 4 bytes, contiguous; ?? is garbage, masked out</span>
+validity: <span class="c-num">0b00001011</span>            <span class="c-com"># bit i set = row i valid → rows 0,1,3 valid, row 2 null</span>
+null_count = <span class="c-num">1</span>
+
+<span class="c-com"># STRING column: ["gpu", "", NULL, "cudf"]</span>
+offsets:  <span class="c-num">[0, 3, 3, 3, 7]</span>       <span class="c-com"># length = offsets[i+1]-offsets[i]</span>
+chars:    <span class="c-str">"gpucudf"</span>             <span class="c-com"># row 1 is empty, row 2 null (still occupies an offset slot)</span>
+validity: <span class="c-num">0b00001011</span></code></pre>
+
+<div class="box key">
+<div class="bt">Why this layout is everywhere</div>
+<p>Because it makes operators <em>buffer transforms</em>. A filter doesn't move strings around — it computes a new offsets array and gathers bytes. A "select these rows" is a <em class="term">gather</em>: read an array of row indices, produce new data+validity by indexed copy. Once you see columns as buffers and operators as buffer math, the entire libcudf API (§05) becomes predictable.</p>
+</div>
+
+<h4>Vectorized (batch-at-a-time) execution</h4>
+<p>Classic databases used the <em class="term">Volcano</em> model: each operator's <code>next()</code> returns one row, pulled up the tree. That's death on a GPU (and slow even on modern CPUs) — one row can't fill a warp. Modern engines (Velox, DuckDB, cuDF, Photon) are <strong>vectorized</strong>: operators pass <em>batches</em> of a few thousand rows (CPU) up to ~1 GiB (GPU) as column vectors. Each operator does its whole job on the batch with tight, branch-light kernels, then hands the batch onward. This amortizes per-call overhead and exposes the data parallelism the GPU needs.</p>
+
+<h4>Dictionary encoding &amp; run-length — compression that operators understand</h4>
+<p>Low-cardinality columns (e.g. <code>country</code>) are often <em class="term">dictionary-encoded</em>: a small dictionary of distinct values plus an array of integer codes. Velox has <code>DictionaryVector</code>; Arrow has dictionary arrays; Parquet stores dictionary pages. Operators can sometimes run directly on the codes (compare integers, not strings), which is both less memory and faster. Knowing whether your data arrives dictionary-encoded matters for join/group-by performance — decoding too early throws away a free optimization.</p>
+
+<div class="box warn">
+<div class="bt">The null-semantics trap</div>
+<p>Presto, Spark, and SQL each have subtly different null rules (three-valued logic, null ordering in sorts, null handling in aggregates, <code>NULLIF</code>, etc.). A GPU operator that ignores the bitmap, or treats null as a sentinel value, will produce <em>fast wrong answers</em> — the worst kind. Much of the Velox-cuDF effort is exactly "make the GPU operator's null semantics match what Presto/Spark users expect." When you diff GPU vs CPU results (§15), null edge cases are the first place divergence shows up.</p>
+</div>
+</section>
+
+<section id="cuda" class="layer">
+<h2>Section 03</h2>
+<div class="sectitle">CUDA, memory &amp; RMM — the platform floor</div>
+
+<p>You know CUDA kernels already, so this section skips the SIMT basics and focuses on the parts that actually govern analytics performance: <strong>memory</strong> and <strong>streams</strong>. In OLAP, allocation and data movement — not arithmetic — are usually what you're fighting.</p>
+
+<h4>The memory types, and which to use when</h4>
+<div class="tbl"><table>
+<thead><tr><th>Kind</th><th>Allocator</th><th>Lives where</th><th>Use in analytics</th></tr></thead>
+<tbody>
+<tr><td><strong>Device</strong></td><td><code>cudaMalloc</code></td><td>GPU HBM</td><td>The default home of every column. Fast, finite (e.g. 80 GB).</td></tr>
+<tr><td><strong>Pageable host</strong></td><td><code>malloc</code></td><td>CPU DRAM</td><td>Avoid for transfers — DMA must stage it through a pinned bounce buffer.</td></tr>
+<tr><td><strong>Pinned host</strong></td><td><code>cudaHostAlloc</code></td><td>CPU DRAM (page-locked)</td><td>Spill targets &amp; H2D/D2H staging. ~2× the copy bandwidth of pageable. The host buffer pool for spilling (§11) should be pinned.</td></tr>
+<tr><td><strong>Managed / UVM</strong></td><td><code>cudaMallocManaged</code></td><td>Migrates on demand</td><td>Oversubscription safety net: lets a query touch more than GPU memory by paging to host. The Velox-cuDF team used managed memory to <em>complete</em> TPC-H Q21 on GH200 when it wouldn't fit. Convenient, but page faults can be slow — a correctness/last-resort tool, not a perf strategy.</td></tr>
+</tbody>
+</table></div>
+
+<div class="box gpu">
+<div class="bt">Grace-Hopper / NVL72 change this table</div>
+<p>On GH200 and GB200, the CPU and GPU are joined by <strong>NVLink-C2C at 900 GB/s</strong> (≈7× PCIe Gen5) with cache-coherent shared memory. "Managed memory" and "spill to host" stop being cliffs and become gentle slopes — host memory is almost a slower tier of GPU memory. This is why "spilling to host" (§11) is far more attractive on Grace-Hopper than on a PCIe-attached A100, and why your hardware target (§10) changes the whole spilling calculus.</p>
+</div>
+
+<h4>Streams and stream-ordering — the soul of cuDF</h4>
+<p>A CUDA <em class="term">stream</em> is an ordered queue of GPU work. Operations in one stream run in issue order; operations in different streams may overlap. Analytics engines lean on this for two reasons: (1) overlap copy with compute (while one batch computes, the next is copying in), and (2) run independent pipeline branches concurrently.</p>
+<p>Crucially, libcudf is <strong>stream-ordered</strong>: nearly every API takes an <code>rmm::cuda_stream_view</code>, and both the kernel <em>and its memory allocation/free</em> are ordered on that stream. This is why Velox's <code>CudfVector</code> carries a stream alongside its <code>cudf::table</code> — so that asynchronously launched GPU work on that batch stays correctly ordered as it flows between operators.</p>
+
+<div class="box warn">
+<div class="bt">The #1 correctness bug in async GPU code</div>
+<p>Reading a result before its stream has produced it. If operator A launches work on stream <code>s</code> and operator B (on a different stream, or the host) reads A's output without synchronizing, you get a <strong>race</strong> — intermittent wrong answers that vanish under a debugger. Stream-ordered allocation prevents the <em>allocation</em> race; you still must order the <em>data</em> dependency (event wait, or share the stream). When a Velox-cuDF result looks nondeterministic, suspect stream ordering first.</p>
+</div>
+
+<h4>RMM — why you never call <code>cudaMalloc</code> in a hot path</h4>
+<p><code>cudaMalloc</code>/<code>cudaFree</code> are <strong>synchronous</strong> — they stall the whole device and serialize streams. A query that allocates per-batch (and every operator allocates its output column) would spend more time in the allocator than in compute. The fix is the <strong>RAPIDS Memory Manager (RMM)</strong>: a pluggable allocator that everything (libcudf, cuCollections, Velox-cuDF) routes through.</p>
+<p>RMM's workhorse is the <em class="term">pool allocator</em>: grab a big slab from the driver once, then satisfy per-batch allocations by sub-allocating from the pool in microseconds with no device sync. Other resources stack on top (statistics/logging adaptors, a <code>cuda_async_memory_resource</code> wrapping the driver's <code>cudaMallocAsync</code> pool, a managed-memory resource for oversubscription, etc.) via the <em class="term">memory_resource</em> interface — composable like decorators.</p>
+
+<pre data-lang="c++"><code><span class="c-com">// Configure the process-wide RMM allocator ONCE at startup.</span>
+<span class="c-com">// A pool pre-reserves device memory so per-batch allocs don't hit the driver.</span>
+<span class="c-kw">auto</span> cuda_mr = std::make_shared&lt;rmm::mr::<span class="c-ty">cuda_memory_resource</span>&gt;();
+<span class="c-kw">auto</span> pool_mr = std::make_shared&lt;
+    rmm::mr::<span class="c-ty">pool_memory_resource</span>&lt;rmm::mr::<span class="c-ty">cuda_memory_resource</span>&gt;&gt;(
+        cuda_mr.get(),
+        <span class="c-num">60UL</span> &lt;&lt; <span class="c-num">30</span>);   <span class="c-com">// initial pool: 60 GiB</span>
+rmm::mr::<span class="c-fn">set_current_device_resource</span>(pool_mr.get());
+
+<span class="c-com">// From here on, every libcudf output column allocates from the pool — fast,</span>
+<span class="c-com">// stream-ordered, no global device sync. This single line is often the</span>
+<span class="c-com">// difference between "GPU is slower than CPU" and "GPU is 10x faster".</span></code></pre>
+
+<div class="box bug">
+<div class="bt">Fragmentation — the silent OOM</div>
+<p>Pool allocators can <strong>fragment</strong>: enough free bytes exist, but not contiguously, so a large column allocation fails with an out-of-memory error even though <code>nvidia-smi</code> shows free space. Big-batch GPU analytics (1 GiB allocations) is especially prone to it. Mitigations: the <code>cuda_async_memory_resource</code> (driver-managed pool defragments better), an arena resource, capping batch size, or fewer concurrent drivers. When you see "OOM but there's plenty free," it's fragmentation, not a leak — this is a frequent multi-driver tuning issue (§06, §15).</p>
+</div>
+</section>
+
+<section id="primitives" class="layer">
+<h2>Section 04</h2>
+<div class="sectitle">CCCL · cuCollections · nvCOMP — the primitives</div>
+
+<p>This is the <em>Parallel Algorithms</em> row. libcudf does not implement sort or hash from scratch; it composes these three libraries. Knowing them tells you what libcudf can do cheaply and where its operators' performance and limits come from.</p>
+
+<h4>CCCL = CUB + Thrust + libcu++</h4>
+<p>The <em class="term">CUDA Core Compute Libraries</em> bundle three layers of generic parallel building blocks:</p>
+<ul>
+<li><strong>Thrust</strong> — high-level, STL-like algorithms over device vectors: <code>sort</code>, <code>reduce</code>, <code>scan</code> (prefix sum), <code>transform</code>, <code>gather</code>/<code>scatter</code>, <code>unique</code>, <code>partition</code>. Productivity layer; picks reasonable kernels for you.</li>
+<li><strong>CUB</strong> — lower-level, performance-tunable primitives at <em>device</em>, <em>block</em>, and <em>warp</em> scope: <code>DeviceRadixSort</code>, <code>DeviceReduce</code>, <code>DeviceScan</code>, <code>DeviceSelect</code>, segmented variants. When libcudf needs a tuned sort or scan, it calls CUB directly.</li>
+<li><strong>libcu++ (libcudacxx)</strong> — the CUDA C++ standard library: <code>cuda::std::</code> types, <code>cuda::atomic</code>, <code>cuda::barrier</code>, memory-order primitives that work on device. The plumbing the other two stand on.</li>
+</ul>
+
+<div class="box key">
+<div class="bt">Scan &amp; reduce are the two primitives behind half of SQL</div>
+<p><strong>Reduction</strong> (combine N values → 1) implements <code>SUM/MIN/MAX/COUNT/AVG</code>. <strong>Prefix-sum / scan</strong> (running totals) is how the GPU does <em>compaction</em>: to filter a column, compute a boolean mask, scan it to get output positions, then scatter surviving rows into place — all data-parallel, no locks. <code>FILTER</code>, <code>WHERE</code>, building offset arrays, computing partition boundaries: all scans underneath. Internalize "filter = mask + scan + scatter" and libcudf's filter implementation stops being mysterious.</p>
+</div>
+
+<h4>cuCollections (cuco) — GPU hash tables</h4>
+<p>Joins and hash aggregations need a hash table that thousands of threads can probe and insert into <em>concurrently</em>. CPU hash maps (chaining, locks) don't translate. <strong>cuCollections</strong> provides lock-free, open-addressing GPU hash tables — <code>static_map</code>, <code>static_multimap</code>, <code>static_set</code> — built on <code>cuda::atomic</code> compare-and-swap.</p>
+<p>Design points that leak upward into operator behavior:</p>
+<ul>
+<li><strong>Open addressing, not chaining.</strong> Fixed slot array; collisions probe to the next slot. No pointer chasing → coalesced, cache-friendly. But the table must be <strong>sized up front</strong> (a load factor below 1.0), so libcudf must estimate cardinality before building — over-allocate and you waste memory, under-allocate and you must rehash.</li>
+<li><strong>Two-phase use.</strong> Build phase: insert all build-side keys (massively parallel CAS). Probe phase: every probe-side thread looks up its key. This is exactly a hash join's build/probe split.</li>
+<li><strong>Multimap for joins.</strong> Equi-joins need duplicate keys → <code>static_multimap</code>. Aggregations map key → accumulator slot, often combined with atomic updates for the running aggregate.</li>
+</ul>
+
+<pre data-lang="c++"><code><span class="c-com">// Sketch of a GPU hash inner-join, the shape libcudf::inner_join uses:</span>
+<span class="c-com">// 1) BUILD — insert (key, row_index) for every build-side row, in parallel</span>
+cuco::<span class="c-ty">static_multimap</span>&lt;<span class="c-ty">key_type</span>, <span class="c-ty">size_type</span>&gt; hash_table{
+    capacity, cuco::<span class="c-fn">empty_key</span>{<span class="c-num">-1</span>}, cuco::<span class="c-fn">empty_value</span>{<span class="c-num">-1</span>}};
+hash_table.<span class="c-fn">insert</span>(build_pairs.begin(), build_pairs.end(), stream);
+
+<span class="c-com">// 2) PROBE — each probe row finds all matching build rows; emit index pairs</span>
+hash_table.<span class="c-fn">retrieve</span>(probe_keys.begin(), probe_keys.end(),
+                     out_probe_idx, out_build_idx, stream);
+
+<span class="c-com">// 3) GATHER — materialize the joined columns from the two index arrays</span>
+<span class="c-com">//    (cudf::gather on each side — see SS05). The join is "find indices,</span>
+<span class="c-com">//    then gather"; cuco does step 1-2, libcudf gather does step 3.</span></code></pre>
+
+<h4>nvCOMP — GPU (de)compression</h4>
+<p>Decompression and compression run <em>on the GPU</em> via <strong>nvCOMP</strong>: LZ4, Snappy, Deflate/GZIP, Zstd, plus cascaded/bitpacking schemes tuned for columnar data. Three places it matters to you directly:</p>
+<ul>
+<li><strong>I/O.</strong> Parquet/ORC pages are compressed (Snappy/Zstd). cuDF's GPU reader decompresses on-device so the CPU never touches the bytes — pairs with GPUDirect Storage to go SSD/S3 → GPU directly.</li>
+<li><strong>Spilling (§11).</strong> Compress a column before evicting it to host/disk to cut the bytes moved across PCIe — trade GPU cycles (cheap) for bandwidth (scarce).</li>
+<li><strong>Exchange/shuffle (§09).</strong> Compressing partitions before they cross the network reduces wire bytes; on a fat NVLink fabric the compute may not be worth it, on a thin TCP link it usually is. A real decision knob.</li>
+</ul>
+
+<div class="box gpu">
+<div class="bt">Hardware decompression on Blackwell</div>
+<p>Blackwell (B200/GB200) adds a dedicated <strong>hardware decompression engine</strong> that offloads formats like Snappy/LZ4/Deflate from the SM cores entirely — NVIDIA cites large speedups on database scan/decompress paths. If your TableScan is decompress-bound, the platform generation underneath you (§10) changes the answer.</p>
+</div>
+
+<p><strong>The composition, in one line:</strong> cuCollections gives you the hash table, CUB/Thrust give you sort/scan/reduce, nvCOMP gives you (de)compression, RMM gives you fast memory — and libcudf (next) stitches them into relational operators with correct SQL semantics over Arrow columns.</p>
+</section>
+
+<section id="libcudf" class="layer">
+<h2>Section 05</h2>
+<div class="sectitle">libcudf / cuDF — relational ops on columns</div>
+
+<p>libcudf is the CUDA/C++ library that turns the primitives of §04 into the columnar relational operators of a query engine. (The Python <code>cudf</code> dataframe is a thin binding over it; Velox-cuDF, Sirius, and Spark-RAPIDS all use the C++ layer.) It is "the ETL algorithms" box.</p>
+
+<h4>The data model: column, column_view, table</h4>
+<ul>
+<li><code>cudf::column</code> — <strong>owns</strong> its GPU memory (an <code>rmm::device_buffer</code> for data, another for the null mask, child columns for nested types). Move-only, like a <code>unique_ptr</code> to device data.</li>
+<li><code>cudf::column_view</code> — a <strong>non-owning</strong>, read-only window into a column (pointer + size + null mask + type + offset). Operators take <code>column_view</code>s in and return owning <code>column</code>s out. <code>mutable_column_view</code> for in-place writes.</li>
+<li><code>cudf::table</code> / <code>table_view</code> — an ordered collection of columns of equal length: a batch of rows in columnar form. This is what flows between operators.</li>
+</ul>
+
+<div class="box key">
+<div class="bt">Operators are pure functions: views in, owned table out</div>
+<p>Almost every libcudf op has the shape <code>table f(table_view input, ..., rmm::cuda_stream_view, rmm::device_async_resource_ref mr)</code>. It reads inputs through views, allocates outputs from the memory resource on the given stream, and returns new owning columns. <strong>Inputs are never mutated.</strong> This functional style is why GPU pipelines are easy to reason about and parallelize — but it also means every operator <em>allocates its full output</em>, which is the root of GPU memory pressure (§11). There is no in-place "append"; a filter that keeps 90% of rows still allocates a fresh 90%-sized column.</p>
+</div>
+
+<h4>gather &amp; scatter — the two primitives under everything</h4>
+<p>If you learn one libcudf concept, learn <strong>gather</strong>. Given a table and an array of row indices, <code>gather</code> produces a new table containing those rows in that order. It is how filter, join materialization, sort, and shuffle-partition all actually move rows:</p>
+
+<pre data-lang="c++"><code><span class="c-com">// gather: output[i] = input[ gather_map[i] ] for every column, in parallel.</span>
+<span class="c-com">// One indexed copy per output element — coalesced, no branching.</span>
+std::unique_ptr&lt;cudf::<span class="c-ty">table</span>&gt; selected = cudf::<span class="c-fn">gather</span>(
+    input_table_view,        <span class="c-com">// the columns to pull from</span>
+    gather_map_view,         <span class="c-com">// INT32 column of row indices to keep, in order</span>
+    cudf::<span class="c-ty">out_of_bounds_policy</span>::NULLIFY,  <span class="c-com">// negative index → null (used by outer joins)</span>
+    stream, mr);
+
+<span class="c-com">// FILTER is literally: build boolean mask → apply_boolean_mask</span>
+<span class="c-com">//   (internally: mask → scan → gather of surviving positions)</span>
+<span class="c-kw">auto</span> mask = cudf::<span class="c-fn">compute_column</span>(t, /*expr:*/ price &gt; <span class="c-num">100</span>, stream, mr);
+<span class="c-kw">auto</span> result = cudf::<span class="c-fn">apply_boolean_mask</span>(t, mask-&gt;view(), stream, mr);</code></pre>
+<p><strong>scatter</strong> is the inverse (write input rows <em>to</em> given output positions) and underlies updates and some partition writes.</p>
+
+<h4>The operator catalog you'll actually touch</h4>
+<div class="tbl"><table>
+<thead><tr><th>libcudf op</th><th>Built from</th><th>SQL it powers</th></tr></thead>
+<tbody>
+<tr><td><strong>gather / scatter</strong></td><td>indexed copy</td><td>row selection, join output, projection reorder</td></tr>
+<tr><td><strong>apply_boolean_mask</strong></td><td>scan + gather</td><td><code>WHERE</code>, <code>FILTER</code></td></tr>
+<tr><td><strong>compute_column / AST</strong></td><td>fused expr kernels (some JIT)</td><td><code>SELECT a*b+c</code>, projections, filter predicates</td></tr>
+<tr><td><strong>inner/left/full_join</strong></td><td>cuCollections + gather</td><td><code>JOIN</code> (all types, with null semantics)</td></tr>
+<tr><td><strong>groupby + aggregations</strong></td><td>hash table or sort + reduce</td><td><code>GROUP BY</code>, <code>SUM/COUNT/AVG/…</code></td></tr>
+<tr><td><strong>sorted_order / sort</strong></td><td>CUB radix sort</td><td><code>ORDER BY</code>, sort-merge paths</td></tr>
+<tr><td><strong>reduce / scan</strong></td><td>CUB</td><td>scalar aggregates, window prep</td></tr>
+<tr><td><strong>strings::*</strong></td><td>custom kernels over chars/offsets</td><td><code>LIKE</code>, <code>SUBSTR</code>, <code>CONCAT</code>, regex</td></tr>
+<tr><td><strong>io::read_parquet/orc</strong></td><td>nvCOMP + decode kernels</td><td><code>TableScan</code> from data lake</td></tr>
+<tr><td><strong>partition / hash_partition</strong></td><td>hash + scatter</td><td>the <strong>Exchange</strong> (§09)</td></tr>
+</tbody>
+</table></div>
+
+<h4>groupby: hash vs sort (this matters for §12)</h4>
+<p>libcudf groupby has two strategies. <strong>Hash groupby</strong> builds a key→accumulator hash table (cuco) and atomically updates running aggregates — one pass, great when the number of distinct groups is modest. <strong>Sort groupby</strong> sorts by key so equal keys are adjacent, then does a segmented reduce — handles huge cardinality and any aggregate, but pays for the sort. The engine picks based on cardinality and aggregate type. Streaming aggregation (§12) is built on the <em>partial → merge</em> decomposition of these.</p>
+
+<h4>GPU-direct I/O</h4>
+<p>The TableScan path can read Parquet/ORC straight from NVMe or S3 into GPU memory via <strong>GPUDirect Storage (GDS)</strong>, bypassing the CPU bounce buffer, then decompress and decode on-device with nvCOMP + cuDF kernels. This keeps the "never leave the GPU" promise from the very first byte read — important for your AWS+S3 target (§10), where scan cost can dominate.</p>
+
+<div class="box bug">
+<div class="bt">Type &amp; overflow gotchas when matching Presto/Spark</div>
+<p>libcudf is a general columnar library; Presto/Spark have specific type rules. Watch: <strong>decimal</strong> precision/scale (fixed-point columns), <strong>integer overflow</strong> in <code>SUM</code> (Spark may promote, a naive int64 accumulate wraps), <strong>timestamp</strong> units/timezones, and <strong>string collation</strong>. These are exactly the "fast but wrong" risks — the GPU op runs fine and returns a number that disagrees with CPU in the last digit or on an edge row. §15's CPU-vs-GPU diffing exists to catch these.</p>
+</div>
+</section>
+
+<section id="velox" class="layer">
+<h2>Section 06</h2>
+<div class="sectitle">Velox &amp; Velox-cuDF — the execution engine</div>
+
+<p>Velox is a C++ <strong>library</strong>, not a database. It provides the reusable guts of a query engine — vectors, expression evaluation, and a catalog of vectorized operators with a scheduler — so that systems like Presto, Spark (via Gluten), and others don't each re-implement them. "Composable data management": write the operators once, reuse everywhere. Velox-cuDF adds a GPU backend to that shared engine, which is why one effort accelerates Presto <em>and</em> Spark at once.</p>
+
+<h4>The Velox execution model</h4>
+<p>The objects you'll live in:</p>
+<ul>
+<li><strong>PlanNode tree</strong> — the logical/physical plan Velox receives (TableScan → Filter → Project → HashJoin → Aggregation → …).</li>
+<li><strong>Task</strong> — the execution of a plan fragment on one worker. A Task is split into <strong>Pipelines</strong> at blocking boundaries (e.g. a hash-join build).</li>
+<li><strong>Driver</strong> — a thread of execution running one pipeline over a slice of data. Velox runs <em>multiple drivers per pipeline</em> for intra-node parallelism. On CPU you want ~one driver per core; on GPU, far fewer (below).</li>
+<li><strong>Operator</strong> — a node in a pipeline (<code>TableScan</code>, <code>FilterProject</code>, <code>HashProbe</code>, <code>HashAggregation</code>, <code>PartitionedOutput</code>, <code>Exchange</code>…). Each consumes and produces <code>RowVector</code> batches.</li>
+<li><strong>Split</strong> — a unit of input (e.g. a Parquet file range) handed to a TableScan; how work is distributed.</li>
+<li><strong>Vector</strong> — Velox's Arrow-compatible columnar batch: <code>FlatVector</code> (plain column), <code>DictionaryVector</code>, <code>ConstantVector</code>, <code>RowVector</code> (a struct/row of child vectors = a table). Encodings are lazy and composable, like libcudf's dictionary handling.</li>
+</ul>
+<p>Execution is <strong>push-based within a pipeline</strong> and connected across pipelines/workers by <strong>Exchange</strong>. The driver pulls a batch from its source operator, pushes it through the chain, and the last operator either yields results or hands them to a <code>PartitionedOutput</code> that feeds the next stage's <code>Exchange</code> (§08–09).</p>
+
+<h4>How cuDF plugs in: the DriverAdapter</h4>
+<p>Velox exposes a <strong>DriverAdapter</strong> hook: after Velox builds executable pipelines, a backend may rewrite them. The cuDF backend's adapter walks the operator chain and rewrites it for GPU. It can:</p>
+<ul>
+<li><strong>Replace</strong> an operator one-to-one (Velox <code>HashJoin</code> → <code>CudfHashJoin</code>).</li>
+<li><strong>Fuse</strong> adjacent operators into one GPU operator (fewer kernel launches, fewer intermediate columns).</li>
+<li><strong>Add</strong> a bridge operator where needed.</li>
+</ul>
+<p>The first GPU operators include <code>TableScan</code>, <code>CudfHashJoin</code>, <code>CudfHashAggregation</code>, <code>CudfFilterProject</code>, <code>CudfOrderBy</code>, and the cuDF Exchange. When an operator has <em>no</em> GPU implementation yet, the adapter inserts a <strong><code>CudfConversion</code></strong> operator that copies the batch GPU→CPU, runs the CPU operator, and copies back — graceful fallback at the cost of a round trip.</p>
+
+<div class="box gpu">
+<div class="bt">CudfVector: a RowVector that owns a cudf::table</div>
+<p>The clever bit. <code>CudfVector</code> <strong>inherits from Velox's <code>RowVector</code></strong> but internally holds a <code>std::unique_ptr&lt;cudf::table&gt;</code> (the GPU-resident data) plus an <code>rmm::cuda_stream_view</code> (so async work stays stream-ordered as the batch flows between operators). To the rest of Velox it <em>is</em> a RowVector — it satisfies the standard "operators produce and consume RowVector" contract — but the bytes live on the GPU. This is what lets a whole pipeline stay on-device while still using Velox's unmodified scheduling, Task/Driver model, and operator interfaces. The CPU↔GPU boundary is exactly where a CudfVector is unwrapped or a CudfConversion fires.</p>
+</div>
+
+<h4>Tuning that's the opposite of CPU Velox</h4>
+<div class="tbl"><table>
+<thead><tr><th>Knob</th><th>CPU Velox</th><th>Velox-cuDF (single GPU)</th><th>Why</th></tr></thead>
+<tbody>
+<tr><td><strong>Batch size</strong></td><td>~1K rows</td><td><strong>~1 GiB</strong></td><td>A kernel needs enough rows to saturate tens of thousands of threads; tiny batches waste launch overhead.</td></tr>
+<tr><td><strong>Drivers / pipeline</strong></td><td>= physical cores</td><td><strong>2–8</strong></td><td>One driver underutilizes the GPU (stalls on H2D copy); a few overlap copy with compute. More than ~8 just multiplies memory pressure with no throughput gain once compute saturates.</td></tr>
+<tr><td><strong>Scaling unit</strong></td><td>more cores/threads</td><td>more <strong>GPUs</strong> (drivers→devices), then more nodes</td><td>Past one GPU's compute, you scale out — which makes the <strong>Exchange</strong> the bottleneck (§09).</td></tr>
+</tbody>
+</table></div>
+
+<div class="box bug">
+<div class="bt">The "GPU is barely faster" anti-pattern</div>
+<p>Three classic misconfigurations flatten the GPU win: (1) <strong>batch too small</strong> — left at CPU defaults, so kernels are launch-bound; (2) <strong>accidental CPU fallback</strong> — one unsupported operator (or expression, or type) inserts <code>CudfConversion</code> mid-pipeline and every batch ping-pongs across PCIe; (3) <strong>too many drivers</strong> fragmenting memory into OOM. When a query underperforms, check those three before profiling kernels. The fix for (2) is to read the rewritten plan and confirm it's end-to-end GPU (no conversion nodes).</p>
+</div>
+</section>
+
+<section id="compat" class="layer">
+<h2>Section 07</h2>
+<div class="sectitle">Presto C++ · Gluten · Substrait — the compatibility layer</div>
+
+<p>This row answers "how does a query written for Presto or Spark end up as a Velox pipeline?" Two different bridges, because Presto and Spark have different histories.</p>
+
+<h4>Presto C++ (Prestissimo)</h4>
+<p>Classic Presto workers are JVM processes. <strong>Presto C++</strong> (a.k.a. Prestissimo) replaces the worker with a native C++ process built on Velox, while keeping the Java <strong>coordinator</strong> for parsing, planning, and optimization. The coordinator emits its plan as JSON/Thrift fragments; the C++ worker translates each fragment into a Velox PlanNode tree and executes it. For GPU, the cuDF DriverAdapter then rewrites those pipelines. Because the coordinator is unchanged, you inherit Presto's full SQL surface, optimizer, and connector ecosystem "for free" — the GPU work is entirely in the worker. This is why Presto-on-GPU targets <em>end-to-end</em> GPU execution.</p>
+
+<h4>Gluten — the Spark bridge</h4>
+<p>Spark's engine lives in the JVM and produces Spark physical plans. <strong>Gluten</strong> (an Apache incubator project) intercepts those plans and offloads supported operators to a native backend (Velox) instead of running them in the JVM. The plan is conveyed in <strong>Substrait</strong>, a cross-engine serialized plan format, which Gluten translates into Velox plan nodes. Where an operator isn't offloadable, Gluten falls back to vanilla Spark — so Spark-on-Velox is naturally <strong>hybrid</strong>.</p>
+
+<div class="box key">
+<div class="bt">Why Spark integration is "hybrid", Presto is "end-to-end"</div>
+<p>The published results reflect this: Presto-on-GPU runs entire query plans on the GPU, while Spark-via-Gluten currently <em>offloads specific compute-heavy stages</em> (e.g. a costly second stage of a TPC-DS query) to the GPU and leaves the rest on CPU. Same Velox-cuDF operators underneath; different integration maturity and different scheduling philosophy. For your roadmap, Presto-on-GPU is the deeper integration and where the exchange work lands first.</p>
+</div>
+
+<h4>Substrait — the plan interchange</h4>
+<p>Substrait is to query plans what Arrow is to data: a neutral, serializable representation of relational operations (read, filter, project, join, aggregate) that any engine can produce or consume. Gluten uses it (Spark→Velox); Sirius uses it (DuckDB/Doris→GPU, §13). Knowing Substrait exists explains how a GPU engine can be a "drop-in" for a host database without rewriting that database's SQL front-end.</p>
+</section>
+
+<section id="distributed" class="layer">
+<h2>Section 08</h2>
+<div class="sectitle">The distributed runtime — stages, tasks, splits</div>
+
+<p>Everything so far was single-node. To run on NVL72 or a fleet of EC2 instances, the query is cut into pieces that run on many workers and exchange data between them. This is the structure your multi-node performance work lives inside.</p>
+
+<h4>Coordinator → stages → tasks → splits</h4>
+<ul>
+<li>The <strong>coordinator</strong> compiles SQL into a tree of <em class="term">stages</em>. A stage boundary is wherever data must be <strong>repartitioned</strong> — e.g. before a distributed join or a global aggregation, rows must be grouped by key onto the right worker.</li>
+<li>Each stage runs as parallel <em class="term">tasks</em>, one per worker (per GPU, in practice). A task is the Velox Task of §06.</li>
+<li>Input is divided into <em class="term">splits</em> (file ranges, partitions) distributed across tasks so they work in parallel.</li>
+<li>Between stages sits the <strong>shuffle / exchange</strong>: stage N's tasks each <em>produce</em> partitioned output; stage N+1's tasks each <em>consume</em> the partitions destined for them. This all-to-all data movement is the subject of §09.</li>
+</ul>
+
+<pre data-lang="text"><code><span class="c-com"># Distributed hash join, two stages, three workers:</span>
+Stage 1 (scan+partition)          Stage 2 (join+aggregate)
+  task A ─ scan shard ─┐            ┌─&gt; task X  (gets hash-partition 0)
+  task B ─ scan shard ─┼─ EXCHANGE ─┼─&gt; task Y  (gets hash-partition 1)
+  task C ─ scan shard ─┘  (shuffle) └─&gt; task Z  (gets hash-partition 2)
+            every producer sends rows to the consumer that owns
+            hash(key) % numPartitions  →  N producers x M consumers</code></pre>
+
+<div class="box warn">
+<div class="bt">Why the exchange is the scaling wall</div>
+<p>Single-node, you scale by adding GPUs and the data stays on-device. The moment a join or aggregation key isn't co-located, you must move data <em>between</em> GPUs/workers. With N producers and M consumers, that's an all-to-all with up to N×M streams. If each byte detours GPU→host→TCP→host→GPU, the network and PCIe — not the GPUs — set the query time. Amdahl's law bites: you can make the operators infinitely fast and still be gated by shuffle. That is exactly why a GPU-native, NVLink/RDMA exchange (next) is worth a person's full attention.</p>
+</div>
+</section>
+
+<section id="exchange" class="layer">
+<h2>Section 09 · your mandate</h2>
+<div class="sectitle">The Exchange — GPU-to-GPU shuffle over UCX</div>
+
+<p>This is the operator you own. The Exchange moves data between workers at stage boundaries; on a GPU cluster it is usually the difference between linear scaling and a flat line. The job: keep columnar data on the GPU from the moment it's partitioned to the moment it lands in a peer GPU, using the fabric directly. Here's the full mechanism, bottom to top, tying back to the interconnect guide.</p>
+
+<h4>The three Velox exchange types</h4>
+<div class="tbl"><table>
+<thead><tr><th>Type</th><th>What it does</th><th>Used for</th></tr></thead>
+<tbody>
+<tr><td><strong>Partitioned</strong></td><td>Hash-partition input by key; send each partition to the worker that owns it</td><td>distributed joins &amp; group-bys (the common case)</td></tr>
+<tr><td><strong>Merge</strong></td><td>Receive multiple <em>sorted</em> input partitions and merge into one sorted output</td><td>distributed <code>ORDER BY</code> / merge sort</td></tr>
+<tr><td><strong>Broadcast</strong></td><td>Replicate one worker's data to all workers</td><td>broadcast (small-side) joins</td></tr>
+</tbody>
+</table></div>
+<p>On the producer side this is the <code>PartitionedOutput</code> operator (it calls libcudf <code>hash_partition</code> to split a batch into per-destination sub-tables); on the consumer side it's the <code>Exchange</code> operator pulling its partitions from every producer.</p>
+
+<h4>The legacy path, and why it's slow</h4>
+<p>Baseline Presto shuffle is <strong>HTTP over TCP</strong>. On GPU data, a single partition's journey is brutal:</p>
+<pre data-lang="text"><code>producer GPU ─D2H copy─&gt; host ─serialize─&gt; HTTP/TCP ─&gt; host ─deserialize─&gt; H2D copy ─&gt; consumer GPU
+            \_____ PCIe _____/   \__ CPU __/   \_ NIC _/    \__ CPU __/   \_____ PCIe _____/
+   every byte crosses PCIe twice, is touched by the CPU twice, and pays TCP/kernel overhead</code></pre>
+<p>The GPUs sit idle through all of it. With many producers and consumers (all-to-all), this serializes the whole query behind PCIe and the CPU network stack. This is the wall §08 warned about.</p>
+
+<h4>The GPU-native UCX path (what you're building)</h4>
+<p>Replace that with a path where columns never leave device memory and the transport reads/writes GPU memory directly:</p>
+<pre data-lang="text"><code>producer GPU buffers ──UCX (GPUDirect RDMA / NVLink)──&gt; consumer GPU buffers
+   no D2H, no CPU touch of payload, no TCP copy — the NIC or NVSwitch DMAs GPU→GPU</code></pre>
+<p>Step by step, and where each piece comes from:</p>
+<ol>
+<li><strong>Partition on GPU.</strong> libcudf <code>hash_partition(table, key_cols, num_partitions)</code> produces, in one kernel pass, the reordered table plus the offset where each destination partition begins. No host involvement.</li>
+<li><strong>Describe the partition as buffers.</strong> A cudf partition is just its column buffers (data, validity, offsets, children) plus small metadata (types, lengths, null counts). The metadata goes in a header; the buffers are the payload — already contiguous in GPU memory, so they're RDMA-ready as-is.</li>
+<li><strong>Hand the GPU pointers to UCX.</strong> UCX's <code>ucp_put</code>/<code>ucp_tag_send</code> accept <em>device</em> pointers when built with CUDA support. UCX selects the transport itself (this is the whole point of UCX from the last guide): NVLink for same-node peers, RoCE/InfiniBand for remote peers, with <strong>GPUDirect RDMA</strong> so the HCA reads GPU memory without staging through host.</li>
+<li><strong>Land directly in the consumer's GPU.</strong> The bytes arrive in a pre-registered device buffer on the consumer; the Exchange operator wraps them back into a <code>cudf::table</code> / <code>CudfVector</code> and the downstream pipeline continues — still on-device.</li>
+</ol>
+
+<div class="box gpu">
+<div class="bt">This is the exact seam where this guide meets the interconnect guide</div>
+<p>The Exchange is a <strong>libcudf + UCX</strong> operator. libcudf gives you the partitioned device buffers; UCX (UCP API on top of UCT transports) moves them; GPUDirect RDMA lets the NIC touch GPU memory; NVLink/NVSwitch carries intra-node traffic; RoCE/InfiniBand carries inter-node. Everything in the comms guide's §02 (RDMA verbs), §06 (NCCL's transports), and §08 (UCX architecture) is the machinery underneath this one operator. You are, quite literally, the person making the query engine speak the fabric.</p>
+</div>
+
+<pre data-lang="c++"><code><span class="c-com">// Producer side of a GPU-native partitioned exchange (sketch).</span>
+<span class="c-com">// 1) Partition the batch on-device — reorders rows; returns split offsets.</span>
+<span class="c-kw">auto</span> [partitioned, offsets] = cudf::<span class="c-fn">hash_partition</span>(
+    batch-&gt;view(), key_indices, num_workers, stream, mr);
+
+<span class="c-com">// 2) For each destination worker, send its slice's buffers over UCX.</span>
+<span class="c-kw">for</span> (<span class="c-kw">int</span> dst = <span class="c-num">0</span>; dst &lt; num_workers; ++dst) {
+  <span class="c-kw">auto</span> slice = cudf::<span class="c-fn">slice</span>(partitioned-&gt;view(),
+                          {offsets[dst], offsets[dst + <span class="c-num">1</span>]});
+  <span class="c-ty">WireHeader</span> hdr = <span class="c-fn">describe</span>(slice);  <span class="c-com">// types, lengths, null counts, buffer sizes</span>
+
+  <span class="c-fn">ucp_tag_send_nbx</span>(eps[dst], &amp;hdr, <span class="c-kw">sizeof</span>(hdr), header_tag, &amp;params);
+  <span class="c-kw">for</span> (<span class="c-kw">auto</span> buf : <span class="c-fn">device_buffers_of</span>(slice))   <span class="c-com">// DEVICE pointers</span>
+    <span class="c-fn">ucp_tag_send_nbx</span>(eps[dst], buf.data(), buf.size(), data_tag, &amp;params);
+  <span class="c-com">// UCX picks NVLink vs RDMA per endpoint; GPUDirect RDMA = no host bounce.</span>
+}
+<span class="c-com">// Consumer: ucp_tag_recv_nbx into pre-registered device buffers, then</span>
+<span class="c-com">// reassemble a cudf::table view over them and push downstream. Zero D2H.</span></code></pre>
+
+<h4>Serialization: less than you'd think</h4>
+<p>Because cuDF/Arrow buffers are already the wire format, "serialization" is mostly assembling a small header and sending the buffers verbatim — close to zero-copy. Contrast with row formats (serialize each row) or with engines that must transcode. Pitfalls: variable-width columns (strings/lists) carry offset buffers that must travel too and be rebased on arrival; null masks must travel; and the header must be enough to reconstruct exact types (decimal scale, timestamp unit) so the consumer rebuilds a semantically identical column.</p>
+
+<div class="box warn">
+<div class="bt">Correctness &amp; robustness checklist for the exchange (your "performance and correctness" mandate)</div>
+<p><strong>Buffer registration:</strong> RDMA needs pinned/registered memory; registration is expensive, so cache/pool registered buffers (UCX rcache) rather than registering per send. <strong>Backpressure &amp; flow control:</strong> a fast producer must not OOM a slow consumer — bound in-flight bytes. <strong>Ordering &amp; completion:</strong> don't reuse/free a send buffer before UCX signals completion (mirror of the stream-ordering rule in §03). <strong>Partition skew:</strong> a hot key sends one consumer 10× the data — detect and, where possible, split. <strong>Failure semantics:</strong> a dropped worker mid-shuffle must surface as a query error, not a hang. <strong>Empty/!found partitions:</strong> handle zero-row sends. These are the bugs that separate a demo from production.</p>
+</div>
+
+<div class="box key">
+<div class="bt">The result that justifies the project</div>
+<p>On an 8-GPU DGX A100, swapping the baseline HTTP exchange for the UCX-based cuDF exchange (using NVLink intra-node) delivered <strong>&gt;6× speedup</strong> on the TPC-H suite at SF1000 — and let the cluster finish all 22 queries with default async allocation, no managed-memory fallback. The exchange wasn't a tweak; it moved the whole multi-GPU regime from "shuffle-bound" to "compute-bound."</p>
+</div>
+</section>
+
+<section id="hardware" class="layer">
+<h2>Section 10 · your mandate</h2>
+<div class="sectitle">NVL72 · DGX/HGX · AWS+S3 — topology decides the plan</div>
+
+<p>"Drive multi-node performance, NVL72 first then AWS EC2 to S3" is really one question asked on three different fabrics: <strong>how fast can GPUs exchange data, and how fast can they read it?</strong> The same exchange operator behaves completely differently depending on the interconnect and storage underneath. Here's the landscape, ordered from the friendliest to the harshest.</p>
+
+<h4>The three regimes</h4>
+<div class="tbl"><table>
+<thead><tr><th>Regime</th><th>Intra-node</th><th>Inter-node</th><th>Storage</th><th>What gates the query</th></tr></thead>
+<tbody>
+<tr><td><strong>GB200 NVL72</strong></td><td colspan="2">All 72 GPUs in <strong>one NVLink domain</strong> — 1.8 TB/s per GPU, 130 TB/s aggregate, ~300 ns any-to-any. No "inter-node" penalty across the rack.</td><td>NVLink-C2C to Grace host (900 GB/s); fast local + network</td><td><strong>Compute &amp; skew.</strong> Shuffle is nearly free → operator efficiency and partition balance dominate.</td></tr>
+<tr><td><strong>DGX/HGX node + IB</strong></td><td>8 GPUs on <strong>NVSwitch</strong> (NVLink), full-BW intra-node</td><td>drop to <strong>InfiniBand / RoCE</strong> between nodes (≪ NVLink)</td><td>local NVMe + networked lake</td><td><strong>Inter-node shuffle.</strong> Keep traffic on-node; the node boundary is the cliff.</td></tr>
+<tr><td><strong>AWS EC2 + S3</strong></td><td>NVLink within an instance (e.g. p5)</td><td><strong>EFA</strong> between instances; <em>no</em> cross-instance NVLink</td><td><strong>S3 object store</strong> — high latency, cold</td><td><strong>Scan / I/O + network.</strong> Reading S3 can outweigh compute.</td></tr>
+</tbody>
+</table></div>
+
+<div class="box gpu">
+<div class="bt">Why NVL72 changes the exchange's character</div>
+<p>On NVL72 the rack <em>is</em> the NVLink domain — every one of the 72 GPUs reaches every other at NVLink speed, ~14× PCIe Gen5, with uniform ~300 ns latency. The producer→consumer detour that dominates HTTP shuffle effectively vanishes; your UCX exchange runs over NVLink for the whole "cluster." So on NVL72 the limiter shifts to (a) how balanced your hash partitions are (skew now matters more than bandwidth) and (b) raw operator throughput. It also makes <strong>spilling to host cheap</strong>: the Grace CPU's memory hangs off NVLink-C2C at 900 GB/s, so host is just a slower memory tier, not a PCIe exile (§11). This is why the roadmap starts here — it's the regime where the GPU engine is least constrained, so you validate correctness and operator perf before the network gets hard.</p>
+</div>
+
+<div class="box warn">
+<div class="bt">…and why AWS+S3 is the hard mode you graduate to</div>
+<p>On EC2, cross-instance traffic has no NVLink — it's EFA/RoCE, far thinner than the NVL72 fabric — and your data lives in <strong>S3</strong>, an object store with tens-of-ms first-byte latency and per-request cost. Two consequences: (1) the <strong>TableScan</strong> can dominate, so prefetching, parallel range reads, GPUDirect Storage, and keeping Parquet compressed until the GPU decompresses it all matter; (2) <strong>inter-instance shuffle</strong> is precious, so compress partitions (nvCOMP) before they hit the wire and partition topology-aware to minimize cross-instance bytes. The exchange that looked "free" on NVL72 is now the thing you fight. Same operator, opposite tuning.</p>
+</div>
+
+<h4>Topology-aware partitioning (the portable idea)</h4>
+<p>Across all three regimes the winning move is the same: make the <em>cheap</em> link carry the <em>most</em> traffic. Hierarchical/two-level shuffle — partition first to local peers over NVLink, then a reduced cross-node step over IB/EFA — mirrors how NCCL builds hierarchical collectives (comms guide §06). On NVL72 there's no hierarchy to exploit (it's flat NVLink), so you optimize differently than on a multi-node DGX or EC2 fleet. A production exchange should be aware of which peers are NVLink-local vs network-remote and route accordingly; UCX already discovers this, but the <em>partition assignment</em> is your operator's choice.</p>
+
+<div class="box bug">
+<div class="bt">Benchmark hygiene that bites everyone</div>
+<p>Hot-cache single-node numbers and cold-cache multi-node numbers <strong>are not comparable</strong> — the published Velox-cuDF figures explicitly separate them. When you report multi-node speedups, fix: cache state (cold S3 vs warm local), whether managed memory was needed, allocator (async vs managed), and which exchange (HTTP vs UCX). A "regression" is often just a cold cache or an accidental managed-memory fallback, not the operator.</p>
+</div>
+</section>
+
+<section id="spilling" class="layer">
+<h2>Section 11 · your mandate</h2>
+<div class="sectitle">Spilling to host — surviving memory pressure</div>
+
+<p>"Add spilling to host in Velox-cuDF." Here's the problem it solves and the design space. GPU memory is small (tens of GB) relative to the data, and §05 told us every libcudf operator <em>allocates its full output</em>. A hash-join build side, a high-cardinality aggregation's hash table, or a sort's working set can all exceed device memory. Without spilling, the query simply OOMs. With it, the query slows down gracefully instead of dying. Velox already has a mature CPU spilling framework; the work is making the GPU operators participate.</p>
+
+<h4>The memory hierarchy you're managing</h4>
+<pre data-lang="text"><code>GPU HBM        tens of GB     8 TB/s    &lt;-- where columns want to live
+   |  D2H / H2D copy (PCIe ~64 GB/s, or NVLink-C2C 900 GB/s on Grace-Hopper)
+Pinned host    hundreds of GB  ~DRAM BW  &lt;-- first spill tier (page-locked for fast DMA)
+   |  disk I/O
+Local NVMe     TBs            GB/s       &lt;-- second spill tier (or skip on Grace)</code></pre>
+<p>Spilling = pushing the coldest data <em>down</em> this hierarchy when HBM is tight, and pulling it back <em>up</em> when needed. The art is choosing <em>what</em> and <em>when</em> with minimal damage to throughput.</p>
+
+<h4>Mechanism</h4>
+<ol>
+<li><strong>Detect pressure.</strong> Hook RMM: when an allocation would exceed a budget (or the pool fails), invoke a spill manager rather than throwing. Velox's <code>MemoryPool</code>/arbitrator drives this on CPU; the GPU backend needs the same trigger wired to RMM.</li>
+<li><strong>Choose a victim.</strong> Spillable units are whole batches / build-side partitions. Pick the least-recently-used, or partitions not needed until later in the plan. Operator knowledge helps: a hash-join build partition that won't be probed for a while is a great victim.</li>
+<li><strong>Evict.</strong> D2H-copy the victim's column buffers into a <strong>pinned</strong> host buffer (fast DMA). Optionally <strong>nvCOMP-compress</strong> first to cut bytes moved — GPU compute is cheaper than PCIe bandwidth. Free the device buffers back to RMM.</li>
+<li><strong>Restore.</strong> When the operator needs the victim, H2D-copy (decompress) it back. Track residency so you never read a spilled buffer as if it were on-device (a stream-ordering-class bug, §03).</li>
+</ol>
+
+<pre data-lang="c++"><code><span class="c-com">// Spill manager sketch: evict a build-side partition under memory pressure.</span>
+<span class="c-ty">HostBuffer</span> <span class="c-fn">spill_to_host</span>(<span class="c-kw">const</span> cudf::<span class="c-ty">table_view</span>&amp; victim, rmm::<span class="c-ty">cuda_stream_view</span> s) {
+  <span class="c-kw">auto</span> packed = cudf::<span class="c-fn">pack</span>(victim, s);          <span class="c-com">// contiguous {metadata, gpu_data}</span>
+  <span class="c-kw">auto</span> bytes  = nvcomp::<span class="c-fn">compress</span>(packed.gpu_data, s); <span class="c-com">// optional, bandwidth vs cycles</span>
+  <span class="c-ty">HostBuffer</span> h = <span class="c-fn">alloc_pinned</span>(bytes.size());
+  <span class="c-fn">cudaMemcpyAsync</span>(h.data(), bytes.data(), bytes.size(), cudaMemcpyDeviceToHost, s);
+  s.<span class="c-fn">synchronize</span>();                              <span class="c-com">// ensure copy done before freeing device mem</span>
+  <span class="c-kw">return</span> h;  <span class="c-com">// device buffers now freed back to RMM; metadata kept to restore later</span>
+}</code></pre>
+
+<h4>Spill vs partition vs recompute — the real decision</h4>
+<div class="box key">
+<div class="bt">Three ways to not OOM, and when each wins</div>
+<p><strong>Spill</strong> (evict to host/disk, bring back later): simplest, preserves the plan; cost is data movement. Best when the overflow is modest or host is close (Grace-Hopper).<br>
+<strong>Partition</strong> (a.k.a. <em>grace hash join</em>: split the join/agg into key-ranges that each fit, process one at a time): avoids ever holding everything; cost is extra passes over data. Best when the build side hugely exceeds memory.<br>
+<strong>Recompute</strong> (drop and regenerate from source): best when regeneration is cheaper than the round-trip (rare in analytics, common in ML).<br>
+A good operator combines them: partition to bound peak, spill within a partition for slack.</p>
+</div>
+
+<div class="box gpu">
+<div class="bt">Grace-Hopper / NVL72 tilts the answer toward "spill freely"</div>
+<p>On PCIe-attached GPUs, every spill costs a ~64 GB/s round trip and you spill reluctantly. On GH200/GB200, host memory hangs off NVLink-C2C at 900 GB/s and is cache-coherent — spilling to host is ~14× cheaper, so the threshold to spill drops dramatically and managed memory becomes a viable backstop. Your spilling design should be parameterized by the host link speed, not hard-coded — the same code should spill aggressively on Grace and conservatively on a cloud PCIe instance.</p>
+</div>
+
+<div class="box bug">
+<div class="bt">Spilling pitfalls</div>
+<p><strong>Pinned memory exhaustion:</strong> pinned host allocations are themselves limited and slow to allocate — pool them. <strong>Spill thrashing:</strong> evict-then-immediately-need causes ping-pong; victim selection must look at the plan, not just recency. <strong>Stream races on restore:</strong> a restored buffer must be fully copied before any kernel reads it. <strong>Correctness under spill:</strong> a query must return identical results spilled or not — diff them (§15). <strong>Compression CPU fallback:</strong> if nvCOMP doesn't support a path and you silently fall back to host compression, you've reintroduced the CPU bottleneck you were avoiding.</p>
+</div>
+</section>
+
+<section id="streaming-agg" class="layer">
+<h2>Section 12 · your mandate</h2>
+<div class="sectitle">Streaming aggregation — bounded-memory GROUP BY</div>
+
+<p>"Improve streaming aggregation support in Velox-cuDF." The blog notes HashAggregation got "a streaming interface to manage partial and final aggregations." Here's what that means and why it's the natural partner to spilling.</p>
+
+<h4>The partial → final decomposition</h4>
+<p>A distributed/streaming aggregation splits every aggregate into two phases that exploit associativity:</p>
+<ul>
+<li><strong>Partial (pre-aggregate):</strong> each producer aggregates its <em>local</em> batches into per-group partial states (e.g. for <code>AVG</code>: keep <code>(sum, count)</code>, not the average). Input shrinks from N rows to ~G groups.</li>
+<li><strong>Shuffle</strong> the small partial states by group key (the Exchange, §09) — far less data than shuffling raw rows.</li>
+<li><strong>Final (merge):</strong> each consumer merges partial states for its groups and finalizes (<code>sum/count → avg</code>).</li>
+</ul>
+<p>This is why <code>SUM/COUNT/MIN/MAX/AVG</code> distribute cleanly (they're associative/mergeable) while <code>MEDIAN</code> / exact <code>COUNT(DISTINCT)</code> don't — they need approximate sketches (HLL, t-digest) to stream.</p>
+
+<h4>Why "streaming" specifically</h4>
+<p>Non-streaming aggregation buffers <em>all</em> input, builds one giant hash table, then emits — peak memory = whole input. Streaming aggregation processes batch-by-batch, maintaining a bounded running hash table of group states and emitting/merging as it goes, so memory ∝ number of <em>groups</em>, not number of <em>rows</em>. On a GPU with tens of GB, that distinction is the difference between fitting and OOMing on a billion-row scan.</p>
+
+<pre data-lang="c++"><code><span class="c-com">// Streaming partial aggregation: fold each incoming batch into a running state.</span>
+<span class="c-ty">GroupState</span> state;  <span class="c-com">// key -&gt; partial accumulators, lives on GPU, size ~ #groups</span>
+<span class="c-kw">while</span> (<span class="c-kw">auto</span> batch = source-&gt;<span class="c-fn">next</span>()) {            <span class="c-com">// ~1 GiB GPU batches</span>
+  <span class="c-kw">auto</span> partial = cudf::<span class="c-fn">groupby</span>(batch, keys)
+                    .<span class="c-fn">aggregate</span>({SUM(v), COUNT(v)}, stream, mr);
+  state = <span class="c-fn">merge_states</span>(state, partial, stream, mr);   <span class="c-com">// combine into running result</span>
+  <span class="c-kw">if</span> (<span class="c-fn">groups_exceed_budget</span>(state))                  <span class="c-com">// high-cardinality safety valve</span>
+    <span class="c-fn">spill_or_flush</span>(state);                          <span class="c-com">// ties straight into SS11</span>
+}
+<span class="c-kw">auto</span> result = <span class="c-fn">finalize</span>(state, stream, mr);            <span class="c-com">// e.g. sum/count -&gt; avg</span></code></pre>
+
+<div class="box warn">
+<div class="bt">The cardinality cliff</div>
+<p>Streaming aggregation is bounded by <em>group count</em>, not row count — but a high-cardinality <code>GROUP BY</code> (e.g. by user_id over a billion users) makes the running hash table itself blow past memory. Then you need either (a) <strong>sort-based</strong> aggregation (sort by key, segmented reduce — handles unbounded cardinality, costs a sort), or (b) <strong>spilling</strong> the partial-state table (§11), or (c) <strong>repartitioning</strong> so each worker holds fewer groups. The streaming interface's job is to detect this and pick a path instead of dying. This is precisely where your streaming-agg and spilling projects intersect — they're two halves of "aggregate more data than fits."</p>
+</div>
+
+<div class="box key">
+<div class="bt">Why this lands in Velox-cuDF, not raw libcudf</div>
+<p>libcudf gives you one-shot <code>groupby</code> over a table. Turning that into a <em>streaming</em> operator — running state across batches, partial/final split, spill integration, correct null/overflow semantics for Presto — is operator-level work in the Velox-cuDF backend. It's the kind of "compose libcudf primitives into a correct, memory-safe Velox operator" task that defines the whole integration.</p>
+</div>
+</section>
+
+<section id="engines" class="layer">
+<h2>Section 13</h2>
+<div class="sectitle">The neighboring engines — the rest of the diagram</div>
+
+<p>The colored boxes to the right of the red rectangle (Spark, Polars, DuckDB, "GPU DB Partners") are <em>other front-ends sitting on the same cuDF/CUDA platform</em>. Velox-cuDF is one consumer of libcudf; these are the others. Knowing them clarifies what's special about the Velox approach and where the field is going.</p>
+
+<div class="tbl"><table>
+<thead><tr><th>Engine</th><th>Front-end / host</th><th>How it reaches the GPU</th><th>Built on</th><th>Integration shape</th></tr></thead>
+<tbody>
+<tr><td><strong>Velox-cuDF</strong></td><td>Presto, Spark (via Gluten)</td><td>cuDF DriverAdapter rewrites Velox pipelines</td><td>Velox + libcudf + RMM + UCX</td><td>shared C++ engine; one effort accelerates many systems</td></tr>
+<tr><td><strong>Spark-RAPIDS</strong></td><td>Apache Spark (JVM)</td><td>plugin replaces Spark SQL physical operators with GPU versions</td><td>libcudf (JNI) + UCX shuffle</td><td>mature, production; Spark-only; predates Velox path</td></tr>
+<tr><td><strong>cudf-polars</strong></td><td>Polars (Python/Rust)</td><td>executes the Polars lazy logical plan on GPU</td><td>libcudf (via pylibcudf)</td><td>single-engine GPU backend; <code>.collect(engine="gpu")</code></td></tr>
+<tr><td><strong>Sirius</strong></td><td>DuckDB, Doris (via <strong>Substrait</strong>)</td><td>routes the Substrait plan to a GPU executor</td><td>libcudf + RMM + NCCL + custom CUDA + JIT</td><td>drop-in DuckDB extension; CPU fallback for gaps</td></tr>
+<tr><td><strong>DuckDB</strong></td><td>itself (embedded SQL)</td><td>CPU engine; GPU only via Sirius extension</td><td>own vectorized engine</td><td>the host that Sirius accelerates</td></tr>
+</tbody>
+</table></div>
+
+<h4>The common thread, and the bet</h4>
+<p>Every GPU engine in 2025–26 converges on the same foundation: <strong>libcudf for operators, RMM for memory, a collective/transport library (UCX or NCCL) for shuffle, and Substrait/Arrow as the neutral plan/data interchange.</strong> Sirius and Spark-RAPIDS even reuse the same shuffle ideas you're building. The differences are (1) which host SQL system they plug into and (2) whether they're a bespoke engine or a shared one.</p>
+
+<div class="box key">
+<div class="bt">Why the Velox approach is strategically different</div>
+<p>Spark-RAPIDS accelerates Spark. cudf-polars accelerates Polars. Sirius accelerates DuckDB/Doris. Each is a vertical. <strong>Velox-cuDF accelerates the shared engine</strong> — so a GPU operator written once shows up in Presto <em>and</em> Spark <em>and</em> any future Velox-based system (e.g. Meta's Axiom). That's the "reduce duplication across the open data stack" thesis. The flip side: you inherit Velox's abstractions and must satisfy multiple hosts' semantics (Presto <em>and</em> Spark null/type rules), which is harder than a single-host engine. Your correctness mandate is partly that multi-host burden.</p>
+</div>
+
+<p>Historical context for the "GPU DB Partners" box: GPU databases aren't new — <strong>MapD/HeavyDB</strong> (JIT-compiled SQL on GPU, ~2016) and <strong>BlazingSQL</strong> proved the thesis years ago. What changed is the foundation maturing (libcudf, RMM, Arrow, Substrait, UCX) plus hardware crossing the line (huge HBM, NVLink domains, hardware decompression). The 2025–26 wave — Velox-cuDF, Sirius setting ClickBench records — is that groundwork paying off, which is why this is a good area to be working in right now.</p>
+</section>
+
+<section id="decisions" class="layer">
+<h2>Section 14</h2>
+<div class="sectitle">Decision trees</div>
+
+<h3>Should this query (or operator) run on GPU?</h3>
+<div class="tree"><span class="q">How big is the data the operator touches?</span>
+├─ <span class="a">small (&lt; ~100 MB / few M rows)</span> → <span class="r">CPU. Launch + H2D overhead dominates; GPU batch can't fill the device.</span>
+└─ <span class="a">large</span> → <span class="q">What's the operator mix?</span>
+       ├─ <span class="a">scan + filter + join + groupby + strings</span> → <span class="r">GPU. The sweet spot — bandwidth-bound, parallel, mergeable.</span>
+       ├─ <span class="a">point lookup / tiny result by key</span> → <span class="r">CPU + index. GPU full-scan wastes the device.</span>
+       └─ <span class="a">branchy row-at-a-time UDF</span> → <span class="r">GPU only if JIT/AST-expressible; else warp divergence kills it.</span>
+<span class="q">Does the whole pipeline stay on GPU?</span>
+├─ <span class="a">yes, no CudfConversion nodes</span> → <span class="r">ship it — residency preserved end to end.</span>
+└─ <span class="a">no, one op falls back</span> → <span class="r">measure: a mid-pipeline GPU→CPU→GPU bounce can erase the win. Consider CPU for that whole stage.</span></div>
+
+<h3>Which shuffle / exchange strategy?</h3>
+<div class="tree"><span class="q">Are producer and consumer GPUs in the same NVLink domain?</span>
+├─ <span class="a">yes (intra-node NVSwitch, or anywhere on NVL72)</span> → <span class="r">UCX over NVLink. ~1.8 TB/s, ~free. Optimize for partition balance, not bandwidth.</span>
+└─ <span class="a">no (separate nodes / EC2 instances)</span> → <span class="q">Is the link fat (InfiniBand/RoCE) or thin (TCP/EFA, cloud)?</span>
+       ├─ <span class="a">fat IB/RoCE</span> → <span class="r">UCX + GPUDirect RDMA. Keep buffers registered (rcache); avoid host staging.</span>
+       └─ <span class="a">thin / cloud</span> → <span class="r">UCX + nvCOMP-compress partitions first; trade GPU cycles for scarce wire bytes. Topology-aware partitioning.</span>
+<span class="q">Still on the legacy HTTP exchange?</span>
+└─ <span class="a">yes</span> → <span class="r">that's the baseline you beat &gt;6x on DGX A100 — every byte does GPU→host→TCP→host→GPU. Move to UCX cuDF exchange.</span></div>
+
+<h3>Out of GPU memory — what now?</h3>
+<div class="tree"><span class="q">Why is it OOM?</span>
+├─ <span class="a">"plenty free" in nvidia-smi but alloc fails</span> → <span class="r">fragmentation. Use cuda_async resource / arena; cap batch size; fewer drivers.</span>
+└─ <span class="a">genuinely too big</span> → <span class="q">How much bigger than memory, and what op?</span>
+       ├─ <span class="a">slightly over, host link is fast (Grace-Hopper)</span> → <span class="r">spill to pinned host (SS11). Cheap over NVLink-C2C.</span>
+       ├─ <span class="a">build side ≫ memory (join/agg)</span> → <span class="r">partition / grace-hash: process key-ranges that each fit, in passes.</span>
+       ├─ <span class="a">high-cardinality GROUP BY</span> → <span class="r">sort-based agg or spill the partial-state table (SS11+SS12).</span>
+       └─ <span class="a">last resort, must complete</span> → <span class="r">CUDA managed memory — correctness backstop, expect page-fault slowdown.</span></div>
+
+<h3>"My GPU query is barely faster than CPU" — triage order</h3>
+<div class="tree"><span class="c-com"># Check these in order BEFORE profiling kernels — they're the usual culprits.</span>
+<span class="q">1. Batch size?</span> → <span class="r">left at CPU default (~1K rows)? raise to ~1 GiB. Kernels were launch-bound.</span>
+<span class="q">2. End-to-end GPU?</span> → <span class="r">dump the rewritten plan; any CudfConversion node = PCIe ping-pong. Find the unsupported op/type/expr.</span>
+<span class="q">3. Driver count?</span> → <span class="r">1 driver underutilizes (copy stalls); &gt;8 fragments memory. Try 2–8.</span>
+<span class="q">4. Exchange?</span> → <span class="r">multi-GPU and still HTTP? you're shuffle-bound, not compute-bound. Switch to UCX.</span>
+<span class="q">5. Scan-bound?</span> → <span class="r">cold S3 / no GDS / decompress on CPU? the GPU is starved waiting for input.</span>
+└─ <span class="a">only after all clear</span> → <span class="r">now profile with Nsight Systems for the actual kernel/timeline bottleneck.</span></div>
+</section>
+
+<section id="debugging" class="layer">
+<h2>Section 15</h2>
+<div class="sectitle">Debugging &amp; profiling</div>
+
+<p>The tools split by which layer you're chasing: a kernel, a memory issue, an operator/plan issue, a transport issue, or a correctness issue. Reach for the matching one rather than guessing.</p>
+
+<div class="tbl"><table>
+<thead><tr><th>Tool</th><th>Layer</th><th>Use it to…</th></tr></thead>
+<tbody>
+<tr><td><strong>Nsight Systems</strong> (<code>nsys</code>)</td><td>whole timeline</td><td>see kernel/copy/stream overlap, find gaps (GPU idle = stalls on copy, exchange, or CPU fallback). First tool, always.</td></tr>
+<tr><td><strong>Nsight Compute</strong> (<code>ncu</code>)</td><td>one kernel</td><td>memory vs compute bound, occupancy, coalescing — once nsys says <em>which</em> kernel.</td></tr>
+<tr><td><strong>compute-sanitizer</strong></td><td>memory / races</td><td><code>--tool memcheck</code> (OOB/use-after-free), <code>--tool racecheck</code> — catches the stream-ordering races of §03.</td></tr>
+<tr><td><strong>RMM logging / stats</strong></td><td>allocation</td><td>wrap the resource in a logging/statistics adaptor: peak usage, alloc histogram, leaks, fragmentation.</td></tr>
+<tr><td><strong>Velox runtime stats / query trace</strong></td><td>operator / plan</td><td>per-operator rows, bytes, time, spill counts; Velox query tracing replays a plan. Confirm the rewritten plan is end-to-end GPU.</td></tr>
+<tr><td><strong>UCX_LOG_LEVEL / ucx_info</strong></td><td>transport</td><td>verify the exchange chose NVLink/RDMA (not TCP); inspect endpoints — same trick as the comms guide.</td></tr>
+<tr><td><strong>cuda-gdb</strong></td><td>kernel logic</td><td>step a misbehaving kernel when a sanitizer isn't enough.</td></tr>
+</tbody>
+</table></div>
+
+<h4>Correctness: diff the GPU against the CPU</h4>
+<p>Your "performance and correctness" mandate has a single most-valuable technique: run the same query on the CPU backend and the GPU backend and <strong>diff the results</strong>. Velox makes this natural — same plan, flip the backend. Where they disagree, you've found a semantics bug. The usual suspects, in order:</p>
+<ul>
+<li><strong>Nulls</strong> — null ordering in sorts, null propagation in expressions, <code>COUNT</code> vs <code>COUNT(*)</code>, null keys in joins/group-bys.</li>
+<li><strong>Numeric</strong> — integer overflow in <code>SUM</code>, decimal scale/precision, float associativity (GPU reduces in a different order → last-bit differences; use tolerance for floats, exact for ints/decimals).</li>
+<li><strong>Strings</strong> — collation, case, Unicode, empty-vs-null.</li>
+<li><strong>Time</strong> — timestamp units, timezone, date boundaries.</li>
+</ul>
+<p>Spilling and exchange add a second axis: a query must return identical results <em>with and without</em> spilling, and <em>across</em> different partition counts. Make those equivalences part of CI.</p>
+
+<div class="tbl"><table>
+<thead><tr><th>Symptom</th><th>Likely cause</th><th>Fix</th></tr></thead>
+<tbody>
+<tr><td>GPU barely faster than CPU</td><td>small batch / fallback / too-few drivers (§14 triage)</td><td>raise batch to ~1 GiB; remove CudfConversion; 2–8 drivers</td></tr>
+<tr><td>OOM with free memory shown</td><td>pool fragmentation</td><td>async/arena resource; cap batch; fewer drivers</td></tr>
+<tr><td>Intermittent wrong answers</td><td>stream-ordering race / read-before-ready</td><td>racecheck; share stream or event-wait on the dependency</td></tr>
+<tr><td>nsys shows long GPU idle gaps</td><td>copy stalls, exchange wait, or CPU fallback</td><td>overlap copy (more drivers); UCX exchange; fix fallback</td></tr>
+<tr><td>Multi-GPU doesn't scale</td><td>HTTP exchange / partition skew</td><td>UCX exchange; detect &amp; split hot keys</td></tr>
+<tr><td>Exchange slower than expected</td><td>fell back to TCP / re-registering buffers</td><td>UCX_LOG_LEVEL=info to confirm transport; cache registrations</td></tr>
+<tr><td>Result wrong only on big data</td><td>SUM overflow / spill path bug</td><td>diff vs CPU; widen accumulator; test spilled==unspilled</td></tr>
+<tr><td>Scan-bound on cloud</td><td>cold S3, CPU decompress, no GDS</td><td>parallel range reads; GPU decode (nvCOMP); GPUDirect Storage</td></tr>
+</tbody>
+</table></div>
+
+<div class="box key">
+<div class="bt">The one habit that catches the most bugs</div>
+<p>After any plan runs, dump the <strong>rewritten</strong> operator tree and read it. Most "mysterious" GPU performance and correctness issues are visible right there: a <code>CudfConversion</code> you didn't expect, an operator that didn't get replaced, a partition count that doesn't match the topology. The plan is the ground truth for what actually ran — not what you think you asked for.</p>
+</div>
+</section>
+
+<section id="glossary" class="layer">
+<h2>Section 16</h2>
+<div class="sectitle">Glossary &amp; further reading</div>
+
+<h4>Terms in one line each</h4>
+<div class="tbl"><table>
+<thead><tr><th>Term</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><strong>libcudf / cuDF</strong></td><td>CUDA C++ library of columnar relational operators; cuDF is its Python dataframe binding.</td></tr>
+<tr><td><strong>Velox</strong></td><td>Reusable C++ vectorized query-engine library (vectors, expressions, operators, scheduler).</td></tr>
+<tr><td><strong>Velox-cuDF</strong></td><td>Experimental GPU backend: a DriverAdapter that rewrites Velox pipelines to cuDF GPU operators.</td></tr>
+<tr><td><strong>DriverAdapter</strong></td><td>Velox hook to rewrite pipelines (replace/fuse/add operators) — how cuDF inserts GPU ops.</td></tr>
+<tr><td><strong>CudfVector</strong></td><td>RowVector subclass owning a <code>cudf::table</code> + stream; keeps batches on-GPU within Velox's model.</td></tr>
+<tr><td><strong>CudfConversion</strong></td><td>Bridge operator that copies GPU↔CPU to fall back to a CPU operator; a perf red flag if unexpected.</td></tr>
+<tr><td><strong>RMM</strong></td><td>RAPIDS Memory Manager: pooled, stream-ordered, pluggable GPU allocator. Never <code>cudaMalloc</code> in a hot loop.</td></tr>
+<tr><td><strong>CCCL</strong></td><td>CUDA Core Compute Libraries = Thrust + CUB + libcu++ (parallel algorithm primitives).</td></tr>
+<tr><td><strong>cuCollections</strong></td><td>Lock-free GPU hash tables (open addressing); the engine of joins and hash aggregations.</td></tr>
+<tr><td><strong>nvCOMP</strong></td><td>GPU (de)compression (LZ4/Snappy/Zstd/…); used in I/O, spilling, shuffle. HW engine on Blackwell.</td></tr>
+<tr><td><strong>Exchange / shuffle</strong></td><td>All-to-all data movement between stages (Partitioned / Merge / Broadcast).</td></tr>
+<tr><td><strong>UCX</strong></td><td>Unified Communication X — transport framework; picks NVLink/RDMA/TCP. The exchange's mover.</td></tr>
+<tr><td><strong>GPUDirect RDMA / Storage</strong></td><td>NIC/SSD DMA directly to/from GPU memory, bypassing the host bounce buffer.</td></tr>
+<tr><td><strong>Prestissimo</strong></td><td>Presto C++ native worker built on Velox (Java coordinator unchanged).</td></tr>
+<tr><td><strong>Gluten</strong></td><td>Bridges Spark (JVM) plans to a native engine (Velox) via Substrait; enables hybrid CPU-GPU.</td></tr>
+<tr><td><strong>Substrait</strong></td><td>Cross-engine serialized query-plan format (Gluten, Sirius use it). Arrow, but for plans.</td></tr>
+<tr><td><strong>Spilling</strong></td><td>Evicting GPU data down to pinned host / disk under memory pressure, restoring on demand.</td></tr>
+<tr><td><strong>Streaming aggregation</strong></td><td>Partial→merge GROUP BY with memory ∝ #groups, not #rows.</td></tr>
+<tr><td><strong>NVL72</strong></td><td>72-Blackwell-GPU rack as one NVLink domain (1.8 TB/s/GPU, 130 TB/s aggregate, ~300 ns).</td></tr>
+</tbody>
+</table></div>
+
+<h4>Primary sources</h4>
+<ul>
+<li><strong>NVIDIA blog — "Accelerating Large-Scale Data Analytics with GPU-Native Velox and cuDF"</strong>: end-to-end Presto results, the UCX exchange, multi-GPU scaling. <code>developer.nvidia.com/blog/accelerating-large-scale-data-analytics-with-gpu-native-velox-and-nvidia-cudf</code></li>
+<li><strong>Velox blog — "Extending Velox: GPU Acceleration with cuDF"</strong>: DriverAdapter, CudfVector, tuning. <code>velox-lib.io/blog/extending-velox-with-cudf</code></li>
+<li><strong>Your repo</strong>: <code>github.com/facebookincubator/velox/tree/main/velox/experimental/ucx-exchange</code> and the cuDF backend at <code>.../experimental/cudf</code>; GPU exchange PR <code>facebookincubator/velox/pull/15014</code>.</li>
+<li><strong>libcudf docs</strong>: <code>docs.rapids.ai/api/libcudf/stable</code> · <strong>RMM</strong>: <code>docs.rapids.ai/api/rmm/stable</code> · <strong>cuCollections</strong>: <code>github.com/NVIDIA/cuCollections</code> · <strong>CCCL</strong>: <code>github.com/NVIDIA/cccl</code>.</li>
+<li><strong>Sirius</strong> (GPU engine for DuckDB, the neighboring approach): paper <code>arxiv.org/abs/2508.04701</code>, code <code>github.com/sirius-db/sirius</code>.</li>
+<li><strong>VeloxCon</strong> talks (incl. "Accelerating Velox with RAPIDS cuDF" and the cuDF Exchange session) for the deepest operator-level detail.</li>
+</ul>
+
+<div class="box key">
+<div class="bt">The whole guide in five sentences</div>
+<p>Columnar data in GPU memory (§02) is processed by libcudf operators (§05) composed from CUDA primitives (§03–04), scheduled by Velox pipelines that the cuDF DriverAdapter rewrites for the GPU (§06), driven by Presto/Spark plans through a compatibility layer (§07). Single-node, the goal is to keep data resident and batches huge; multi-node, the <strong>Exchange</strong> becomes the bottleneck (§08), which is why a GPU-native UCX shuffle over NVLink/RDMA (§09) is the highest-leverage thing to own. The fabric underneath — NVL72 vs DGX vs AWS+S3 (§10) — changes whether shuffle is free or fatal, and therefore changes every other decision. When data won't fit, spilling (§11) and streaming aggregation (§12) keep queries alive instead of OOMing. Everything else is reading the rewritten plan, diffing GPU against CPU, and making sure the data never accidentally leaves the GPU.</p>
+</div>
+
+<hr class="div">
+<div class="foot">
+cuda → velox_cudf · a companion to the HPC/GPU interconnect field guide<br>
+built from the two red boxes + the roadmap · grounded in NVIDIA &amp; Velox engineering sources, current to 2026<br>
+sections 09–12 map to your four mandate items: the UCX exchange, multi-node/NVL72, spilling, streaming aggregation.
+</div>
+
+</section>
+
+</div>
+</main>
+</div>
+
+<script>
+const prog = document.getElementById('progress');
+const navLinks = [...document.querySelectorAll('#nav a[href^="#"]')];
+const sections = navLinks.map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+function onScroll(){
+  const h = document.documentElement;
+  const scrolled = (h.scrollTop || document.body.scrollTop);
+  const max = (h.scrollHeight - h.clientHeight);
+  prog.style.width = (max>0 ? (scrolled/max*100) : 0) + '%';
+  let cur = null;
+  for(const s of sections){
+    if(s.getBoundingClientRect().top <= 120) cur = s.id;
+  }
+  navLinks.forEach(a=>{
+    a.classList.toggle('active', a.getAttribute('href') === '#'+cur);
+  });
+}
+document.addEventListener('scroll', onScroll, {passive:true});
+window.addEventListener('resize', onScroll);
+onScroll();
+</script>
+</body>
+</html>
