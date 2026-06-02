@@ -1,0 +1,1111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Road to UCX — A Low-Level Guide to HPC & GPU Communication</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Serif:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0a0e16;
+  --bg2:#0e1420;
+  --panel:#121a28;
+  --panel2:#16202f;
+  --line:#22304a;
+  --line2:#2d3f5c;
+  --txt:#c4d0e0;
+  --txt-dim:#8595ab;
+  --txt-faint:#5d6c84;
+  --cyan:#4ec9b0;
+  --cyan-bright:#5fe3c4;
+  --amber:#e8a33d;
+  --amber-soft:#f0c075;
+  --red:#e06c75;
+  --violet:#9d7cd8;
+  --blue:#61afef;
+  --green:#98c379;
+  --mono:'IBM Plex Mono',monospace;
+  --sans:'IBM Plex Sans',system-ui,sans-serif;
+  --serif:'IBM Plex Serif',Georgia,serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg);
+  color:var(--txt);
+  font-family:var(--sans);
+  font-weight:300;
+  font-size:16px;
+  line-height:1.72;
+  -webkit-font-smoothing:antialiased;
+  background-image:
+    linear-gradient(rgba(78,201,176,.022) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(78,201,176,.022) 1px,transparent 1px),
+    radial-gradient(circle at 12% -5%,rgba(78,201,176,.06),transparent 45%),
+    radial-gradient(circle at 92% 8%,rgba(232,163,61,.05),transparent 42%);
+  background-size:46px 46px,46px 46px,100% 100%,100% 100%;
+}
+/* progress bar */
+#progress{position:fixed;top:0;left:0;height:3px;width:0;background:linear-gradient(90deg,var(--cyan),var(--amber));z-index:200;box-shadow:0 0 12px var(--cyan)}
+
+/* layout */
+.shell{display:grid;grid-template-columns:300px 1fr;max-width:1500px;margin:0 auto}
+nav{
+  position:sticky;top:0;align-self:start;height:100vh;overflow-y:auto;
+  border-right:1px solid var(--line);
+  padding:30px 18px 60px 28px;
+  background:linear-gradient(180deg,rgba(14,20,32,.92),rgba(10,14,22,.92));
+  backdrop-filter:blur(6px);
+}
+nav .brand{font-family:var(--mono);font-size:13px;letter-spacing:.5px;color:var(--cyan);font-weight:600;margin-bottom:4px}
+nav .brand .arrow{color:var(--amber)}
+nav .sub{font-family:var(--mono);font-size:10.5px;color:var(--txt-faint);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:26px;border-bottom:1px solid var(--line);padding-bottom:18px}
+nav a{display:block;color:var(--txt-dim);text-decoration:none;font-size:13.5px;padding:5px 10px;border-radius:5px;transition:all .15s;border-left:2px solid transparent;line-height:1.4}
+nav a:hover{color:var(--txt);background:var(--panel)}
+nav a.active{color:var(--cyan-bright);border-left-color:var(--cyan);background:rgba(78,201,176,.08)}
+nav a.sec{font-family:var(--mono);font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--txt-faint);margin-top:20px;padding-left:10px;pointer-events:none}
+nav a.lvl2{padding-left:24px;font-size:12.5px;color:var(--txt-faint)}
+nav a.lvl2:hover{color:var(--txt-dim)}
+
+main{padding:0;min-width:0;overflow:hidden}
+.wrap{max-width:920px;padding:60px 56px 140px}
+
+/* hero */
+.hero{padding:40px 0 20px;border-bottom:1px solid var(--line);margin-bottom:48px}
+.hero .kicker{font-family:var(--mono);color:var(--amber);font-size:12px;letter-spacing:3px;text-transform:uppercase;margin-bottom:20px}
+.hero h1{font-family:var(--mono);font-weight:700;font-size:44px;line-height:1.1;letter-spacing:-1px;color:#eaf1f8;margin-bottom:22px}
+.hero h1 em{font-style:normal;color:var(--cyan)}
+.hero p{font-size:18px;color:var(--txt-dim);max-width:760px;font-weight:300}
+.hero .meta{display:flex;gap:10px;flex-wrap:wrap;margin-top:28px}
+.hero .meta span{font-family:var(--mono);font-size:11px;color:var(--txt-faint);border:1px solid var(--line);padding:5px 12px;border-radius:20px}
+
+/* typography */
+h2{font-family:var(--mono);font-weight:600;font-size:13px;letter-spacing:3px;text-transform:uppercase;color:var(--amber);margin:0 0 6px;display:flex;align-items:center;gap:12px}
+h2::before{content:"";width:34px;height:1px;background:var(--amber);opacity:.6}
+.sectitle{font-family:var(--mono);font-weight:700;font-size:32px;letter-spacing:-.5px;color:#eaf1f8;margin:0 0 28px;line-height:1.15}
+section{padding-top:60px;margin-top:-20px}
+.layer{scroll-margin-top:20px}
+h3{font-family:var(--sans);font-weight:600;font-size:22px;color:#dce6f2;margin:42px 0 14px;letter-spacing:-.2px}
+h4{font-family:var(--mono);font-weight:600;font-size:15px;color:var(--cyan-bright);margin:30px 0 10px;letter-spacing:.3px}
+p{margin:0 0 16px}
+a.inl{color:var(--cyan);text-decoration:none;border-bottom:1px dotted var(--cyan)}
+strong{color:#e6edf5;font-weight:600}
+em.term{font-style:normal;font-family:var(--mono);font-size:.9em;color:var(--amber-soft);background:rgba(232,163,61,.08);padding:1px 6px;border-radius:4px}
+ul,ol{margin:0 0 18px;padding-left:24px}
+li{margin-bottom:8px}
+li::marker{color:var(--cyan)}
+code{font-family:var(--mono);font-size:.88em;background:rgba(120,150,190,.13);color:var(--amber-soft);padding:2px 6px;border-radius:4px;border:1px solid rgba(120,150,190,.12)}
+
+/* code blocks */
+pre{background:#070b12;border:1px solid var(--line);border-radius:10px;padding:20px 22px;overflow-x:auto;margin:18px 0 24px;font-family:var(--mono);font-size:13px;line-height:1.65;position:relative}
+pre::before{content:attr(data-lang);position:absolute;top:0;right:0;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--txt-faint);background:var(--panel);padding:3px 11px;border-bottom-left-radius:8px;border-left:1px solid var(--line);border-bottom:1px solid var(--line)}
+pre code{background:none;border:none;padding:0;color:#c8d4e4;font-size:13px}
+.c-kw{color:var(--violet)}.c-fn{color:var(--blue)}.c-str{color:var(--green)}.c-num{color:var(--amber)}.c-com{color:var(--txt-faint);font-style:italic}.c-ty{color:var(--cyan)}.c-mac{color:var(--amber-soft)}
+
+/* callouts */
+.box{border-radius:10px;padding:18px 22px;margin:22px 0;border:1px solid var(--line);background:var(--panel);position:relative;padding-left:48px}
+.box::before{position:absolute;left:18px;top:18px;font-family:var(--mono);font-weight:700;font-size:16px}
+.box .bt{font-family:var(--mono);font-size:11px;letter-spacing:2px;text-transform:uppercase;font-weight:600;margin-bottom:6px}
+.box p:last-child{margin-bottom:0}
+.box.key{border-color:rgba(78,201,176,.4);background:linear-gradient(180deg,rgba(78,201,176,.07),rgba(78,201,176,.02))}
+.box.key::before{content:"◆";color:var(--cyan)}.box.key .bt{color:var(--cyan)}
+.box.warn{border-color:rgba(232,163,61,.4);background:linear-gradient(180deg,rgba(232,163,61,.07),rgba(232,163,61,.02))}
+.box.warn::before{content:"▲";color:var(--amber)}.box.warn .bt{color:var(--amber)}
+.box.bug{border-color:rgba(224,108,117,.38);background:linear-gradient(180deg,rgba(224,108,117,.06),rgba(224,108,117,.02))}
+.box.bug::before{content:"✦";color:var(--red)}.box.bug .bt{color:var(--red)}
+.box.gpu{border-color:rgba(157,124,216,.4);background:linear-gradient(180deg,rgba(157,124,216,.07),rgba(157,124,216,.02))}
+.box.gpu::before{content:"⬢";color:var(--violet)}.box.gpu .bt{color:var(--violet)}
+
+/* tables */
+.tbl{overflow-x:auto;margin:22px 0;border:1px solid var(--line);border-radius:10px}
+table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:560px}
+th{background:var(--panel2);font-family:var(--mono);font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--cyan);text-align:left;padding:12px 16px;font-weight:600;border-bottom:1px solid var(--line)}
+td{padding:11px 16px;border-bottom:1px solid var(--line);color:var(--txt-dim);vertical-align:top}
+tr:last-child td{border-bottom:none}
+td strong{color:var(--amber-soft);font-family:var(--mono);font-size:13px}
+tbody tr:hover{background:rgba(78,201,176,.03)}
+
+/* layer stack diagram */
+.stack{margin:26px 0;border-radius:12px;overflow:hidden;border:1px solid var(--line)}
+.stack .row{display:flex;align-items:stretch;border-bottom:1px solid var(--line)}
+.stack .row:last-child{border-bottom:none}
+.stack .lbl{flex:0 0 130px;font-family:var(--mono);font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--txt-faint);display:flex;align-items:center;padding:0 14px;background:var(--bg2);border-right:1px solid var(--line)}
+.stack .cells{flex:1;display:flex}
+.stack .cell{flex:1;padding:13px 14px;font-family:var(--mono);font-size:12.5px;text-align:center;border-right:1px dashed var(--line);display:flex;flex-direction:column;justify-content:center;gap:3px}
+.stack .cell:last-child{border-right:none}
+.stack .cell small{font-family:var(--sans);font-size:10.5px;color:var(--txt-faint);font-weight:300;letter-spacing:0}
+.tier-app{background:rgba(157,124,216,.1);color:var(--violet)}
+.tier-mid{background:rgba(78,201,176,.1);color:var(--cyan-bright)}
+.tier-abs{background:rgba(97,175,239,.1);color:var(--blue)}
+.tier-low{background:rgba(232,163,61,.1);color:var(--amber-soft)}
+.tier-hw{background:rgba(224,108,117,.1);color:var(--red)}
+
+/* decision tree */
+.tree{font-family:var(--mono);font-size:13px;background:#070b12;border:1px solid var(--line);border-radius:10px;padding:22px 24px;margin:22px 0;line-height:1.9;overflow-x:auto}
+.tree .q{color:var(--cyan-bright)}
+.tree .a{color:var(--amber-soft)}
+.tree .r{color:var(--green)}
+.tree .br{color:var(--txt-faint)}
+
+/* timeline */
+.timeline{position:relative;margin:30px 0 10px;padding-left:32px}
+.timeline::before{content:"";position:absolute;left:7px;top:6px;bottom:6px;width:2px;background:linear-gradient(180deg,var(--cyan),var(--amber))}
+.tl-item{position:relative;margin-bottom:26px}
+.tl-item::before{content:"";position:absolute;left:-31px;top:6px;width:12px;height:12px;border-radius:50%;background:var(--bg);border:2px solid var(--cyan)}
+.tl-item .yr{font-family:var(--mono);font-size:12px;color:var(--amber);letter-spacing:1px;font-weight:600}
+.tl-item .nm{font-weight:600;color:#dce6f2;font-size:16px;margin:2px 0 4px}
+.tl-item .ds{font-size:14px;color:var(--txt-dim)}
+
+/* collapsibles */
+details{border:1px solid var(--line);border-radius:9px;margin:16px 0;background:var(--panel);overflow:hidden}
+details summary{cursor:pointer;padding:14px 20px;font-family:var(--mono);font-size:13.5px;color:var(--cyan-bright);font-weight:500;list-style:none;display:flex;align-items:center;gap:10px;user-select:none}
+details summary::-webkit-details-marker{display:none}
+details summary::before{content:"▸";color:var(--amber);transition:transform .2s}
+details[open] summary::before{transform:rotate(90deg)}
+details summary:hover{background:var(--panel2)}
+details .body{padding:4px 22px 18px;border-top:1px solid var(--line)}
+
+.qa{border-left:3px solid var(--cyan);padding:4px 0 4px 18px;margin:24px 0}
+.qa . q{font-family:var(--mono);color:var(--cyan-bright);font-size:14.5px;font-weight:500;margin-bottom:8px}
+
+hr.div{border:none;border-top:1px solid var(--line);margin:54px 0}
+.foot{border-top:1px solid var(--line);margin-top:80px;padding-top:30px;font-family:var(--mono);font-size:12px;color:var(--txt-faint);line-height:1.8}
+
+@media(max-width:1080px){
+  .shell{grid-template-columns:1fr}
+  nav{position:static;height:auto;border-right:none;border-bottom:1px solid var(--line)}
+  .wrap{padding:40px 24px 100px}
+  .hero h1{font-size:32px}
+}
+::selection{background:rgba(78,201,176,.3);color:#fff}
+nav::-webkit-scrollbar,pre::-webkit-scrollbar,.tbl::-webkit-scrollbar,.tree::-webkit-scrollbar{height:8px;width:8px}
+nav::-webkit-scrollbar-thumb,pre::-webkit-scrollbar-thumb,.tbl::-webkit-scrollbar-thumb,.tree::-webkit-scrollbar-thumb{background:var(--line2);border-radius:4px}
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<div class="shell">
+<nav id="nav">
+  <div class="brand">comms_stack<span class="arrow"> →</span> ucx</div>
+  <div class="sub">HPC / GPU Interconnect Field Guide</div>
+  <a class="sec">Foundations</a>
+  <a href="#overview">00 · The Layered Stack</a>
+  <a href="#timeline">01 · Evolution Timeline</a>
+  <a class="sec">Physical & Transport</a>
+  <a href="#physical">02 · Sockets, RDMA, NVLink</a>
+  <a href="#physical-sockets" class="lvl2">TCP/IP & sockets</a>
+  <a href="#physical-shm" class="lvl2">Shared memory</a>
+  <a href="#physical-rdma" class="lvl2">InfiniBand & verbs</a>
+  <a href="#physical-roce" class="lvl2">RoCE / iWARP</a>
+  <a href="#physical-nvlink" class="lvl2">NVLink / NVSwitch</a>
+  <a class="sec">Message Passing</a>
+  <a href="#pvm">03 · PVM (the ancestor)</a>
+  <a href="#mpi">04 · MPI — deep dive</a>
+  <a href="#mpi-standard" class="lvl2">Standard vs. implementation</a>
+  <a href="#mpi-launch" class="lvl2">Launch without Slurm</a>
+  <a href="#mpi-ops" class="lvl2">Operators & semantics</a>
+  <a href="#mpi-buffers" class="lvl2">Buffering & protocols</a>
+  <a href="#mpi-transport" class="lvl2">Transport selection</a>
+  <a href="#mpi-gpu" class="lvl2">GPU-aware MPI</a>
+  <a href="#mpi-stencil" class="lvl2">Full stencil example</a>
+  <a href="#mpi-debug" class="lvl2">Issues & debugging</a>
+  <a class="sec">PGAS & GPU collectives</a>
+  <a href="#pgas">05 · PGAS & OpenSHMEM</a>
+  <a href="#nccl">06 · NCCL</a>
+  <a href="#nvshmem">07 · NVSHMEM</a>
+  <a class="sec">The Abstraction</a>
+  <a href="#ucx">08 · UCX</a>
+  <a href="#alternatives">09 · libfabric & cousins</a>
+  <a class="sec">Operating Knowledge</a>
+  <a href="#decisions">10 · Decision trees</a>
+  <a href="#debugging">11 · Debugging cheat sheet</a>
+</nav>
+<main>
+<div class="wrap">
+<div class="hero">
+  <div class="kicker">From wires to collectives</div>
+  <h1>The Road to <em>UCX</em></h1>
+  <p>A low-level field guide to how processes and GPUs actually talk to each other across a cluster — sockets, RDMA, MPI, NCCL, NVSHMEM, and the abstraction layer that unifies them. Built for someone who wants the mechanisms, not the marketing.</p>
+  <div class="meta">
+    <span>TCP · IB Verbs · RDMA</span>
+    <span>MPICH · Open MPI · MVAPICH</span>
+    <span>NCCL · RCCL · NVSHMEM</span>
+    <span>UCX · libfabric · GASNet</span>
+  </div>
+</div>
+
+<section id="overview" class="layer">
+<h2>Section 00</h2>
+<div class="sectitle">The Layered Stack: where every library lives</div>
+<p>Before walking the history, anchor everything to one mental model. "Getting bytes from process A to process B" is solved at several layers, and every tool you listed is a layer (or a span of layers) in this stack. The recurring theme of the last 30 years is <strong>pushing common functionality down into reusable layers</strong> so the layers above stop reinventing it. UCX is the most recent big consolidation of that idea.</p>
+
+<div class="stack">
+  <div class="row">
+    <div class="lbl">Application</div>
+    <div class="cells"><div class="cell tier-app">Your code<small>solvers, training loops, kernels</small></div></div>
+  </div>
+  <div class="row">
+    <div class="lbl">Programming model / API</div>
+    <div class="cells">
+      <div class="cell tier-mid">MPI<small>send/recv, collectives</small></div>
+      <div class="cell tier-mid">SHMEM / NVSHMEM<small>one-sided PGAS</small></div>
+      <div class="cell tier-mid">NCCL / RCCL<small>GPU collectives</small></div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="lbl">Communication framework</div>
+    <div class="cells"><div class="cell tier-abs">UCX &nbsp;·&nbsp; libfabric (OFI) &nbsp;·&nbsp; GASNet-EX<small>transport-neutral primitives: tag-matching, RMA, atomics, active messages</small></div></div>
+  </div>
+  <div class="row">
+    <div class="lbl">Transport API</div>
+    <div class="cells">
+      <div class="cell tier-low">Sockets<small>TCP/UDP</small></div>
+      <div class="cell tier-low">IB verbs<small>libibverbs</small></div>
+      <div class="cell tier-low">CUDA IPC / GDRCopy<small>intra-node GPU</small></div>
+      <div class="cell tier-low">SHM / CMA / XPMEM<small>intra-node CPU</small></div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="lbl">Hardware fabric</div>
+    <div class="cells">
+      <div class="cell tier-hw">Ethernet NIC<small>TCP, RoCE, iWARP</small></div>
+      <div class="cell tier-hw">InfiniBand HCA<small>native RDMA</small></div>
+      <div class="cell tier-hw">NVLink / NVSwitch<small>GPU↔GPU</small></div>
+      <div class="cell tier-hw">PCIe / shared DRAM<small>same node</small></div>
+    </div>
+  </div>
+</div>
+
+<div class="box key">
+  <div class="bt">The core answer to your last question, up front</div>
+  <p>Yes — your intuition about UCX is exactly right. UCX sits <strong>above</strong> the transport APIs (sockets, verbs, CUDA IPC) and <strong>below</strong> the programming models (MPI, NCCL, SHMEM). The contract becomes: <code>MPI ↔ UCX ↔ physical</code>. An MPI implementation that uses UCX no longer talks to InfiniBand verbs or TCP sockets directly — it hands UCX a buffer, a destination, and a tag, and UCX decides which wire and which protocol to use. We'll justify <em class="term">why</em> that abstraction was worth building in Section 08.</p>
+</div>
+
+<h3>Two axes that explain every design choice</h3>
+<p>As you read, classify each tool along two axes. Almost every "why is it designed this way" question collapses into these:</p>
+<ul>
+  <li><strong>Two-sided vs. one-sided.</strong> <em class="term">Two-sided</em> (MPI send/recv) means both peers participate: the sender posts a send, the receiver posts a matching receive, and the library matches them. <em class="term">One-sided</em> / RMA (SHMEM put/get, MPI-3 RMA, RDMA verbs) means one peer reads or writes the other's memory without the remote CPU being involved at all. One-sided maps directly onto RDMA hardware; two-sided requires a matching/queueing layer on top.</li>
+  <li><strong>Copy vs. zero-copy.</strong> Does the data get staged through an intermediate <em class="term">bounce buffer</em>, or does the NIC DMA straight out of and into the user's buffer? Zero-copy is faster but needs the buffer to be <em class="term">registered</em> (pinned and mapped for the NIC) and needs a handshake so the sender knows where to write. This single trade-off is the reason the eager/rendezvous protocol split exists, which you'll see in MPI, UCX, and NCCL alike.</li>
+</ul>
+</section>
+
+<section id="timeline" class="layer">
+<h2>Section 01</h2>
+<div class="sectitle">Evolution timeline: how we got here</div>
+<p>This is the lineage you asked for, compressed. Each entry solved a pain point left by the previous one.</p>
+<div class="timeline">
+  <div class="tl-item"><div class="yr">1980s</div><div class="nm">Sockets (BSD) + vendor message libraries</div><div class="ds">Every supercomputer vendor (Intel NX, IBM, Thinking Machines) shipped its <em>own</em> incompatible message-passing API. Portable code was impossible. TCP/IP sockets worked everywhere but were slow and low-level.</div></div>
+  <div class="tl-item"><div class="yr">1989–1993</div><div class="nm">PVM (Parallel Virtual Machine)</div><div class="ds">First widely adopted portable model: turn a heap of heterogeneous workstations into one "virtual machine." Dynamic process spawn, built-in heterogeneity/data conversion. Proved the demand but was a single implementation, not a standard.</div></div>
+  <div class="tl-item"><div class="yr">1994</div><div class="nm">MPI-1 standard</div><div class="ds">The community wrote a <em>specification</em>, not a product. Anyone could implement it; user code became portable across vendors. This "standard, not a binary" decision is the most important event on this timeline.</div></div>
+  <div class="tl-item"><div class="yr">1990s–2000s</div><div class="nm">MPICH & LAM/MPI → Open MPI; InfiniBand arrives (1999)</div><div class="ds">Reference implementations matured. InfiniBand brought commodity RDMA, forcing MPI implementations to grow pluggable transport layers (BTL/MTL, CH3/CH4) instead of being hard-wired to TCP.</div></div>
+  <div class="tl-item"><div class="yr">2000s</div><div class="nm">PGAS era: SHMEM, GASNet, UPC, OpenSHMEM (2010)</div><div class="ds">One-sided "just write into remote memory" models, riding RDMA directly. GASNet became the portable conduit beneath many of them — a conceptual ancestor of UCX.</div></div>
+  <div class="tl-item"><div class="yr">2009→</div><div class="nm">GPUs enter the fabric: GPUDirect, CUDA-aware MPI (~2013)</div><div class="ds">GPUs became the compute, but data still detoured through host memory. GPUDirect RDMA let the NIC DMA straight from GPU memory; MPI implementations learned to accept device pointers.</div></div>
+  <div class="tl-item"><div class="yr">2015–2016</div><div class="nm">NCCL (2015) and UCX (~2015)</div><div class="ds">NCCL: GPU-topology-aware collectives that MPI couldn't deliver. UCX: unify the duplicated transport code that MPICH, Open MPI, and SHMEM had each written separately, into one framework.</div></div>
+  <div class="tl-item"><div class="yr">2017→</div><div class="nm">NVSHMEM, GPU-initiated comms, UCX everywhere</div><div class="ds">NVSHMEM put the OpenSHMEM one-sided model <em>inside</em> CUDA kernels (GPU initiates communication). UCX became the default transport under Open MPI, MPICH, and OpenSHMEM; NCCL and DeepSpeed/PyTorch built on these layers.</div></div>
+</div>
+<div class="box key">
+  <div class="bt">The repeating pattern</div>
+  <p>Notice the rhythm: a new <em>hardware</em> capability appears (RDMA, GPUDirect, NVLink) → each programming model bolts on support for it independently → the duplicated plumbing gets painful → a shared lower layer is extracted (GASNet, then UCX/libfabric) to absorb it once. Keep this in mind; it is the entire justification for UCX.</p>
+</div>
+</section>
+
+<section id="physical" class="layer">
+<h2>Section 02</h2>
+<div class="sectitle">The physical & transport layer</div>
+<p>Everything above is built on a small set of transports. You cannot reason about MPI/NCCL behavior without understanding these, because the libraries' "design choices" are mostly <em>which transport to use and how to feed it</em>.</p>
+
+<h3 id="physical-sockets">TCP/IP & Berkeley sockets — the universal baseline</h3>
+<p>The kernel sockets API (<code>socket()</code>, <code>connect()</code>, <code>send()</code>, <code>recv()</code>) is the lowest common denominator: it works on any Ethernet anywhere. Its mechanism is also its weakness for HPC:</p>
+<ul>
+  <li><strong>Kernel involvement on every transfer.</strong> A <code>send()</code> copies your buffer into a kernel socket buffer (skb), the TCP/IP stack segments it, the driver hands it to the NIC. The receiver's NIC raises an interrupt, the kernel reassembles, copies into the socket buffer, and a final copy lands it in your <code>recv()</code> buffer. That's <strong>two memory copies plus a syscall plus an interrupt</strong> per message — the "data touches the CPU many times" problem.</li>
+  <li><strong>Latency floor.</strong> Syscall + interrupt + TCP processing gives you ~10–50 µs half-round-trip on commodity gear. RDMA fabrics deliver ~1–2 µs. For tightly-coupled HPC where you exchange millions of small messages, that gap dominates.</li>
+  <li><strong>It is two-sided and stream-oriented.</strong> TCP gives you a reliable byte stream with no message boundaries; message libraries add their own framing on top.</li>
+</ul>
+<div class="box key"><div class="bt">Why it still matters</div><p>Sockets are the fallback every library keeps. When MPI/NCCL/UCX can't find a fast fabric, they fall back to TCP — which is exactly why a job that "works but is mysteriously slow" is often silently running over TCP instead of InfiniBand. (Debugging that is a recurring theme below.)</p></div>
+
+<h3 id="physical-shm">Shared memory — intra-node fast path</h3>
+<p>When two ranks are on the <em>same node</em>, going through a NIC is wasteful. Transports here:</p>
+<ul>
+  <li><strong>SysV / POSIX shared memory + copy.</strong> Both processes map a common region; sender copies into it, receiver copies out. Two copies, but no kernel networking. Classic intra-node MPI path.</li>
+  <li><strong>Single-copy via kernel assist.</strong> <em class="term">CMA</em> (<code>process_vm_readv/writev</code>), <em class="term">KNEM</em>, and <em class="term">XPMEM</em> let one process's pages be read/written directly by another, eliminating one copy for large messages. XPMEM can even expose another process's address space for true zero-copy.</li>
+  <li><strong>CUDA IPC.</strong> For two GPUs on one node, <code>cudaIpcGetMemHandle</code> lets a peer map another process's GPU buffer; the copy then rides PCIe or NVLink without touching host memory.</li>
+</ul>
+
+<h3 id="physical-rdma">InfiniBand & the verbs API — RDMA, properly</h3>
+<p>InfiniBand (IB) is a purpose-built HPC fabric. The software interface is <em class="term">verbs</em> (<code>libibverbs</code>), and it is a fundamentally different model from sockets. This is the single most important transport to understand because UCX, MPI, and NCCL all ultimately drive it.</p>
+<h4>The verbs mechanism (kernel bypass)</h4>
+<ol>
+  <li><strong>Queue Pairs (QP).</strong> You create a send queue and a receive queue. To communicate you post <em class="term">Work Requests (WR)</em> directly into these queues from user space.</li>
+  <li><strong>Kernel bypass.</strong> After setup, posting a request and reaping a completion happen entirely in user space by writing/reading mapped device memory (a doorbell). <strong>No syscall, no interrupt</strong> on the data path. This is where the µs-latency comes from.</li>
+  <li><strong>Memory registration.</strong> Before the NIC can DMA a buffer, you must <code>ibv_reg_mr()</code> it: the buffer's pages are <em>pinned</em> (can't be swapped/moved) and the NIC's IOMMU mapping + a <em class="term">protection key (rkey/lkey)</em> are created. Registration is <strong>expensive</strong> — this cost is why every higher layer obsesses over registration caches and bounce buffers.</li>
+  <li><strong>Completion Queues (CQ).</strong> You poll a CQ for completions (busy-poll for lowest latency) or arm it for an event.</li>
+</ol>
+<h4>Two flavors of operation</h4>
+<ul>
+  <li><strong>Channel semantics (SEND/RECV).</strong> Two-sided: receiver must pre-post a receive buffer; sender's SEND consumes it. This is what MPI eager messages map to.</li>
+  <li><strong>Memory semantics (RDMA WRITE / READ).</strong> One-sided: sender already knows the remote address + rkey and writes/reads it with <strong>zero remote CPU involvement</strong>. This is what powers SHMEM put/get, MPI RMA, and MPI rendezvous bulk transfer.</li>
+</ul>
+<div class="box gpu"><div class="bt">GPUDirect RDMA</div><p>Normally the NIC can only DMA host memory. <em class="term">GPUDirect RDMA</em> lets you register <em>GPU</em> memory with the HCA so the NIC DMAs straight out of / into GPU VRAM across the network — host memory and the CPU are never touched. This is the hardware feature that makes "CUDA-aware MPI" and NCCL-over-IB fast. It requires the NIC and GPU to share a PCIe path (ideally under the same switch) for full performance.</p></div>
+
+<h3 id="physical-roce">RoCE & iWARP — RDMA over Ethernet</h3>
+<p>RDMA's benefits (kernel bypass, one-sided ops) were so valuable that two standards brought them to Ethernet so you don't need an IB fabric:</p>
+<ul>
+  <li><strong>RoCE</strong> (RDMA over Converged Ethernet): runs the IB transport over Ethernet. <em>RoCEv1</em> is L2-only; <em class="term">RoCEv2</em> encapsulates in UDP/IP and is routable — the common one. Crucially it usually needs a <strong>lossless</strong> fabric via Priority Flow Control (PFC) / ECN, because the IB transport historically assumed no drops. Misconfigured PFC is the #1 RoCE pain point.</li>
+  <li><strong>iWARP</strong>: RDMA layered over TCP. Tolerates lossy networks (TCP handles loss) but has higher latency and is less common today.</li>
+</ul>
+<p>From the verbs API's perspective, IB, RoCE, and iWARP look nearly identical — same <code>libibverbs</code> calls — which is precisely why a transport-neutral layer like UCX can treat them uniformly.</p>
+
+<h3 id="physical-nvlink">NVLink & NVSwitch — the GPU-to-GPU fabric</h3>
+<p>PCIe (~16–64 GB/s per direction depending on gen/width) became the bottleneck between GPUs. NVIDIA's answer:</p>
+<ul>
+  <li><strong>NVLink</strong>: direct high-bandwidth GPU↔GPU (and GPU↔CPU on some platforms) links — hundreds of GB/s, far above PCIe, with cache-coherent-style load/store access to peer GPU memory.</li>
+  <li><strong>NVSwitch</strong>: a crossbar so that <em>all</em> GPUs in a node (e.g. 8× in a DGX) get full NVLink bandwidth to every other GPU, not just nearest neighbors.</li>
+  <li>Across nodes, you still need IB/RoCE; <strong>GPUDirect RDMA</strong> + NVLink intra-node is the combination NCCL exploits to build its topology-aware rings/trees.</li>
+</ul>
+<div class="box key"><div class="bt">Transport recap table</div></div>
+<div class="tbl"><table>
+<thead><tr><th>Transport</th><th>Scope</th><th>Sided</th><th>Copies</th><th>Typical latency</th><th>Driven by</th></tr></thead>
+<tbody>
+<tr><td><strong>TCP sockets</strong></td><td>Anywhere</td><td>Two-sided stream</td><td>2 + syscall</td><td>~10–50 µs</td><td>Fallback everywhere</td></tr>
+<tr><td><strong>SHM + copy</strong></td><td>Intra-node</td><td>Two-sided</td><td>2</td><td>~0.3–1 µs</td><td>Intra-node MPI</td></tr>
+<tr><td><strong>XPMEM/CMA</strong></td><td>Intra-node</td><td>One-sided-ish</td><td>1 / 0</td><td>sub-µs</td><td>Large intra-node msgs</td></tr>
+<tr><td><strong>IB verbs (SEND)</strong></td><td>Inter-node</td><td>Two-sided</td><td>0–1</td><td>~1–2 µs</td><td>MPI eager</td></tr>
+<tr><td><strong>IB verbs (RDMA)</strong></td><td>Inter-node</td><td>One-sided</td><td>0</td><td>~1–2 µs</td><td>SHMEM, MPI rendezvous/RMA</td></tr>
+<tr><td><strong>RoCEv2</strong></td><td>Inter-node (Eth)</td><td>both</td><td>0</td><td>~2–4 µs</td><td>Same as IB on Ethernet</td></tr>
+<tr><td><strong>NVLink/NVSwitch</strong></td><td>Intra-node GPU</td><td>Load/store + copy</td><td>0</td><td>sub-µs, huge BW</td><td>NCCL, NVSHMEM, P2P</td></tr>
+</tbody>
+</table></div>
+</section>
+
+<section id="pvm" class="layer">
+<h2>Section 03</h2>
+<div class="sectitle">PVM — the ancestor worth knowing</div>
+<p>PVM (Parallel Virtual Machine, Oak Ridge / Emory, ~1989) is rarely used now but explains <em>why MPI is shaped the way it is</em> — MPI's design was largely a reaction to PVM's strengths and weaknesses.</p>
+<h4>What PVM did</h4>
+<ul>
+  <li><strong>A "virtual machine" daemon model.</strong> A <code>pvmd</code> daemon ran on each host; together they presented your pile of (possibly heterogeneous) workstations as one machine. You'd <code>pvm_spawn()</code> tasks dynamically at runtime.</li>
+  <li><strong>Built-in heterogeneity.</strong> PVM did data encoding/decoding (<code>pvm_pkint</code>, XDR-style) so a big-endian and little-endian machine could exchange data correctly — a real concern in the era of mixed Suns, Crays, and x86.</li>
+  <li><strong>Dynamic & fault-aware.</strong> Tasks could be added/removed during a run, and PVM had notification of host failure.</li>
+</ul>
+<h4>Why MPI superseded it</h4>
+<ul>
+  <li>PVM was effectively <strong>one implementation</strong>, controlled by its authors. MPI was a <strong>standard</strong> many vendors could implement and optimize for their hardware — instantly giving portable code real performance.</li>
+  <li>PVM routed much traffic through daemons (extra hops/copies); MPI's model allowed direct, highly optimized point-to-point and rich collectives.</li>
+  <li>MPI formalized <em class="term">communicators</em>, datatypes, and a huge collective API that PVM lacked.</li>
+</ul>
+<div class="box key"><div class="bt">The lesson that shaped everything after</div><p>MPI winning over PVM established the pattern that recurs through this entire guide: <strong>a community standard with many competing implementations beats a single product.</strong> NCCL and NVSHMEM are the notable exceptions (single-vendor), and OpenSHMEM/MPI are the rule.</p></div>
+</section>
+
+<section id="mpi" class="layer">
+<h2>Section 04</h2>
+<div class="sectitle">MPI — the deep dive</div>
+<p>MPI is the workhorse. We'll answer each of your questions in mechanism-level detail.</p>
+
+<h3 id="mpi-standard">"MPI is a protocol / contract" — elaborated</h3>
+<p>This framing is exactly correct and is the key to the whole ecosystem. <strong>MPI is a specification document</strong> (currently MPI-4.x) that defines an API and its <em>semantics</em> — function signatures, what <code>MPI_Send</code> guarantees, completion rules, datatypes, communicators. It deliberately says <em>nothing</em> about wires, buffers, or protocols on the network. It is a contract between your code and "some implementation."</p>
+<p>Because it's a contract, you get two independent things:</p>
+<ul>
+  <li><strong>Source-level portability.</strong> Recompile the same code against any MPI library and it runs — on a laptop over TCP, on a supercomputer over Slingshot, on an IB cluster.</li>
+  <li><strong>Implementation freedom.</strong> Each implementation is free to transform your <code>MPI_Send</code> into whatever physical communication is fastest on the given hardware. This "transform user code → physical communication" mapping is where implementations differ, <em>not</em> in the API you call.</li>
+</ul>
+<div class="box key"><div class="bt">Does the user interface change between implementations?</div><p><strong>No — that is the whole point.</strong> <code>MPI_Bcast</code>, <code>MPI_Isend</code>, etc. are identical across Open MPI, MPICH, MVAPICH2, Intel MPI, Cray MPICH. What changes is everything <em>below</em> the API: which transport, which collective algorithm, which buffering strategy, whether GPU pointers are accepted, tuning knobs, and the launcher. You can usually swap implementations by just recompiling/relinking. (Caveat: the <em>ABI</em> historically differed, so you relink; an ABI-standardization effort is changing this, but treat them as "recompile to switch.")</p></div>
+
+<h4>The major implementations and how they differ</h4>
+<div class="tbl"><table>
+<thead><tr><th>Implementation</th><th>Lineage</th><th>Transport architecture</th><th>Sweet spot</th></tr></thead>
+<tbody>
+<tr><td><strong>MPICH</strong></td><td>Argonne reference impl</td><td><em>CH4</em> layer → netmods: UCX, OFI/libfabric, or sockets</td><td>The basis most others fork from; portable reference</td></tr>
+<tr><td><strong>Open MPI</strong></td><td>Merger of LAM/MPI, LA-MPI, FT-MPI</td><td><em>MTL</em> (match-transport: UCX, OFI, PSM) &amp; <em>BTL</em> (byte-transport: TCP, vader/SHM, uct)</td><td>Modular, research-friendly, very common default</td></tr>
+<tr><td><strong>MVAPICH2</strong></td><td>MPICH fork (Ohio State)</td><td>Highly tuned native IB/RoCE, strong GPU/GDR support</td><td>Squeezing max performance from IB clusters</td></tr>
+<tr><td><strong>Intel MPI</strong></td><td>MPICH-based</td><td>Built on libfabric (OFI)</td><td>Intel fabrics/CPUs, commercial support</td></tr>
+<tr><td><strong>Cray/HPE MPICH</strong></td><td>MPICH-based</td><td>OFI over Slingshot (cxi provider)</td><td>HPE Cray EX supercomputers</td></tr>
+</tbody>
+</table></div>
+<p><strong>Why do multiple alternatives exist?</strong> History (LAM vs. MPICH camps), vendor incentive (a vendor tunes an MPI for its own fabric/CPU and ships it), research (Open MPI's modular design is a platform for experiments), and licensing/support (some sites want commercial support). They converge on the same API but compete on performance, hardware coverage, and features.</p>
+
+<div class="box key"><div class="bt">Transform user code → physical communication (the differentiator)</div><p>This is the crux of your question. Internally each MPI library has a <em>component framework</em> that maps the abstract operation onto hardware:</p>
+<ul style="margin-bottom:0">
+<li><strong>Open MPI</strong>: the <em class="term">pml</em> (point-to-point management layer, e.g. <code>ob1</code> or <code>cm</code>) chooses an <em class="term">MTL</em> or set of <em class="term">BTL</em>s. <code>vader</code>/<code>sm</code> = shared memory, <code>tcp</code> = sockets, <code>uct</code>/<code>ucx</code> = RDMA via UCX.</li>
+<li><strong>MPICH (CH4)</strong>: a <em class="term">netmod</em> — <code>ucx</code>, <code>ofi</code>, or <code>sockets</code> — does the actual transport. CH4 also has a "shm" path for intra-node.</li>
+</ul>
+<p style="margin-bottom:0">So when you call <code>MPI_Send</code>, the library (1) checks if the peer is local → shared memory; (2) else picks the best NIC transport; (3) chooses eager vs. rendezvous based on size; (4) registers/pins memory if needed; (5) drives verbs/UCX/sockets. <strong>Different implementations differ precisely in how cleverly they make those choices.</strong></p></div>
+</section>
+
+<section class="layer">
+<h3 id="mpi-launch">Running MPI without Slurm: how launch & wire-up actually work</h3>
+<p>Slurm is just <em>one</em> launcher. MPI predates and doesn't require it. Here's the real machinery on bare-metal Linux boxes.</p>
+
+<h4>Step 1 — you need a way to start N processes on M machines</h4>
+<p>An MPI "job" is just N OS processes (ranks) running your binary, possibly spread across machines. <em>Something</em> has to log into each machine and exec the binary. That something is a <strong>process manager / launcher</strong>, invoked by <code>mpirun</code>/<code>mpiexec</code>. Without Slurm, the default bootstrap is <strong>SSH</strong> (or <code>rsh</code>).</p>
+<p>You give it a <em class="term">hostfile</em>:</p>
+<pre data-lang="hostfile"><code><span class="c-com"># hosts.txt — Open MPI style</span>
+node01 slots=8
+node02 slots=8
+node03 slots=8
+node04 slots=8</code></pre>
+<pre data-lang="bash"><code><span class="c-com"># Launch 32 ranks across the 4 nodes</span>
+mpirun --hostfile hosts.txt -np 32 ./my_app
+
+<span class="c-com"># MPICH/Hydra equivalent</span>
+mpiexec -f hosts.txt -n 32 ./my_app</code></pre>
+
+<div class="box key"><div class="bt">Your direct question: "Do we SSH into machines and run the same job?"</div><p><strong>Essentially yes</strong>, but you don't do it manually. <code>mpirun</code> uses its launcher (Open MPI's <em class="term">PRRTE/ORTE</em>, MPICH's <em class="term">Hydra</em>) to SSH into each host and exec your binary the right number of times. All ranks run the <em>same</em> binary (SPMD model) and discover which rank they are at runtime via <code>MPI_Comm_rank</code>. They are <em>not</em> independent identical jobs — they form one communicator and coordinate.</p></div>
+
+<h4>Step 2 — prerequisites for the SSH bootstrap to work</h4>
+<ul>
+  <li><strong>Passwordless SSH</strong> from the launch node to every compute node (and often between them). Set up keys + <code>authorized_keys</code>; SSH agent or host-based auth.</li>
+  <li><strong>Same binary at the same path</strong> on every node — usually via a shared filesystem (NFS/Lustre) mounted identically, or copy the binary everywhere.</li>
+  <li><strong>Consistent environment</strong>: <code>LD_LIBRARY_PATH</code>, the MPI libs, and any CUDA libs must be found on each node. Non-interactive SSH often doesn't source your <code>.bashrc</code> — a classic "works on head node, fails on compute node" bug. Use <code>mpirun -x VAR</code> (Open MPI) or set them in a sourced profile.</li>
+  <li><strong>Clock & hostname resolution</strong>: nodes must resolve each other's hostnames (DNS or <code>/etc/hosts</code>) and reach each other on the fabric.</li>
+</ul>
+
+<h4>Step 3 — what happens at launch (the wire-up)</h4>
+<ol>
+  <li><code>mpirun</code> starts a <strong>head/launcher process</strong> on your node.</li>
+  <li>It SSHes to each host and starts a <strong>per-node daemon</strong> (Open MPI: <code>prted</code>/<code>orted</code>; MPICH: a Hydra proxy <code>hydra_pmi_proxy</code>).</li>
+  <li>Each daemon forks/execs the requested number of rank processes, assigning each a global rank and setting environment so the MPI runtime knows the layout.</li>
+  <li><strong>Business-card exchange via PMI/PMIx.</strong> Each rank, inside <code>MPI_Init</code>, publishes its connection info (IB GID/LID + QP numbers, or TCP host:port) into a key-value store provided by the launcher (<em class="term">PMI</em>, now <em class="term">PMIx</em>). Ranks then look up peers' info and establish the actual transport connections (QPs, sockets). This out-of-band bootstrap is how RDMA peers find each other before any RDMA exists.</li>
+  <li>From then on, data flows <em>directly</em> peer-to-peer over the fabric; the daemons mostly handle I/O forwarding (stdout/stderr) and teardown.</li>
+</ol>
+
+<div class="box warn"><div class="bt">Under Slurm it's the same idea, just a different launcher</div><p>With Slurm you'd use <code>srun ./my_app</code> (or <code>mpirun</code> inside an allocation). Slurm replaces SSH-bootstrap with its own daemons (<code>slurmd</code>) and provides the PMI/PMIx key-value store itself. The MPI wire-up logic is identical — only the "who starts the processes and hosts the KVS" differs. This is why understanding the no-Slurm path makes Slurm obvious.</p></div>
+
+<h4>Alternative launchers / no-SSH options</h4>
+<ul>
+  <li><strong>Hydra</strong> (MPICH) supports bootstrap servers: <code>ssh</code>, <code>rsh</code>, <code>fork</code> (single node), <code>slurm</code>, <code>pbs</code>, <code>lsf</code> via <code>-bootstrap</code>.</li>
+  <li><strong>Single machine</strong>: just <code>mpirun -np 8 ./app</code> — it forks locally, no SSH, all ranks talk over shared memory. Great for development.</li>
+  <li><strong>Containers/cloud</strong>: same hostfile+SSH pattern inside the container network; or use the scheduler's PMIx integration.</li>
+</ul>
+<pre data-lang="bash"><code><span class="c-com"># Single-node quick test (no SSH, shared-memory transport)</span>
+mpirun -np 4 ./my_app
+
+<span class="c-com"># Pin ranks to cores &amp; report binding (Open MPI) — perf hygiene</span>
+mpirun --hostfile hosts.txt -np 32 \
+       --map-by socket --bind-to core --report-bindings ./my_app</code></pre>
+</section>
+
+<section class="layer">
+<h3 id="mpi-ops">The operators: what each one does at the low level</h3>
+<p>MPI operations split into <strong>point-to-point</strong> (two named ranks) and <strong>collective</strong> (all ranks in a communicator). Plus one-sided RMA. Here's each, with the mechanism underneath.</p>
+
+<h4>Point-to-point</h4>
+<div class="tbl"><table>
+<thead><tr><th>Call</th><th>Blocking?</th><th>What it means / low-level behavior</th></tr></thead>
+<tbody>
+<tr><td><strong>MPI_Send</strong></td><td>Blocking</td><td>Returns when the <em>send buffer is safe to reuse</em> — not necessarily when received. For small msgs the lib copies to an internal buffer and returns (eager); for large it may block until the receiver is ready (rendezvous).</td></tr>
+<tr><td><strong>MPI_Recv</strong></td><td>Blocking</td><td>Posts a receive; the progress engine matches an incoming message by (communicator, source, tag). Returns when data is fully in your buffer.</td></tr>
+<tr><td><strong>MPI_Isend</strong></td><td>Non-blocking</td><td>Posts the send and returns immediately with a <code>request</code>. You must <code>MPI_Wait/Test</code> before reusing the buffer. Enables compute/comm overlap.</td></tr>
+<tr><td><strong>MPI_Irecv</strong></td><td>Non-blocking</td><td>Posts a receive buffer for the matching engine and returns a request. Posting receives <em>early</em> is the key to performance (lets the sender go eager / zero-copy).</td></tr>
+<tr><td><strong>MPI_Sendrecv</strong></td><td>Blocking</td><td>Simultaneous send + receive in one call — avoids deadlock in ring/halo exchanges where everyone sends and receives.</td></tr>
+<tr><td><strong>MPI_Bsend/Ssend/Rsend</strong></td><td>Blocking variants</td><td><em>B</em>=buffered (uses your attached buffer, always returns fast). <em>S</em>=synchronous (returns only once receiver started receiving — useful to force rendezvous/debug). <em>R</em>=ready (assumes receive already posted; unsafe otherwise).</td></tr>
+</tbody>
+</table></div>
+
+<div class="box key"><div class="bt">The matching engine (why two-sided is "expensive")</div><p>Every incoming message carries an envelope: <em>(communicator, source rank, tag)</em>. The receiver maintains two queues: <em class="term">posted receive queue</em> (receives you posted that haven't matched yet) and <em class="term">unexpected message queue</em> (messages that arrived before a matching receive). On each event the engine walks the queue to find a match. This software matching is the cost two-sided messaging adds on top of raw RDMA — and is exactly what one-sided models (SHMEM/RMA) avoid. UCX implements tag-matching as a first-class primitive (<code>ucp_tag_send</code>) precisely so MPI doesn't have to reimplement it.</p></div>
+
+<h4>Collectives — and what they do underneath</h4>
+<p>Collectives are <em>not</em> magic hardware ops (usually); the library composes them from point-to-point sends using clever algorithms chosen by message size and topology. Knowing the algorithm explains the performance.</p>
+<div class="tbl"><table>
+<thead><tr><th>Collective</th><th>Semantics</th><th>Typical underlying algorithm</th></tr></thead>
+<tbody>
+<tr><td><strong>MPI_Barrier</strong></td><td>All ranks wait until all arrive</td><td>Dissemination / recursive-doubling: O(log P) rounds of pairwise messages.</td></tr>
+<tr><td><strong>MPI_Bcast</strong></td><td>Root's buffer → everyone</td><td>Small: binomial tree (O(log P)). Large: scatter + allgather (van de Geijn) to use full bandwidth, or a pipeline.</td></tr>
+<tr><td><strong>MPI_Reduce</strong></td><td>Combine (sum/max/…) → root</td><td>Binomial tree with partial reductions at each node; large msgs use reduce-scatter + gather.</td></tr>
+<tr><td><strong>MPI_Allreduce</strong></td><td>Reduce, result to all</td><td><strong>Recursive doubling</strong> (small) or <strong>ring / reduce-scatter+allgather</strong> (large — bandwidth-optimal, the same idea NCCL uses).</td></tr>
+<tr><td><strong>MPI_Scatter</strong></td><td>Root chunk i → rank i</td><td>Tree or direct sends from root.</td></tr>
+<tr><td><strong>MPI_Gather</strong></td><td>Rank i → root chunk i</td><td>Inverse of scatter.</td></tr>
+<tr><td><strong>MPI_Allgather</strong></td><td>Every rank's chunk → everyone</td><td>Ring (bandwidth) or recursive doubling (latency) or Bruck for small.</td></tr>
+<tr><td><strong>MPI_Alltoall</strong></td><td>Full transpose: i→j sends block</td><td>The heaviest collective. Bruck (small), pairwise-exchange / index (large). Stresses the bisection bandwidth of the fabric.</td></tr>
+<tr><td><strong>MPI_Reduce_scatter</strong></td><td>Reduce then scatter pieces</td><td>Ring; building block of ring-allreduce.</td></tr>
+<tr><td><strong>MPI_Scan/Exscan</strong></td><td>Prefix reductions</td><td>Recursive doubling.</td></tr>
+</tbody>
+</table></div>
+
+<details><summary>Why ring-allreduce is bandwidth-optimal (the idea NCCL borrowed)</summary>
+<div class="body">
+<p>Naive allreduce (everyone sends to a root, root sums, broadcasts back) makes the root a bottleneck: it moves O(P·N) data through one link. <strong>Ring-allreduce</strong> arranges P ranks in a logical ring and runs two phases:</p>
+<ol>
+<li><strong>Reduce-scatter</strong> (P−1 steps): the array is split into P chunks. Each step, rank r sends one chunk to r+1 and receives + adds a chunk from r−1. After P−1 steps each rank owns the fully-reduced value for <em>one</em> chunk.</li>
+<li><strong>Allgather</strong> (P−1 steps): circulate those finished chunks around the ring so everyone ends with the whole reduced array.</li>
+</ol>
+<p>Each rank sends ≈2N(P−1)/P bytes total — essentially <strong>2N regardless of P</strong>, and every link is busy simultaneously. That bandwidth-optimality is why both large-message MPI_Allreduce and NCCL use ring/tree variants. This is also why allreduce performance is the headline metric for distributed training.</p>
+</div></details>
+
+<h4>One-sided / RMA (MPI-3)</h4>
+<p>MPI also has a one-sided API that maps onto RDMA: <code>MPI_Win_create</code> exposes a memory <em class="term">window</em>; then <code>MPI_Put</code>, <code>MPI_Get</code>, <code>MPI_Accumulate</code> read/write remote memory with no matching receive, synchronized by <code>MPI_Win_fence</code> / lock-unlock / flush. This is MPI converging toward the SHMEM model — useful when access patterns are irregular and you don't want the remote rank to post receives.</p>
+</section>
+
+<section class="layer">
+<h3 id="mpi-buffers">Buffering: does send/isend/recv allocate buffers? (eager vs. rendezvous)</h3>
+<p>This is the heart of MPI's internal design. The answer is <strong>"it depends on message size, and that threshold is the whole game."</strong> MPI uses two protocols, chosen automatically by a tunable <em class="term">eager limit</em> (often ~16–64 KB).</p>
+
+<h4>Eager protocol (small messages)</h4>
+<p>Goal: minimize latency. The sender just <em>throws</em> the data at the receiver without asking permission.</p>
+<ol>
+<li>Sender copies the payload into a <strong>pre-allocated internal eager buffer</strong> (or sends inline) and fires it with the envelope.</li>
+<li>If the receiver hasn't posted a matching <code>Recv</code> yet, the data lands in the receiver's <strong>unexpected-message buffer</strong> — the library <em>does</em> allocate/manage memory here, on the receive side.</li>
+<li>When the matching receive is posted, the lib copies from the unexpected buffer into the user's buffer.</li>
+</ol>
+<p>So for eager: <strong>yes, the library allocates and copies through internal buffers</strong>. <code>MPI_Send</code> can return almost immediately because the data is already buffered. Cost: extra memory copies + bounded buffer space (flooding a receiver with unexpected eager messages can exhaust it — a real failure mode).</p>
+
+<h4>Rendezvous protocol (large messages)</h4>
+<p>Goal: maximize bandwidth and avoid copying megabytes. The sender asks permission first so it can do a <strong>zero-copy</strong> RDMA straight from user buffer to user buffer.</p>
+<ol>
+<li>Sender sends a small <strong>RTS</strong> (ready-to-send) control message with the envelope and its buffer address/rkey.</li>
+<li>Receiver, once it has a matching posted receive, replies <strong>CTS</strong> (clear-to-send) with <em>its</em> destination buffer address/rkey (and registers that buffer with the NIC if not already).</li>
+<li>One side issues an <strong>RDMA WRITE</strong> (or READ) moving the payload directly between the registered user buffers — <strong>no intermediate copy</strong>.</li>
+<li>A completion notification tells both sides it's done.</li>
+</ol>
+<p>So for rendezvous: <strong>no payload buffering/copy</strong> — but it requires <em>memory registration</em> (pinning) of both buffers and an extra handshake (higher latency, amortized over the large transfer).</p>
+
+<div class="box key"><div class="bt">Now, your specific calls</div>
+<ul style="margin-bottom:0">
+<li><code>MPI_Send</code> / small: copies into internal eager buffer, returns fast. <strong>Allocates/uses internal buffer.</strong></li>
+<li><code>MPI_Send</code> / large: rendezvous; <strong>no payload buffer</strong>, but blocks until handshake + transfer can proceed (buffer reusable on return).</li>
+<li><code>MPI_Isend</code>: same protocol choice, but returns a <code>request</code> immediately. The buffer is <strong>not</strong> safe until <code>MPI_Wait</code>. For large/rendezvous, the actual transfer happens during <code>Wait</code> or when the progress engine runs.</li>
+<li><code>MPI_Recv</code> / <code>MPI_Irecv</code>: posts your buffer into the matching engine. If data already arrived eagerly, it copies from the unexpected buffer; if rendezvous, it sends CTS and the RDMA targets your buffer directly. <code>Irecv</code> doesn't allocate payload buffers — it registers your buffer (for rendezvous) and queues it.</li>
+</ul></div>
+
+<div class="box warn"><div class="bt">The design choice, stated plainly</div><p>The eager/rendezvous split is a <strong>latency-vs-bandwidth + copy-vs-registration trade</strong>. Small messages: a copy is cheaper than a handshake → eager. Large messages: a handshake + registration is cheaper than copying megabytes → rendezvous/zero-copy. The <em>eager limit</em> tunable (<code>MPICH_*_EAGER_LIMIT</code>, Open MPI BTL <code>eager_limit</code>, UCX <code>UCX_*_ZCOPY_THRESH</code>/<code>RNDV_THRESH</code>) lets you move the crossover for your workload.</p></div>
+
+<details><summary>Memory registration & the registration cache — why pinning dominates the discussion</summary>
+<div class="body">
+<p>RDMA needs buffers <em>pinned</em> and mapped in the NIC (<code>ibv_reg_mr</code>), which is a slow kernel operation. If you registered/deregistered on every large send, rendezvous would be miserable. So implementations keep a <strong>registration cache (rcache)</strong>: once a user buffer is registered, the mapping is cached keyed by address range, and reused on subsequent transfers. This is fast but introduces the infamous bug class: if your allocator frees and remaps that virtual address to different physical pages, a stale cache entry sends to the wrong memory. UCX/MPICH hook the allocator and <code>madvise</code> to invalidate stale entries; this is also why some sites set <code>MALLOC_TRIM_THRESHOLD_=-1</code> or use <code>--mca mpi_leave_pinned 1</code>.</p>
+</div></details>
+
+<details><summary>Buffered send (MPI_Bsend) — the one case where you supply the buffer</summary>
+<div class="body">
+<p>With <code>MPI_Bsend</code> you call <code>MPI_Buffer_attach(buf, size)</code> to hand MPI a chunk of <em>your</em> memory; subsequent buffered sends copy into it and return instantly, decoupling you from the receiver entirely. You're responsible for sizing it (use <code>MPI_BSEND_OVERHEAD</code> per message). It's rarely needed but is the explicit, user-controlled buffering mode — contrast with the implicit internal buffering of eager <code>MPI_Send</code>.</p>
+</div></details>
+</section>
+
+<section class="layer">
+<h3 id="mpi-transport">TCP or InfiniBand by default? Why, and how to select</h3>
+<p><strong>If a usable high-speed fabric is present, every serious MPI picks it automatically over TCP.</strong> The selection logic, roughly:</p>
+<ol>
+<li>For each peer, is it on the <strong>same node</strong>? → use shared memory (vader/sm/CMA/XPMEM). Fastest, always preferred intra-node.</li>
+<li>Else, probe available devices. If an <strong>InfiniBand/RoCE HCA</strong> (or UCX/OFI reports an RDMA-capable provider) is up and reachable → use it.</li>
+<li>Only if no RDMA fabric is found → fall back to <strong>TCP sockets</strong> over whatever Ethernet exists.</li>
+</ol>
+<p><strong>Why prefer IB?</strong> 5–25× lower latency, higher bandwidth, kernel-bypass (no CPU on the data path), and one-sided RDMA for rendezvous. TCP is the safety net, not the choice.</p>
+
+<div class="box bug"><div class="bt">The trap: silently running over TCP</div><p>The most common "my cluster is slow" bug is MPI falling back to TCP because the IB device wasn't detected, the subnet manager (OpenSM) isn't running, the port is <code>DOWN</code>, or UCX/OFI wasn't compiled in. Always verify the chosen transport — don't assume.</p></div>
+
+<h4>How to inspect and force the transport</h4>
+<pre data-lang="bash"><code><span class="c-com"># Is the IB fabric even healthy?</span>
+ibstat                 <span class="c-com"># port State: Active, PhysState: LinkUp?</span>
+ibv_devices           <span class="c-com"># are HCAs visible?</span>
+ucx_info -d           <span class="c-com"># which UCX transports/devices are available</span>
+
+<span class="c-com"># --- Open MPI: see &amp; control selection ---</span>
+mpirun --mca pml_base_verbose 10 -np 2 ./app   <span class="c-com"># show what pml/btl chosen</span>
+mpirun --mca pml ucx -np 2 ./app               <span class="c-com"># force UCX (RDMA) path</span>
+mpirun --mca btl tcp,self -np 2 ./app          <span class="c-com"># force TCP (debugging)</span>
+mpirun --mca btl_tcp_if_include ib0 ...        <span class="c-com"># pick the right NIC if multi-homed</span>
+
+<span class="c-com"># --- UCX (used by both Open MPI &amp; MPICH) ---</span>
+UCX_TLS=rc,sm,cuda     ./app   <span class="c-com"># restrict to RC verbs + shared mem + cuda</span>
+UCX_NET_DEVICES=mlx5_0:1 ./app <span class="c-com"># pin to a specific HCA port</span>
+UCX_LOG_LEVEL=info     ./app   <span class="c-com"># see what UCX selected</span>
+
+<span class="c-com"># --- MPICH (CH4) ---</span>
+mpiexec -genv MPIR_CVAR_CH4_NETMOD ucx ...     <span class="c-com"># choose netmod</span></code></pre>
+<p><strong>How to select intentionally</strong>: in production let auto-selection work but <em>verify</em> it; for debugging, force TCP to isolate whether a problem is fabric-related; for performance tuning, restrict <code>UCX_TLS</code> to exactly the transports you want (e.g. drop the slower <code>ud</code> if <code>rc</code> works) and pin <code>UCX_NET_DEVICES</code> on multi-rail nodes.</p>
+</section>
+
+<section class="layer">
+<h3 id="mpi-gpu">GPU-aware MPI: passing device pointers</h3>
+<div class="box gpu"><div class="bt">What "CUDA-aware" / "GPU-aware" means</div><p>A GPU-aware MPI lets you pass a <strong>device pointer</strong> (GPU VRAM address) directly to <code>MPI_Send</code>/<code>Recv</code> etc. Without it, you must <code>cudaMemcpy</code> to host memory, MPI the host buffer, then <code>cudaMemcpy</code> back on the other side — three steps, host bounce, no overlap. With it, MPI handles the GPU memory itself.</p></div>
+<p>Under the hood, GPU-aware MPI chooses the best path based on where the two buffers live:</p>
+<ul>
+<li><strong>Same node, NVLink/PCIe peers</strong>: uses <strong>CUDA IPC</strong> to copy GPU↔GPU directly (over NVLink if present), never touching host memory.</li>
+<li><strong>Different nodes, GPUDirect RDMA available</strong>: registers the GPU buffer with the HCA and the NIC DMAs <strong>straight from VRAM across IB/RoCE</strong> — no host bounce. This is the fast path.</li>
+<li><strong>No GDR</strong>: falls back to staging through a pinned host bounce buffer (a pipelined <code>cudaMemcpy</code> + network), which the library does internally so your code still just passes the device pointer.</li>
+</ul>
+<pre data-lang="cpp"><code><span class="c-com">// GPU-aware MPI: device pointers passed directly</span>
+<span class="c-ty">float</span> *d_buf; <span class="c-fn">cudaMalloc</span>(&amp;d_buf, n*<span class="c-kw">sizeof</span>(<span class="c-ty">float</span>));
+<span class="c-com">// no cudaMemcpy to host needed:</span>
+<span class="c-fn">MPI_Send</span>(d_buf, n, MPI_FLOAT, peer, tag, MPI_COMM_WORLD);</code></pre>
+<pre data-lang="bash"><code><span class="c-com"># Enable / verify the GPU path</span>
+ompi_info --parsable | grep -i cuda          <span class="c-com"># is Open MPI built CUDA-aware?</span>
+UCX_TLS=rc,cuda,cuda_copy,cuda_ipc,gdr_copy ./app
+mpirun -x UCX_RNDV_SCHEME=get_zcopy ...       <span class="c-com"># tune GPU rendezvous scheme</span></code></pre>
+<div class="box warn"><div class="bt">Why this still isn't enough for deep learning — foreshadowing NCCL</div><p>GPU-aware MPI moves GPU buffers efficiently, but it does <em>not</em> understand the GPU interconnect <strong>topology</strong> when building collectives, and it can't run the reduction <em>on the GPU</em> in a fused, kernel-driven way. For an 8-GPU NVSwitch node doing allreduce on gradients, you want an algorithm that maxes NVLink bandwidth and does the sum on-device. That gap is exactly what NCCL was built to fill (Section 06).</p></div>
+</section>
+
+<section class="layer">
+<h3 id="mpi-stencil">Complete worked example: 2D Jacobi stencil with halo exchange</h3>
+<p>This is the canonical MPI pattern. We solve a 2D heat/Laplace equation with a 5-point stencil, decomposing the grid into horizontal strips (one per rank). Each rank needs the boundary rows of its neighbors — the <em class="term">halo</em> / <em class="term">ghost</em> rows — exchanged every iteration. It's complete and compiles.</p>
+<pre data-lang="c"><code><span class="c-com">/* jacobi2d.c  —  build: mpicc -O3 jacobi2d.c -o jacobi2d
+ *               run:   mpirun -np 4 ./jacobi2d
+ * 5-point Jacobi on an NxN grid, 1-D row decomposition + halo exchange. */</span>
+<span class="c-mac">#include</span> <span class="c-str">&lt;mpi.h&gt;</span>
+<span class="c-mac">#include</span> <span class="c-str">&lt;stdio.h&gt;</span>
+<span class="c-mac">#include</span> <span class="c-str">&lt;stdlib.h&gt;</span>
+<span class="c-mac">#include</span> <span class="c-str">&lt;math.h&gt;</span>
+
+<span class="c-mac">#define</span> <span class="c-mac">N</span> <span class="c-num">512</span>          <span class="c-com">/* global grid is N x N (interior) */</span>
+<span class="c-mac">#define</span> <span class="c-mac">MAXIT</span> <span class="c-num">10000</span>
+<span class="c-mac">#define</span> <span class="c-mac">TOL</span> <span class="c-num">1e-5</span>
+
+<span class="c-ty">int</span> <span class="c-fn">main</span>(<span class="c-ty">int</span> argc, <span class="c-ty">char</span> **argv) {
+    <span class="c-fn">MPI_Init</span>(&amp;argc, &amp;argv);
+    <span class="c-ty">int</span> rank, nproc;
+    <span class="c-fn">MPI_Comm_rank</span>(MPI_COMM_WORLD, &amp;rank);
+    <span class="c-fn">MPI_Comm_size</span>(MPI_COMM_WORLD, &amp;nproc);
+
+    <span class="c-com">/* --- domain decomposition: split N rows across nproc ranks --- */</span>
+    <span class="c-ty">int</span> base = N / nproc, rem = N % nproc;
+    <span class="c-ty">int</span> nrows = base + (rank &lt; rem ? <span class="c-num">1</span> : <span class="c-num">0</span>);   <span class="c-com">/* local interior rows */</span>
+
+    <span class="c-com">/* allocate (nrows+2) x (N+2): +2 for halo rows (top/bottom) &amp; side borders */</span>
+    <span class="c-ty">int</span> ld = N + <span class="c-num">2</span>;                          <span class="c-com">/* leading dim (row length) */</span>
+    <span class="c-ty">double</span> *u    = <span class="c-fn">calloc</span>((nrows+<span class="c-num">2</span>)*ld, <span class="c-kw">sizeof</span>(<span class="c-ty">double</span>));
+    <span class="c-ty">double</span> *unew = <span class="c-fn">calloc</span>((nrows+<span class="c-num">2</span>)*ld, <span class="c-kw">sizeof</span>(<span class="c-ty">double</span>));
+
+    <span class="c-com">/* boundary condition: top global edge = 1.0 (rank 0 owns it) */</span>
+    <span class="c-kw">if</span> (rank == <span class="c-num">0</span>)
+        <span class="c-kw">for</span> (<span class="c-ty">int</span> j = <span class="c-num">0</span>; j &lt; ld; j++) u[<span class="c-num">0</span>*ld + j] = <span class="c-num">1.0</span>;
+
+    <span class="c-com">/* who are my neighbors? MPI_PROC_NULL = no-op send/recv (clean edges) */</span>
+    <span class="c-ty">int</span> up   = (rank == <span class="c-num">0</span>)        ? MPI_PROC_NULL : rank - <span class="c-num">1</span>;
+    <span class="c-ty">int</span> down = (rank == nproc-<span class="c-num">1</span>) ? MPI_PROC_NULL : rank + <span class="c-num">1</span>;
+
+    <span class="c-ty">double</span> gdiff = <span class="c-num">1.0</span>;
+    <span class="c-ty">int</span> it = <span class="c-num">0</span>;
+    <span class="c-kw">while</span> (it &lt; MAXIT &amp;&amp; gdiff &gt; TOL) {
+        <span class="c-com">/* ---- HALO EXCHANGE: trade boundary rows with neighbors ----
+         * Sendrecv avoids deadlock: send my top interior row up,
+         * receive into my bottom halo from down, and vice-versa.  */</span>
+        <span class="c-fn">MPI_Sendrecv</span>(&amp;u[<span class="c-num">1</span>*ld],       ld, MPI_DOUBLE, up,   <span class="c-num">0</span>,
+                     &amp;u[(nrows+<span class="c-num">1</span>)*ld], ld, MPI_DOUBLE, down, <span class="c-num">0</span>,
+                     MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        <span class="c-fn">MPI_Sendrecv</span>(&amp;u[nrows*ld],   ld, MPI_DOUBLE, down, <span class="c-num">1</span>,
+                     &amp;u[<span class="c-num">0</span>*ld],       ld, MPI_DOUBLE, up,   <span class="c-num">1</span>,
+                     MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+        <span class="c-com">/* ---- local 5-point update on interior cells ---- */</span>
+        <span class="c-ty">double</span> ldiff = <span class="c-num">0.0</span>;
+        <span class="c-kw">for</span> (<span class="c-ty">int</span> i = <span class="c-num">1</span>; i &lt;= nrows; i++)
+            <span class="c-kw">for</span> (<span class="c-ty">int</span> j = <span class="c-num">1</span>; j &lt;= N; j++) {
+                <span class="c-ty">double</span> v = <span class="c-num">0.25</span> * (u[(i-<span class="c-num">1</span>)*ld+j] + u[(i+<span class="c-num">1</span>)*ld+j] +
+                                   u[i*ld+(j-<span class="c-num">1</span>)] + u[i*ld+(j+<span class="c-num">1</span>)]);
+                ldiff += <span class="c-fn">fabs</span>(v - u[i*ld+j]);
+                unew[i*ld+j] = v;
+            }
+
+        <span class="c-com">/* swap buffers */</span>
+        <span class="c-ty">double</span> *t = u; u = unew; unew = t;
+
+        <span class="c-com">/* ---- global convergence test: sum local diffs across all ranks ---- */</span>
+        <span class="c-fn">MPI_Allreduce</span>(&amp;ldiff, &amp;gdiff, <span class="c-num">1</span>, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+        it++;
+    }
+
+    <span class="c-kw">if</span> (rank == <span class="c-num">0</span>)
+        <span class="c-fn">printf</span>(<span class="c-str">"converged after %d iters, residual=%.3e\n"</span>, it, gdiff);
+
+    <span class="c-fn">free</span>(u); <span class="c-fn">free</span>(unew);
+    <span class="c-fn">MPI_Finalize</span>();
+    <span class="c-kw">return</span> <span class="c-num">0</span>;
+}</code></pre>
+
+<div class="box key"><div class="bt">What to notice (the transferable lessons)</div>
+<ul style="margin-bottom:0">
+<li><strong>Ghost/halo rows</strong> are the universal stencil pattern: pad your local array by the stencil radius, fill the pad from neighbors each step.</li>
+<li><strong>MPI_Sendrecv</strong> is used to avoid the classic deadlock where every rank blocks in <code>Send</code> waiting for a matching <code>Recv</code> that no one has reached yet.</li>
+<li><strong>MPI_PROC_NULL</strong> elegantly handles physical boundaries — the call becomes a no-op, no special-casing edges.</li>
+<li><strong>MPI_Allreduce</strong> turns per-rank local residuals into one global convergence number every rank agrees on.</li>
+</ul></div>
+
+<details><summary>Performance upgrade: overlap halo exchange with interior compute (non-blocking)</summary>
+<div class="body">
+<p>The version above is correct but synchronous: ranks idle during the exchange. The optimized pattern posts non-blocking <code>MPI_Irecv</code>/<code>MPI_Isend</code> for halos, immediately computes the <em>interior</em> cells that don't depend on halos, then <code>MPI_Waitall</code> and finishes the <em>boundary</em> cells. This hides communication behind computation:</p>
+<pre data-lang="c"><code>MPI_Request reqs[<span class="c-num">4</span>];
+<span class="c-fn">MPI_Irecv</span>(&amp;u[(nrows+<span class="c-num">1</span>)*ld], ld, MPI_DOUBLE, down, <span class="c-num">0</span>, comm, &amp;reqs[<span class="c-num">0</span>]);
+<span class="c-fn">MPI_Irecv</span>(&amp;u[<span class="c-num">0</span>*ld],       ld, MPI_DOUBLE, up,   <span class="c-num">1</span>, comm, &amp;reqs[<span class="c-num">1</span>]);
+<span class="c-fn">MPI_Isend</span>(&amp;u[<span class="c-num">1</span>*ld],       ld, MPI_DOUBLE, up,   <span class="c-num">0</span>, comm, &amp;reqs[<span class="c-num">2</span>]);
+<span class="c-fn">MPI_Isend</span>(&amp;u[nrows*ld],   ld, MPI_DOUBLE, down, <span class="c-num">1</span>, comm, &amp;reqs[<span class="c-num">3</span>]);
+<span class="c-com">/* compute rows 2..nrows-1 here (independent of halos) ... */</span>
+<span class="c-fn">MPI_Waitall</span>(<span class="c-num">4</span>, reqs, MPI_STATUSES_IGNORE);
+<span class="c-com">/* now compute boundary rows 1 and nrows that needed halos ... */</span></code></pre>
+<p>For a 2-D decomposition (better surface-to-volume ratio at large scale) you'd use <code>MPI_Cart_create</code> + <code>MPI_Cart_shift</code> to get neighbors in both dimensions, and <code>MPI_Type_vector</code> to describe non-contiguous column halos as a derived datatype.</p>
+</div></details>
+</section>
+
+<section class="layer">
+<h3 id="mpi-debug">MPI: common issues, fixes & debugging</h3>
+<div class="tbl"><table>
+<thead><tr><th>Symptom</th><th>Likely cause</th><th>Fix / approach</th></tr></thead>
+<tbody>
+<tr><td><strong>Hang / deadlock</strong></td><td>Mutual blocking <code>Send</code>s; mismatched send/recv counts or tags; one rank exits early</td><td>Use <code>Sendrecv</code> or non-blocking; verify every send has a matching recv; check ranks/tags; attach gdb to the stuck rank (see below).</td></tr>
+<tr><td><strong>Silent slowness</strong></td><td>Fell back to TCP; wrong NIC; eager limit too low; no process binding</td><td><code>UCX_LOG_LEVEL=info</code>, <code>--mca pml_base_verbose</code>; pin with <code>--bind-to core</code>; tune eager/rndv thresholds.</td></tr>
+<tr><td><strong>Truncation error</strong></td><td>Receiver buffer smaller than message</td><td>Match counts/datatypes; use <code>MPI_Probe</code>/<code>MPI_Get_count</code> for unknown sizes.</td></tr>
+<tr><td><strong>Works on 1 node, fails multi-node</strong></td><td>Env not propagated over SSH; binary/libs missing on remote; firewall blocking ports</td><td><code>mpirun -x LD_LIBRARY_PATH ...</code>; shared FS or copy; open the fabric/TCP ports.</td></tr>
+<tr><td><strong>Unexpected-message buffer exhaustion</strong></td><td>Flooding a receiver with eager messages it hasn't posted recvs for</td><td>Post <code>Irecv</code>s earlier; throttle; raise/lower eager limit; add synchronization.</td></tr>
+<tr><td><strong>Crash in registration cache</strong></td><td>Allocator reused freed pinned pages (stale rcache)</td><td><code>--mca mpi_leave_pinned 1</code> off, set <code>MALLOC_TRIM_THRESHOLD_=-1</code>, update UCX; use MPI-provided alloc.</td></tr>
+<tr><td><strong>GPU pointer "invalid"</strong></td><td>MPI not built CUDA-aware</td><td><code>ompi_info | grep cuda</code>; rebuild with CUDA; or stage through host explicitly.</td></tr>
+</tbody>
+</table></div>
+
+<h4>Debugging tips</h4>
+<ul>
+<li><strong>Attach a debugger to one rank</strong>: <code>mpirun -np 4 xterm -e gdb ./app</code>, or insert a sleep-loop gated by an env var and attach with <code>gdb -p &lt;pid&gt;</code> on the node. Set <code>int wait=1; while(wait) sleep(1);</code> then change <code>wait</code> in gdb.</li>
+<li><strong>Verbose transport selection</strong>: Open MPI <code>--mca pml_base_verbose 100 --mca btl_base_verbose 100</code>; UCX <code>UCX_LOG_LEVEL=debug</code>.</li>
+<li><strong>Sanitizers/checkers</strong>: build with <code>-fsanitize=address</code>; use MUST or Intel Trace Analyzer for MPI-correctness (detects mismatched collectives, leaks of requests/datatypes).</li>
+<li><strong>Force synchronous sends</strong> (<code>MPI_Ssend</code> or <code>MPICH_*FORCE_SSEND</code>) to expose latent assumptions about buffering — if it hangs only with Ssend, you were relying on eager buffering.</li>
+<li><strong>Print the map</strong>: <code>--report-bindings</code> and <code>--display-map</code> to confirm rank→core→node placement.</li>
+</ul>
+
+<div class="tree">
+<span class="c-com"># MPI "it's broken" decision tree</span>
+<span class="q">Does it hang?</span>
+├─ <span class="a">yes</span> → <span class="r">deadlock: check Send/Recv pairing, tags, ranks; switch to Sendrecv/nonblocking; gdb-attach stuck rank</span>
+└─ <span class="a">no</span> → <span class="q">Does it crash?</span>
+       ├─ <span class="a">on GPU ptr</span> → <span class="r">MPI not CUDA-aware → rebuild / stage via host</span>
+       ├─ <span class="a">in rcache/verbs</span> → <span class="r">registration cache / pinning → tune malloc, update UCX</span>
+       └─ <span class="a">truncation</span> → <span class="r">buffer/count/datatype mismatch</span>
+<span class="q">Runs but slow?</span>
+├─ <span class="a">check transport</span> → <span class="r">UCX_LOG_LEVEL=info — is it TCP? force pml ucx; verify ibstat Active</span>
+├─ <span class="a">check binding</span> → <span class="r">--bind-to core --map-by socket</span>
+└─ <span class="a">check protocol</span> → <span class="r">tune eager/rndv thresholds; overlap with Isend/Irecv</span>
+</div>
+</section>
+
+<section id="pgas" class="layer">
+<h2>Section 05</h2>
+<div class="sectitle">PGAS & OpenSHMEM — the one-sided model</div>
+<p>To understand NVSHMEM you must first understand the model it implements. <em class="term">PGAS</em> (Partitioned Global Address Space) is the alternative to message passing: instead of "send me a message," you treat remote memory as if it were part of one big global address space — partitioned because each chunk physically lives on one node, but addressable by all.</p>
+
+<h4>The SHMEM mental model</h4>
+<ul>
+<li><strong>Symmetric heap.</strong> Every process (called a <em class="term">PE</em>, processing element) allocates the same variables at the same symmetric offsets via <code>shmem_malloc</code>. So a pointer's offset is meaningful on every PE — PE 3 knows where variable <code>X</code> lives on PE 7.</li>
+<li><strong>One-sided put/get.</strong> The core ops are <code>shmem_put(dest, src, n, pe)</code> (write into PE <code>pe</code>'s memory) and <code>shmem_get(dest, src, n, pe)</code> (read from it). <strong>The target PE does nothing</strong> — no matching receive, no CPU involvement. This maps <em>directly</em> onto an RDMA WRITE/READ.</li>
+<li><strong>Explicit synchronization.</strong> Because there's no matching, you synchronize separately: <code>shmem_quiet</code> (ensure my puts completed), <code>shmem_barrier_all</code>, <code>shmem_fence</code> (order puts), and atomics (<code>shmem_atomic_add</code>, compare-swap) for coordination.</li>
+</ul>
+
+<div class="box key"><div class="bt">Why one-sided exists at all</div><p>For <em>irregular</em> or <em>data-dependent</em> communication — graph algorithms, sparse solvers, dynamic load balancing — you often don't know in advance who will send you what, so posting matching receives is awkward. One-sided "just reach into their memory" fits these patterns and removes the matching overhead. The cost is you manage consistency/ordering yourself. SHMEM put/get latency can beat MPI for fine-grained access because there's no envelope matching.</p></div>
+
+<p><strong>OpenSHMEM</strong> (standardized 2010) is to SHMEM what MPI is to PVM: a community spec with multiple implementations (Sandia SOS, Open MPI's OSHMEM, Cray SHMEM), most of which sit on UCX or libfabric underneath — because put/get/atomics are exactly the RMA primitives those layers expose. <strong>GASNet</strong> played the same "portable conduit" role for UPC and other PGAS languages and is a direct conceptual ancestor of UCX.</p>
+<pre data-lang="c"><code><span class="c-com">/* OpenSHMEM: one-sided write, no receive on the target */</span>
+<span class="c-ty">int</span> *data = <span class="c-fn">shmem_malloc</span>(n*<span class="c-kw">sizeof</span>(<span class="c-ty">int</span>));  <span class="c-com">/* symmetric allocation */</span>
+<span class="c-fn">shmem_int_put</span>(data, local, n, /*to PE*/ <span class="c-num">3</span>);   <span class="c-com">/* RDMA WRITE into PE 3 */</span>
+<span class="c-fn">shmem_quiet</span>();                              <span class="c-com">/* ensure completion */</span>
+<span class="c-fn">shmem_barrier_all</span>();</code></pre>
+</section>
+
+<section id="nccl" class="layer">
+<h2>Section 06</h2>
+<div class="sectitle">NCCL — GPU collective communication</div>
+<p>NCCL (NVIDIA Collective Communications Library, "nickel," 2015) is the comms backbone of essentially all multi-GPU deep learning (PyTorch DDP/FSDP, Megatron, DeepSpeed). Let's answer your questions precisely.</p>
+
+<h3>Is it GPU-to-GPU only, or more?</h3>
+<p>NCCL is specifically about <strong>moving and reducing data that lives in GPU memory</strong>, between GPUs — both <em>intra-node</em> (over NVLink/NVSwitch/PCIe) and <em>inter-node</em> (over IB/RoCE with GPUDirect RDMA). So it spans the whole network, but the <em>endpoints are always GPU buffers</em>. It is not a general CPU message-passing library; it has no rich point-to-point tag-matching API like MPI. It does have <code>ncclSend/ncclRecv</code> (added later) for point-to-point, but its reason for existing is <strong>collectives</strong>.</p>
+
+<h3 id="nccl-api">The API — is it like MPI?</h3>
+<p>Deliberately familiar, but narrower and GPU/stream-centric:</p>
+<div class="tbl"><table>
+<thead><tr><th>NCCL</th><th>MPI analogue</th><th>Note</th></tr></thead>
+<tbody>
+<tr><td><code>ncclAllReduce</code></td><td><code>MPI_Allreduce</code></td><td>The headline op for gradient averaging.</td></tr>
+<tr><td><code>ncclBroadcast</code></td><td><code>MPI_Bcast</code></td><td></td></tr>
+<tr><td><code>ncclReduce / ncclReduceScatter</code></td><td><code>MPI_Reduce / MPI_Reduce_scatter</code></td><td>Reductions run on the GPU.</td></tr>
+<tr><td><code>ncclAllGather</code></td><td><code>MPI_Allgather</code></td><td></td></tr>
+<tr><td><code>ncclSend / ncclRecv</code></td><td><code>MPI_Send / MPI_Recv</code></td><td>Point-to-point; grouped for pipelines.</td></tr>
+</tbody>
+</table></div>
+<p>Key API differences from MPI:</p>
+<ul>
+<li>Every call takes a <strong>CUDA stream</strong> and is <em>asynchronous</em> with respect to the host — it enqueues a comm kernel on the stream, ordered with your compute kernels. This stream integration is the big ergonomic win for GPU pipelines.</li>
+<li>Setup uses a <strong>unique ID</strong> broadcast out-of-band (often via MPI or a file) + <code>ncclCommInitRank</code>, rather than MPI's communicator world. People frequently use MPI <em>just to bootstrap</em> NCCL, then do all data movement with NCCL.</li>
+<li>No datatypes/derived-types machinery, no tags, no wildcard matching — it's a lean collective API.</li>
+</ul>
+
+<h3 id="nccl-phys">Physical layer & topology awareness</h3>
+<p>This is NCCL's superpower. At init it <strong>detects the intra-node topology</strong> (which GPUs share NVLink, NVSwitch, PCIe switches, which NIC is closest to which GPU) and builds optimized <strong>rings and trees</strong> across the whole job that maximize bandwidth on the fastest links. Transports it picks among:</p>
+<ul>
+<li><strong>NVLink / NVSwitch</strong> — GPU↔GPU on the same node, the fast path.</li>
+<li><strong>PCIe / shared host memory</strong> — when no NVLink between a pair.</li>
+<li><strong>GPUDirect RDMA over IB/RoCE</strong> — inter-node, NIC DMAs straight from VRAM.</li>
+<li><strong>P2P via CUDA</strong> for direct peer access; <strong>SHM</strong> staging when needed.</li>
+</ul>
+<p>It runs the reduction arithmetic <em>inside CUDA kernels on the GPU</em>, fused with the data movement, using ring-allreduce / tree-allreduce (the bandwidth-optimal algorithms from Section 04) sized to the detected topology.</p>
+
+<div class="box gpu"><div class="bt">Why NCCL when we already have GPU-aware MPI?</div><p>This is the crux. GPU-aware MPI can <em>move</em> GPU buffers, but NCCL solves <strong>different problems</strong>:</p>
+<ul style="margin-bottom:0">
+<li><strong>GPU-topology-aware collective construction.</strong> NCCL builds rings/trees that specifically exploit NVLink/NVSwitch bandwidth and NIC-GPU affinity. Generic MPI collectives were designed around CPU/network topology and rarely match this.</li>
+<li><strong>On-GPU, kernel-fused reduction.</strong> NCCL does the sum/max in a CUDA kernel as data streams, keeping the GPU busy; MPI would often reduce on the CPU or with less GPU integration.</li>
+<li><strong>CUDA stream integration.</strong> NCCL ops slot into your stream and overlap naturally with compute kernels — exactly what a training step needs. MPI lives on the host timeline.</li>
+<li><strong>Tuned for the DL access pattern</strong>: a few very large collectives (gradients) repeated millions of times, where squeezing allreduce bandwidth is everything.</li>
+</ul>
+<p style="margin-bottom:0">So it's not "NCCL replaces MPI" — many apps use <strong>MPI for control/CPU + NCCL for GPU collectives</strong>. (AMD's <strong>RCCL</strong> is the ROCm port of the same design; Microsoft's <strong>MSCCL/MSCCL++</strong> adds custom programmable collective algorithms on top.)</p></div>
+
+<h3>Common issues & debugging</h3>
+<div class="tbl"><table>
+<thead><tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr></thead>
+<tbody>
+<tr><td>Hang at init / first allreduce</td><td>Can't reach peers; wrong NIC; IB down; mismatched comm size; one rank crashed</td><td><code>NCCL_DEBUG=INFO</code>; set <code>NCCL_SOCKET_IFNAME</code>/<code>NCCL_IB_HCA</code>; verify all ranks call collectives in same order.</td></tr>
+<tr><td>Slow allreduce</td><td>Not using NVLink/GDR; fell back to PCIe/TCP; wrong NIC-GPU affinity</td><td><code>NCCL_DEBUG=INFO</code> shows chosen rings/transports; <code>NCCL_P2P_LEVEL</code>, <code>NCCL_NET_GDR_LEVEL</code>; check <code>nvidia-smi topo -m</code>.</td></tr>
+<tr><td>Mismatched-collective deadlock</td><td>Ranks call different collectives / sizes</td><td>NCCL requires identical op sequence across ranks (like MPI).</td></tr>
+<tr><td>"unhandled cuda error"</td><td>OOM, bad device, driver mismatch</td><td>Check device set per rank (<code>cudaSetDevice</code>), memory, driver/toolkit versions.</td></tr>
+</tbody>
+</table></div>
+<pre data-lang="bash"><code><span class="c-com"># The first thing to run when NCCL misbehaves</span>
+NCCL_DEBUG=INFO NCCL_DEBUG_SUBSYS=INIT,GRAPH,NET ./train.py
+nvidia-smi topo -m            <span class="c-com"># NVLink/PCIe/NIC topology matrix</span>
+NCCL_IB_HCA=mlx5_0,mlx5_1     <span class="c-com"># pick the right HCAs</span>
+NCCL_SOCKET_IFNAME=ib0        <span class="c-com"># bootstrap NIC (not docker0!)</span></code></pre>
+</section>
+
+<section id="nvshmem" class="layer">
+<h2>Section 07</h2>
+<div class="sectitle">NVSHMEM — OpenSHMEM, but inside the GPU kernel</div>
+<p>NVSHMEM is NVIDIA's implementation of the OpenSHMEM (PGAS, one-sided) model for GPU clusters. Its defining feature: communication can be <strong>initiated from within a CUDA kernel by the GPU threads themselves</strong>, not just orchestrated from the host. That's a genuinely different execution model from MPI and NCCL.</p>
+
+<h3 id="nvshmem-api">The user API — does it have send/recv?</h3>
+<p>No — it's the <strong>SHMEM one-sided model</strong>, not the MPI two-sided one. There is no send/recv matching. The vocabulary is put/get/atomics over a <strong>symmetric heap that lives in GPU memory</strong>:</p>
+<ul>
+<li><code>nvshmem_malloc</code> — allocate a symmetric buffer in GPU memory across all PEs.</li>
+<li><code>nvshmem_put / nvshmem_get</code> — one-sided write/read of a remote PE's GPU memory.</li>
+<li><strong>Device-side variants callable from inside a kernel</strong>: <code>nvshmem_p</code> (single element), <code>nvshmemx_putmem_block/warp</code> (cooperative by a thread block/warp), <code>nvshmem_fence</code>, <code>nvshmem_quiet</code>, <code>nvshmem_barrier_all</code>, plus atomics and (newer) collectives like <code>nvshmem_float_sum_reduce</code>.</li>
+</ul>
+<pre data-lang="cuda"><code><span class="c-com">// NVSHMEM: a CUDA kernel that does its OWN communication.
+// Thread writes directly into a neighbor GPU's memory — no host, no NCCL call.</span>
+<span class="c-kw">__global__</span> <span class="c-ty">void</span> <span class="c-fn">shift</span>(<span class="c-ty">float</span> *dst, <span class="c-ty">float</span> *src, <span class="c-ty">int</span> n, <span class="c-ty">int</span> peer) {
+    <span class="c-ty">int</span> i = blockIdx.x*blockDim.x + threadIdx.x;
+    <span class="c-kw">if</span> (i &lt; n)
+        <span class="c-fn">nvshmem_float_p</span>(&amp;dst[i], src[i], peer);  <span class="c-com">// one-sided put, from device</span>
+}
+<span class="c-com">// host side:</span>
+<span class="c-fn">nvshmem_init</span>();
+<span class="c-ty">float</span> *buf = (<span class="c-ty">float</span>*)<span class="c-fn">nvshmem_malloc</span>(n*<span class="c-kw">sizeof</span>(<span class="c-ty">float</span>)); <span class="c-com">// symmetric GPU heap</span>
+<span class="c-fn">shift</span>&lt;&lt;&lt;blocks,threads&gt;&gt;&gt;(buf, src, n, peer);
+<span class="c-fn">nvshmemx_barrier_all_on_stream</span>(stream);</code></pre>
+
+<div class="box gpu"><div class="bt">Why GPU-initiated communication matters (vs NCCL)</div><p>With NCCL/MPI, the <em>host</em> launches a kernel, waits, then issues a collective — communication and computation are separate phases on the timeline, with kernel-launch and synchronization overhead between them. With NVSHMEM, a long-running kernel can compute <em>and</em> exchange data with neighbors as it goes (fine-grained, data-driven), eliminating launch/sync overhead and enabling deep overlap. This is ideal for strong-scaling stencils, FFTs, graph traversal, and increasingly for fused communication in transformer layers (e.g. overlapping all-to-all in MoE / tensor-parallel matmuls).</p></div>
+
+<h3 id="nvshmem-phys">Physical-layer selection</h3>
+<p>NVSHMEM maps put/get onto whatever moves GPU memory fastest between the two PEs:</p>
+<ul>
+<li><strong>NVLink / NVSwitch</strong> intra-node: a put becomes a direct <strong>load/store or copy over NVLink</strong> into the peer GPU's address space — extremely low latency, which is what makes <em>in-kernel</em> single-element puts viable.</li>
+<li><strong>PCIe P2P</strong> intra-node when no NVLink between the pair.</li>
+<li><strong>GPUDirect RDMA over IB/RoCE</strong> inter-node — and crucially, <strong>GPU-initiated</strong> RDMA via mechanisms like <em class="term">IBGDA</em> (InfiniBand GPUDirect Async), where the GPU itself rings the NIC doorbell, so a kernel can fire network transfers without a host round-trip.</li>
+</ul>
+
+<h3>"MEM" — the lower-level memory angle</h3>
+<p>The "MEM" in the name signals that the abstraction <em>is memory</em>, not messages. Things that happen at this lower level:</p>
+<ul>
+<li><strong>The symmetric heap</strong> is a chunk of each GPU's VRAM, registered for peer/NIC access at allocation, with consistent offsets so addresses are computable across PEs.</li>
+<li><strong>Address translation</strong>: a remote reference (offset, PE) is resolved to either a peer GPU virtual address (NVLink) or a registered region + rkey (RDMA).</li>
+<li><strong>Memory ordering</strong> becomes your responsibility — <code>nvshmem_fence</code> orders puts to one PE, <code>nvshmem_quiet</code> waits for global completion. Because there's no receive to imply ordering, you reason about it like a relaxed memory model. Atomics (<code>nvshmem_atomic_add</code>, CAS) provide the synchronization primitives.</li>
+</ul>
+<div class="box warn"><div class="bt">When NVSHMEM, when NCCL?</div><p>Use <strong>NCCL</strong> for big bulk collectives (gradient allreduce) — it's tuned and simple. Use <strong>NVSHMEM</strong> when you need fine-grained, in-kernel, one-sided communication fused with computation, or custom communication patterns NCCL doesn't express. They coexist; some libraries use NVSHMEM to build faster custom collectives than stock NCCL for specific shapes.</p></div>
+</section>
+
+<section id="ucx" class="layer">
+<h2>Section 08</h2>
+<div class="sectitle">UCX — the unifying abstraction</div>
+<p>Now the destination. <strong>UCX (Unified Communication X)</strong> is exactly the layer you described: above the transport APIs (TCP, verbs, CUDA), below the programming models (MPI, OpenSHMEM, NCCL-net plugins). It's an open-source framework (UCF Consortium: NVIDIA/Mellanox, ORNL, IBM, others) extracting the transport plumbing that every model used to write itself.</p>
+
+<h3 id="ucx-layers">"Higher than TCP/IB, lower than MPI/NCCL" — confirmed</h3>
+<div class="stack">
+  <div class="row"><div class="lbl">Models</div><div class="cells"><div class="cell tier-mid">Open MPI · MPICH · OpenSHMEM · Dask/RAPIDS · NCCL net plugin</div></div></div>
+  <div class="row"><div class="lbl">UCX · UCP</div><div class="cells"><div class="cell tier-abs">High-level API: tag-matched send/recv, RMA put/get, atomics, active messages, streams<small>protocol logic: eager/rendezvous, fragmentation, multi-rail, registration cache</small></div></div></div>
+  <div class="row"><div class="lbl">UCX · UCT</div><div class="cells"><div class="cell tier-abs">Transport layer: thin uniform wrappers over each hardware capability</div></div></div>
+  <div class="row"><div class="lbl">Transports</div><div class="cells">
+    <div class="cell tier-low">rc/ud/dc<small>IB verbs</small></div>
+    <div class="cell tier-low">tcp<small>sockets</small></div>
+    <div class="cell tier-low">sm/cma/xpmem<small>shared mem</small></div>
+    <div class="cell tier-low">cuda_ipc/gdr<small>GPU</small></div>
+  </div></div>
+  <div class="row"><div class="lbl">Hardware</div><div class="cells"><div class="cell tier-hw">InfiniBand · RoCE · Ethernet · NVLink/PCIe · shared DRAM</div></div></div>
+</div>
+
+<h3>The internal architecture (UCP / UCT / UCS)</h3>
+<ul>
+<li><strong>UCT (transport layer)</strong> — thin, uniform wrappers around each hardware mechanism: post a zero-copy send on RC verbs, do an RDMA put, a CUDA IPC copy, a TCP send. UCT exposes <em>capabilities</em> ("I can do zero-copy RMA," "max eager size is X"). One <em class="term">UCT module per transport</em>.</li>
+<li><strong>UCP (protocol layer)</strong> — the brain. It implements the <em>logic</em> the models need on top of raw transports: tag matching, automatic <strong>eager vs. rendezvous</strong> selection, message fragmentation, <strong>multi-rail</strong> (striping one transfer across several NICs), the <strong>registration cache</strong>, and crucially <strong>picking the best transport per peer</strong> (SHM intra-node, NVLink for GPU peers, RC verbs inter-node) — all behind one API.</li>
+<li><strong>UCS (services)</strong> — common utilities: data structures, memory hooks, config, async.</li>
+</ul>
+<p>So an MPI implementation calls <code>ucp_tag_send_nbx(...)</code> with a buffer, destination, and tag. UCP figures out: is the peer local? GPU memory? big enough to warrant rendezvous? which rail? — and drives the right UCT transport. <strong>MPI no longer contains any verbs or socket code.</strong></p>
+
+<div class="box key"><div class="bt">Your exact question, answered</div><p><strong>"Does that mean MPI doesn't have to talk to physical layers? MPI ↔ UCX ↔ physical?"</strong> — Yes, precisely. When Open MPI's <code>pml ucx</code> or MPICH's <code>ch4:ucx</code> netmod is used, MPI delegates <em>all</em> transport decisions to UCX. MPI's job shrinks to: implement MPI semantics (communicators, datatypes, collective algorithms) and translate each operation into UCP calls. UCX owns the wire. OpenSHMEM does the same (its put/get → UCP RMA). NCCL can use UCX through its network plugin for the inter-node leg.</p></div>
+
+<h3 id="ucx-why">Why abstract UCX out? (repeat code — and more)</h3>
+<p>You guessed "due to repeated code." That's the biggest reason, but not the only one:</p>
+<ol>
+<li><strong>Eliminate duplicated, hard plumbing.</strong> Before UCX, MPICH, Open MPI, MVAPICH, and every SHMEM each maintained their <em>own</em> verbs driver, their own registration cache, their own eager/rendezvous engine, their own GPUDirect support. That's the same difficult, bug-prone code written 5+ times. UCX writes it once, well, and everyone shares it. (The really nasty bits — registration caches, RoCE quirks, multi-rail — benefit enormously from being centralized.)</li>
+<li><strong>New hardware integrated once.</strong> When a new NIC, NVLink generation, or GPUDirect feature ships, the vendor adds one UCT module and <em>every</em> consumer (all MPIs, SHMEM, RAPIDS) gets it for free — instead of N separate porting efforts. This is the decisive practical reason vendors backed it.</li>
+<li><strong>Consistent, expert performance.</strong> The protocol decisions (thresholds, multi-rail striping, transport selection) are subtle; concentrating them lets a focused team tune them better than each model could individually, and improvements lift everyone.</li>
+<li><strong>A clean, model-neutral API.</strong> UCP deliberately offers both <em>tag-matched two-sided</em> (for MPI) and <em>RMA/atomics one-sided</em> (for SHMEM) plus active messages — so it can serve message-passing and PGAS models from one codebase. That generality is why it could replace the bespoke layers of both worlds.</li>
+</ol>
+<div class="box key"><div class="bt">The historical throughline</div><p>This is the same consolidation that happened with <strong>GASNet</strong> for PGAS languages in the 2000s, now done broadly and GPU-aware. UCX is the maturation of the pattern the whole timeline has been building toward: <em>push the common, hardware-touching code into one shared, vendor-maintained layer.</em></p></div>
+
+<pre data-lang="bash"><code><span class="c-com"># UCX is mostly invisible — you tune it via env vars under MPI/SHMEM</span>
+ucx_info -v                 <span class="c-com"># version &amp; build features (cuda? gdrcopy?)</span>
+ucx_info -d                 <span class="c-com"># enumerate transports &amp; devices UCX sees</span>
+ucx_info -c                 <span class="c-com"># all tunables and their defaults</span>
+UCX_TLS=rc,sm,cuda_copy,cuda_ipc,gdr_copy ./app   <span class="c-com"># restrict transports</span>
+UCX_NET_DEVICES=mlx5_0:1    <span class="c-com"># pin to a specific HCA port (multi-rail control)</span>
+UCX_RNDV_THRESH=8192        <span class="c-com"># eager↔rendezvous crossover</span>
+UCX_LOG_LEVEL=info          <span class="c-com"># show selection decisions</span></code></pre>
+</section>
+
+<section id="alternatives" class="layer">
+<h2>Section 09</h2>
+<div class="sectitle">The cousins: libfabric, GASNet, Gloo, RCCL, MSCCL</div>
+<p>UCX isn't alone. These are worth knowing because you'll meet them in the wild and they sharpen what UCX <em>is</em>.</p>
+
+<h3>libfabric / OFI — UCX's main peer</h3>
+<p><strong>libfabric</strong> (the Open Fabrics Interfaces project) occupies the <em>same layer</em> as UCX: a transport-neutral framework below MPI/SHMEM, above hardware. It exposes <em class="term">providers</em> (verbs, tcp, sockets, psm2 for Omni-Path, <code>cxi</code> for HPE Slingshot, efa for AWS, shm). Intel MPI, Cray MPICH, and AWS's libraries are built on it.</p>
+<div class="tbl"><table>
+<thead><tr><th></th><th>UCX</th><th>libfabric (OFI)</th></tr></thead>
+<tbody>
+<tr><td>Origin</td><td>Mellanox/NVIDIA, ORNL, IBM</td><td>OpenFabrics / Intel-led, broad consortium</td></tr>
+<tr><td>API philosophy</td><td>Opinionated high-level (UCP) + thin transport (UCT)</td><td>Capability-negotiated; app requests features, provider advertises</td></tr>
+<tr><td>Strong on</td><td>InfiniBand/RoCE, NVIDIA GPUs, NVLink</td><td>Vendor breadth: Slingshot (cxi), AWS EFA, Omni-Path, GNI</td></tr>
+<tr><td>Default under</td><td>Open MPI, MVAPICH, MPICH(ucx), OpenSHMEM</td><td>Intel MPI, Cray/HPE MPICH, MPICH(ofi), AWS</td></tr>
+</tbody>
+</table></div>
+<p>They overlap heavily and compete; which one you get is mostly determined by your vendor/fabric. On NVIDIA-IB clusters you'll typically be on UCX; on HPE Cray EX or AWS you'll be on libfabric. Both answer your "MPI ↔ X ↔ physical" picture identically — they're interchangeable abstraction layers.</p>
+
+<h3>GASNet-EX — the PGAS conduit</h3>
+<p>The portable communication layer beneath UPC, Legion, Chapel, and other PGAS languages. Older sibling in spirit to UCX, focused on one-sided RMA + active messages for partitioned global address space runtimes. Conceptually it pioneered the "extract the conduit" idea UCX generalized.</p>
+
+<h3>Gloo, RCCL, MSCCL — the DL-collective neighbors of NCCL</h3>
+<ul>
+<li><strong>Gloo</strong> (Meta): CPU- and GPU-capable collective library, the original CPU backend for PyTorch <code>torch.distributed</code>; simpler than NCCL, used where NCCL isn't available or for CPU tensors.</li>
+<li><strong>RCCL</strong>: AMD's drop-in NCCL clone for ROCm GPUs — same API, same ring/tree ideas, AMD interconnects (Infinity Fabric/xGMI).</li>
+<li><strong>MSCCL / MSCCL++</strong> (Microsoft): a layer to express <em>custom, programmable</em> collective algorithms (and a GPU-initiated comms primitive set) when NCCL's built-ins aren't optimal for a given topology or shape.</li>
+</ul>
+<div class="box key"><div class="bt">Where PyTorch fits</div><p><code>torch.distributed</code> is an <em>even higher</em> layer: it picks a <strong>backend</strong> — <code>nccl</code> (GPU, the default), <code>gloo</code> (CPU/fallback), or <code>mpi</code> — and exposes <code>all_reduce</code>, <code>all_gather</code>, etc. So the full stack for distributed training is often: <em>PyTorch DDP → NCCL → (UCX or NCCL's own net) → GPUDirect RDMA → IB/RoCE + NVLink</em>. Every layer in this guide is somewhere in that line.</p></div>
+</section>
+
+<section id="decisions" class="layer">
+<h2>Section 10</h2>
+<div class="sectitle">Decision trees & master comparison</div>
+
+<h3>Which library should I use?</h3>
+<div class="tree">
+<span class="q">What am I moving, and what's the pattern?</span>
+│
+├─ <span class="a">CPU data, structured msg-passing (solvers, stencils, HPC)</span>
+│     └─ <span class="r">MPI. Two-sided send/recv + collectives. Let it pick UCX/OFI underneath.</span>
+│
+├─ <span class="a">CPU/GPU data, irregular / data-dependent / "reach into remote memory"</span>
+│     └─ <span class="r">OpenSHMEM (CPU) or NVSHMEM (GPU). One-sided put/get + atomics.</span>
+│
+├─ <span class="a">GPU tensors, bulk collectives (gradient allreduce in training)</span>
+│     └─ <span class="r">NCCL (NVIDIA) / RCCL (AMD). Via torch.distributed backend=nccl.</span>
+│
+├─ <span class="a">GPU, fine-grained comm fused inside a kernel / custom pattern</span>
+│     └─ <span class="r">NVSHMEM (GPU-initiated put/get) or MSCCL++ for custom collectives.</span>
+│
+└─ <span class="a">I'm writing a comms library / runtime myself</span>
+      └─ <span class="r">Target UCX or libfabric — don't write verbs/sockets/CUDA-IPC by hand.</span>
+
+<span class="br">Note: these compose. Common real stack →</span>
+<span class="r">  MPI (bootstrap + CPU control) + NCCL (GPU collectives) + NVSHMEM (fused kernels),
+  all riding UCX/libfabric → GPUDirect RDMA → NVLink + InfiniBand.</span>
+</div>
+
+<h3>Master comparison</h3>
+<div class="tbl"><table>
+<thead><tr><th>Layer</th><th>Model</th><th>Sided</th><th>Endpoints</th><th>Std or product?</th><th>Sits on</th></tr></thead>
+<tbody>
+<tr><td><strong>Sockets</strong></td><td>Byte stream</td><td>Two-sided</td><td>CPU mem</td><td>POSIX std</td><td>Kernel TCP/IP</td></tr>
+<tr><td><strong>IB verbs</strong></td><td>QP / RDMA</td><td>Both</td><td>CPU/GPU mem</td><td>std (RDMA-core)</td><td>HCA hardware</td></tr>
+<tr><td><strong>PVM</strong></td><td>Message + spawn</td><td>Two-sided</td><td>CPU mem</td><td>Single product</td><td>Sockets</td></tr>
+<tr><td><strong>MPI</strong></td><td>Msg passing + collectives</td><td>Two-sided (+RMA)</td><td>CPU/GPU mem</td><td><strong>Standard</strong>, many impls</td><td>UCX / OFI / verbs / TCP</td></tr>
+<tr><td><strong>OpenSHMEM</strong></td><td>PGAS put/get</td><td>One-sided</td><td>CPU mem</td><td><strong>Standard</strong>, many impls</td><td>UCX / OFI</td></tr>
+<tr><td><strong>NCCL/RCCL</strong></td><td>GPU collectives</td><td>Collective (+P2P)</td><td>GPU mem</td><td>Single-vendor product</td><td>NVLink/PCIe/IB (own net + UCX)</td></tr>
+<tr><td><strong>NVSHMEM</strong></td><td>PGAS in kernels</td><td>One-sided</td><td>GPU mem</td><td>Single-vendor product</td><td>NVLink / GPUDirect RDMA / IBGDA</td></tr>
+<tr><td><strong>UCX</strong></td><td>Transport framework</td><td>Both</td><td>CPU/GPU mem</td><td>Open consortium</td><td>verbs / TCP / CUDA / SHM</td></tr>
+<tr><td><strong>libfabric</strong></td><td>Transport framework</td><td>Both</td><td>CPU/GPU mem</td><td>Open consortium</td><td>verbs / cxi / efa / psm2 / TCP</td></tr>
+</tbody>
+</table></div>
+</section>
+
+<section id="debugging" class="layer">
+<h2>Section 11</h2>
+<div class="sectitle">Cross-layer debugging cheat sheet</div>
+<p>The fastest path to diagnosis is making the stack <em>tell you what it chose</em>. Below: the first commands to run at each layer.</p>
+
+<h4>Fabric health (before blaming software)</h4>
+<pre data-lang="bash"><code>ibstat                  <span class="c-com"># State: Active &amp; PhysState: LinkUp per port?</span>
+ibv_devinfo -v          <span class="c-com"># HCA details, GIDs (RoCE), MTU, rate</span>
+ibping / ib_write_bw    <span class="c-com"># point-to-point IB latency/bandwidth sanity</span>
+ucx_perftest            <span class="c-com"># UCX micro-benchmark between two hosts</span>
+nvidia-smi topo -m      <span class="c-com"># GPU↔GPU↔NIC topology (NVLink? PCIe? SYS?)</span>
+sminfo                  <span class="c-com"># is a subnet manager (OpenSM) running on IB?</span></code></pre>
+
+<h4>Make each layer confess its choices</h4>
+<div class="tbl"><table>
+<thead><tr><th>Layer</th><th>Env / command to reveal behavior</th></tr></thead>
+<tbody>
+<tr><td><strong>UCX</strong></td><td><code>UCX_LOG_LEVEL=info</code>, <code>ucx_info -d</code> (devices), <code>ucx_info -c</code> (config), <code>UCX_TLS=</code> to restrict, <code>UCX_NET_DEVICES=</code> to pin</td></tr>
+<tr><td><strong>Open MPI</strong></td><td><code>--mca pml_base_verbose 100 --mca btl_base_verbose 100</code>, <code>ompi_info</code>, <code>--report-bindings</code>, <code>--display-map</code></td></tr>
+<tr><td><strong>MPICH</strong></td><td><code>-genv MPIR_CVAR_CH4_NETMOD ucx</code>, <code>-genv MPIR_CVAR_DEBUG_SUMMARY 1</code></td></tr>
+<tr><td><strong>NCCL</strong></td><td><code>NCCL_DEBUG=INFO</code>, <code>NCCL_DEBUG_SUBSYS=INIT,GRAPH,NET,ENV</code>, <code>NCCL_IB_HCA=</code>, <code>NCCL_SOCKET_IFNAME=</code>, <code>NCCL_P2P_DISABLE=1</code> (isolate NVLink)</td></tr>
+<tr><td><strong>NVSHMEM</strong></td><td><code>NVSHMEM_DEBUG=INFO</code>, <code>NVSHMEM_DEBUG_SUBSYS=ALL</code>, <code>NVSHMEM_BOOTSTRAP=</code></td></tr>
+<tr><td><strong>libfabric</strong></td><td><code>FI_LOG_LEVEL=debug</code>, <code>fi_info</code> (list providers), <code>FI_PROVIDER=</code> to force</td></tr>
+</tbody>
+</table></div>
+
+<div class="tree">
+<span class="c-com"># Universal "is it the network?" triage</span>
+<span class="q">1. Fabric up?</span>      → <span class="r">ibstat Active, sminfo has SM, nvidia-smi topo shows NVLink</span>
+<span class="q">2. Right transport?</span> → <span class="r">turn on INFO logs; confirm RDMA/NVLink, not TCP/PCIe fallback</span>
+<span class="q">3. Right device?</span>    → <span class="r">pin HCA (UCX_NET_DEVICES / NCCL_IB_HCA); avoid docker0/lo</span>
+<span class="q">4. Affinity?</span>        → <span class="r">bind ranks to cores; match GPU↔NIC NUMA locality</span>
+<span class="q">5. Protocol?</span>       → <span class="r">tune eager/rndv thresholds; check registration-cache health</span>
+<span class="q">6. Correctness?</span>    → <span class="r">collectives called in same order/size on all ranks; sanitizers</span>
+</div>
+
+<div class="box warn"><div class="bt">The three bugs you'll actually hit most</div>
+<ol style="margin-bottom:0">
+<li><strong>Silent TCP fallback</strong> — "slow but works." Always verify the chosen transport with INFO logs.</li>
+<li><strong>Wrong interface picked</strong> — comms binding to <code>docker0</code>/<code>lo</code> instead of <code>ib0</code>. Set <code>*_IFNAME</code>/<code>NET_DEVICES</code> explicitly.</li>
+<li><strong>Collective mismatch / one rank diverged</strong> — a hang where ranks disagree on what collective to run. Check control flow is identical across ranks.</li>
+</ol></div>
+
+<hr class="div">
+<div class="foot">
+THE ROAD TO UCX · a low-level field guide<br>
+sockets → verbs/RDMA → PVM → MPI → PGAS/OpenSHMEM → NCCL → NVSHMEM → UCX / libfabric<br><br>
+Mechanisms over marketing. Verify the transport. Pin the device. Match the collective.<br>
+Built as a self-contained reference — open it anywhere, styling travels with it.
+</div>
+</section>
+
+</div><!-- /wrap -->
+</main>
+</div><!-- /shell -->
+
+<script>
+// scroll progress bar
+const prog = document.getElementById('progress');
+const navLinks = [...document.querySelectorAll('#nav a[href^="#"]')];
+const sections = navLinks.map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+function onScroll(){
+  const h = document.documentElement;
+  const scrolled = (h.scrollTop || document.body.scrollTop);
+  const max = (h.scrollHeight - h.clientHeight);
+  prog.style.width = (max>0 ? (scrolled/max*100) : 0) + '%';
+  // scroll-spy
+  let cur = null;
+  for(const s of sections){
+    if(s.getBoundingClientRect().top <= 120) cur = s.id;
+  }
+  navLinks.forEach(a=>{
+    a.classList.toggle('active', a.getAttribute('href') === '#'+cur);
+  });
+}
+document.addEventListener('scroll', onScroll, {passive:true});
+window.addEventListener('resize', onScroll);
+onScroll();
+</script>
+</body>
+</html>
