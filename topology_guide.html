@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Network &amp; NUMA Topology — Physical, Logical, and Topology-Aware</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Serif:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#080b12;
+  --bg2:#0c1119;
+  --panel:#101725;
+  --panel2:#151d2e;
+  --line:#243349;
+  --line2:#324563;
+  --txt:#c6d2e2;
+  --txt-dim:#8696ad;
+  --txt-faint:#5a6a83;
+  --cyan:#5b9bf0;          /* PRIMARY accent (azure) */
+  --cyan-bright:#82b6ff;
+  --amber:#e8a33d;         /* eyebrows / secondary (gold) */
+  --amber-soft:#f0c075;
+  --red:#e06c75;
+  --violet:#a98be0;        /* special callouts / keywords */
+  --blue:#46c8e0;          /* fns / links (teal, distinct from azure) */
+  --green:#9bd14f;         /* code strings / tree result (lime) */
+  --mono:'IBM Plex Mono',monospace;
+  --sans:'IBM Plex Sans',system-ui,sans-serif;
+  --serif:'IBM Plex Serif',Georgia,serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg);
+  color:var(--txt);
+  font-family:var(--sans);
+  font-weight:300;
+  font-size:16px;
+  line-height:1.72;
+  -webkit-font-smoothing:antialiased;
+  background-image:
+    radial-gradient(rgba(91,155,240,.10) 1px,transparent 1.4px),
+    radial-gradient(circle at 12% -5%,rgba(91,155,240,.07),transparent 45%),
+    radial-gradient(circle at 92% 6%,rgba(232,163,61,.045),transparent 42%);
+  background-size:30px 30px,100% 100%,100% 100%;
+}
+#progress{position:fixed;top:0;left:0;height:3px;width:0;background:linear-gradient(90deg,var(--cyan),var(--amber));z-index:200;box-shadow:0 0 12px var(--cyan)}
+
+.shell{display:grid;grid-template-columns:312px 1fr;max-width:1520px;margin:0 auto}
+nav{
+  position:sticky;top:0;align-self:start;height:100vh;overflow-y:auto;
+  border-right:1px solid var(--line);
+  padding:30px 18px 60px 28px;
+  background:linear-gradient(180deg,rgba(12,17,25,.94),rgba(8,11,18,.94));
+  backdrop-filter:blur(6px);
+}
+nav .brand{font-family:var(--mono);font-size:13px;letter-spacing:.5px;color:var(--cyan);font-weight:600;margin-bottom:4px}
+nav .brand .arrow{color:var(--amber)}
+nav .sub{font-family:var(--mono);font-size:10.5px;color:var(--txt-faint);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:26px;border-bottom:1px solid var(--line);padding-bottom:18px}
+nav a{display:block;color:var(--txt-dim);text-decoration:none;font-size:13.5px;padding:5px 10px;border-radius:5px;transition:all .15s;border-left:2px solid transparent;line-height:1.4}
+nav a:hover{color:var(--txt);background:var(--panel)}
+nav a.active{color:var(--cyan-bright);border-left-color:var(--cyan);background:rgba(91,155,240,.10)}
+nav a.sec{font-family:var(--mono);font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--txt-faint);margin-top:20px;padding-left:10px;pointer-events:none}
+nav a.lvl2{padding-left:24px;font-size:12.5px;color:var(--txt-faint)}
+nav a.lvl2:hover{color:var(--txt-dim)}
+
+main{padding:0;min-width:0;overflow:hidden}
+.wrap{max-width:930px;padding:60px 56px 140px}
+
+.hero{padding:40px 0 20px;border-bottom:1px solid var(--line);margin-bottom:48px}
+.hero .kicker{font-family:var(--mono);color:var(--amber);font-size:12px;letter-spacing:3px;text-transform:uppercase;margin-bottom:20px}
+.hero h1{font-family:var(--mono);font-weight:700;font-size:42px;line-height:1.12;letter-spacing:-1px;color:#eaf1fb;margin-bottom:22px}
+.hero h1 em{font-style:normal;color:var(--cyan)}
+.hero p{font-size:18px;color:var(--txt-dim);max-width:770px;font-weight:300}
+.hero .meta{display:flex;gap:10px;flex-wrap:wrap;margin-top:28px}
+.hero .meta span{font-family:var(--mono);font-size:11px;color:var(--txt-faint);border:1px solid var(--line);padding:5px 12px;border-radius:20px}
+
+h2{font-family:var(--mono);font-weight:600;font-size:13px;letter-spacing:3px;text-transform:uppercase;color:var(--amber);margin:0 0 6px;display:flex;align-items:center;gap:12px}
+h2::before{content:"";width:34px;height:1px;background:var(--amber);opacity:.6}
+.sectitle{font-family:var(--mono);font-weight:700;font-size:31px;letter-spacing:-.5px;color:#eaf1fb;margin:0 0 28px;line-height:1.16}
+section{padding-top:60px;margin-top:-20px}
+.layer{scroll-margin-top:20px}
+h3{font-family:var(--sans);font-weight:600;font-size:22px;color:#dde7f4;margin:42px 0 14px;letter-spacing:-.2px}
+h4{font-family:var(--mono);font-weight:600;font-size:15px;color:var(--cyan-bright);margin:30px 0 10px;letter-spacing:.3px}
+p{margin:0 0 16px}
+a.inl{color:var(--blue);text-decoration:none;border-bottom:1px dotted var(--blue)}
+strong{color:#e9f0f8;font-weight:600}
+em.term{font-style:normal;font-family:var(--mono);font-size:.9em;color:var(--amber-soft);background:rgba(232,163,61,.08);padding:1px 6px;border-radius:4px}
+ul,ol{margin:0 0 18px;padding-left:24px}
+li{margin-bottom:8px}
+li::marker{color:var(--cyan)}
+code{font-family:var(--mono);font-size:.88em;background:rgba(120,150,190,.14);color:var(--amber-soft);padding:2px 6px;border-radius:4px;border:1px solid rgba(120,150,190,.13)}
+
+pre{background:#06090f;border:1px solid var(--line);border-radius:10px;padding:20px 22px;overflow-x:auto;margin:18px 0 24px;font-family:var(--mono);font-size:13px;line-height:1.65;position:relative}
+pre::before{content:attr(data-lang);position:absolute;top:0;right:0;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--txt-faint);background:var(--panel);padding:3px 11px;border-bottom-left-radius:8px;border-left:1px solid var(--line);border-bottom:1px solid var(--line)}
+pre code{background:none;border:none;padding:0;color:#c8d4e4;font-size:13px}
+.c-kw{color:var(--violet)}.c-fn{color:var(--blue)}.c-str{color:var(--green)}.c-num{color:var(--amber)}.c-com{color:var(--txt-faint);font-style:italic}.c-ty{color:var(--cyan)}.c-mac{color:var(--amber-soft)}
+
+.box{border-radius:10px;padding:18px 22px;margin:22px 0;border:1px solid var(--line);background:var(--panel);position:relative;padding-left:48px}
+.box::before{position:absolute;left:18px;top:18px;font-family:var(--mono);font-weight:700;font-size:16px}
+.box .bt{font-family:var(--mono);font-size:11px;letter-spacing:2px;text-transform:uppercase;font-weight:600;margin-bottom:6px}
+.box p:last-child{margin-bottom:0}
+.box.key{border-color:rgba(91,155,240,.42);background:linear-gradient(180deg,rgba(91,155,240,.08),rgba(91,155,240,.02))}
+.box.key::before{content:"◆";color:var(--cyan)}.box.key .bt{color:var(--cyan)}
+.box.warn{border-color:rgba(232,163,61,.4);background:linear-gradient(180deg,rgba(232,163,61,.07),rgba(232,163,61,.02))}
+.box.warn::before{content:"▲";color:var(--amber)}.box.warn .bt{color:var(--amber)}
+.box.bug{border-color:rgba(224,108,117,.38);background:linear-gradient(180deg,rgba(224,108,117,.06),rgba(224,108,117,.02))}
+.box.bug::before{content:"✦";color:var(--red)}.box.bug .bt{color:var(--red)}
+.box.gpu{border-color:rgba(169,139,224,.42);background:linear-gradient(180deg,rgba(169,139,224,.08),rgba(169,139,224,.02))}
+.box.gpu::before{content:"⬢";color:var(--violet)}.box.gpu .bt{color:var(--violet)}
+
+.tbl{overflow-x:auto;margin:22px 0;border:1px solid var(--line);border-radius:10px}
+table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:560px}
+th{background:var(--panel2);font-family:var(--mono);font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--cyan);text-align:left;padding:12px 16px;font-weight:600;border-bottom:1px solid var(--line)}
+td{padding:11px 16px;border-bottom:1px solid var(--line);color:var(--txt-dim);vertical-align:top}
+tr:last-child td{border-bottom:none}
+td strong{color:var(--amber-soft);font-family:var(--mono);font-size:13px}
+tbody tr:hover{background:rgba(91,155,240,.035)}
+
+.stack{margin:26px 0;border-radius:12px;overflow:hidden;border:1px solid var(--line)}
+.stack .row{display:flex;align-items:stretch;border-bottom:1px solid var(--line)}
+.stack .row:last-child{border-bottom:none}
+.stack .lbl{flex:0 0 140px;font-family:var(--mono);font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--txt-faint);display:flex;align-items:center;padding:0 14px;background:var(--bg2);border-right:1px solid var(--line)}
+.stack .cells{flex:1;display:flex}
+.stack .cell{flex:1;padding:13px 14px;font-family:var(--mono);font-size:12.5px;text-align:center;border-right:1px dashed var(--line);display:flex;flex-direction:column;justify-content:center;gap:3px}
+.stack .cell:last-child{border-right:none}
+.stack .cell small{font-family:var(--sans);font-size:10.5px;color:var(--txt-faint);font-weight:300;letter-spacing:0}
+.tier-app{background:rgba(169,139,224,.12);color:var(--violet)}
+.tier-mid{background:rgba(91,155,240,.11);color:var(--cyan-bright)}
+.tier-abs{background:rgba(70,200,224,.10);color:var(--blue)}
+.tier-low{background:rgba(232,163,61,.11);color:var(--amber-soft)}
+.tier-hw{background:rgba(224,108,117,.11);color:var(--red)}
+.tier-data{background:rgba(155,209,122,.10);color:var(--green)}
+
+.tree{font-family:var(--mono);font-size:13px;background:#06090f;border:1px solid var(--line);border-radius:10px;padding:22px 24px;margin:22px 0;line-height:1.9;overflow-x:auto;white-space:pre-wrap;word-break:normal;overflow-wrap:anywhere;tab-size:2}
+.tree .q{color:var(--cyan-bright)}
+.tree .a{color:var(--amber-soft)}
+.tree .r{color:var(--green)}
+.tree .br{color:var(--txt-faint)}
+
+/* ascii diagram block — like .tree but for network drawings */
+.net{font-family:var(--mono);font-size:12.5px;background:#06090f;border:1px solid var(--line);border-radius:10px;padding:22px 24px;margin:22px 0;line-height:1.5;overflow-x:auto;white-space:pre;color:#9fb4cf}
+.net .hi{color:var(--cyan-bright)}
+.net .h2{color:var(--amber-soft)}
+.net .h3{color:var(--green)}
+.net .dim{color:var(--txt-faint)}
+
+.timeline{position:relative;margin:30px 0 10px;padding-left:32px}
+.timeline::before{content:"";position:absolute;left:7px;top:6px;bottom:6px;width:2px;background:linear-gradient(180deg,var(--cyan),var(--amber))}
+.tl-item{position:relative;margin-bottom:26px}
+.tl-item::before{content:"";position:absolute;left:-31px;top:6px;width:12px;height:12px;border-radius:50%;background:var(--bg);border:2px solid var(--cyan)}
+.tl-item .yr{font-family:var(--mono);font-size:12px;color:var(--amber);letter-spacing:1px;font-weight:600}
+.tl-item .nm{font-weight:600;color:#dde7f4;font-size:16px;margin:2px 0 4px}
+.tl-item .ds{font-size:14px;color:var(--txt-dim)}
+
+details{border:1px solid var(--line);border-radius:9px;margin:16px 0;background:var(--panel);overflow:hidden}
+details summary{cursor:pointer;padding:14px 20px;font-family:var(--mono);font-size:13.5px;color:var(--cyan-bright);font-weight:500;list-style:none;display:flex;align-items:center;gap:10px;user-select:none}
+details summary::-webkit-details-marker{display:none}
+details summary::before{content:"▸";color:var(--amber);transition:transform .2s}
+details[open] summary::before{transform:rotate(90deg)}
+details summary:hover{background:var(--panel2)}
+details .body{padding:4px 22px 18px;border-top:1px solid var(--line)}
+
+.pill{display:inline-block;font-family:var(--mono);font-size:10.5px;letter-spacing:.5px;padding:2px 9px;border-radius:20px;border:1px solid var(--line2);color:var(--txt-dim);margin:0 4px 4px 0}
+
+hr.div{border:none;border-top:1px solid var(--line);margin:54px 0}
+.foot{border-top:1px solid var(--line);margin-top:80px;padding-top:30px;font-family:var(--mono);font-size:12px;color:var(--txt-faint);line-height:1.8}
+
+@media(max-width:1080px){
+  .shell{grid-template-columns:1fr}
+  nav{position:static;height:auto;border-right:none;border-bottom:1px solid var(--line)}
+  .wrap{padding:40px 24px 100px}
+  .hero h1{font-size:30px}
+}
+::selection{background:rgba(91,155,240,.32);color:#fff}
+nav::-webkit-scrollbar,pre::-webkit-scrollbar,.tbl::-webkit-scrollbar,.tree::-webkit-scrollbar,.net::-webkit-scrollbar{height:8px;width:8px}
+nav::-webkit-scrollbar-thumb,pre::-webkit-scrollbar-thumb,.tbl::-webkit-scrollbar-thumb,.tree::-webkit-scrollbar-thumb,.net::-webkit-scrollbar-thumb{background:var(--line2);border-radius:4px}
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<div class="shell">
+<nav id="nav">
+  <div class="brand">nodes<span class="arrow"> · </span>links<span class="arrow"> · </span>topology</div>
+  <div class="sub">Network &amp; NUMA Topology Field Guide</div>
+
+  <a class="sec">Foundations</a>
+  <a href="#overview">00 · What Topology Is</a>
+  <a href="#metrics">01 · The Metrics That Matter</a>
+  <a href="#phys-log">02 · Physical vs Logical</a>
+
+  <a class="sec">The Topologies</a>
+  <a href="#basic">03 · Bus · Star · All-to-All</a>
+  <a href="#ring">04 · Ring &amp; Ring-AllReduce</a>
+  <a href="#fattree">05 · Tree · Fat-Tree · Rail-Optimized</a>
+  <a href="#torus">06 · Mesh &amp; Torus</a>
+  <a href="#hypercube">07 · Hypercube</a>
+  <a href="#dragonfly">08 · Dragonfly</a>
+
+  <a class="sec">Movement &amp; Choice</a>
+  <a href="#routing">09 · How Data Travels (Routing)</a>
+  <a href="#choosing">10 · Choosing a Topology</a>
+
+  <a class="sec">Topology-Aware Software</a>
+  <a href="#aware">11 · Aware MPI · NCCL · UCX</a>
+  <a href="#innetwork">12 · In-Network Computing (SHARP)</a>
+  <a href="#numa">13 · NUMA Topology</a>
+
+  <a class="sec">Practice</a>
+  <a href="#debugging">14 · Common Issues &amp; Debugging</a>
+  <a href="#examples">15 · Worked Examples</a>
+  <a href="#glossary">16 · Glossary</a>
+</nav>
+
+<main>
+<div class="wrap">
+
+<div class="hero">
+  <div class="kicker">The shape of the wires</div>
+  <h1>Network &amp; NUMA <em>Topology</em>:<br>physical, logical,<br>and <em>topology-aware</em></h1>
+  <p>The third companion. The interconnect guide named the wires — UCX, RDMA, NVLink. The analytics guide found where the exchange bottleneck lives. This one is about the <em>shape</em> those wires form: how nodes and switches are arranged, how a message picks its way across that arrangement, and why the same collective is fast on one layout and crippling on another. From a two-node cable up to a 250,000-endpoint dragonfly and an NVL72 NVLink domain — plus the topology <em>inside</em> a single node, where NUMA and PCIe quietly decide half your performance.</p>
+  <div class="meta">
+    <span>101 → advanced</span><span>physical + logical</span><span>routing &amp; collectives</span><span>topology-aware MPI/NCCL/UCX</span><span>NUMA</span><span>decision trees</span><span>debugging</span>
+  </div>
+</div>
+
+<section id="overview" class="layer">
+<h2>Section 00</h2>
+<div class="sectitle">What topology is — and why it sits under everything</div>
+
+<p><em class="term">Topology</em> is the arrangement of the things that compute and the links between them: which node connects to which, through how many switches, over what kind of wire. It is the map. Everything in the other two guides runs <em>on top of</em> this map — a UCX <code>put</code> or an NCCL all-reduce or a Velox shuffle ultimately becomes "bytes traversing some number of links and switches," and the topology decides how many, how fast, and whether they collide with everyone else's bytes.</p>
+
+<p>The single most important distinction, which the whole guide leans on:</p>
+
+<div class="box key">
+<div class="bt">Physical vs logical topology</div>
+<p><strong>Physical topology</strong> is the literal wiring: GPUs, NICs, switches, cables, and how they're plugged together. It's fixed at deployment time (you can't re-cable a datacenter per job).</p>
+<p><strong>Logical topology</strong> is the communication pattern a program <em>imposes</em> on top of the physical one: "treat my 8 ranks as a ring," "as a 2D grid," "as a binary tree." It's chosen per algorithm, in software, and can change between collectives in the same job.</p>
+<p>The art of high-performance communication is <strong>mapping a good logical topology onto the physical one</strong> so that logically-adjacent ranks are also physically close. A ring all-reduce is bandwidth-optimal <em>only</em> if consecutive ring ranks sit on fast, direct links. Put the ring's "next hop" across the slowest link in the building and the same algorithm crawls. That mapping problem is what "topology-aware" (§11) means.</p>
+</div>
+
+<h4>The layers of topology you actually deal with</h4>
+<p>"The network" is really several nested topologies, each with different speed and rules. A byte from one GPU to another may cross all of them:</p>
+
+<div class="stack">
+  <div class="row"><div class="lbl">Within a GPU</div><div class="cells"><div class="cell tier-hw">on-die / chiplet fabric<small>e.g. 2 dies linked at ~10 TB/s (Blackwell)</small></div></div></div>
+  <div class="row"><div class="lbl">Within a node</div><div class="cells">
+    <div class="cell tier-mid">NVLink / NVSwitch<small>GPU↔GPU, ~1.8 TB/s/GPU</small></div>
+    <div class="cell tier-abs">PCIe / NVLink-C2C<small>GPU↔CPU↔NIC</small></div>
+  </div></div>
+  <div class="row"><div class="lbl">Node ↔ node</div><div class="cells">
+    <div class="cell tier-low">InfiniBand / RoCE / Slingshot<small>fat-tree, dragonfly — 100s of GB/s</small></div>
+  </div></div>
+  <div class="row"><div class="lbl">Rack ↔ rack / pod</div><div class="cells">
+    <div class="cell tier-low">spine / core / global links<small>optical, oversubscribed-or-not</small></div>
+  </div></div>
+  <div class="row"><div class="lbl">Inside the CPU</div><div class="cells">
+    <div class="cell tier-app">NUMA: sockets · memory · UPI/IF<small>the topology nobody sees until it's slow (§13)</small></div>
+  </div></div>
+</div>
+
+<p>Each transition down this list is typically <strong>10–100× slower</strong> than the one above. The entire game — rail-optimized fabrics, NVLink domains, NUMA binding, topology-aware collectives — is about <em>keeping traffic on the fast layers and minimizing crossings of the slow ones</em>. Hold that thought; it recurs in every section.</p>
+
+<div class="box gpu">
+<div class="bt">Why this matters even if you "just" write query engines or training loops</div>
+<p>An all-reduce that should ride NVLink but accidentally goes over PCIe, a shuffle partition that crosses three switch tiers instead of one, a tensor pinned to the wrong NUMA node so every access hops the inter-socket link — these are 2–10× slowdowns that no amount of kernel tuning fixes, because the bottleneck isn't compute, it's the path. Topology literacy is how you recognize "this is a placement problem, not a code problem."</p>
+</div>
+</section>
+
+<section id="metrics" class="layer">
+<h2>Section 01</h2>
+<div class="sectitle">The metrics that decide everything</div>
+
+<p>Before comparing shapes you need the vocabulary to compare them. Six numbers characterize any topology; every design is a trade among them.</p>
+
+<div class="tbl"><table>
+<thead><tr><th>Metric</th><th>Definition</th><th>Why you care</th></tr></thead>
+<tbody>
+<tr><td><strong>Degree / radix</strong></td><td>Links per node (or ports per switch)</td><td>High radix → fewer hops to reach everyone, but pricier switches &amp; more cables.</td></tr>
+<tr><td><strong>Diameter</strong></td><td>Max hops between the two farthest nodes</td><td>Worst-case latency. Low diameter = predictable latency at scale.</td></tr>
+<tr><td><strong>Bisection bandwidth</strong></td><td>Min total BW across any cut splitting the network in half</td><td><strong>The master metric for all-to-all / shuffle / all-reduce.</strong> It's the bandwidth available when everyone talks to everyone.</td></tr>
+<tr><td><strong>Blocking / oversubscription</strong></td><td>Ratio of downlink to uplink capacity (1:1 = non-blocking)</td><td>Oversubscribed links congest under heavy collective traffic. AI training usually demands 1:1.</td></tr>
+<tr><td><strong>Cost &amp; scalability</strong></td><td>Cables, switches, optics, power vs node count</td><td>What's affordable at 100 nodes is bankrupting at 100,000. Optics &gt; copper in cost &amp; power.</td></tr>
+<tr><td><strong>Fault tolerance</strong></td><td>Path diversity; effect of one link/switch dying</td><td>A ring dies on one break; a fat-tree reroutes. Matters more as scale (and failure rate) grows.</td></tr>
+</tbody>
+</table></div>
+
+<div class="box key">
+<div class="bt">Bisection bandwidth is the number to internalize</div>
+<p>Imagine slicing the cluster into two equal halves and summing the bandwidth of every link you cut. That's bisection bandwidth — the throughput available when traffic is maximally spread (an all-to-all shuffle, an all-reduce, a distributed join). A topology can have wonderful point-to-point links and still choke a collective if its bisection is low. <strong>Full bisection bandwidth</strong> means any half can talk to the other half at full node-injection rate with no bottleneck; that's the gold standard for training fabrics and exactly what "non-blocking fat-tree" delivers. When someone says a fabric "scales," ask: <em>at what bisection?</em></p>
+</div>
+
+<h4>Latency vs bandwidth — two different questions</h4>
+<p>Diameter governs <strong>latency</strong> (small messages, barriers, latency-bound collectives); bisection governs <strong>bandwidth</strong> (big transfers, the bulk of training/analytics). Different workloads weight them differently: a latency-bound HPC solver with tiny halo exchanges cares about diameter and nearest-neighbor locality; a 405B-parameter training all-reduce cares about bisection bandwidth above all. The "best" topology is workload-relative — which is the whole point of §10.</p>
+
+<div class="box warn">
+<div class="bt">The cost wall is why topologies exist at all</div>
+<p>If money and cables were free, every cluster would be fully connected (all-to-all) — diameter 1, perfect bisection. They aren't: full connectivity needs N(N−1)/2 links, which is impossible past a few dozen nodes. Every topology below — ring, tree, torus, hypercube, dragonfly — is a <em>different compromise</em> that buys most of the bandwidth/latency of full connectivity for a fraction of the cables. Understanding each one is understanding <em>which</em> compromise it makes.</p>
+</div>
+</section>
+
+<section id="phys-log" class="layer">
+<h2>Section 02</h2>
+<div class="sectitle">Physical vs logical — the mapping problem</div>
+
+<p>Section 00 introduced the split; here's why it's the crux of performance. A program never says "send over cable 7." It says "rank 3, send to rank 4" — a <em>logical</em> instruction. Something must translate logical ranks into physical paths. If logically-adjacent ranks are physically far apart, the algorithm is fine but the run is slow. Same code, same physical network, wildly different speed depending purely on the <strong>rank-to-hardware mapping</strong>.</p>
+
+<h4>A concrete example: a ring on a fat-tree</h4>
+<p>Suppose 8 GPUs across 2 nodes (4 each), and you run a ring all-reduce (logical topology = ring: 0→1→2→…→7→0). Two mappings:</p>
+
+<div class="net"><span class="hi">GOOD mapping</span>  (ring follows the hardware)
+ node A [g0 g1 g2 g3]          node B [g4 g5 g6 g7]
+ ring:  0→1→2→3 ───────────────────→ 4→5→6→7 ──┐
+        └─────── all intra-node NVLink ─────────┘
+ only TWO of the eight ring hops cross the slow inter-node link.
+
+<span class="h2">BAD mapping</span>  (ring zig-zags across nodes)
+ node A [g0 g2 g4 g6]          node B [g1 g3 g5 g7]
+ ring:  0→1 crosses,  1→2 crosses,  2→3 crosses ... 
+ EVERY hop crosses the inter-node link → 8x the slow-link traffic, ~order-of-magnitude slower.</div>
+
+<p>Both are "a ring all-reduce." The physical network is identical. The only difference is which GPU got which rank — and it can be a 5–10× swing. This is why NCCL spends startup time <em>detecting</em> the physical topology and building its rings/trees to match it, and why MPI lets you reorder ranks. The mapping is the performance.</p>
+
+<div class="box key">
+<div class="bt">Who does the mapping</div>
+<p><strong>You / the scheduler</strong>: process placement (which rank lands on which node/GPU) via Slurm/MPI host ordering, <code>CUDA_VISIBLE_DEVICES</code>, rankfiles. <strong>The library</strong>: NCCL builds its logical rings/trees over the detected NVLink/PCIe/IB graph; MPI can reorder a Cartesian communicator to match the machine. <strong>The fabric</strong>: routing chooses physical paths between two endpoints (§09). Get all three aligned and the logical pattern rides the fast links; misalign any one and you leak traffic onto slow links.</p>
+</div>
+
+<p>Keep this lens for the rest of the guide: when we describe a topology (ring, torus, hypercube), we're usually describing a <em>logical</em> communication pattern. Whether it's fast depends on the <em>physical</em> fabric it's mapped onto and the routing underneath.</p>
+</section>
+
+<section id="basic" class="layer">
+<h2>Section 03</h2>
+<div class="sectitle">The basics — bus, star, and all-to-all</div>
+
+<p>Start with the three simplest arrangements. You'll rarely build a large system out of these alone, but they're the conceptual atoms, and the star (as a switch) is literally the building block of everything bigger.</p>
+
+<h4>Bus — one shared medium</h4>
+<div class="net">n0 ──┬────┬────┬────┬── n4
+     n1   n2   n3        (all share ONE link; one talker at a time)</div>
+<p>Every node taps a single shared wire. <strong>Data travel:</strong> a frame is seen by everyone; only the addressee keeps it. <strong>Pros:</strong> trivially cheap, minimal cabling. <strong>Cons:</strong> one collision domain — bandwidth is shared by all, and two simultaneous talkers collide. <strong>Scenario:</strong> legacy 10BASE2 Ethernet, simple on-chip/embedded buses, a PCIe bus segment. Doesn't scale past a handful of busy nodes; obsolete for clusters but the mental model behind "shared bandwidth" warnings.</p>
+
+<h4>Star — everyone through one hub/switch</h4>
+<div class="net">      n1
+       │
+ n0 ── <span class="hi">SW</span> ── n2        every node has its own link to a central switch;
+       │                the switch forwards frames port-to-port.
+      n3</div>
+<p><strong>Data travel:</strong> source → switch → destination, one hop, no collisions if the switch is non-blocking (it has internal bandwidth ≥ sum of ports). <strong>Pros:</strong> simple, full per-link bandwidth, one failed link affects only one node. <strong>Cons:</strong> the switch is a single point of failure and a hard scaling limit — you can only buy switches with so many ports (the <em>radix</em>). <strong>Scenario:</strong> every modern LAN, and the <strong>unit cell of all large topologies</strong> — a fat-tree is just stars of switches wired into more stars. When a single switch's radix runs out (say 64 ports), you must combine switches, and <em>how</em> you combine them is the rest of this guide.</p>
+
+<h4>All-to-all (fully connected) — a dedicated link between every pair</h4>
+<div class="net">  n0───n1        every node directly wired to every other.
+  │ ╲ ╱ │        diameter = 1 hop. bisection = maximal.
+  │ ╱ ╲ │        links needed = N(N-1)/2  →  N=8: 28,  N=100: 4,950,  N=1000: ~500,000
+  n3───n2        ...which is why you can't build it at scale.</div>
+<p><strong>Data travel:</strong> one direct hop, always. The theoretical ideal — lowest latency, highest bisection, total fault tolerance. <strong>Cons:</strong> the link count explodes quadratically; impossible past tens of endpoints. <strong>Scenario:</strong> it <em>does</em> exist at small scale where it matters most — <strong>NVSwitch makes the 8 GPUs in a node effectively all-to-all</strong> over NVLink, and a dragonfly group wires its switches all-to-all (§08). The lesson: full connectivity is the gold standard you approximate locally (within a node, within a group) and give up globally.</p>
+
+<div class="box key">
+<div class="bt">The pattern behind every big topology</div>
+<p>Large fabrics are <strong>hierarchies of stars with all-to-all islands</strong>: all-to-all where it's cheap (inside a node via NVSwitch, inside a dragonfly group via copper), trees/stars to aggregate, and careful link budgeting between the islands. Bus is dead; star and all-to-all are the recurring motifs. Everything below is a way to get near-all-to-all behavior without near-all-to-all cabling.</p>
+</div>
+</section>
+
+<section id="ring" class="layer">
+<h2>Section 04</h2>
+<div class="sectitle">Ring — and why all-reduce loves it</div>
+
+<p>A ring connects each node to exactly two neighbors, closing into a loop. Degree 2, dirt-cheap cabling — and, surprisingly, the <strong>bandwidth-optimal</strong> shape for the most important collective in deep learning. This is the topology to understand deeply because NCCL's default all-reduce is a ring.</p>
+
+<div class="net">  n0 ── n1 ── n2
+  │              │      each node talks only to left &amp; right neighbor.
+  n7            n3      diameter = N/2 hops (bad latency for small msgs).
+  │              │      bisection = just 2 links (bad for random all-to-all).
+  n6 ── n5 ── n4        BUT for structured collectives it's optimal — here's why.</div>
+
+<h4>Why a ring is bandwidth-optimal for all-reduce</h4>
+<p>All-reduce = every node ends up with the sum (or avg) of all nodes' vectors — exactly gradient averaging in data-parallel training. The ring algorithm has two phases, each N−1 steps, moving only <em>chunks</em>:</p>
+<ol>
+<li><strong>Scatter-reduce:</strong> split each node's vector into N chunks. Each step, every node sends one chunk to its right neighbor and adds the chunk it receives. After N−1 steps, each node owns one fully-reduced chunk (the sum of that chunk across all nodes).</li>
+<li><strong>All-gather:</strong> circulate those finished chunks around the ring N−1 more steps so everyone ends with all reduced chunks.</li>
+</ol>
+
+<div class="net"><span class="dim">scatter-reduce, 4 nodes, vector split in 4 chunks (a,b,c,d):</span>
+ step1:  n0 ─a→ n1 ─b→ n2 ─c→ n3 ─d→ n0     (each adds incoming chunk)
+ step2:  n0 ─d→ n1 ─a→ n2 ─b→ n3 ─c→ n0
+ step3:  n0 ─c→ n1 ─d→ n2 ─a→ n3 ─b→ n0
+ <span class="h3">now each node holds ONE chunk = sum over all 4 nodes. then all-gather (3 more steps).</span></div>
+
+<div class="box key">
+<div class="bt">The key result: ring all-reduce bandwidth is independent of N</div>
+<p>Each node sends <code>2·(N−1)/N · S</code> bytes total (S = vector size), and every link carries data the whole time. As N grows, per-node bytes →<code>2S</code> — it does <strong>not</strong> grow with cluster size. That's why ring all-reduce scales to thousands of GPUs at near-constant bandwidth cost. The price is <strong>latency</strong>: 2(N−1) sequential steps, so big rings have high latency and small messages suffer. This latency/bandwidth split is exactly why NCCL uses <em>rings</em> for large messages and <em>trees</em> (§05) for small/latency-bound ones, picking per call.</p>
+</div>
+
+<p><strong>Data travel:</strong> always to your one neighbor — so if neighbors are NVLink-connected, every byte rides NVLink. This is why the rank-to-GPU mapping (§02) matters so much for rings: NCCL builds the ring order to follow NVLink/NVSwitch links, so "neighbor" is physically one fast hop.</p>
+
+<h4>Variants &amp; failure</h4>
+<ul>
+<li><strong>Bidirectional ring:</strong> use both directions at once → double the effective bandwidth. NCCL builds multiple rings (and both directions) over the available links.</li>
+<li><strong>Failure mode:</strong> a single broken link or dead node <em>severs</em> a unidirectional ring entirely — no path around. Mitigations: bidirectional/double rings, or rebuild the ring excluding the failed node. Low fault tolerance is the ring's real weakness, which is fine inside a controlled NVLink domain but risky across a flaky network.</li>
+</ul>
+
+<div class="box gpu">
+<div class="bt">Where you've already met this</div>
+<p>NCCL's ring all-reduce over NVLink is the workhorse of every multi-GPU training step, and the GPU-analytics exchange (guide 2, §09) shuffles partitions over the same NVLink/NVSwitch fabric. The ring is the canonical "logical topology mapped onto a fast physical island" — and the reason an 8-GPU NVSwitch node (physically all-to-all) can run a ring at full NVLink bandwidth.</p>
+</div>
+</section>
+
+<section id="fattree" class="layer">
+<h2>Section 05</h2>
+<div class="sectitle">Tree · Fat-Tree · Clos · Rail-Optimized</div>
+
+<p>This family dominates datacenters and AI clusters. It starts from a plain tree, fixes the tree's fatal flaw, and scales into the spine-leaf and rail-optimized fabrics that connect essentially every large GPU cluster today.</p>
+
+<h4>Plain tree — and the root bottleneck</h4>
+<div class="net">              <span class="h2">root SW</span>            ← ALL cross-subtree traffic squeezes through here
+             /        \
+        sw            sw
+       /  \          /  \
+     n0   n1       n2   n3</div>
+<p>A tree gives low diameter (log N hops) and simple routing (up to common ancestor, back down). But links get <strong>narrower</strong> toward the root while traffic <em>concentrates</em> there: if n0 and n2 both want to reach the far subtree, they contend for the one root link. Bisection bandwidth is just that top link — terrible for all-to-all. Plain trees are fine for aggregation patterns, useless for shuffle/all-reduce at scale.</p>
+
+<h4>Fat-tree — make the links fatter as you climb</h4>
+<p>Leiserson's insight: widen the links (add parallel paths) toward the root so aggregate bandwidth is <strong>constant at every level</strong>. Now any half of the leaves can reach the other half at full rate — <strong>full bisection bandwidth</strong>, the property all-to-all collectives need.</p>
+
+<div class="net">         <span class="hi">spine spine spine spine</span>      ← multiple roots; aggregate BW = leaf BW
+          ╲ ╳   ╳   ╳ ╱           every leaf connects to EVERY spine
+        <span class="h3">leaf</span>  <span class="h3">leaf</span>  <span class="h3">leaf</span>  <span class="h3">leaf</span>        (a full bipartite mesh between tiers)
+        /│      │      │ ╲
+      n0 n1   n2 n3  n4 n5 ...    ← nodes hang off leaves</div>
+
+<h4>Clos / folded-Clos / spine-leaf — building a fat-tree from fixed-radix switches</h4>
+<p>You can't buy a switch with a million ports, so a fat-tree is built as a <em>Clos network</em>: cheap fixed-radix switches wired so there are many equal-cost paths between any two endpoints. Folded flat, this is the ubiquitous <strong>spine-leaf</strong> (2-tier) design: <em class="term">leaf</em> (top-of-rack) switches connect to servers below and to <em>all</em> <em class="term">spine</em> switches above; spines connect only to leaves. Two hops leaf→spine→leaf reaches anything.</p>
+
+<div class="box key">
+<div class="bt">The scaling math (worth memorizing)</div>
+<p>With <strong>k-port</strong> switches, split each leaf's ports half-down/half-up:</p>
+<p><strong>2 tiers</strong> (leaf+spine): up to <code>k²/2</code> endpoints. A 64-port switch → ~2,048 endpoints, full bisection.<br>
+<strong>3 tiers</strong> (leaf+spine+core): up to <code>k³/4</code> endpoints. 64-port → ~65,000 endpoints. (NVIDIA cites a 64-port 3-tier fat-tree scaling to ~32,768 with 32 down/32 up.)</p>
+<p>Higher-radix switches (Quantum-2 = 64×400 Gb/s; Quantum-X800 = 800 Gb/s) push these numbers up without changing the <em>shape</em> — you just need fewer switches/tiers for a given size. This is why "we doubled port speed" scales the fabric without a redesign.</p>
+</div>
+
+<h4>Non-blocking vs oversubscribed</h4>
+<p>If a leaf has equal down and up bandwidth (1:1), the fabric is <strong>non-blocking</strong> — no internal link can be the bottleneck. Cheaper deployments <strong>oversubscribe</strong> (e.g. 4:1 down:up), saving spine switches/optics but creating congestion when many flows go up at once. <strong>AI training demands non-blocking</strong> because all-reduce/all-to-all saturate uplinks; an oversubscribed fabric quietly tanks collective bandwidth. General cloud/storage traffic tolerates oversubscription. Knowing your fabric's ratio explains a lot of "why is my all-reduce slow."</p>
+
+<h4>Rail-optimized (multi-plane) fat-tree — the modern AI fabric</h4>
+<p>This is the current standard for GPU clusters, and it's a clever twist. A GPU node has 8 GPUs, each with its own NIC ("rail"). Instead of one fat-tree, build <strong>8 parallel fat-trees (planes)</strong> — and wire <em>GPU i's NIC on every node to the same leaf switch</em> (leaf set i). So all the "rail-i" NICs share a plane.</p>
+
+<div class="net"><span class="dim">rail-optimized: GPUg of every node → leaf-plane g</span>
+ node A:  g0 g1 g2 ... g7        node B:  g0 g1 g2 ... g7
+          │  │  │      │                  │  │  │      │
+        <span class="hi">L0 L1 L2 ...  L7</span>  ← rail planes →  <span class="hi">L0 L1 L2 ...  L7</span>
+        (A.g3 and B.g3 are both on plane L3 → reach each other in ONE switch hop)</div>
+
+<div class="box gpu">
+<div class="bt">Why rail-optimized is brilliant</div>
+<p>In data-parallel training, GPU <em>g</em> on node A mostly talks to GPU <em>g</em> on node B (same tensor shard / same ring position). Rail-optimized puts those exact peers <strong>one leaf-switch hop apart</strong>. Cross-rail traffic (g3→g5) is rare and, when needed, uses the node-internal <strong>NVSwitch</strong> to hop to the right local GPU first, then one switch hop on that rail. Result: most inter-node collective traffic crosses a single switch instead of climbing to spine/core — lower latency, less spine load, cheaper (often copper, not optics). NVIDIA's "AI factory" reference fabric and SuperPOD/Spectrum-X designs are rail-optimized non-blocking fat-trees. It's the §02 mapping principle baked into the cabling.</p>
+</div>
+
+<h4>Data travel &amp; routing in a fat-tree</h4>
+<p>Packet goes <strong>up</strong> to a common ancestor switch, then <strong>down</strong> to the destination. Because there are <em>many</em> equal-cost upward paths (every spine is a valid ancestor), the fabric spreads flows across them — by hashing flows (ECMP) or, better, <strong>adaptive routing</strong> that picks the least-congested uplink per packet (§09). Good spreading is what realizes the theoretical full bisection in practice; poor spreading (hash collisions onto one spine) causes congestion even on a non-blocking fabric.</p>
+
+<h4>Tree as a logical collective (NCCL trees)</h4>
+<p>Separately from the <em>physical</em> fat-tree, "tree" is also a <em>logical</em> collective pattern: reduce up a binary tree to a root, broadcast back down — <code>2·log(N)</code> latency, far fewer steps than a ring's <code>2(N−1)</code>. So NCCL uses a <strong>tree algorithm for small/latency-bound all-reduces</strong> and a <strong>ring for large/bandwidth-bound</strong> ones. Same hardware, two logical topologies, chosen by message size. (And SHARP, §12, does the tree reduction <em>inside the switches</em>.)</p>
+
+<p><span class="pill">Examples</span> DGX SuperPOD: 3-tier fat-tree, Quantum-2 400 Gb/s, full bisection. Hyperscaler AI clusters: rail-optimized spine-leaf, non-blocking, Spectrum-X Ethernet or Quantum InfiniBand. Meta's research notes network mis-config caused ~10.7% of significant GPU job failures — the fabric's correctness, not just its shape, is a first-class concern (§14).</p>
+</section>
+
+<section id="torus" class="layer">
+<h2>Section 06</h2>
+<div class="sectitle">Mesh &amp; Torus — neighbors, not switches</div>
+
+<p>Mesh and torus take a radically different approach: <strong>no central switches at all</strong>. Each node wires directly to its grid neighbors, and routing happens hop-by-hop through the nodes themselves. This trades switch cost and diameter for cheapness and locality — great for some workloads, poor for others.</p>
+
+<div class="net"><span class="dim">2D MESH (grid)</span>                 <span class="dim">2D TORUS (grid + wraparound)</span>
+ n──n──n──n                 ┌─n──n──n──n─┐
+ │  │  │  │                 │ │  │  │  │ │
+ n──n──n──n                 └─n──n──n──n─┘   edges wrap: right of last = first
+ │  │  │  │                   │  │  │  │      → halves diameter, uniform links
+ n──n──n──n                   n──n──n──n
+ (edges have fewer links)     (every node has the same degree)</div>
+
+<h4>How data travels: dimension-order routing</h4>
+<p>A packet moves along one dimension until aligned, then the next: "go east 3, then north 2." Simple, deadlock-avoidable (with care), no routing tables. <strong>Diameter</strong> for an N-node d-dimensional torus is ~<code>d·(N^(1/d))/2</code> — it <em>grows</em> with size (unlike a fat-tree's fixed log), so a big 2D torus has poor worst-case latency. Adding dimensions (3D, 4D) shrinks diameter at the cost of more links per node.</p>
+
+<div class="box key">
+<div class="bt">When torus wins, when it loses</div>
+<p><strong>Wins:</strong> workloads with <em>nearest-neighbor</em> communication — physics stencils, CFD, lattice QCD, and (crucially) systolic ML where each chip mostly talks to adjacent chips. Traffic stays on short direct links; no switch to buy, build, or congest; bisection is excellent <em>for neighbor patterns</em>; scales cheaply and predictably. <strong>Loses:</strong> random all-to-all or far-apart communication — diameter is high and a distant message hogs many intermediate nodes' links. A torus is a bet that your communication is <em>local</em>.</p>
+</div>
+
+<div class="box gpu">
+<div class="bt">Google TPU pods — torus at scale</div>
+<p>TPU pods wire chips in a <strong>2D/3D torus</strong> precisely because large-model training (with the right parallelism mapping) is dominated by structured neighbor exchanges, and a torus delivers that bandwidth without a giant switch fabric. Modern TPU pods add <strong>optical circuit switches</strong> to <em>reconfigure</em> the torus topology per job — physically rewiring (logically) so each job gets a torus slice sized and shaped to its needs. AWS Trainium similarly uses workload-optimized direct-connect topologies. It's the counterpoint to "fat-tree everything": if you control the workload's communication pattern, a switchless torus can be cheaper and faster.</p>
+</div>
+<p><span class="pill">Historical</span> Cray XT/Gemini (3D torus), IBM Blue Gene (3D/5D torus) — HPC ran on tori for decades before fat-trees and dragonflies took over general clusters. The idea never left; it just moved to ML accelerators.</p>
+</section>
+
+<section id="hypercube" class="layer">
+<h2>Section 07</h2>
+<div class="sectitle">Hypercube — logarithmic elegance</div>
+
+<p>A hypercube connects nodes whose binary addresses differ in exactly one bit. A d-dimensional hypercube has <code>2^d</code> nodes, each with degree <code>d</code>, and — the beautiful part — <strong>diameter <code>d = log₂(N)</code></strong>. Double the nodes, add one link per node and one hop of diameter.</p>
+
+<div class="net"><span class="dim">3D hypercube (8 nodes; neighbors differ in one address bit)</span>
+      110───────111
+     ╱│        ╱│
+   100───────101│            000-001 differ in bit0  (1 hop)
+    │ │       │ │            000-011 differ in bits0,1 (2 hops)
+    │010──────│011           000-111 differ in all 3  (3 hops = diameter)
+    │╱        │╱
+   000───────001</div>
+
+<h4>How data travels: bit-fixing</h4>
+<p>Route by flipping disagreeing address bits one at a time. From <code>000</code> to <code>101</code>: fix bit0 (→<code>001</code>), fix bit2 (→<code>101</code>). At most <code>log N</code> hops, and there are multiple shortest paths (any order of fixing bits) → natural path diversity and fault tolerance.</p>
+
+<div class="box key">
+<div class="bt">Why hypercubes matter even though nobody cables one anymore</div>
+<p>The hypercube's structure <em>is</em> the structure of the fastest collective algorithms. <strong>Recursive-doubling all-reduce / all-gather:</strong> step k, every node exchanges with the partner differing in bit k and combines — done in exactly <code>log₂(N)</code> steps. That's the latency-optimal collective, and it's a hypercube communication pattern <em>regardless of the physical network</em>. MPI's all-reduce/all-gather use recursive doubling for this reason; NCCL's tree algorithm is a close cousin. So you "run a hypercube" logically on a fat-tree every time you do a small all-reduce.</p>
+</div>
+
+<p><strong>The catch:</strong> degree grows with size (<code>log N</code> links per node), so physically wiring a large hypercube means ever-more ports per node — expensive and inflexible. Real machines (older nCUBE, some SGI designs) built modest hypercubes; modern systems keep the <em>algorithm</em> and drop the <em>wiring</em>, using fat-trees/dragonflies physically and hypercube patterns logically. The lesson repeats: <strong>logical topology ≠ physical topology</strong>, and the cleverest algorithms are logical hypercubes/rings/trees mapped onto whatever fabric you actually have.</p>
+</section>
+
+<section id="dragonfly" class="layer">
+<h2>Section 08</h2>
+<div class="sectitle">Dragonfly — minimal cables, minimal hops, maximal scale</div>
+
+<p>Dragonfly is the topology behind the world's top supercomputers (Frontier, El Capitan, Aurora — all on HPE Slingshot). Its goal: connect hundreds of thousands of endpoints with <strong>very few hops</strong> and <strong>far fewer expensive optical cables</strong> than a fat-tree, by exploiting high-radix switches and a two-level all-to-all structure.</p>
+
+<div class="net"><span class="dim">Dragonfly = groups, each internally all-to-all, groups globally all-to-all</span>
+  ┌── GROUP 0 ──┐   ┌── GROUP 1 ──┐   ┌── GROUP 2 ──┐
+  │ sw─sw─sw─sw │   │ sw─sw─sw─sw │   │ sw─sw─sw─sw │   ← intra-group: all-to-all (cheap copper)
+  │  ╲ ╳  ╳ ╱   │   │  ╲ ╳  ╳ ╱   │   │  ╲ ╳  ╳ ╱   │
+  └──────┬──────┘   └──────┬──────┘   └──────┬──────┘
+         └─────── global optical links ──────┘          ← inter-group: all-to-all (few optics)
+  any node → any node in ≤ 3 hops:  local → global → local</div>
+
+<h4>How data travels</h4>
+<p>Minimal route: hop within source group to the switch holding the right global link, cross one global (optical) link to the destination group, hop within that group to the target — at most <strong>3 switch-to-switch hops</strong>, even at 250,000 endpoints. Slingshot's 64-port switches build this; each group is all-to-all over copper, groups are all-to-all over optics.</p>
+
+<div class="box key">
+<div class="bt">Why dragonfly is cost-effective at exascale</div>
+<p>Optical cables (long, fast, expensive, power-hungry) are the dominant cost at scale. Dragonfly minimizes them: most links are short copper <em>inside</em> groups; only the relatively few <em>global</em> links are optical. Net effect — it scales to ~4× the nodes of a 3-tier fat-tree for similar network cost, with diameter 3. That economics is why every recent exascale machine chose it.</p>
+</div>
+
+<div class="box warn">
+<div class="bt">The catch: global-link contention demands adaptive routing</div>
+<p>Between any two groups there may be only <em>one</em> (or few) global link(s). If many flows want the same group-pair, that minimal path congests instantly — the dragonfly's Achilles heel. The fix is <strong>non-minimal (Valiant) routing</strong>: deliberately route through a <em>random intermediate group</em> first, spreading load across many global links at the cost of an extra hop (up to ~5 hops). Slingshot's Rosetta ASIC does <strong>fine-grained adaptive routing</strong> — per-packet, real-time congestion sensing — choosing minimal when clear and non-minimal when congested. Without sophisticated adaptive routing + congestion control, a dragonfly collapses under adversarial traffic. This is why dragonfly and adaptive routing are inseparable (§09).</p>
+</div>
+
+<p><strong>Job placement matters enormously here:</strong> a job that fits in one group (256–512 nodes) stays on fast intra-group copper and avoids global links entirely; a job spanning groups pays global-link bandwidth (low per group-pair) and needs spreading. Schedulers are dragonfly-aware: pack small jobs into single groups, spread large jobs to exploit many global links. <span class="pill">Examples</span> Slingshot-11 powers El Capitan, Frontier, Aurora (top 3 of the TOP500); 64-port switches at 12.8 Tb/s, ≤3 hops, 145 km of cabling per machine.</p>
+</section>
+
+<section id="routing" class="layer">
+<h2>Section 09</h2>
+<div class="sectitle">How data travels — routing across any topology</div>
+
+<p>Topology defines the <em>possible</em> paths; routing chooses the <em>actual</em> one. Two endpoints in a fat-tree or dragonfly have many equal-cost paths, and which one each packet takes determines whether the fabric's theoretical bandwidth is realized or wasted. This is where a "non-blocking" fabric still congests if routing is dumb.</p>
+
+<div class="tbl"><table>
+<thead><tr><th>Axis</th><th>Options</th><th>Trade-off</th></tr></thead>
+<tbody>
+<tr><td><strong>Path length</strong></td><td>minimal vs non-minimal</td><td>Minimal = fewest hops; non-minimal (Valiant) = extra hops to dodge congestion.</td></tr>
+<tr><td><strong>Decision</strong></td><td>deterministic vs adaptive</td><td>Deterministic = same path always (simple, predictable, can hotspot); adaptive = pick by live congestion (fast, complex).</td></tr>
+<tr><td><strong>Granularity</strong></td><td>per-flow vs per-packet</td><td>Per-flow keeps ordering (ECMP hashing); per-packet ("spraying") spreads best but can reorder → needs reassembly.</td></tr>
+<tr><td><strong>Awareness</strong></td><td>oblivious vs congestion-aware</td><td>Oblivious ignores load; congestion-aware reroutes around hotspots.</td></tr>
+</tbody>
+</table></div>
+
+<h4>Deterministic / dimension-order routing</h4>
+<p>Fixed rule, e.g. "fix dimensions in order" (mesh/torus) or "hash the 5-tuple to pick an uplink" (Ethernet <strong>ECMP</strong>). Simple and order-preserving, but two flows can hash to the same link and collide while other links idle — <em>hash-collision congestion</em> on an otherwise non-blocking fat-tree. The classic "my all-reduce is slower than the fabric should allow" bug.</p>
+
+<h4>Adaptive routing</h4>
+<p>Switches sense per-port load and steer each packet (or flow) onto the least-congested viable path. Essential for dragonfly (global-link contention) and increasingly standard on InfiniBand and AI Ethernet (Spectrum-X). Slingshot does it per-packet in the Rosetta ASIC; the payoff is high sustained utilization without overprovisioning. The cost is complexity and possible packet reordering.</p>
+
+<div class="box key">
+<div class="bt">Deadlock &amp; virtual channels — the subtle correctness issue</div>
+<p>Routing can <strong>deadlock</strong>: a cycle of packets each holding a buffer the next needs, none able to advance — the network freezes. Two defenses: (1) <strong>acyclic routing rules</strong> (dimension-order routing is deadlock-free by construction — always go X before Y); (2) <strong>virtual channels</strong> — multiplex several logical buffer lanes on one physical link so the dependency graph stays acyclic even with adaptive/non-minimal routes. Every real fabric (IB, Slingshot, NVLink) uses virtual channels/lanes. When you see mysterious fabric-wide stalls, suspect a routing/credit/deadlock-avoidance issue, not your code.</p>
+</div>
+
+<h4>Congestion control</h4>
+<p>Adaptive routing handles <em>in-network</em> hotspots but not <strong>endpoint congestion</strong> — many senders → one receiver (incast), classic in all-to-all shuffles and parameter-server patterns. Fabrics add congestion control: credit-based flow control (InfiniBand), ECN/DCQCN (RoCE), and Slingshot's hardware congestion management that throttles the offending flows to protect everyone else's latency. AI Ethernet (Spectrum-X, Ultra Ethernet) is largely about bringing IB-grade adaptive routing + congestion control to Ethernet.</p>
+
+<div class="box bug">
+<div class="bt">Routing problems you'll actually hit</div>
+<p><strong>Hash-collision hotspots</strong> (ECMP): a few flows pile on one uplink → uneven link utilization despite spare capacity. Fix: enable adaptive routing / better hashing / more flows. <strong>Incast collapse:</strong> all-to-all overwhelms a receiver → throughput craters. Fix: congestion control, message scheduling, smaller in-flight windows. <strong>Routing imbalance after a link failure:</strong> rerouted traffic overloads survivors. <strong>Non-minimal overhead:</strong> Valiant routing doubles hops — great under load, wasteful when idle (good adaptive routing only uses it when needed). Diagnosing these means reading <em>per-link</em> counters (§14), not host-side throughput.</p>
+</div>
+</section>
+
+<section id="choosing" class="layer">
+<h2>Section 10</h2>
+<div class="sectitle">Choosing a topology</div>
+
+<p>There is no "best" topology — only the best match to a <strong>communication pattern, scale, and budget</strong>. Here's the whole family side by side, then a decision procedure.</p>
+
+<div class="tbl"><table>
+<thead><tr><th>Topology</th><th>Diameter</th><th>Bisection</th><th>Cost / scale</th><th>Best for</th><th>Weak at</th></tr></thead>
+<tbody>
+<tr><td><strong>All-to-all</strong></td><td>1</td><td>maximal</td><td>O(N²) links — tiny only</td><td>within a node (NVSwitch), dragonfly groups</td><td>any real scale</td></tr>
+<tr><td><strong>Bus</strong></td><td>1</td><td>1 link</td><td>cheapest</td><td>nothing modern</td><td>everything (shared BW)</td></tr>
+<tr><td><strong>Star</strong></td><td>2</td><td>switch BW</td><td>1 switch, radix-limited</td><td>a rack; building block</td><td>scale past switch radix</td></tr>
+<tr><td><strong>Ring</strong></td><td>N/2</td><td>2 links</td><td>cheap (degree 2)</td><td>bandwidth-optimal all-reduce (NCCL)</td><td>latency, fault tolerance</td></tr>
+<tr><td><strong>Mesh</strong></td><td>~2√N</td><td>√N</td><td>no switches</td><td>nearest-neighbor stencils</td><td>far/random traffic</td></tr>
+<tr><td><strong>Torus</strong></td><td>~√N/2</td><td>2√N</td><td>no switches, cheap</td><td>TPU pods, CFD/QCD, neighbor patterns</td><td>all-to-all</td></tr>
+<tr><td><strong>Hypercube</strong></td><td>log N</td><td>N/2</td><td>degree grows (log N)</td><td>logical collectives (recursive doubling)</td><td>physical wiring at scale</td></tr>
+<tr><td><strong>Fat-tree / Clos</strong></td><td>2·log N</td><td><strong>full</strong> (non-block)</td><td>many switches/optics; $$$</td><td>general AI training, any-to-any</td><td>cost; oversubscription if cut</td></tr>
+<tr><td><strong>Rail-optimized</strong></td><td>~1–2 hops (same rail)</td><td>full</td><td>fat-tree minus some optics</td><td>data-parallel GPU training</td><td>heavy cross-rail traffic</td></tr>
+<tr><td><strong>Dragonfly</strong></td><td>3 (≤5 w/ Valiant)</td><td>good w/ adaptive</td><td>fewest optics; best at huge scale</td><td>exascale HPC (Slingshot)</td><td>global-link contention; needs adaptive routing</td></tr>
+</tbody>
+</table></div>
+
+<h3>Decision tree: which topology / fabric?</h3>
+<div class="tree"><span class="q">What's the dominant communication pattern?</span>
+├─ <span class="a">nearest-neighbor / structured (stencils, systolic ML)</span>
+│     └─ <span class="r">mesh/torus — switchless, cheap, locality-optimal (TPU pods, HPC physics).</span>
+├─ <span class="a">data-parallel all-reduce (gradient sync)</span>
+│     └─ <span class="r">rail-optimized fat-tree + NVLink intra-node; ring/tree collectives + SHARP.</span>
+├─ <span class="a">any-to-any / shuffle / mixed (general training + analytics)</span>
+│     └─ <span class="r">non-blocking fat-tree (spine-leaf). Full bisection is the safe default.</span>
+└─ <span class="a">huge scale, cost-driven, HPC</span>
+      └─ <span class="r">dragonfly (Slingshot) — but commit to adaptive routing + topology-aware scheduling.</span>
+<span class="q">What scale?</span>
+├─ <span class="a">one node (≤8–72 GPUs)</span> → <span class="r">NVSwitch all-to-all / NVLink domain — already optimal.</span>
+├─ <span class="a">≤ ~2K endpoints</span> → <span class="r">2-tier spine-leaf (k²/2) suffices.</span>
+└─ <span class="a">10K–100K+</span> → <span class="r">3-tier fat-tree or dragonfly; mind optics cost &amp; bisection.</span>
+<span class="q">Budget vs bisection?</span>
+├─ <span class="a">training, money available</span> → <span class="r">non-blocking 1:1 — collectives need it.</span>
+└─ <span class="a">cloud/storage/mixed, cost-sensitive</span> → <span class="r">oversubscribe (e.g. 4:1) where collectives are light.</span></div>
+
+<div class="box key">
+<div class="bt">The 80% answer</div>
+<p>For GPU training/analytics today the default is a <strong>non-blocking, rail-optimized fat-tree</strong> (InfiniBand or Spectrum-X Ethernet) with an <strong>NVLink/NVSwitch all-to-all domain inside each node</strong>, and NVLink-scale domains (NVL72) where you can get them. You pick something exotic (torus, dragonfly) only when scale or a known-local communication pattern justifies it. Inside the node, the topology that bites you is NUMA (§13) — don't forget it.</p>
+</div>
+</section>
+
+<section id="aware" class="layer">
+<h2>Section 11</h2>
+<div class="sectitle">Topology-aware — MPI, NCCL, UCX</div>
+
+<p>"Topology-aware" means the software <strong>discovers the physical topology and shapes its behavior to match it</strong> — instead of treating all ranks as equidistant. Concretely, three levers (from §02): place ranks well, build logical collectives that follow fast links, and pick the fastest transport per peer. Each library pulls these levers differently.</p>
+
+<h4>MPI — placement, reordering, and hierarchical collectives</h4>
+<ul>
+<li><strong>Process placement &amp; binding.</strong> <code>mpirun --map-by ppr:1:numa --bind-to core</code>, rankfiles, and Slurm placement decide which rank lands on which socket/GPU/NIC. This is the coarsest, highest-impact lever (recall the ring-mapping example, §02). Open MPI uses <strong>hwloc</strong> to see the machine.</li>
+<li><strong>Let MPI renumber ranks.</strong> <code>MPI_Dims_create</code> + <code>MPI_Cart_create(..., reorder=true)</code> asks MPI to remap your logical grid onto the hardware so Cartesian neighbors are physically close. <code>MPI_Comm_split_type(MPI_COMM_TYPE_SHARED)</code> extracts the on-node ranks so you can do <strong>hierarchical collectives</strong>: reduce within the node first (shared memory / NVLink), then one rank per node across the network — turning N-way network traffic into (nodes)-way.</li>
+</ul>
+<pre data-lang="c"><code><span class="c-com">// Hierarchical all-reduce: collapse on-node traffic before hitting the network.</span>
+<span class="c-ty">MPI_Comm</span> node_comm;
+<span class="c-fn">MPI_Comm_split_type</span>(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, <span class="c-num">0</span>,
+                    MPI_INFO_NULL, &amp;node_comm);          <span class="c-com">// ranks on the same node</span>
+<span class="c-fn">MPI_Reduce</span>(send, tmp, n, MPI_FLOAT, MPI_SUM, <span class="c-num">0</span>, node_comm);  <span class="c-com">// 1) intra-node (fast)</span>
+<span class="c-kw">if</span> (node_rank == <span class="c-num">0</span>)
+  <span class="c-fn">MPI_Allreduce</span>(tmp, recv, n, MPI_FLOAT, MPI_SUM, leaders_comm); <span class="c-com">// 2) one/node across net</span>
+<span class="c-fn">MPI_Bcast</span>(recv, n, MPI_FLOAT, <span class="c-num">0</span>, node_comm);            <span class="c-com">// 3) push result back down</span></code></pre>
+
+<h4>NCCL — auto-detected rings/trees over the real graph</h4>
+<p>NCCL is aggressively topology-aware by default. At init it <strong>probes the intra-node fabric</strong> (NVLink, NVSwitch, PCIe switches, P2P capability) and the <strong>inter-node fabric</strong> (which NIC is near which GPU), builds an internal topology graph, then constructs its <strong>rings and trees to follow the fastest links</strong> — so "ring neighbor" is an NVLink hop and each GPU uses its <em>nearest</em> NIC (rail).</p>
+<ul>
+<li><strong>Rail awareness / PXN.</strong> NCCL routes a GPU's inter-node traffic to the NIC on its own rail; <strong>PXN</strong> (PCI × NVLink) lets a GPU hop over intra-node NVLink to reach the <em>right rail's</em> NIC, exactly exploiting the rail-optimized fabric (§05) — one switch hop instead of climbing tiers.</li>
+<li><strong>Algorithm selection.</strong> <code>NCCL_ALGO</code> = <code>Ring</code> (bandwidth), <code>Tree</code> (latency/small msgs), <code>NVLS</code> (NVLink SHARP), <code>CollNet</code> (in-network SHARP, §12). NCCL picks per message size + topology.</li>
+<li><strong>Knobs to know.</strong> <code>NCCL_TOPO_DUMP_FILE</code> (see the detected graph), <code>NCCL_P2P_LEVEL</code>/<code>NCCL_NET_GDR_LEVEL</code> (when to use P2P / GPUDirect RDMA), <code>NCCL_IB_HCA</code> (rail/NIC selection), <code>NCCL_DEBUG=INFO</code> + <code>NCCL_DEBUG_SUBSYS=GRAPH</code> (why it chose a given ring/tree).</li>
+</ul>
+
+<h4>UCX — transport selection by locality</h4>
+<p>UCX is the layer that turns "send to peer X" into "use <em>this</em> wire," and it's topology-aware at the transport level. For each peer it selects the fastest available <em class="term">transport</em> (TL): <strong>CUDA-IPC/NVLink</strong> for same-node GPU peers, <strong>shared memory</strong> for same-node CPU, <strong>IB/RoCE with GPUDirect RDMA</strong> for remote GPUs, TCP as fallback — and can <strong>stripe across multiple rails</strong> (multi-rail) for more bandwidth. It uses hwloc for NUMA/PCIe locality so a transfer uses the NIC nearest the source buffer.</p>
+<pre data-lang="bash"><code><span class="c-com"># Make UCX's topology choices explicit / debuggable:</span>
+<span class="c-kw">export</span> UCX_TLS=rc,cuda_copy,cuda_ipc,gdr_copy   <span class="c-com"># allowed transports (IB RC + CUDA paths)</span>
+<span class="c-kw">export</span> UCX_NET_DEVICES=mlx5_0:1,mlx5_1:1         <span class="c-com"># which rails/HCAs to use (multi-rail)</span>
+<span class="c-kw">export</span> UCX_RNDV_SCHEME=get_zcopy                 <span class="c-com"># zero-copy rendezvous for big msgs</span>
+<span class="c-kw">export</span> UCX_LOG_LEVEL=info                         <span class="c-com"># print chosen transports per peer</span></code></pre>
+
+<div class="box key">
+<div class="bt">How the three stack up</div>
+<p>They compose: <strong>MPI</strong> (or a training framework) issues collectives; <strong>NCCL</strong> implements GPU collectives by building topology-matched rings/trees; <strong>UCX</strong> (under MPI, and as one of NCCL's net plugins) moves each message over the fastest transport for that peer. All three lean on <strong>hwloc</strong> to see the machine. "Topology-aware" is the same idea at three altitudes: place ranks near their partners, shape the collective to the fabric, and pick the right wire per hop. Misconfigure any layer (bad binding, NCCL falling back to PCIe, UCX choosing TCP) and you leak onto slow links — the §14 symptoms.</p>
+</div>
+</section>
+
+<section id="innetwork" class="layer">
+<h2>Section 12</h2>
+<div class="sectitle">In-network computing — SHARP &amp; NVLS</div>
+
+<p>The topologies so far <em>move</em> data; in-network computing makes the topology <em>compute on it in flight</em>. NVIDIA <strong>SHARP</strong> (Scalable Hierarchical Aggregation and Reduction Protocol) offloads collectives — all-reduce, reduce, broadcast, barrier — into the <strong>switch ASICs</strong> themselves, so the reduction happens as data climbs the fabric, not on the CPUs/GPUs.</p>
+
+<div class="net"><span class="dim">Without SHARP: every GPU sends to every other (ring/tree on endpoints)</span>
+   g0 ─┐
+   g1 ─┼─→ lots of endpoint↔endpoint traffic, GPUs do the adds
+   g2 ─┘
+
+<span class="dim">With SHARP: switches form an aggregation tree; ANs reduce on the way up</span>
+   g0 g1 g2 g3        leaves send once →
+     ╲ │ │ ╱
+     <span class="hi">[ switch AN ]</span>          ← Aggregation Node reduces here
+          │
+     <span class="hi">[ root AN ]</span>            ← final sum formed in-network, then distributed back down
+   ~half the data on the wire, GPUs freed, less jitter</div>
+
+<h4>How it works</h4>
+<p>SHARP builds <strong>aggregation trees</strong> across the physical fabric; switches act as <em class="term">aggregation nodes</em> (ANs). Partial results enter at the leaves and are reduced at each AN as they ascend, so the global sum forms <em>inside the network</em> and is distributed back down — the textbook tree all-reduce (§05/§07), executed in switch silicon. Benefits: roughly <strong>halves the data crossing the network</strong> and <strong>~doubles effective all-reduce bandwidth</strong>, cuts latency (fewer endpoint round-trips), and slashes <strong>jitter</strong> (the switch path is deterministic, unlike contended endpoint reductions). 3rd-gen SHARP builds <em>multiple</em> aggregation trees over one fabric so many jobs share the benefit; it integrates with NCCL automatically.</p>
+
+<div class="box gpu">
+<div class="bt">Two flavors: SHARP (network) and NVLS (NVLink)</div>
+<p><strong>SHARP / CollNet</strong> runs in the <em>InfiniBand</em> Quantum switches — inter-node collectives. <strong>NVLS (NVLink SHARP)</strong> runs the same idea in the <em>NVSwitch</em> — intra-node/NVL72 collectives reduced inside the NVLink fabric. NCCL exposes both via <code>NCCL_ALGO=CollNet</code> and <code>NCCL_ALGO=NVLS</code>. On an NVL72 (72-GPU NVLink domain) NVLS lets a 72-way all-reduce reduce in the switch fabric — a major reason that domain behaves like "one big GPU." This is the topology layer reaching up to do the collective's arithmetic.</p>
+</div>
+
+<p><strong>Caveat:</strong> SHARP needs supported switches/HCAs (Quantum IB, ConnectX) and correct fabric configuration (UFM, aggregation-tree setup). When it's misconfigured it silently doesn't engage and you fall back to endpoint collectives — a common "why didn't my all-reduce speed up" mystery (§14). Verify with <code>ibdiagnet</code> SHARP counters and NCCL debug output.</p>
+</section>
+
+<section id="numa" class="layer">
+<h2>Section 13</h2>
+<div class="sectitle">NUMA topology — the network inside the node</div>
+
+<p>Everything so far was <em>between</em> nodes. But there's a topology <em>inside</em> each node that quietly decides a huge fraction of performance: <strong>NUMA</strong> (Non-Uniform Memory Access). A modern server has multiple CPU sockets, each with its own memory controllers and PCIe lanes; reaching <em>your</em> socket's memory is fast, reaching the <em>other</em> socket's memory crosses an inter-socket link (Intel <strong>UPI</strong> / AMD <strong>Infinity Fabric</strong>) and is slower. The node is a tiny network, and GPUs/NICs hang off specific sockets.</p>
+
+<div class="net"><span class="dim">A 2-socket GPU node is itself a topology:</span>
+   [ DRAM0 ]            [ DRAM1 ]
+       │                    │
+   ┌─Socket 0─┐ ──UPI/IF── ┌─Socket 1─┐     ← cross-socket = the slow "link"
+   │ PCIe     │            │ PCIe     │
+   │ GPU0 GPU1│            │ GPU2 GPU3│
+   │ NIC0     │            │ NIC1     │
+   └──────────┘            └──────────┘
+ GPU0↔NIC0 = local (fast).  GPU0↔NIC1 or GPU0↔DRAM1 = crosses UPI (slow).</div>
+
+<h4>Why it matters — three concrete hits</h4>
+<ul>
+<li><strong>Memory affinity.</strong> A thread on socket 0 touching memory allocated on socket 1 pays the UPI crossing on <em>every</em> access — easily 1.5–2× slower bandwidth and higher latency. Linux uses <em>first-touch</em> (a page lands on the NUMA node of the thread that first writes it), so initialization order silently sets affinity.</li>
+<li><strong>GPU–NIC affinity.</strong> For GPUDirect RDMA, the GPU should use the NIC on its <em>own</em> PCIe/NUMA domain. Cross-socket GPU↔NIC traffic detours over UPI and can halve effective network bandwidth — this is the <em>node-level</em> version of rail-optimization, and it's why NCCL/UCX try to pair each GPU with its local NIC.</li>
+<li><strong>GPU–GPU path.</strong> Two GPUs may be NVLink-connected (fast), on the same PCIe switch (ok), or split across sockets so P2P must traverse UPI (slow) — or be disallowed, forcing a host bounce.</li>
+</ul>
+
+<h4>See the topology, then bind to it</h4>
+<pre data-lang="bash"><code><span class="c-com"># See GPU↔GPU / GPU↔NIC paths (NV# = NVLink, PIX/PXB = PCIe, SYS = crosses NUMA/UPI):</span>
+nvidia-smi topo -m
+<span class="c-com"># Full machine topology — sockets, caches, PCIe, NUMA distances:</span>
+lstopo            <span class="c-com"># (hwloc) graphical/text map of the node</span>
+numactl --hardware <span class="c-com"># NUMA nodes + distance matrix</span>
+
+<span class="c-com"># Bind a rank to the NUMA node local to its GPU and NIC:</span>
+numactl --cpunodebind=0 --membind=0 ./train   <span class="c-com"># socket-0 cores + socket-0 memory</span>
+<span class="c-com"># MPI equivalent: --map-by numa --bind-to core; set CUDA_VISIBLE_DEVICES to local GPUs.</span></code></pre>
+
+<div class="box warn">
+<div class="bt">The classic NUMA bug</div>
+<p>A data loader or allocator runs on socket 0, allocates the pinned host staging buffer there (first-touch), but the GPU and its NIC are on socket 1. Every H2D copy and every GPUDirect transfer now crosses UPI — throughput drops ~2× and nobody knows why because the GPU and code look fine. Fix: bind the process to the GPU's NUMA node, allocate pinned buffers <em>after</em> binding, and confirm GPU↔NIC are <code>PIX/PXB</code> (local), not <code>SYS</code> (cross-socket), in <code>nvidia-smi topo -m</code>. On Grace-Hopper/NVL72 the CPU↔GPU link is NVLink-C2C and coherent, which softens (but doesn't erase) NUMA effects — placement still matters for which NIC/rail a GPU uses.</p>
+</div>
+
+<div class="box key">
+<div class="bt">NUMA is the same lesson, one level down</div>
+<p>"Keep traffic on the fast layer; minimize crossings of the slow one" applies inside the node exactly as it does across the fabric. Inter-socket UPI is the node's "spine link," GPUs/NICs are leaves on sockets, and binding is the node-level analogue of rail-optimized placement. Topology-aware software (NCCL, UCX, MPI via hwloc) reads this internal map too — but only if you place processes correctly. The fanciest fabric in the world won't save a job that's fighting its own motherboard.</p>
+</div>
+</section>
+
+<section id="debugging" class="layer">
+<h2>Section 14</h2>
+<div class="sectitle">Common issues &amp; debugging</div>
+
+<p>Topology problems share a signature: <strong>the compute is fine but the run is slow, or stalls, in a way no kernel profiler explains.</strong> The bottleneck is a path, a placement, or a routing decision. Here's how to find it.</p>
+
+<h4>The tools, by layer</h4>
+<div class="tbl"><table>
+<thead><tr><th>Tool</th><th>Layer</th><th>Use it to…</th></tr></thead>
+<tbody>
+<tr><td><strong>nvidia-smi topo -m</strong></td><td>node</td><td>see GPU↔GPU / GPU↔NIC paths (NVLink vs PCIe vs cross-socket SYS).</td></tr>
+<tr><td><strong>lstopo</strong> / hwloc</td><td>node</td><td>full socket/PCIe/NUMA map; confirm GPU–NIC locality.</td></tr>
+<tr><td><strong>numactl --hardware</strong></td><td>node</td><td>NUMA nodes + distance matrix; check binding.</td></tr>
+<tr><td><strong>NCCL_DEBUG=INFO</strong> (+SUBSYS=GRAPH)</td><td>collective</td><td>which rings/trees NCCL built, which algo/transport, whether SHARP/NVLS engaged.</td></tr>
+<tr><td><strong>nccl-tests</strong> (all_reduce_perf)</td><td>collective</td><td>measured bus bandwidth vs theoretical → is the fabric delivering?</td></tr>
+<tr><td><strong>UCX_LOG_LEVEL=info</strong> / ucx_info</td><td>transport</td><td>confirm chosen transport per peer (NVLink/RDMA vs TCP) &amp; multi-rail.</td></tr>
+<tr><td><strong>ib_write_bw / ib_write_lat</strong> (perftest)</td><td>link</td><td>point-to-point IB bandwidth/latency between two nodes — isolate a bad link/pair.</td></tr>
+<tr><td><strong>ibdiagnet / ibtracert</strong></td><td>fabric</td><td>fabric-wide errors, routing, SHARP trees/counters; trace the actual path between LIDs.</td></tr>
+<tr><td><strong>UFM</strong> / switch counters</td><td>fabric</td><td>per-link utilization, congestion, error counters — find the hot or failing link.</td></tr>
+</tbody>
+</table></div>
+
+<h4>Symptom → cause → fix</h4>
+<div class="tbl"><table>
+<thead><tr><th>Symptom</th><th>Likely cause</th><th>Fix</th></tr></thead>
+<tbody>
+<tr><td>All-reduce far below fabric BW</td><td>oversubscription, or ECMP hash collisions onto one uplink</td><td>enable adaptive routing; verify 1:1; spread flows; check link counters in UFM</td></tr>
+<tr><td>All-reduce slower than expected, NCCL log shows PCIe</td><td>NVLink/P2P not used → traffic on PCIe</td><td><code>nvidia-smi topo -m</code>; fix placement; <code>NCCL_P2P_LEVEL</code>; check P2P enabled</td></tr>
+<tr><td>UCX/NCCL on TCP not RDMA</td><td>wrong NIC, GDR off, transport misconfig</td><td><code>UCX_TLS</code>/<code>NCCL_IB_HCA</code>; enable GPUDirect RDMA; check rail selection</td></tr>
+<tr><td>~2× slowdown, GPU &amp; code look fine</td><td>NUMA misbinding (buffer on wrong socket; cross-socket GPU–NIC)</td><td>bind to GPU's NUMA node; allocate pinned buffers after binding; check SYS in topo</td></tr>
+<tr><td>SHARP "didn't help"</td><td>SHARP not engaged (config / unsupported path)</td><td><code>ibdiagnet</code> SHARP counters; NCCL CollNet/NVLS debug; UFM aggregation-tree setup</td></tr>
+<tr><td>Dragonfly job slow / variable</td><td>global-link contention; job spread across groups</td><td>topology-aware scheduling (pack in a group); ensure adaptive routing on</td></tr>
+<tr><td>Whole job hangs at a collective</td><td>routing deadlock, dead link, or one straggler rank</td><td>check fabric errors/credit loops; isolate slow rank; bisect with ib_write_bw</td></tr>
+<tr><td>Tail latency / jitter spikes</td><td>incast congestion on a receiver</td><td>congestion control (ECN/DCQCN); message scheduling; bound in-flight; consider SHARP</td></tr>
+<tr><td>Performance degraded after a node failed</td><td>rerouted traffic overloads survivors</td><td>check rebalanced routes; re-place job; verify ring/tree rebuilt without dead node</td></tr>
+</tbody>
+</table></div>
+
+<h3>Triage tree: "the fabric is slow"</h3>
+<div class="tree"><span class="c-com"># Work outward: node first (cheapest to check), then collective, then fabric.</span>
+<span class="q">1. Is it intra-node?</span> → <span class="r">nvidia-smi topo -m: are GPU↔GPU NVLink and GPU↔NIC local (not SYS)? bind NUMA.</span>
+<span class="q">2. Did NCCL pick the right paths?</span> → <span class="r">NCCL_DEBUG=INFO: ring/tree on NVLink? algo Ring/Tree/NVLS sane? not falling to PCIe?</span>
+<span class="q">3. Is the transport right?</span> → <span class="r">UCX_LOG_LEVEL=info / NCCL net: RDMA+GDR, correct rail — not TCP?</span>
+<span class="q">4. Is a single link/pair bad?</span> → <span class="r">ib_write_bw between suspect nodes; compare against neighbors to isolate.</span>
+<span class="q">5. Is the fabric congested/misrouted?</span> → <span class="r">UFM/switch counters for hot links; ibdiagnet for errors; confirm adaptive routing.</span>
+└─ <span class="a">only after all clear</span> → <span class="r">now it may actually be algorithm/message-size — tune NCCL_ALGO, sizes, SHARP.</span></div>
+
+<div class="box bug">
+<div class="bt">Per-topology gotchas</div>
+<p><strong>Ring:</strong> one dead link severs it → hang; check rank-to-NVLink mapping. <strong>Fat-tree:</strong> hash collisions/oversubscription hide as "fabric underperforms" — read per-link counters. <strong>Torus:</strong> a far-apart job pair saturates intermediate nodes' links; placement is everything. <strong>Dragonfly:</strong> global-link contention + needs adaptive routing on; bad job placement spans groups. <strong>NUMA:</strong> first-touch puts buffers on the wrong socket — the silent 2×. The meta-lesson: instrument <em>links and placement</em>, not just hosts.</p>
+</div>
+</section>
+
+<section id="examples" class="layer">
+<h2>Section 15</h2>
+<div class="sectitle">Worked examples — the same job, three fabrics</div>
+
+<p>Concrete traces to cement the ideas. We all-reduce a vector of size S across the cluster and watch how topology + algorithm change the cost.</p>
+
+<h4>Example 1 — all-reduce, three ways</h4>
+<div class="net"><span class="hi">RING (bandwidth-optimal, N GPUs)</span>
+   steps: 2(N-1)        per-GPU bytes moved: 2·(N-1)/N·S  ≈ 2S  (independent of N!)
+   latency: grows with N (many sequential steps) → great for BIG S, poor for small S
+
+<span class="h2">TREE / recursive-doubling (latency-optimal)</span>
+   steps: 2·log2(N)     per-GPU bytes: ~2S      latency: log N → great for SMALL S
+   (this is the hypercube pattern from SS07, used by NCCL Tree &amp; MPI for small msgs)
+
+<span class="h3">FAT-TREE + SHARP (in-network)</span>
+   reduction happens INSIDE the switches (SS12): ~half the data crosses the wire,
+   ~2x effective all-reduce BW, low jitter. GPUs send once, get the sum back.</div>
+<p>Same operation, same hardware bandwidth — but NCCL picks <strong>Tree for small S</strong> (latency wins), <strong>Ring for large S</strong> (bandwidth wins), and <strong>CollNet/NVLS when SHARP is available</strong> (offload wins). That per-call choice <em>is</em> topology-awareness in action.</p>
+
+<h4>Example 2 — why rail-optimized cuts hops</h4>
+<div class="net"><span class="dim">data-parallel: GPU3 on node A all-reduces with GPU3 on node B (same ring position)</span>
+ plain fat-tree:  A.g3 → leaf → spine → leaf → B.g3      (3+ switch hops, climbs tiers)
+ <span class="hi">rail-optimized</span>:  A.g3 → <span class="hi">leaf-plane-3</span> → B.g3                (ONE switch hop, same rail)
+ → less latency, no spine load for the common case. cross-rail (g3↔g5) uses NVSwitch
+   inside the node to reach the right local GPU first, THEN one rail hop.</div>
+
+<h4>Example 3 — the NUMA tax</h4>
+<div class="net"><span class="dim">8-GPU node, dataloader pinned-buffer on socket 0, GPU6+NIC1 on socket 1</span>
+ BAD : host buf (sock0) ──UPI──&gt; GPU6 (sock1)         every H2D + GDR crosses UPI → ~2x slower
+ GOOD: bind rank to sock1; alloc pinned AFTER bind     local PCIe path, full bandwidth
+ verify: nvidia-smi topo -m shows GPU6↔NIC1 = PIX/PXB (local), not SYS (cross-socket)</div>
+
+<div class="box key">
+<div class="bt">The thread through all three</div>
+<p>Every example is the same principle: <strong>match the logical communication to the physical fast path, and minimize crossings of slow links</strong> — whether the "slow link" is a spine tier, a dragonfly global link, or an inter-socket UPI hop. Get placement and algorithm aligned with the topology and you ride the fast layers; misalign them and you leak onto the slow ones. That single idea spans this entire guide, from an 8-GPU motherboard to a 250,000-endpoint dragonfly.</p>
+</div>
+</section>
+
+<section id="glossary" class="layer">
+<h2>Section 16</h2>
+<div class="sectitle">Glossary &amp; further reading</div>
+
+<div class="tbl"><table>
+<thead><tr><th>Term</th><th>One-line meaning</th></tr></thead>
+<tbody>
+<tr><td><strong>Physical / logical topology</strong></td><td>The literal wiring vs the communication pattern a program imposes on it.</td></tr>
+<tr><td><strong>Degree / radix</strong></td><td>Links per node / ports per switch.</td></tr>
+<tr><td><strong>Diameter</strong></td><td>Max hops between farthest nodes → worst-case latency.</td></tr>
+<tr><td><strong>Bisection bandwidth</strong></td><td>Min BW across a cut splitting the network in half → master metric for all-to-all.</td></tr>
+<tr><td><strong>Non-blocking / oversubscription</strong></td><td>1:1 down:up (no internal bottleneck) vs cheaper, congesting ratios.</td></tr>
+<tr><td><strong>Clos / fat-tree / spine-leaf</strong></td><td>Multi-path fabric from fixed-radix switches giving full bisection.</td></tr>
+<tr><td><strong>Rail-optimized (multi-plane)</strong></td><td>Each GPU's NIC on its own leaf plane → same-rail peers one hop apart.</td></tr>
+<tr><td><strong>Torus</strong></td><td>Grid with wraparound; switchless; great for nearest-neighbor (TPU pods).</td></tr>
+<tr><td><strong>Hypercube</strong></td><td>Address-differ-by-one-bit graph; log diameter; basis of recursive-doubling collectives.</td></tr>
+<tr><td><strong>Dragonfly</strong></td><td>Groups all-to-all internally + globally; ≤3 hops; fewest optics; exascale (Slingshot).</td></tr>
+<tr><td><strong>Adaptive routing</strong></td><td>Per-packet/flow path choice by live congestion; required for dragonfly.</td></tr>
+<tr><td><strong>Valiant routing</strong></td><td>Route via a random intermediate to spread load (non-minimal).</td></tr>
+<tr><td><strong>Virtual channels</strong></td><td>Logical buffer lanes on one link to keep routing acyclic → deadlock-free.</td></tr>
+<tr><td><strong>ECMP</strong></td><td>Equal-cost multipath; hash flows across uplinks (can collide).</td></tr>
+<tr><td><strong>Incast</strong></td><td>Many senders → one receiver congestion (all-to-all/shuffle hazard).</td></tr>
+<tr><td><strong>SHARP / NVLS</strong></td><td>In-network collective reduction in IB switches (SHARP) / NVSwitch (NVLS).</td></tr>
+<tr><td><strong>NUMA</strong></td><td>Non-uniform memory access; the node-internal topology of sockets/memory/PCIe.</td></tr>
+<tr><td><strong>UPI / Infinity Fabric</strong></td><td>Inter-socket links — the node's "slow link."</td></tr>
+<tr><td><strong>hwloc / lstopo</strong></td><td>Library/tool that maps node topology; used by MPI/UCX/NCCL.</td></tr>
+<tr><td><strong>Ring / tree all-reduce</strong></td><td>Bandwidth-optimal (ring) vs latency-optimal (tree) collective patterns.</td></tr>
+</tbody>
+</table></div>
+
+<h4>Where to go deeper</h4>
+<ul>
+<li><strong>Theory:</strong> Dally &amp; Towles, <em>Principles and Practices of Interconnection Networks</em> — the canonical text (routing, deadlock, flow control, topologies). Leiserson's original fat-tree paper; Kim et al., "Technology-Driven, Highly-Scalable Dragonfly Topology."</li>
+<li><strong>Collectives:</strong> NCCL docs &amp; <code>NCCL_DEBUG=INFO</code> output; the ring all-reduce derivation (Baidu/Horovod write-ups); MPI collective algorithm references (recursive doubling, Rabenseifner).</li>
+<li><strong>Modern fabrics:</strong> NVIDIA InfiniBand / Quantum-2 / Quantum-X800 + SHARP docs; NVIDIA "AI factory" rail-optimized reference architectures; HPE Slingshot / dragonfly papers (Frontier, El Capitan, Aurora).</li>
+<li><strong>Node topology:</strong> hwloc/lstopo docs; <code>nvidia-smi topo -m</code>; GPUDirect RDMA &amp; NUMA-affinity guides.</li>
+<li><strong>Companions:</strong> guide 1 (interconnect libraries: UCX/NCCL/NVSHMEM/MPI) for what rides these topologies; guide 2 (GPU analytics) for where the exchange/shuffle bottleneck this topology serves actually lives.</li>
+</ul>
+
+<div class="box key">
+<div class="bt">The whole guide in four sentences</div>
+<p>Topology is the shape of the wires; <strong>physical</strong> is fixed cabling, <strong>logical</strong> is the pattern software lays on top, and performance is how well they're matched (§02). Each shape — ring, torus, hypercube, fat-tree, dragonfly — is a different compromise between diameter, bisection bandwidth, and cost (§01–08), and routing decides whether the shape's potential bandwidth is actually realized (§09). "Topology-aware" software (MPI, NCCL, UCX) discovers the physical layout and shapes placement, collectives, and transport to keep traffic on fast links — extended <em>into</em> the switches by SHARP (§11–12) and <em>down into</em> the node by NUMA awareness (§13). Across every scale the rule is one sentence: <strong>keep traffic on the fast layer, minimize crossings of the slow one.</strong></p>
+</div>
+
+<hr class="div">
+<div class="foot">
+nodes · links · topology — the third companion to the interconnect &amp; GPU-analytics field guides<br>
+physical + logical · every major topology · routing · topology-aware MPI/NCCL/UCX · SHARP · NUMA · debugging<br>
+grounded in interconnection-network theory and current AI/HPC fabric practice, to 2026.
+</div>
+
+</section>
+
+</div>
+</main>
+</div>
+
+<script>
+const prog = document.getElementById('progress');
+const navLinks = [...document.querySelectorAll('#nav a[href^="#"]')];
+const sections = navLinks.map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+function onScroll(){
+  const h = document.documentElement;
+  const scrolled = (h.scrollTop || document.body.scrollTop);
+  const max = (h.scrollHeight - h.clientHeight);
+  prog.style.width = (max>0 ? (scrolled/max*100) : 0) + '%';
+  let cur = null;
+  for(const s of sections){
+    if(s.getBoundingClientRect().top <= 120) cur = s.id;
+  }
+  navLinks.forEach(a=>{
+    a.classList.toggle('active', a.getAttribute('href') === '#'+cur);
+  });
+}
+document.addEventListener('scroll', onScroll, {passive:true});
+window.addEventListener('resize', onScroll);
+onScroll();
+</script>
+</body>
+</html>
