@@ -232,7 +232,9 @@ nav::-webkit-scrollbar-thumb,pre::-webkit-scrollbar-thumb,.tbl::-webkit-scrollba
   <a class="sec">Practice</a>
   <a href="#debugging">14 · Common Issues &amp; Debugging</a>
   <a href="#examples">15 · Worked Examples</a>
-  <a href="#glossary">16 · Glossary</a>
+  <a class="sec">Synthesis &amp; reference</a>
+  <a href="#design">16 · Designing Logical from Physical</a>
+  <a href="#glossary">17 · Glossary</a>
 </nav>
 
 <main>
@@ -1340,8 +1342,285 @@ numactl --cpunodebind=0 --membind=0 ./train   <span class="c-com"># socket-0 cor
 </div>
 </section>
 
-<section id="glossary" class="layer">
+<section id="design" class="layer">
 <h2>Section 16</h2>
+<div class="sectitle">Designing the logical topology from the physical</div>
+
+<p>Everything so far described topologies in isolation. This section is the method that connects them: given a <em>fixed</em> physical fabric, how do you design the <em>logical</em> communication pattern that runs fastest on it? The whole discipline of topology-awareness lives here, and it is the daily work behind a good collective or a good shuffle.</p>
+
+<div class="box key">
+<div class="bt">The core reframing</div>
+<p>The <strong>physical topology is a fixed cost model</strong>: for every pair of endpoints it fixes hop count, bandwidth, latency, path diversity, and — most importantly — <em>where the cliffs are</em> (the node boundary where NVLink yields to PCIe/IB, an oversubscribed spine, a dragonfly group-pair with one global link, the inter-socket UPI hop). The <strong>logical topology is the free variable</strong> you choose at runtime. So designing the logical topology is <em>compiling</em> a communication pattern against that cost model — the same move a query optimizer makes against table statistics, or a scheduler makes against the cache hierarchy. Knowing the physical layout is what lets you pick the pattern the cost model rewards instead of one it punishes.</p>
+</div>
+
+<h3>The discovery → design loop</h3>
+
+<figure class="fig">
+<svg viewBox="0 0 880 190" xmlns="http://www.w3.org/2000/svg" role="img">
+<defs><marker id="a-loop-amber" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--amber)"/></marker><marker id="a-loop-red" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--red)"/></marker><marker id="a-loop-green" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--green)"/></marker><marker id="a-loop-azure" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--cyan)"/></marker></defs>
+<rect x="36.0" y="50.0" width="128" height="56" rx="6" class="sw"/>
+<text x="100.0" y="74" text-anchor="middle" class="lbl-b">Discover</text>
+<text x="100.0" y="91" text-anchor="middle" class="lbl-s">physical</text>
+<text x="100.0" y="52" text-anchor="middle" class="lbl-a">1</text>
+<rect x="172.0" y="50.0" width="128" height="56" rx="6" class="sw"/>
+<text x="236.0" y="74" text-anchor="middle" class="lbl-b">Classify</text>
+<text x="236.0" y="91" text-anchor="middle" class="lbl-s">pattern</text>
+<text x="236.0" y="52" text-anchor="middle" class="lbl-a">2</text>
+<rect x="308.0" y="50.0" width="128" height="56" rx="6" class="sw"/>
+<text x="372.0" y="74" text-anchor="middle" class="lbl-b">Locate</text>
+<text x="372.0" y="91" text-anchor="middle" class="lbl-s">cliffs</text>
+<text x="372.0" y="52" text-anchor="middle" class="lbl-a">3</text>
+<rect x="444.0" y="50.0" width="128" height="56" rx="6" class="sw"/>
+<text x="508.0" y="74" text-anchor="middle" class="lbl-b">Choose</text>
+<text x="508.0" y="91" text-anchor="middle" class="lbl-s">logical shape</text>
+<text x="508.0" y="52" text-anchor="middle" class="lbl-a">4</text>
+<rect x="580.0" y="50.0" width="128" height="56" rx="6" class="sw"/>
+<text x="644.0" y="74" text-anchor="middle" class="lbl-b">Place ranks</text>
+<text x="644.0" y="91" text-anchor="middle" class="lbl-s">+ hierarchy</text>
+<text x="644.0" y="52" text-anchor="middle" class="lbl-a">5</text>
+<rect x="716.0" y="50.0" width="128" height="56" rx="6" class="sw"/>
+<text x="780.0" y="74" text-anchor="middle" class="lbl-b">Verify</text>
+<text x="780.0" y="91" text-anchor="middle" class="lbl-s">+ tune</text>
+<text x="780.0" y="52" text-anchor="middle" class="lbl-a">6</text>
+<line x1="164.0" y1="78" x2="172.0" y2="78" stroke="var(--amber)" stroke-width="2" fill="none" marker-end="url(#a-loop-amber)"/>
+<line x1="300.0" y1="78" x2="308.0" y2="78" stroke="var(--amber)" stroke-width="2" fill="none" marker-end="url(#a-loop-amber)"/>
+<line x1="436.0" y1="78" x2="444.0" y2="78" stroke="var(--amber)" stroke-width="2" fill="none" marker-end="url(#a-loop-amber)"/>
+<line x1="572.0" y1="78" x2="580.0" y2="78" stroke="var(--amber)" stroke-width="2" fill="none" marker-end="url(#a-loop-amber)"/>
+<line x1="708.0" y1="78" x2="716.0" y2="78" stroke="var(--amber)" stroke-width="2" fill="none" marker-end="url(#a-loop-amber)"/>
+<path d="M780.0,106.0 C780.0,150 508.0,150 508.0,106.0" stroke="var(--green)" stroke-width="1.6" fill="none" stroke-dasharray="5 4" marker-end="url(#a-loop-green)"/>
+<text x="644.0" y="164" text-anchor="middle" class="lbl-g">measure → re-tune the mapping</text>
+</svg>
+<figcaption><b>The discovery → design loop.</b> Physical topology is discovered once and treated as a fixed cost model; the logical topology is then compiled to fit it, and you close the loop by measuring and re-tuning. Topology-aware libraries (§11) run this whole loop for you at init; doing it by hand is for when you out-think the defaults or design a new collective/shuffle.</figcaption>
+</figure>
+
+<p>The procedure, end to end: <strong>(1)</strong> discover the physical fabric and turn it into a cost model; <strong>(2)</strong> classify your communication pattern; <strong>(3)</strong> locate the cliffs in the cost model; <strong>(4)</strong> choose the logical shape/algorithm the cost model favors; <strong>(5)</strong> map ranks to hardware and insert hierarchy levels at the cliffs; <strong>(6)</strong> verify and re-tune. Steps 4–6 are the five design moves below.</p>
+
+<h4>Step 1 — Discover the fabric, build the cost model</h4>
+<p>You cannot design against a cost model you haven’t measured. Pull the physical map from the bottom of the node up to the fabric, then write down the tiers, their bandwidth/latency, and the boundaries.</p>
+<pre data-lang="bash"><code><span class="c-com"># node-internal: sockets, NUMA, PCIe, GPU↔NIC placement</span>
+lstopo --of console
+nvidia-smi topo -m              <span class="c-com"># GPU↔GPU / GPU↔NIC link class: NV#=NVLink PIX/PXB=PCIe SYS=cross-socket</span>
+numactl --hardware             <span class="c-com"># NUMA nodes + distance matrix</span>
+<span class="c-com"># the fabric: switches, links, routing, in-network features</span>
+ibnetdiscover ; iblinkinfo     <span class="c-com"># IB graph + per-port width/speed</span>
+ibdiagnet                      <span class="c-com"># fabric health + SHARP capability/trees</span>
+<span class="c-com"># what the collective library already detected &amp; decided</span>
+NCCL_TOPO_DUMP_FILE=topo.xml NCCL_DEBUG=INFO NCCL_DEBUG_SUBSYS=GRAPH ./app
+UCX_LOG_LEVEL=info ./app       <span class="c-com"># transport chosen per peer</span></code></pre>
+<div class="tbl"><table>
+<thead><tr><th>Tool</th><th>What it reveals for the cost model</th></tr></thead>
+<tbody>
+<tr><td><strong>lstopo</strong> (hwloc)</td><td>the node as a tree: sockets, NUMA nodes, caches, PCIe switches, where each GPU/NIC attaches</td></tr>
+<tr><td><strong>nvidia-smi topo -m</strong></td><td>GPU↔GPU and GPU↔NIC link <em>class</em> — the intra-node fast/slow graph</td></tr>
+<tr><td><strong>numactl --hardware</strong></td><td>NUMA node count + inter-node distance (the on-node “slow link”)</td></tr>
+<tr><td><strong>ibnetdiscover / iblinkinfo</strong></td><td>fabric graph, tier structure, link width/speed, oversubscription</td></tr>
+<tr><td><strong>NCCL_TOPO_DUMP_FILE</strong></td><td>NCCL’s own detected topology XML — a ready-made cost model</td></tr>
+<tr><td><strong>NCCL_DEBUG=INFO (GRAPH)</strong></td><td>the rings/trees NCCL actually built — ground truth for what ran</td></tr>
+<tr><td><strong>ibdiagnet</strong></td><td>fabric errors + whether SHARP/in-network reduction is available</td></tr>
+</tbody>
+</table></div>
+
+<h4>Step 2 — Classify the communication pattern</h4>
+<p>The pattern determines which family of logical topologies is even in play. Name it before choosing a shape.</p>
+<div class="tbl"><table>
+<thead><tr><th>Pattern</th><th>Logical topology family to design from</th></tr></thead>
+<tbody>
+<tr><td><strong>All-reduce / reduce</strong> (gradient sync)</td><td>ring (large msg, bandwidth) · tree / recursive-doubling (small msg, latency) · SHARP/NVLS (offload)</td></tr>
+<tr><td><strong>All-to-all / shuffle / repartition</strong></td><td>spread across full bisection; hierarchical combine per node; topology-aware partition→destination assignment</td></tr>
+<tr><td><strong>Nearest-neighbor / halo</strong></td><td>map the logical grid onto physical adjacency (torus, or careful rank order on a fat-tree)</td></tr>
+<tr><td><strong>Broadcast / all-gather</strong></td><td>tree from root; recursive doubling; in-network multicast</td></tr>
+<tr><td><strong>Point-to-point (sparse)</strong></td><td>no global shape needed — just pick the fastest transport per peer (UCX)</td></tr>
+</tbody>
+</table></div>
+
+<h3>The five design moves</h3>
+<p>Steps 4–6 in practice. Each turns one piece of physical knowledge into a faster logical pattern.</p>
+
+<h4>Move 1 — Map logical adjacency onto physical adjacency (placement)</h4>
+<p>The cheapest, highest-impact move: number ranks so that logically-adjacent ranks sit on physically-fast links. <strong>How-to:</strong> from <code>nvidia-smi topo -m</code> get the NVLink-1-hop graph; order ranks so the ring’s/tree’s neighbors are NVLink neighbors, and only unavoidable hops cross the slow link (the good-vs-bad ring contrast in §02). Levers: Slurm <code>--distribution</code> / process order, <code>CUDA_VISIBLE_DEVICES</code> ordering, MPI <code>--map-by</code>/<code>--rank-by</code> and rankfiles, and <code>MPI_Cart_create(… reorder=true)</code> to let MPI renumber a grid to match the machine. Verify the result in the NCCL graph dump.</p>
+
+<h4>Move 2 — Mirror the physical hierarchy (the biggest lever)</h4>
+<p>Physical fabrics are tiered with a sharp bandwidth drop at each boundary. Design the logical collective so most traffic happens at the cheapest tier and only a <em>reduced summary</em> crosses each boundary. <strong>How-to:</strong> for every cliff you found in Step 1, insert a logical level — reduce within the level to one representative over its fast link, have the representatives do the collective across the boundary, then broadcast back down. Slow-link traffic then scales with the <em>number of groups</em>, not the number of ranks.</p>
+
+<figure class="fig">
+<svg viewBox="0 0 880 270" xmlns="http://www.w3.org/2000/svg" role="img">
+<defs><marker id="a-hier-amber" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--amber)"/></marker><marker id="a-hier-red" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--red)"/></marker><marker id="a-hier-green" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--green)"/></marker><marker id="a-hier-azure" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--cyan)"/></marker></defs>
+<text x="215" y="30" text-anchor="middle" class="lbl-b">FLAT  (every rank crosses)</text>
+<rect x="30" y="105" width="180" height="56" rx="8" fill="none" stroke="var(--line2)"/>
+<rect x="228" y="105" width="180" height="56" rx="8" fill="none" stroke="var(--line2)"/>
+<line x1="219" y1="70" x2="219" y2="205" stroke="var(--line2)" stroke-width="1.4" stroke-dasharray="5 4"/>
+<text x="120" y="182" text-anchor="middle" class="lbl-s">node A (NVLink)</text>
+<text x="318" y="182" text-anchor="middle" class="lbl-s">node B</text>
+<circle cx="52.0" cy="132" r="12" class="nd"/>
+<circle cx="97.3" cy="132" r="12" class="nd"/>
+<circle cx="142.7" cy="132" r="12" class="nd"/>
+<circle cx="188.0" cy="132" r="12" class="nd"/>
+<circle cx="250.0" cy="132" r="12" class="nd"/>
+<circle cx="295.3" cy="132" r="12" class="nd"/>
+<circle cx="340.7" cy="132" r="12" class="nd"/>
+<circle cx="386.0" cy="132" r="12" class="nd"/>
+<line x1="64.0" y1="132" x2="238.0" y2="132" stroke="var(--red)" stroke-width="1.7" fill="none" marker-end="url(#a-hier-red)"/>
+<line x1="109.3" y1="132" x2="283.3" y2="132" stroke="var(--red)" stroke-width="1.7" fill="none" marker-end="url(#a-hier-red)"/>
+<line x1="154.7" y1="132" x2="328.7" y2="132" stroke="var(--red)" stroke-width="1.7" fill="none" marker-end="url(#a-hier-red)"/>
+<line x1="200.0" y1="132" x2="374.0" y2="132" stroke="var(--red)" stroke-width="1.7" fill="none" marker-end="url(#a-hier-red)"/>
+<text x="215" y="232" text-anchor="middle" class="lbl-r">O(N) crossings of the slow link</text>
+<text x="215" y="250" text-anchor="middle" class="lbl-s">the inter-node link is the bottleneck</text>
+<text x="665" y="30" text-anchor="middle" class="lbl-b">HIERARCHICAL  (mirror the boundary)</text>
+<rect x="462" y="105" width="180" height="56" rx="8" fill="none" stroke="var(--line2)"/>
+<rect x="660" y="105" width="180" height="56" rx="8" fill="none" stroke="var(--line2)"/>
+<line x1="651" y1="70" x2="651" y2="205" stroke="var(--line2)" stroke-width="1.4" stroke-dasharray="5 4"/>
+<text x="552" y="182" text-anchor="middle" class="lbl-s">node A</text>
+<text x="750" y="182" text-anchor="middle" class="lbl-s">node B</text>
+<circle cx="484.0" cy="132" r="12" class="nd"/>
+<circle cx="526.7" cy="132" r="12" class="nd"/>
+<circle cx="569.3" cy="132" r="12" class="nd"/>
+<circle cx="612.0" cy="132" r="12" class="nd"/>
+<circle cx="684.0" cy="132" r="12" class="nd"/>
+<circle cx="726.7" cy="132" r="12" class="nd"/>
+<circle cx="769.3" cy="132" r="12" class="nd"/>
+<circle cx="812.0" cy="132" r="12" class="nd"/>
+<line x1="496.0" y1="132" x2="600.0" y2="132" stroke="var(--green)" stroke-width="1.6" fill="none" marker-end="url(#a-hier-green)"/>
+<line x1="538.7" y1="132" x2="600.0" y2="132" stroke="var(--green)" stroke-width="1.6" fill="none" marker-end="url(#a-hier-green)"/>
+<line x1="581.3" y1="132" x2="600.0" y2="132" stroke="var(--green)" stroke-width="1.6" fill="none" marker-end="url(#a-hier-green)"/>
+<line x1="714.7" y1="132" x2="696.0" y2="132" stroke="var(--green)" stroke-width="1.6" fill="none" marker-end="url(#a-hier-green)"/>
+<line x1="757.3" y1="132" x2="696.0" y2="132" stroke="var(--green)" stroke-width="1.6" fill="none" marker-end="url(#a-hier-green)"/>
+<line x1="800.0" y1="132" x2="696.0" y2="132" stroke="var(--green)" stroke-width="1.6" fill="none" marker-end="url(#a-hier-green)"/>
+<line x1="624.0" y1="132" x2="672.0" y2="132" stroke="var(--red)" stroke-width="2.4" fill="none" marker-end="url(#a-hier-red)"/>
+<text x="648" y="108" text-anchor="middle" class="lbl-r">1 crossing</text>
+<text x="665" y="232" text-anchor="middle" class="lbl-s">① reduce in-node (NVLink)  ② ONE cross-boundary  ③ broadcast back</text>
+<text x="665" y="250" text-anchor="middle" class="lbl-g">slow-link traffic ∝ #nodes, not #ranks</text>
+</svg>
+<figcaption><b>Mirror the physical hierarchy in the logical collective.</b> A flat all-reduce sends every rank's data across the slow inter-node link — O(N) crossings (left). The hierarchical version reduces within each node over fast NVLink to one leader, sends a <b>single</b> reduced message across the boundary, then broadcasts back (right). Same result; slow-link traffic drops from ∝#ranks to ∝#nodes. You can only place that level because you discovered <i>where</i> the NVLink→network boundary is.</figcaption>
+</figure>
+
+<pre data-lang="c"><code><span class="c-com">// Build the hierarchy from the physical boundary: on-node ranks share memory/NVLink.</span>
+<span class="c-ty">MPI_Comm</span> node_comm;
+<span class="c-fn">MPI_Comm_split_type</span>(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, <span class="c-num">0</span>, MPI_INFO_NULL, &amp;node_comm);
+<span class="c-fn">MPI_Reduce</span>(send, tmp, n, MPI_FLOAT, MPI_SUM, <span class="c-num">0</span>, node_comm);        <span class="c-com">// ① intra-node (fast)</span>
+<span class="c-kw">if</span> (node_rank == <span class="c-num">0</span>) <span class="c-fn">MPI_Allreduce</span>(tmp, recv, n, MPI_FLOAT, MPI_SUM, leaders); <span class="c-com">// ② one rep/node</span>
+<span class="c-fn">MPI_Bcast</span>(recv, n, MPI_FLOAT, <span class="c-num">0</span>, node_comm);                       <span class="c-com">// ③ back down</span>
+<span class="c-com">// NCCL does this automatically once it has detected the topology; you do it by</span>
+<span class="c-com">// hand for custom collectives, a shuffle, or when you out-think the default.</span></code></pre>
+
+<h4>Move 3 — Pick the algorithm regime from the numbers</h4>
+<p>The bandwidth and latency you measured choose ring vs tree, and set the chunk size. <strong>How-to:</strong> small/latency-bound → tree/recursive-doubling (O(log N) steps); large/bandwidth-bound → ring (every link saturated, per-rank cost ≈ 2S independent of N); size pipeline chunks so a chunk’s transfer time comfortably exceeds link latency (roughly <code>chunk ≥ BW × a few × RTT</code>) so you stay bandwidth-bound, not latency-bound.</p>
+<div class="tbl"><table>
+<thead><tr><th>Message size</th><th>Logical algorithm</th><th>Why the cost model says so</th></tr></thead>
+<tbody>
+<tr><td>tiny / latency-bound</td><td>tree / recursive-doubling</td><td>O(log N) steps — diameter dominates, minimize hops</td></tr>
+<tr><td>large / bandwidth-bound</td><td>ring</td><td>every link busy the whole time; cost ~2S, N-independent</td></tr>
+<tr><td>in between</td><td>chunked/hybrid (NCCL auto-tunes)</td><td>overlap latency with bandwidth via pipelining</td></tr>
+</tbody>
+</table></div>
+
+<h4>Move 4 — Offload to the fabric where it exists</h4>
+<p>If Step 1 showed SHARP (IB switches) or NVLS (NVSwitch), choose a logical collective that <em>terminates the reduction inside the network</em> rather than at an endpoint — <code>NCCL_ALGO=CollNet</code> / <code>NVLS</code>. The tree you’d have built across endpoints is instead executed in switch silicon (§12), roughly halving wire traffic and cutting jitter. The design decision is simply “does the physical fabric offer this, and is my collective one it supports?”</p>
+
+<h4>Move 5 — Route around the scarce link &amp; contention</h4>
+<p>Find the minimum-capacity cut in your cost model (oversubscribed spine, dragonfly global link, the single inter-socket UPI). <strong>How-to:</strong> ensure the logical pattern’s concurrent flows don’t exceed that cut — combine into two levels so fewer messages cross it, spread flows across the parallel paths you know exist (multiple rings, adaptive routing / Valiant on dragonfly), and avoid incast by bounding in-flight bytes to a hot receiver. For a repartition this is the same hierarchical idea as Move 2, applied to the shuffle:</p>
+
+<figure class="fig">
+<svg viewBox="0 0 880 330" xmlns="http://www.w3.org/2000/svg" role="img">
+<defs><marker id="a-shf-amber" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--amber)"/></marker><marker id="a-shf-red" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--red)"/></marker><marker id="a-shf-green" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--green)"/></marker><marker id="a-shf-azure" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--cyan)"/></marker></defs>
+<text x="215" y="30" text-anchor="middle" class="lbl-b">NAÏVE all-to-all shuffle</text>
+<rect x="120" y="78" width="190" height="44" rx="8" fill="none" stroke="var(--line2)"/>
+<rect x="120" y="238" width="190" height="44" rx="8" fill="none" stroke="var(--line2)"/>
+<text x="70" y="104" text-anchor="start" class="lbl-s">node A</text>
+<text x="70" y="264" text-anchor="start" class="lbl-s">node B</text>
+<line x1="40" y1="180" x2="390" y2="180" stroke="var(--line2)" stroke-width="1.4" stroke-dasharray="5 4"/>
+<circle cx="150.0" cy="100" r="12" class="nd"/>
+<circle cx="280.0" cy="100" r="12" class="nd"/>
+<circle cx="150.0" cy="260" r="12" class="nd"/>
+<circle cx="280.0" cy="260" r="12" class="nd"/>
+<line x1="150.0" y1="112" x2="150.0" y2="248" stroke="var(--red)" stroke-width="1.5" fill="none" marker-end="url(#a-shf-red)"/>
+<line x1="150.0" y1="112" x2="280.0" y2="248" stroke="var(--red)" stroke-width="1.5" fill="none" marker-end="url(#a-shf-red)"/>
+<line x1="280.0" y1="112" x2="150.0" y2="248" stroke="var(--red)" stroke-width="1.5" fill="none" marker-end="url(#a-shf-red)"/>
+<line x1="280.0" y1="112" x2="280.0" y2="248" stroke="var(--red)" stroke-width="1.5" fill="none" marker-end="url(#a-shf-red)"/>
+<text x="215" y="316" text-anchor="middle" class="lbl-r">producers × consumers crossings = 4</text>
+<text x="665" y="30" text-anchor="middle" class="lbl-b">TWO-LEVEL  (combine, then one send)</text>
+<rect x="570" y="78" width="190" height="44" rx="8" fill="none" stroke="var(--line2)"/>
+<rect x="570" y="238" width="190" height="44" rx="8" fill="none" stroke="var(--line2)"/>
+<text x="520" y="104" text-anchor="start" class="lbl-s">node A</text>
+<text x="520" y="264" text-anchor="start" class="lbl-s">node B</text>
+<line x1="520" y1="180" x2="840" y2="180" stroke="var(--line2)" stroke-width="1.4" stroke-dasharray="5 4"/>
+<circle cx="600.0" cy="100" r="12" class="nd"/>
+<circle cx="730.0" cy="100" r="12" class="nd"/>
+<circle cx="600.0" cy="260" r="12" class="nd"/>
+<circle cx="730.0" cy="260" r="12" class="nd"/>
+<rect x="638.0" y="141.0" width="54" height="22" rx="6" class="sw sw-spine"/>
+<text x="665" y="156" text-anchor="middle" class="lbl-a">agg</text>
+<rect x="638.0" y="197.0" width="54" height="22" rx="6" class="sw sw-spine"/>
+<text x="665" y="212" text-anchor="middle" class="lbl-a">agg</text>
+<line x1="600.0" y1="112" x2="665" y2="140" stroke="var(--green)" stroke-width="1.5" fill="none" marker-end="url(#a-shf-green)"/>
+<line x1="730.0" y1="112" x2="665" y2="140" stroke="var(--green)" stroke-width="1.5" fill="none" marker-end="url(#a-shf-green)"/>
+<line x1="665" y1="163" x2="665" y2="197" stroke="var(--red)" stroke-width="2.4" fill="none" marker-end="url(#a-shf-red)"/>
+<line x1="665" y1="220" x2="600.0" y2="248" stroke="var(--green)" stroke-width="1.5" fill="none" marker-end="url(#a-shf-green)"/>
+<line x1="665" y1="220" x2="730.0" y2="248" stroke="var(--green)" stroke-width="1.5" fill="none" marker-end="url(#a-shf-green)"/>
+<text x="665" y="316" text-anchor="middle" class="lbl-g">1 transfer per node-pair (then scatter locally)</text>
+</svg>
+<figcaption><b>Route around the scarce link — the exchange / shuffle case.</b> A naïve repartition sends every producer's partition straight to every remote consumer: producers×consumers crossings of the slow inter-node link (left). Topology-aware: each node first <b>combines</b> all partitions bound for a given remote node over local NVLink, sends <b>one</b> aggregated stream per node-pair across the boundary, and the receiver scatters locally (right). This is exactly the design choice in a GPU-native UCX exchange on a multi-node cluster.</figcaption>
+</figure>
+
+
+<h4>Move 6 — Bind to NUMA and rails at the node level</h4>
+<p>The node-internal map dictates the logical rank→NIC assignment. <strong>How-to:</strong> from <code>nvidia-smi topo -m</code>, give each rank the NIC on its own PCIe/NUMA domain (a rail), and allocate its buffers on the GPU’s NUMA node so transfers don’t detour over UPI. Confirm GPU↔NIC shows <code>PIX/PXB</code> (local), not <code>SYS</code> (cross-socket).</p>
+<pre data-lang="bash"><code>numactl --cpunodebind=1 --membind=1 ./rank   <span class="c-com"># pin to the socket that owns this GPU + NIC</span>
+<span class="c-com"># allocate pinned host buffers AFTER binding (first-touch lands them on the right node)</span></code></pre>
+
+<h3>Decision procedure</h3>
+<div class="tree"><span class="c-com"># Given a discovered physical fabric + a named communication pattern, design the logical topology.</span>
+<span class="q">Is everything inside one fast all-to-all domain (NVSwitch node / NVL72)?</span>
+├─ <span class="a">yes</span> → <span class="r">run the collective FLAT within the domain; skip hierarchy. Optimize chunk size &amp; partition balance. Use NVLS if present.</span>
+└─ <span class="a">no — there’s a slow boundary</span> → <span class="q">how many tiers / where are the cliffs?</span>
+       ├─ <span class="a">node → IB/RoCE</span> → <span class="r">2-level: reduce/combine in-node over NVLink, ONE rep crosses per node (Move 2/5).</span>
+       ├─ <span class="a">+ oversubscribed spine or dragonfly global link</span> → <span class="r">add another level; spread across paths; pack the job to minimize cross-cut traffic.</span>
+       └─ <span class="a">neighbor-only pattern on a torus</span> → <span class="r">map the logical grid onto the physical grid (Move 1) — no hierarchy needed.</span>
+<span class="q">Message size?</span>
+├─ <span class="a">small</span> → <span class="r">tree / recursive-doubling (latency).</span>
+└─ <span class="a">large</span> → <span class="r">ring (bandwidth); chunk to stay BW-bound.</span>
+<span class="q">In-network reduction (SHARP/NVLS) available &amp; collective supported?</span>
+└─ <span class="a">yes</span> → <span class="r">offload — CollNet/NVLS (Move 4).</span>
+<span class="q">Always:</span> → <span class="r">place ranks so logical adjacency = physical adjacency (Move 1); bind NUMA/rail (Move 6); verify in the NCCL graph dump &amp; re-tune.</span></div>
+
+<h3>Worked example — one all-reduce, three fabrics</h3>
+<p>The same gradient all-reduce over 16 GPUs, designed from three different physical cost models. Same pattern, three logical topologies.</p>
+<div class="tbl"><table>
+<thead><tr><th>Physical fabric (discovered)</th><th>Cliffs</th><th>Logical design</th></tr></thead>
+<tbody>
+<tr><td><strong>NVL72</strong> (all 16 in one NVLink domain)</td><td>none — flat, uniform ~1.8 TB/s</td><td>single-level ring/NVLS across all 16; no hierarchy; tune chunk size &amp; balance. Shuffle becomes near-free.</td></tr>
+<tr><td><strong>2× DGX</strong> (8+8, NVLink in node, IB between)</td><td>one cliff at the node boundary</td><td>2-level: reduce-scatter in-node over NVLink, one inter-node all-reduce of partials over IB (1 crossing per rank-pair), all-gather back. Use SHARP on the IB step if present.</td></tr>
+<tr><td><strong>2× EC2</strong> (EFA between, no cross-instance NVLink)</td><td>node cliff + thin, cloud network</td><td>same 2-level, plus: compress partials before EFA, stripe across multiple EFA rails, bound in-flight bytes to dodge incast.</td></tr>
+</tbody>
+</table></div>
+<div class="box gpu">
+<div class="bt">The same logic is your UCX exchange</div>
+<p>A distributed shuffle <em>is</em> a logical topology — who sends which partition to whom, and how it’s combined. Design it from the physical map exactly as above: on NVL72, a near-flat all-to-all over NVLink and optimize for partition skew; across DGX/EC2 nodes, combine each node’s partitions per destination node locally, send one aggregated stream per node-pair (Move 5’s figure), choose the transport per peer (NVLink vs RDMA vs TCP), and compress only on the thin links. One operator, one pattern, three logical designs — selected by reading the fabric underneath. That selection <em>is</em> topology-awareness, and it’s what §11 shows the libraries doing for you automatically.</p>
+</div>
+
+<h3>The playbook — physical feature → logical implication</h3>
+<div class="tbl"><table>
+<thead><tr><th>If the physical fabric has…</th><th>…then design the logical topology to…</th></tr></thead>
+<tbody>
+<tr><td>an NVLink / NVSwitch domain (intra-node, NVL72)</td><td>keep ring/tree neighbors inside it; run the collective flat within the domain</td></tr>
+<tr><td>a node boundary (NVLink → IB/RoCE)</td><td>insert a hierarchy level here: reduce in-node, one representative crosses</td></tr>
+<tr><td>an oversubscribed spine (e.g. 4:1)</td><td>keep traffic under the leaf; two-level combine; avoid all-to-all across the cut</td></tr>
+<tr><td>a dragonfly global link (few per group-pair)</td><td>spread (adaptive/Valiant); pack the job within a group; don’t hammer one pair</td></tr>
+<tr><td>full-bisection fat-tree</td><td>treat any-to-any as cheap — pick the algorithm purely by message size</td></tr>
+<tr><td>a torus / direct neighbor fabric</td><td>make the logical pattern neighbor-only; map the problem grid onto the physical grid</td></tr>
+<tr><td>SHARP / NVLS-capable switches</td><td>offload the reduction — the tree terminates in-fabric (CollNet/NVLS)</td></tr>
+<tr><td>GPU↔NIC NUMA affinity</td><td>give each rank its local rail; bind memory to the GPU’s NUMA node</td></tr>
+<tr><td>multiple NICs/rails per node</td><td>stripe the logical transport across rails (multi-rail)</td></tr>
+</tbody>
+</table></div>
+
+<div class="box key">
+<div class="bt">The discipline in one sentence</div>
+<p>Discover the physical fabric once and treat it as a cost model; then compile the logical topology to fit it — adjacency onto fast links, a hierarchy level at every cliff, the algorithm regime from the bandwidth/latency numbers, offload where the fabric offers it, and binding at the node. And when you also control placement, don’t just adapt the logical pattern to the hardware — co-design them, placing ranks so the pattern you want is the one the fabric makes cheap.</p>
+</div>
+</section>
+
+<section id="glossary" class="layer">
+<h2>Section 17</h2>
 <div class="sectitle">Glossary &amp; further reading</div>
 
 <div class="tbl"><table>
