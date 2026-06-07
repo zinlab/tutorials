@@ -1,0 +1,1470 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UCX — A Comprehensive Programming Field Manual</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:        #0e1116;
+  --bg-2:      #151a21;
+  --bg-3:      #1b222c;
+  --panel:     #12171e;
+  --ink:       #e7e3da;
+  --ink-soft:  #b3aea3;
+  --ink-faint: #7d8896;
+  --rule:      #262e39;
+  --rule-soft: #1d242d;
+  --accent:    #d98b4a;   /* copper */
+  --accent-2:  #5fb0c4;   /* cyan   */
+  --accent-3:  #8fbf6f;   /* sage   */
+  --warn:      #d9694a;
+  --code-bg:   #0a0d11;
+  --code-ink:  #d6dde6;
+  --kw:        #c98fc9;
+  --fn:        #5fb0c4;
+  --str:       #8fbf6f;
+  --num:       #d98b4a;
+  --com:       #5d6675;
+  --sel:       rgba(217,139,74,0.22);
+  --serif: "Source Serif 4", Georgia, serif;
+  --sans:  "Instrument Sans", -apple-system, system-ui, sans-serif;
+  --mono:  "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --maxw: 860px;
+}
+html[data-theme="light"] {
+  --bg:        #f4f1ea;
+  --bg-2:      #ebe7dd;
+  --bg-3:      #e1dccf;
+  --panel:     #fbf9f4;
+  --ink:       #23272d;
+  --ink-soft:  #4a4f57;
+  --ink-faint: #757d88;
+  --rule:      #d7d1c4;
+  --rule-soft: #e3ddd0;
+  --accent:    #b5651d;
+  --accent-2:  #2e7d92;
+  --accent-3:  #5a8a3c;
+  --warn:      #b8442a;
+  --code-bg:   #1a1f26;
+  --code-ink:  #d6dde6;
+  --kw:        #c98fc9;
+  --fn:        #5fb0c4;
+  --str:       #8fbf6f;
+  --num:       #e0a060;
+  --com:       #7d8696;
+  --sel:       rgba(181,101,29,0.18);
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 84px; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 18px;
+  line-height: 1.68;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+::selection { background: var(--sel); }
+
+/* ---------- atmospheric background ---------- */
+body::before {
+  content:""; position: fixed; inset: 0; z-index: -2;
+  background:
+    radial-gradient(900px 600px at 12% -5%, rgba(217,139,74,0.10), transparent 60%),
+    radial-gradient(800px 700px at 100% 0%, rgba(95,176,196,0.07), transparent 55%);
+  pointer-events: none;
+}
+body::after {
+  content:""; position: fixed; inset:0; z-index:-1; pointer-events:none; opacity:0.025;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ---------- top bar ---------- */
+header.topbar {
+  position: sticky; top: 0; z-index: 50;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 26px;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--rule);
+}
+.topbar .brand { font-family: var(--mono); font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-faint); }
+.topbar .brand b { color: var(--accent); font-weight: 700; }
+.topbar .tools { display: flex; gap: 10px; align-items: center; }
+.btn {
+  font-family: var(--mono); font-size: 12px; letter-spacing: 0.05em;
+  background: var(--bg-2); color: var(--ink-soft);
+  border: 1px solid var(--rule); border-radius: 7px;
+  padding: 7px 12px; cursor: pointer; transition: all .18s ease;
+}
+.btn:hover { color: var(--accent); border-color: var(--accent); transform: translateY(-1px); }
+
+/* ---------- layout ---------- */
+.shell { display: grid; grid-template-columns: 290px minmax(0,1fr); gap: 0; max-width: 1280px; margin: 0 auto; }
+nav.toc {
+  position: sticky; top: 57px; align-self: start;
+  height: calc(100vh - 57px); overflow-y: auto;
+  padding: 30px 20px 60px 26px;
+  border-right: 1px solid var(--rule-soft);
+  font-family: var(--sans); font-size: 14px; line-height: 1.4;
+}
+nav.toc::-webkit-scrollbar { width: 8px; }
+nav.toc::-webkit-scrollbar-thumb { background: var(--rule); border-radius: 8px; }
+nav.toc h4 {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--ink-faint); margin: 22px 0 9px; font-weight: 500;
+}
+nav.toc a {
+  display: block; color: var(--ink-soft); text-decoration: none;
+  padding: 4px 10px; border-radius: 6px; border-left: 2px solid transparent;
+  margin-left: -2px; transition: all .14s ease;
+}
+nav.toc a:hover { color: var(--ink); background: var(--bg-2); }
+nav.toc a.active { color: var(--accent); border-left-color: var(--accent); background: var(--bg-2); }
+
+main { padding: 44px 56px 140px; max-width: calc(var(--maxw) + 112px); }
+
+/* ---------- hero ---------- */
+.hero { margin-bottom: 50px; padding-bottom: 34px; border-bottom: 1px solid var(--rule); }
+.hero .eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--accent); margin-bottom: 16px; }
+.hero h1 { font-family: var(--serif); font-weight: 700; font-size: 52px; line-height: 1.05; letter-spacing: -0.02em; margin: 0 0 18px; }
+.hero h1 em { font-style: italic; color: var(--accent); }
+.hero p.lede { font-size: 21px; line-height: 1.55; color: var(--ink-soft); margin: 0; max-width: 660px; }
+.hero .meta { margin-top: 24px; display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { font-family: var(--mono); font-size: 11px; letter-spacing: 0.05em; color: var(--ink-faint); border: 1px solid var(--rule); border-radius: 20px; padding: 5px 13px; }
+
+/* ---------- typography ---------- */
+section { margin-bottom: 64px; scroll-margin-top: 80px; }
+h2 {
+  font-family: var(--serif); font-weight: 700; font-size: 33px; letter-spacing: -0.015em;
+  margin: 0 0 6px; padding-top: 14px;
+}
+h2 .num { font-family: var(--mono); font-size: 15px; color: var(--accent); font-weight: 500; display:block; letter-spacing:0.1em; margin-bottom: 6px;}
+h3 { font-family: var(--serif); font-weight: 600; font-size: 24px; letter-spacing: -0.01em; margin: 40px 0 10px; color: var(--ink); }
+h4 { font-family: var(--sans); font-weight: 600; font-size: 16px; letter-spacing: 0.02em; margin: 28px 0 8px; color: var(--accent-2); text-transform: uppercase; }
+.section-rule { height:1px; background: linear-gradient(90deg, var(--accent), transparent); border:0; margin: 8px 0 26px; opacity: 0.5; }
+p { margin: 14px 0; }
+a.inline { color: var(--accent-2); text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--accent-2) 40%, transparent); }
+a.inline:hover { border-bottom-color: var(--accent-2); }
+strong { color: var(--ink); font-weight: 700; }
+em { color: var(--ink); }
+ul, ol { padding-left: 24px; margin: 14px 0; }
+li { margin: 7px 0; }
+li::marker { color: var(--accent); }
+.lead { font-size: 20px; color: var(--ink-soft); line-height: 1.6; }
+
+code.tt {
+  font-family: var(--mono); font-size: 0.84em;
+  background: var(--bg-3); color: var(--accent);
+  padding: 2px 6px; border-radius: 5px; border: 1px solid var(--rule-soft);
+  white-space: nowrap;
+}
+
+/* ---------- code blocks ---------- */
+.code {
+  position: relative; margin: 22px 0;
+  background: var(--code-bg); border: 1px solid var(--rule);
+  border-radius: 11px; overflow: hidden;
+  box-shadow: 0 12px 30px rgba(0,0,0,0.28);
+}
+.code .head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 9px 15px; background: rgba(255,255,255,0.025);
+  border-bottom: 1px solid var(--rule);
+}
+.code .head .name { font-family: var(--mono); font-size: 12px; color: var(--ink-faint); letter-spacing: 0.04em; }
+.code .head .lang { font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); }
+.code pre {
+  margin: 0; padding: 18px 20px; overflow-x: auto;
+  font-family: var(--mono); font-size: 13.5px; line-height: 1.62; color: var(--code-ink);
+  tab-size: 4;
+}
+.code pre::-webkit-scrollbar { height: 9px; }
+.code pre::-webkit-scrollbar-thumb { background: #2a323d; border-radius: 8px; }
+.copy {
+  position: absolute; top: 7px; right: 11px;
+  font-family: var(--mono); font-size: 11px; color: var(--ink-faint);
+  background: var(--bg-3); border: 1px solid var(--rule); border-radius: 6px;
+  padding: 4px 9px; cursor: pointer; opacity: 0; transition: all .16s;
+}
+.code:hover .copy { opacity: 1; }
+.copy:hover { color: var(--accent); border-color: var(--accent); }
+.tk-kw { color: var(--kw); }
+.tk-fn { color: var(--fn); }
+.tk-str{ color: var(--str); }
+.tk-num{ color: var(--num); }
+.tk-com{ color: var(--com); font-style: italic; }
+.tk-ty { color: var(--accent); }
+.tk-pp { color: #c9a06a; }
+
+/* ---------- callouts ---------- */
+.note {
+  margin: 22px 0; padding: 16px 20px 16px 20px;
+  border-radius: 10px; border: 1px solid var(--rule);
+  background: var(--panel); position: relative;
+  border-left: 3px solid var(--accent-2);
+  font-size: 16.5px; line-height: 1.58;
+}
+.note.warn  { border-left-color: var(--warn); }
+.note.tip   { border-left-color: var(--accent-3); }
+.note.deep  { border-left-color: var(--accent); }
+.note .tag {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--accent-2); display: block; margin-bottom: 6px; font-weight: 700;
+}
+.note.warn .tag { color: var(--warn); }
+.note.tip  .tag { color: var(--accent-3); }
+.note.deep .tag { color: var(--accent); }
+.note p:first-of-type { margin-top: 0; }
+.note p:last-child { margin-bottom: 0; }
+
+/* ---------- tables ---------- */
+.tablewrap { overflow-x: auto; margin: 22px 0; border: 1px solid var(--rule); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-family: var(--sans); font-size: 14.5px; }
+th { text-align: left; font-weight: 600; color: var(--accent); background: var(--bg-2); padding: 11px 15px; border-bottom: 1px solid var(--rule); letter-spacing: 0.02em; }
+td { padding: 10px 15px; border-bottom: 1px solid var(--rule-soft); color: var(--ink-soft); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+td code, th code { font-family: var(--mono); font-size: 0.86em; color: var(--accent-2); }
+
+/* ---------- diagram ---------- */
+.diagram { margin: 26px 0; padding: 24px; background: var(--panel); border: 1px solid var(--rule); border-radius: 12px; }
+.diagram svg { width: 100%; height: auto; display: block; }
+.dg-cap { font-family: var(--sans); font-size: 13px; color: var(--ink-faint); text-align: center; margin-top: 14px; font-style: italic; }
+.svg-label { font-family: var(--sans); font-size: 13px; fill: var(--ink); font-weight: 500; }
+.svg-sub  { font-family: var(--mono); font-size: 10.5px; fill: var(--ink-faint); }
+.svg-box  { fill: var(--bg-3); stroke: var(--rule); stroke-width: 1.5; }
+.svg-box-a{ fill: color-mix(in srgb, var(--accent) 16%, var(--bg-3)); stroke: var(--accent); stroke-width: 1.5; }
+.svg-box-b{ fill: color-mix(in srgb, var(--accent-2) 16%, var(--bg-3)); stroke: var(--accent-2); stroke-width: 1.5; }
+.svg-box-c{ fill: color-mix(in srgb, var(--accent-3) 14%, var(--bg-3)); stroke: var(--accent-3); stroke-width: 1.5; }
+.svg-line { stroke: var(--ink-faint); stroke-width: 1.5; fill: none; }
+.svg-arrow{ fill: var(--ink-faint); }
+
+/* ---------- misc ---------- */
+.kbd { font-family: var(--mono); font-size: 0.8em; background: var(--bg-3); border:1px solid var(--rule); border-bottom-width:2px; border-radius:5px; padding: 1px 6px; color: var(--ink); }
+.toc-progress { position: fixed; top:0; left:0; height: 2px; background: var(--accent); z-index: 60; width: 0; transition: width .1s; }
+footer.foot { border-top: 1px solid var(--rule); padding: 30px 56px 60px; font-family: var(--sans); font-size: 14px; color: var(--ink-faint); max-width: calc(var(--maxw) + 112px); }
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 22px 0; }
+.mini-card { background: var(--panel); border:1px solid var(--rule); border-radius: 10px; padding: 16px 18px; }
+.mini-card h5 { font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; color: var(--accent); margin: 0 0 8px; text-transform: uppercase; }
+.mini-card p { font-size: 15px; margin: 0; color: var(--ink-soft); }
+
+@media (max-width: 1000px) {
+  .shell { grid-template-columns: 1fr; }
+  nav.toc { display: none; }
+  main { padding: 32px 22px 100px; }
+  .hero h1 { font-size: 38px; }
+  .two-col { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="toc-progress" id="progress"></div>
+<header class="topbar">
+  <div class="brand"><b>UCX</b> &nbsp;/&nbsp; Unified Communication X — Field Manual</div>
+  <div class="tools">
+    <button class="btn" id="themeBtn">◐ Theme</button>
+  </div>
+</header>
+
+<div class="shell">
+<nav class="toc" id="toc">
+  <h4>Foundations</h4>
+  <a href="#intro">1 · What UCX Is</a>
+  <a href="#architecture">2 · Three-Layer Architecture</a>
+  <a href="#objects">3 · Core Objects</a>
+  <a href="#transports">4 · Transports &amp; Memory Domains</a>
+  <a href="#primitives">5 · Communication Primitives</a>
+  <a href="#nbx">6 · The nbx Request Model</a>
+  <h4>Hands-On</h4>
+  <a href="#build">7 · Install &amp; Build</a>
+  <a href="#hello">8 · Hello World</a>
+  <a href="#pingpong">9 · Full Ping-Pong</a>
+  <a href="#progress">10 · The Progress Engine</a>
+  <h4>How It Works</h4>
+  <a href="#internals">11 · Protocols &amp; Internals</a>
+  <a href="#costmodel">12 · Protocol Selection</a>
+  <a href="#topology">13 · Topology &amp; Locality</a>
+  <a href="#why">14 · Why It's Fast</a>
+  <h4>Ecosystem</h4>
+  <a href="#vsmpi">15 · UCX vs MPI</a>
+  <a href="#withmpi">16 · Coordinating with MPI</a>
+  <a href="#unification">17 · Unifying MPI/NCCL</a>
+  <a href="#ucc">18 · UCC Collectives</a>
+  <a href="#gpu">19 · GPU &amp; RAPIDS</a>
+  <h4>Operations</h4>
+  <a href="#debug">20 · Debugging</a>
+  <a href="#tuning">21 · Tuning Reference</a>
+  <a href="#pitfalls">22 · Common Pitfalls</a>
+  <a href="#mental">23 · Mental Model Recap</a>
+</nav>
+
+<main id="content">
+<div class="hero">
+  <div class="eyebrow">Unified Communication X · Programming Field Manual</div>
+  <h1>Talking to the network <em>at the speed of the hardware</em>.</h1>
+  <p class="lede">UCX is the thin, fast layer that sits between your program and the interconnect — InfiniBand, RoCE, NVLink, shared memory, TCP — and lets you move bytes (and GPU bytes) with zero-copy, hardware offload, and automatic transport selection. This manual takes you from first principles to a running ping-pong to the internals that make MPI, NCCL, and RAPIDS all quietly stand on the same foundation.</p>
+  <div class="meta">
+    <span class="chip">UCP · UCT · UCS</span>
+    <span class="chip">tag / RMA / stream / AM</span>
+    <span class="chip">the nbx API</span>
+    <span class="chip">GPUDirect RDMA</span>
+    <span class="chip">protocol cost model</span>
+    <span class="chip">debugging &amp; tuning</span>
+  </div>
+</div>
+
+<section id="intro">
+  <h2><span class="num">§ 01</span>What UCX Actually Is</h2>
+  <hr class="section-rule">
+  <p class="lead">UCX (Unified Communication X) is an open-source <strong>communication framework</strong>, not an application API you launch jobs with. Its job is to expose the full performance of whatever interconnect you have — without you writing transport-specific code for each one.</p>
+
+  <p>The cleanest way to place UCX in your head: it is a <strong>networking abstraction layer</strong> that a <em>runtime</em> sits on top of. You rarely run a UCX program the way you run an MPI program. Instead, MPI, NCCL, Dask, Spark RAPIDS, and custom shuffle engines (like a GPU exchange operator inside a query engine) call into UCX to do the actual byte movement. UCX answers one question extremely well: <em>"given this source buffer, this destination, and this hardware, what is the fastest way to get the bytes there?"</em></p>
+
+  <p>It was created to solve a real fragmentation problem. Before UCX, every HPC communication library re-implemented the same low-level machinery — InfiniBand verbs handling, shared-memory transports, registration caches, rendezvous protocols — and each did it slightly differently. UCX consolidated that machinery into one well-optimized, vendor-co-developed codebase (NVIDIA/Mellanox, IBM, ORNL, ARM, and others), then exposed it through a clean API so that <em>everyone above it could share the work.</em></p>
+
+  <div class="note tip">
+    <span class="tag">Why you, specifically, care</span>
+    <p>If you are building a GPU-to-GPU exchange operator — moving column batches between workers over NVLink intra-node and InfiniBand inter-node — UCX is the layer that lets one code path target both, pick zero-copy RDMA for big batches, route through the NIC closest to the GPU, and skip the host bounce entirely with GPUDirect RDMA. The "logical topology compiled from physical topology" framing maps directly onto UCX's transport-and-lane selection engine.</p>
+  </div>
+
+  <h3>What UCX gives you — and what it deliberately does not</h3>
+  <div class="two-col">
+    <div class="mini-card">
+      <h5>UCX provides</h5>
+      <p>Point-to-point messaging (tag-matched &amp; stream), one-sided RMA (put/get) and atomics, active messages, memory registration, transport &amp; device selection, multi-rail striping, GPU memory awareness, and a progress engine.</p>
+    </div>
+    <div class="mini-card">
+      <h5>UCX does <em>not</em> provide</h5>
+      <p>Process launch / job management, ranks &amp; communicators, collectives (broadcast/allreduce — that's <span class="kbd">UCC</span>), MPI datatypes, or an out-of-band bootstrap. You bring your own way to exchange initial addresses.</p>
+    </div>
+  </div>
+</section>
+
+<section id="architecture">
+  <h2><span class="num">§ 02</span>The Three-Layer Architecture</h2>
+  <hr class="section-rule">
+  <p>UCX is three nested libraries. Almost all application code lives at the top layer (UCP); the lower two exist so that UCP can be portable and fast. Knowing the split is essential for reading logs and config, because every environment variable and every error message is scoped to one of these layers.</p>
+
+  <div class="diagram">
+  <svg viewBox="0 0 720 360" xmlns="http://www.w3.org/2000/svg">
+    <!-- App -->
+    <rect class="svg-box-a" x="160" y="14" width="400" height="46" rx="8"/>
+    <text class="svg-label" x="360" y="34" text-anchor="middle">Your runtime: MPI impl · NCCL plugin · RAPIDS · custom shuffle</text>
+    <text class="svg-sub" x="360" y="50" text-anchor="middle">calls the UCP API</text>
+    <!-- arrow -->
+    <line class="svg-line" x1="360" y1="60" x2="360" y2="78" marker-end="url(#a)"/>
+    <!-- UCP -->
+    <rect class="svg-box-b" x="60" y="82" width="600" height="78" rx="8"/>
+    <text class="svg-label" x="360" y="104" text-anchor="middle">UCP — Protocol Layer (the API you program against)</text>
+    <text class="svg-sub" x="360" y="124" text-anchor="middle">tag matching · rendezvous · fragmentation · multi-rail · protocol selection · RMA · AM</text>
+    <text class="svg-sub" x="360" y="142" text-anchor="middle">ucp_context · ucp_worker · ucp_ep · ucp_mem_h · ucp_rkey</text>
+    <line class="svg-line" x1="360" y1="160" x2="360" y2="178" marker-end="url(#a)"/>
+    <!-- UCT -->
+    <rect class="svg-box-c" x="60" y="182" width="600" height="74" rx="8"/>
+    <text class="svg-label" x="360" y="204" text-anchor="middle">UCT — Transport Layer (thin hardware abstraction)</text>
+    <text class="svg-sub" x="360" y="224" text-anchor="middle">uct_md (memory domain) · uct_iface · uct_ep — one driver per transport</text>
+    <text class="svg-sub" x="360" y="242" text-anchor="middle">rc · ud · dc · tcp · cma · knem · xpmem · cuda_copy · cuda_ipc · gdr_copy · rocm</text>
+    <line class="svg-line" x1="360" y1="256" x2="360" y2="274" marker-end="url(#a)"/>
+    <!-- UCS + HW -->
+    <rect class="svg-box" x="60" y="278" width="290" height="64" rx="8"/>
+    <text class="svg-label" x="205" y="300" text-anchor="middle">UCS — Services</text>
+    <text class="svg-sub" x="205" y="318" text-anchor="middle">data structures · async · memory</text>
+    <text class="svg-sub" x="205" y="333" text-anchor="middle">pools · config · debug · rcache</text>
+    <rect class="svg-box" x="370" y="278" width="290" height="64" rx="8"/>
+    <text class="svg-label" x="515" y="300" text-anchor="middle">Hardware</text>
+    <text class="svg-sub" x="515" y="318" text-anchor="middle">IB/RoCE HCA · NVLink · PCIe</text>
+    <text class="svg-sub" x="515" y="333" text-anchor="middle">shared memory · Ethernet</text>
+    <defs>
+      <marker id="a" markerWidth="9" markerHeight="9" refX="4.5" refY="4.5" orient="auto">
+        <path class="svg-arrow" d="M0,0 L9,4.5 L0,9 Z"/>
+      </marker>
+    </defs>
+  </svg>
+  <div class="dg-cap">The stack. You program UCP; UCT abstracts each interconnect; UCS provides shared plumbing.</div>
+  </div>
+
+  <h3>UCS — Unified Communication Services</h3>
+  <p>The foundation. Pure software utilities with no networking of their own: lock-free queues and lists, memory pools, the asynchronous event engine, configuration parsing (every <code class="tt">UCX_*</code> environment variable flows through UCS), debugging and logging, and — critically for performance — the <strong>registration cache (rcache)</strong>. When you see <code class="tt">UCX_LOG_LEVEL</code>, <code class="tt">UCX_RCACHE_ENABLE</code>, or a backtrace printed on a fault, that is UCS.</p>
+
+  <h3>UCT — Unified Communication Transport</h3>
+  <p>The thin abstraction over each piece of hardware. UCT defines three object types that every transport driver implements: a <strong>memory domain</strong> (<code class="tt">uct_md</code>, which knows how to register/pin memory for a device), an <strong>interface</strong> (<code class="tt">uct_iface</code>, a communication resource on a device), and an <strong>endpoint</strong> (<code class="tt">uct_ep</code>, a connection to a remote interface). UCT exposes raw capabilities — "this transport can do zero-copy put up to N bytes, has hardware atomics, supports GPU memory" — but it does <em>not</em> decide which to use. UCT is deliberately dumb and fast; the intelligence lives in UCP.</p>
+
+  <h3>UCP — Unified Communication Protocol</h3>
+  <p>The brain and the public API. UCP takes a single logical operation ("send these 4 MB from this GPU buffer to that peer with this tag") and: fragments it if needed, selects between eager and rendezvous, picks one or several UCT transports (multi-rail), handles unexpected messages, matches tags, manages completion, and tracks the protocol state machine. <strong>This is the layer you write code against</strong> — virtually every symbol you call starts with <code class="tt">ucp_</code>.</p>
+
+  <div class="note">
+    <span class="tag">Reading-the-logs payoff</span>
+    <p>An error like <code class="tt">UCX ERROR no active messages transport</code> is a UCT-level complaint (no driver matched your request). A message about <code class="tt">rndv</code> thresholds or <code class="tt">eager</code> is UCP. A backtrace with <code class="tt">ucs_</code> frames is the services layer. The prefix tells you which layer to investigate.</p>
+  </div>
+</section>
+
+<section id="objects">
+  <h2><span class="num">§ 03</span>The Core Objects You Hold</h2>
+  <hr class="section-rule">
+  <p>UCP programming is the lifecycle management of five handle types. Internalize what each one <em>is</em>, how many you create, and its threading rules — most beginner bugs are object-lifecycle bugs.</p>
+
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Object</th><th>What it is</th><th>Cardinality</th><th>Thread rule</th></tr></thead>
+    <tbody>
+      <tr><td><code>ucp_context_h</code></td><td>Top-level container of resources &amp; config; created from <code>ucp_init</code>. Encapsulates which features (tag/RMA/AM) and transports you want.</td><td>Usually <strong>one per process</strong>.</td><td>Created once, shared read-only.</td></tr>
+      <tr><td><code>ucp_worker_h</code></td><td>The progress engine + a communication context. Owns the connection state and the completion queue. Has an <em>address</em> other peers connect to.</td><td><strong>One per thread</strong> (typical), or one per logical communication channel.</td><td><strong>Not thread-safe by default</strong> — one thread drives one worker, unless created <code>MULTI</code>.</td></tr>
+      <tr><td><code>ucp_ep_h</code></td><td>An endpoint: a connection from <em>your</em> worker to a <em>remote</em> worker. The thing you send/put/get on.</td><td>One per remote peer you talk to.</td><td>Belongs to its worker.</td></tr>
+      <tr><td><code>ucp_mem_h</code></td><td>A registered (pinned) memory region. Required for RMA targets; lets the NIC DMA directly.</td><td>One per region you expose for RMA.</td><td>Tied to the context.</td></tr>
+      <tr><td><code>ucp_rkey_h</code></td><td>A <em>remote</em> key: the unpacked handle that lets you put/get into a peer's registered memory.</td><td>One per remote region you access.</td><td>Per-endpoint use.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h4>The skeleton of every UCP program</h4>
+  <div class="code"><div class="head"><span class="name">lifecycle.c</span><span class="lang">C</span></div><pre data-lang="c">/* 1. Configure: read UCX_* env vars into a config object */
+ucp_config_t *config;
+ucp_config_read(NULL, NULL, &amp;config);
+
+/* 2. Create the context: declare which features you need.
+ *    UCX only initializes machinery for features you request. */
+ucp_params_t ucp_params = {
+    .field_mask = UCP_PARAM_FIELD_FEATURES,
+    .features   = UCP_FEATURE_TAG | UCP_FEATURE_RMA,
+};
+ucp_context_h context;
+ucp_init(&amp;ucp_params, config, &amp;context);
+ucp_config_release(config);
+
+/* 3. Create a worker (the progress engine for this thread) */
+ucp_worker_params_t worker_params = {
+    .field_mask  = UCP_WORKER_PARAM_FIELD_THREAD_MODE,
+    .thread_mode = UCS_THREAD_MODE_SINGLE,   /* this worker, one thread */
+};
+ucp_worker_h worker;
+ucp_worker_create(context, &amp;worker_params, &amp;worker);
+
+/* 4. ... establish endpoints, communicate (see later sections) ... */
+
+/* 5. Tear down in reverse order */
+ucp_worker_destroy(worker);
+ucp_cleanup(context);</pre></div>
+
+  <div class="note tip">
+    <span class="tag">The feature-mask discipline</span>
+    <p>You declare the <em>features</em> you need at context creation (<code class="tt">UCP_FEATURE_TAG</code>, <code class="tt">_RMA</code>, <code class="tt">_AM</code>, <code class="tt">_STREAM</code>, <code class="tt">_AMO32/64</code>, <code class="tt">_WAKEUP</code>). This is not bureaucracy — UCX uses it to avoid initializing transports/resources you'll never use, which trims memory and connection-setup cost. Request only what you use.</p>
+  </div>
+</section>
+<section id="transports">
+  <h2><span class="num">§ 04</span>Transports &amp; Memory Domains</h2>
+  <hr class="section-rule">
+  <p>A <strong>transport</strong> (TL) is a UCT driver for one way of moving bytes. UCX ships many, and at runtime it discovers which are usable on your machine, scores them, and selects per operation. You mostly don't name transports in code — you let UCX choose, and optionally constrain the set with <code class="tt">UCX_TLS</code>.</p>
+
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Transport</th><th>Medium</th><th>Use</th></tr></thead>
+    <tbody>
+      <tr><td><code>rc_verbs</code> / <code>rc_mlx5</code></td><td>InfiniBand / RoCE, Reliable Connected</td><td>Inter-node RDMA; reliable, per-peer QP. <code>mlx5</code> is the accelerated direct-verbs path.</td></tr>
+      <tr><td><code>ud_verbs</code> / <code>ud_mlx5</code></td><td>IB Unreliable Datagram</td><td>Scales to many peers with one QP; used for connection setup &amp; large jobs.</td></tr>
+      <tr><td><code>dc_mlx5</code></td><td>IB Dynamically Connected</td><td>Mellanox feature: RC-like performance with UD-like scalability. Great at large scale.</td></tr>
+      <tr><td><code>tcp</code></td><td>Ethernet / sockets</td><td>Portable fallback; works anywhere, slowest.</td></tr>
+      <tr><td><code>cma</code></td><td>Linux Cross-Memory-Attach</td><td>Intra-node: one process reads/writes another's address space via the kernel.</td></tr>
+      <tr><td><code>knem</code> / <code>xpmem</code></td><td>Kernel-assisted shared memory</td><td>Intra-node single-copy / zero-copy large transfers.</td></tr>
+      <tr><td><code>sysv</code> / <code>posix</code></td><td>Shared memory segments</td><td>Intra-node small messages.</td></tr>
+      <tr><td><code>self</code></td><td>Loopback</td><td>A worker talking to itself.</td></tr>
+      <tr><td><code>cuda_copy</code></td><td>CUDA H2D/D2H</td><td>Staging GPU↔host via <code>cudaMemcpy</code> when a direct path is unavailable.</td></tr>
+      <tr><td><code>cuda_ipc</code></td><td>CUDA IPC / NVLink</td><td><strong>Intra-node GPU↔GPU</strong> direct, peer-to-peer over NVLink/PCIe. Key for multi-GPU shuffle.</td></tr>
+      <tr><td><code>gdr_copy</code></td><td>GPUDirect RDMA via gdrcopy</td><td>Low-latency CPU access to GPU memory for small messages.</td></tr>
+      <tr><td><code>rocm_copy</code> / <code>rocm_ipc</code></td><td>AMD ROCm</td><td>The AMD-GPU analogues.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>Memory domains and the registration problem</h3>
+  <p>To let a NIC DMA directly into your buffer, the OS must <em>pin</em> the pages (they can't be swapped or moved) and the device must be told about them — this is <strong>memory registration</strong> (<code class="tt">ibv_reg_mr</code> under the hood). It is expensive: a syscall, page-table walks, and device setup. A <code class="tt">uct_md</code> (memory domain) is the object that performs registration for a given device class.</p>
+  <p>This single fact drives a large fraction of UCX's design and tuning. Registration cost is why UCX has a <strong>registration cache</strong> (reuse a registration for a buffer you send from repeatedly), why <strong>rendezvous</strong> exists (register once, RDMA the bulk), and why pre-registering long-lived buffers is the number-one application-level performance lever.</p>
+
+  <div class="note">
+    <span class="tag">Memory type awareness</span>
+    <p>UCX inspects pointers to learn their memory type — host, CUDA device, CUDA managed, ROCm — using driver queries (<code class="tt">cuPointerGetAttribute</code>) cached in a <strong>memtype cache</strong>. This is how a single <code class="tt">ucp_tag_send_nbx</code> on a GPU pointer transparently routes through <code class="tt">cuda_ipc</code> or GPUDirect RDMA without you writing any GPU-specific transfer code. Inspect what UCX detected with <code class="tt">ucx_info -d</code>.</p>
+  </div>
+</section>
+
+<section id="primitives">
+  <h2><span class="num">§ 05</span>The Five Communication Primitives</h2>
+  <hr class="section-rule">
+  <p>UCP exposes five families of operations. Picking the right one is a design decision, not a detail — it determines your synchronization model and how much the receiver needs to know in advance.</p>
+
+  <h3>1 · Tag-matched messaging — the MPI-like model</h3>
+  <p>Two-sided. The sender attaches a 64-bit <em>tag</em>; the receiver posts a receive with a tag and a 64-bit mask, and UCX matches incoming messages against posted receives. This is the foundation MPI's point-to-point sits on (tag ≈ encode of rank/communicator/MPI-tag). Either side may arrive first; unmatched arrivals wait in an <em>unexpected</em> queue.</p>
+  <div class="code"><div class="head"><span class="name">tag.c</span><span class="lang">C</span></div><pre data-lang="c">/* sender */                ucp_tag_send_nbx(ep, buf, len, tag, &amp;param);
+/* receiver (exact tag) */  ucp_tag_recv_nbx(worker, buf, len, tag, /*mask*/ -1, &amp;param);
+/* receiver (wildcard)   */ ucp_tag_recv_nbx(worker, buf, len, tag, /*mask*/ 0,  &amp;param);
+/* peek without consuming */ ucp_tag_probe_nb(worker, tag, mask, /*remove*/0, &amp;info);</pre></div>
+
+  <h3>2 · Stream — ordered bytes, no tags</h3>
+  <p>Two-sided but connection-oriented and byte-oriented, like a TCP socket: bytes pushed on one end arrive in order on the other, with no message boundaries or tags. Use it when you have an established peer relationship and want simple ordered flow. <code class="tt">ucp_stream_send_nbx</code> / <code class="tt">ucp_stream_recv_nbx</code>.</p>
+
+  <h3>3 · RMA — one-sided put / get</h3>
+  <p>The sender (origin) reads or writes the remote (target) memory <em>without the target's CPU participating</em> in each transfer. The target registers memory once and hands out an <code class="tt">rkey</code>; thereafter the origin issues <code class="tt">ucp_put_nbx</code> / <code class="tt">ucp_get_nbx</code> directly to a remote address. This is the model that exploits RDMA hardware most fully and underpins MPI one-sided windows and PGAS languages.</p>
+  <div class="code"><div class="head"><span class="name">rma.c</span><span class="lang">C</span></div><pre data-lang="c">/* target: register &amp; publish a key */
+ucp_mem_map(context, &amp;map_params, &amp;memh);
+void *rkey_buf; size_t rkey_sz;
+ucp_rkey_pack(context, memh, &amp;rkey_buf, &amp;rkey_sz);   /* send rkey_buf to origin via OOB */
+
+/* origin: unpack the key, then write directly into remote memory */
+ucp_ep_rkey_unpack(ep, rkey_buf, &amp;rkey);
+ucp_put_nbx(ep, local_src, len, remote_addr, rkey, &amp;param);
+ucp_ep_flush_nbx(ep, &amp;param);   /* ensure remote completion */</pre></div>
+
+  <h3>4 · Atomics — remote read-modify-write</h3>
+  <p>Hardware-offloaded atomic operations on remote memory: add, and, or, xor, swap, compare-and-swap, on 32/64-bit words. <code class="tt">ucp_atomic_op_nbx</code>. The building block for distributed counters, locks, and work-stealing queues — done by the NIC, not the remote CPU.</p>
+
+  <h3>5 · Active Messages — handler dispatch</h3>
+  <p>The most flexible primitive and the modern favorite for framework builders. The sender attaches a small <em>header</em> + payload to a numeric <em>AM id</em>; the receiver has pre-registered a callback for that id which fires on arrival. The handler decides what to do — copy now, defer, or trigger a rendezvous pull of a large payload. RAPIDS/UCX-Py and many custom runtimes are built on AM because it cleanly separates control (header) from bulk (payload).</p>
+  <div class="code"><div class="head"><span class="name">am.c</span><span class="lang">C</span></div><pre data-lang="c">/* receiver: register a handler for AM id 7 */
+ucp_am_handler_param_t h = {
+    .field_mask = UCP_AM_HANDLER_PARAM_FIELD_ID |
+                  UCP_AM_HANDLER_PARAM_FIELD_CB,
+    .id = 7, .cb = my_am_recv_cb,
+};
+ucp_worker_set_am_recv_handler(worker, &amp;h);
+
+/* sender: fire it with a header and a payload */
+ucp_am_send_nbx(ep, /*id*/7, hdr, hdr_len, payload, payload_len, &amp;param);</pre></div>
+
+  <div class="note tip">
+    <span class="tag">Choosing a primitive</span>
+    <p>Porting MPI-style code → <strong>tag</strong>. Socket-like ordered pipe → <strong>stream</strong>. Big bulk transfers where one side owns the schedule → <strong>RMA</strong>. Distributed coordination → <strong>atomics</strong>. Building a new runtime / RPC-ish protocol with control + bulk separation → <strong>active messages</strong>.</p>
+  </div>
+</section>
+
+<section id="nbx">
+  <h2><span class="num">§ 06</span>The <code>nbx</code> Request Model</h2>
+  <hr class="section-rule">
+  <p>Every modern UCP operation ends in <code class="tt">_nbx</code> ("non-blocking, extended") and takes a single <code class="tt">ucp_request_param_t</code> describing <em>how</em> you want it done and completed. This unified parameter struct replaced the older fixed-signature <code class="tt">_nb</code> / <code class="tt">_nbi</code> calls; learn it once and every operation looks the same.</p>
+
+  <h3>The three-valued return — the contract you must handle</h3>
+  <p>An <code class="tt">_nbx</code> call returns a <code class="tt">ucs_status_ptr_t</code>, which is one of three things. Mishandling this is the single most common UCX bug.</p>
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Return</th><th>Meaning</th><th>What you do</th></tr></thead>
+    <tbody>
+      <tr><td><code>NULL</code></td><td>Completed <strong>immediately</strong> and in-line.</td><td>Nothing — it's done. Do <em>not</em> free anything.</td></tr>
+      <tr><td><code>UCS_PTR_IS_ERR(p)</code></td><td>Failed synchronously.</td><td>Read <code>UCS_PTR_STATUS(p)</code>; handle the error.</td></tr>
+      <tr><td>a valid request pointer</td><td><strong>In progress.</strong> A request handle was allocated.</td><td>Drive <code>ucp_worker_progress</code> until done, then <strong>you must</strong> <code>ucp_request_free(p)</code>.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>The canonical "wait for one request" helper</h3>
+  <div class="code"><div class="head"><span class="name">request_wait.c</span><span class="lang">C</span></div><pre data-lang="c">ucs_status_t request_wait(ucp_worker_h worker, void *request)
+{
+    /* Immediate completion: nothing was allocated. */
+    if (request == NULL)
+        return UCS_OK;
+
+    /* Synchronous failure. */
+    if (UCS_PTR_IS_ERR(request))
+        return UCS_PTR_STATUS(request);
+
+    /* In progress: pump the engine until the status settles. */
+    ucs_status_t status;
+    do {
+        ucp_worker_progress(worker);              /* advance the state machine */
+        status = ucp_request_check_status(request);
+    } while (status == UCS_INPROGRESS);
+
+    ucp_request_free(request);                    /* MUST free the handle */
+    return status;
+}</pre></div>
+
+  <h3>Anatomy of <code>ucp_request_param_t</code></h3>
+  <p>You only set the fields named in <code class="tt">op_attr_mask</code>; everything else is ignored. This is how one struct serves every operation.</p>
+  <div class="code"><div class="head"><span class="name">param.c</span><span class="lang">C</span></div><pre data-lang="c">ucp_request_param_t param = {
+    /* declare which fields below are valid */
+    .op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK  |   /* I'm providing a completion cb */
+                    UCP_OP_ATTR_FIELD_USER_DATA |   /* ...with this user pointer */
+                    UCP_OP_ATTR_FIELD_DATATYPE  |   /* ...and a non-contiguous datatype */
+                    UCP_OP_ATTR_FIELD_MEMORY_TYPE,  /* ...and I'll tell you the mem type */
+
+    .cb.send      = my_send_complete_cb,            /* fires on async completion */
+    .user_data    = my_context,                     /* passed back to the cb */
+    .datatype     = ucp_dt_make_contig(1),          /* bytes; or iov/generic */
+    .memory_type  = UCS_MEMORY_TYPE_CUDA,           /* skip detection: it's GPU mem */
+};
+
+/* Useful flags you can OR into op_attr_mask:                              */
+/*  UCP_OP_ATTR_FLAG_NO_IMM_CMPL  -> always return a request, never NULL   */
+/*  UCP_OP_ATTR_FLAG_FAST_CMPL    -> optimize for latency over bandwidth   */
+/*  UCP_OP_ATTR_FIELD_FLAGS + UCP_AM_SEND_FLAG_EAGER/_RNDV (AM hinting)    */</pre></div>
+
+  <div class="note">
+    <span class="tag">Callback vs. polling</span>
+    <p>Two completion styles: (1) <strong>poll</strong> with <code class="tt">ucp_request_check_status</code> while calling <code class="tt">ucp_worker_progress</code> (the helper above), or (2) register a <strong>callback</strong> via <code class="tt">.cb.send</code>/<code class="tt">.cb.recv</code> that UCX invokes from inside <code class="tt">ucp_worker_progress</code> when the op finishes. Either way, <em>progress must be driven</em> — callbacks do not fire on a background thread unless you've set that up explicitly.</p>
+  </div>
+  <div class="note warn">
+    <span class="tag">If you're reading old tutorials</span>
+    <p>Code calling <code class="tt">ucp_tag_send_nb</code> (no <em>x</em>) with a bare callback argument is the deprecated pre-1.9 API. The signatures differ and the docs steer you to <code class="tt">_nbx</code>. Don't mix the two families; port to <code class="tt">_nbx</code>.</p>
+  </div>
+</section>
+<section id="build">
+  <h2><span class="num">§ 07</span>Install &amp; Build</h2>
+  <hr class="section-rule">
+  <p>Get UCX present and capable first; nothing else matters if your build lacks the transports your hardware needs. The configure-time flags determine which transports compile in — a UCX without <code class="tt">--with-cuda</code> simply <em>cannot</em> do GPU transfers no matter what you set at runtime.</p>
+
+  <div class="code"><div class="head"><span class="name">build-from-source.sh</span><span class="lang">bash</span></div><pre data-lang="bash"># Distro packages exist (apt install libucx-dev), but source build lets you
+# control which transports are enabled — important for IB + CUDA setups.
+git clone https://github.com/openucx/ucx.git
+cd ucx
+./autogen.sh
+./contrib/configure-release \
+    --prefix=$HOME/ucx-install \
+    --with-cuda=/usr/local/cuda \   # GPU support: cuda_copy, cuda_ipc, gdr
+    --with-gdrcopy \                 # low-latency GPU memory access
+    --with-verbs \                   # InfiniBand / RoCE
+    --enable-mt                      # multi-threaded workers
+make -j$(nproc)
+make install
+
+# Verify the install knows about your hardware:
+$HOME/ucx-install/bin/ucx_info -v     # version + which features compiled in
+$HOME/ucx-install/bin/ucx_info -d     # devices + transports actually available</pre></div>
+
+  <p>Compile and link an application against UCP:</p>
+  <div class="code"><div class="head"><span class="name">compile.sh</span><span class="lang">bash</span></div><pre data-lang="bash">gcc myapp.c -o myapp \
+    -I$HOME/ucx-install/include \
+    -L$HOME/ucx-install/lib -lucp -lucs -luct \
+    -Wl,-rpath,$HOME/ucx-install/lib
+
+# Ships with reference programs — read these, they are excellent:
+#   ucx_perftest        microbenchmark for latency/bandwidth of every primitive
+#   examples/ucp_hello_world.c     tag send/recv with TCP-socket OOB exchange
+#   examples/ucp_client_server.c   listener-based connection (no external OOB)</pre></div>
+
+  <div class="note tip">
+    <span class="tag">First thing to run on any new node</span>
+    <p><code class="tt">ucx_perftest</code> tells you instantly whether the fast path works. On the server: <code class="tt">ucx_perftest -t tag_lat</code>; on the client: <code class="tt">ucx_perftest &lt;server&gt; -t tag_lat</code>. Compare latency/bandwidth against the hardware's spec sheet — if a 200 Gb/s NIC delivers 10 Gb/s, you're on TCP or a wrong device, and you know it before writing a line of code.</p>
+  </div>
+</section>
+
+<section id="hello">
+  <h2><span class="num">§ 08</span>Hello World</h2>
+  <hr class="section-rule">
+  <p>The smallest meaningful program: bring up the stack, connect a worker to itself via the <code class="tt">self</code> transport, and send a tagged message from a worker to itself. It exercises the full send/recv path with zero networking complexity, so when it works you know your build, link, and lifecycle logic are sound.</p>
+
+  <div class="code"><div class="head"><span class="name">hello.c — self-loopback tag send/recv</span><span class="lang">C</span></div><pre data-lang="c">#include &lt;ucp/api/ucp.h&gt;
+#include &lt;string.h&gt;
+#include &lt;stdio.h&gt;
+
+static ucs_status_t wait_req(ucp_worker_h w, void *r) {
+    if (r == NULL) return UCS_OK;
+    if (UCS_PTR_IS_ERR(r)) return UCS_PTR_STATUS(r);
+    ucs_status_t s;
+    do { ucp_worker_progress(w); s = ucp_request_check_status(r); }
+    while (s == UCS_INPROGRESS);
+    ucp_request_free(r);
+    return s;
+}
+
+int main(void) {
+    /* --- bring up context + worker --- */
+    ucp_config_t *cfg; ucp_config_read(NULL, NULL, &amp;cfg);
+    ucp_params_t cp = { .field_mask = UCP_PARAM_FIELD_FEATURES,
+                        .features   = UCP_FEATURE_TAG };
+    ucp_context_h ctx; ucp_init(&amp;cp, cfg, &amp;ctx); ucp_config_release(cfg);
+
+    ucp_worker_params_t wp = { .field_mask = UCP_WORKER_PARAM_FIELD_THREAD_MODE,
+                               .thread_mode = UCS_THREAD_MODE_SINGLE };
+    ucp_worker_h w; ucp_worker_create(ctx, &amp;wp, &amp;w);
+
+    /* --- connect the worker to ITSELF via its own address --- */
+    ucp_address_t *addr; size_t addr_len;
+    ucp_worker_get_address(w, &amp;addr, &amp;addr_len);
+    ucp_ep_params_t ep_p = { .field_mask = UCP_EP_PARAM_FIELD_REMOTE_ADDRESS,
+                             .address = addr };
+    ucp_ep_h ep; ucp_ep_create(w, &amp;ep_p, &amp;ep);
+    ucp_worker_release_address(w, addr);
+
+    /* --- send "hello, ucx" to ourselves with tag 0x42 --- */
+    const char *msg = "hello, ucx";
+    char recv_buf[64] = {0};
+    ucp_request_param_t prm = { .op_attr_mask = 0 };
+
+    void *sreq = ucp_tag_send_nbx(ep, msg, strlen(msg)+1, 0x42, &amp;prm);
+    void *rreq = ucp_tag_recv_nbx(w, recv_buf, sizeof(recv_buf),
+                                  0x42, /*mask*/ (ucp_tag_t)-1, &amp;prm);
+    wait_req(w, sreq);
+    wait_req(w, rreq);
+    printf("received: \"%s\"\n", recv_buf);   /* -> received: "hello, ucx" */
+
+    /* --- teardown --- */
+    void *creq = ucp_ep_close_nbx(ep, &amp;prm); wait_req(w, creq);
+    ucp_worker_destroy(w);
+    ucp_cleanup(ctx);
+    return 0;
+}</pre></div>
+
+  <div class="note">
+    <span class="tag">What this proves</span>
+    <p>Address-based connection (<code class="tt">ucp_worker_get_address</code> → <code class="tt">ucp_ep_create</code> with <code class="tt">REMOTE_ADDRESS</code>) is exactly the mechanism used between real nodes — the only difference there is that the address travels over an out-of-band channel instead of staying in-process. Master this and the two-process version is a small step.</p>
+  </div>
+</section>
+
+<section id="pingpong">
+  <h2><span class="num">§ 09</span>Full Ping-Pong: Client &amp; Server</h2>
+  <hr class="section-rule">
+  <p>Now the real thing across two processes/nodes, using the <strong>listener (client-server) connection model</strong> — UCX's built-in TCP-based bootstrap, so you don't need MPI or your own socket code to exchange addresses. The client connects to <code class="tt">host:port</code>; UCX establishes the endpoints; then they bounce a tagged message back and forth N times.</p>
+
+  <h4>The connection model in one picture</h4>
+  <div class="diagram">
+  <svg viewBox="0 0 720 250" xmlns="http://www.w3.org/2000/svg">
+    <rect class="svg-box-b" x="30" y="30" width="280" height="190" rx="10"/>
+    <text class="svg-label" x="170" y="54" text-anchor="middle">SERVER</text>
+    <rect class="svg-box" x="55" y="70" width="230" height="34" rx="6"/>
+    <text class="svg-sub" x="170" y="91" text-anchor="middle">ucp_listener_create(host:port)</text>
+    <rect class="svg-box" x="55" y="116" width="230" height="34" rx="6"/>
+    <text class="svg-sub" x="170" y="137" text-anchor="middle">conn_cb(conn_request) fires</text>
+    <rect class="svg-box-a" x="55" y="162" width="230" height="40" rx="6"/>
+    <text class="svg-sub" x="170" y="179" text-anchor="middle">ucp_ep_create(</text>
+    <text class="svg-sub" x="170" y="194" text-anchor="middle">CONN_REQUEST)</text>
+
+    <rect class="svg-box-c" x="410" y="30" width="280" height="190" rx="10"/>
+    <text class="svg-label" x="550" y="54" text-anchor="middle">CLIENT</text>
+    <rect class="svg-box-a" x="435" y="70" width="230" height="40" rx="6"/>
+    <text class="svg-sub" x="550" y="87" text-anchor="middle">ucp_ep_create(</text>
+    <text class="svg-sub" x="550" y="102" text-anchor="middle">SOCK_ADDR=host:port)</text>
+    <rect class="svg-box" x="435" y="122" width="230" height="34" rx="6"/>
+    <text class="svg-sub" x="550" y="143" text-anchor="middle">tag_send / tag_recv loop</text>
+
+    <line class="svg-line" x1="435" y1="90" x2="290" y2="90" marker-end="url(#b)" stroke-dasharray="5 4"/>
+    <text class="svg-sub" x="362" y="80" text-anchor="middle">TCP connect</text>
+    <line class="svg-line" x1="290" y1="182" x2="435" y2="139" marker-end="url(#b)"/>
+    <text class="svg-sub" x="362" y="175" text-anchor="middle">endpoints up · data flows</text>
+    <defs><marker id="b" markerWidth="9" markerHeight="9" refX="4.5" refY="4.5" orient="auto"><path class="svg-arrow" d="M0,0 L9,4.5 L0,9 Z"/></marker></defs>
+  </svg>
+  <div class="dg-cap">Listener model: the server publishes an address; UCX handles the handshake; both sides get a connected <code>ucp_ep_h</code>.</div>
+  </div>
+
+  <h4>Shared scaffolding</h4>
+  <div class="code"><div class="head"><span class="name">pingpong.c — common</span><span class="lang">C</span></div><pre data-lang="c">#include &lt;ucp/api/ucp.h&gt;
+#include &lt;netinet/in.h&gt;
+#include &lt;arpa/inet.h&gt;
+#include &lt;string.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+
+#define PORT      13337
+#define ITERS     10
+#define TAG       0xCAFE
+#define MSG_LEN   64
+
+/* drive a single request to completion */
+static ucs_status_t wait_req(ucp_worker_h w, void *r) {
+    if (r == NULL)            return UCS_OK;
+    if (UCS_PTR_IS_ERR(r))    return UCS_PTR_STATUS(r);
+    ucs_status_t s;
+    do { ucp_worker_progress(w); s = ucp_request_check_status(r); }
+    while (s == UCS_INPROGRESS);
+    ucp_request_free(r);
+    return s;
+}
+
+/* one blocking send + one blocking recv on the same tag */
+static void send_msg(ucp_worker_h w, ucp_ep_h ep, void *buf, size_t len) {
+    ucp_request_param_t p = { .op_attr_mask = 0 };
+    wait_req(w, ucp_tag_send_nbx(ep, buf, len, TAG, &amp;p));
+}
+static void recv_msg(ucp_worker_h w, void *buf, size_t len) {
+    ucp_request_param_t p = { .op_attr_mask = 0 };
+    wait_req(w, ucp_tag_recv_nbx(w, buf, len, TAG, (ucp_tag_t)-1, &amp;p));
+}
+
+/* boot a context+worker requesting the TAG feature */
+static void boot(ucp_context_h *ctx, ucp_worker_h *w) {
+    ucp_config_t *cfg; ucp_config_read(NULL, NULL, &amp;cfg);
+    ucp_params_t cp = { .field_mask = UCP_PARAM_FIELD_FEATURES,
+                        .features   = UCP_FEATURE_TAG };
+    ucp_init(&amp;cp, cfg, ctx); ucp_config_release(cfg);
+    ucp_worker_params_t wp = { .field_mask = UCP_WORKER_PARAM_FIELD_THREAD_MODE,
+                               .thread_mode = UCS_THREAD_MODE_SINGLE };
+    ucp_worker_create(*ctx, &amp;wp, w);
+}</pre></div>
+
+  <h4>Server side</h4>
+  <div class="code"><div class="head"><span class="name">pingpong.c — server</span><span class="lang">C</span></div><pre data-lang="c">/* The listener stores the incoming connection request here so main() can
+ * turn it into an endpoint. (A real server would queue multiple.) */
+typedef struct { volatile ucp_conn_request_h req; } server_ctx_t;
+
+/* fires on the worker's progress thread when a client connects */
+static void on_connect(ucp_conn_request_h conn_request, void *arg) {
+    server_ctx_t *s = arg;
+    s->req = conn_request;                 /* hand it to main loop */
+}
+
+int run_server(void) {
+    ucp_context_h ctx; ucp_worker_h w;
+    boot(&amp;ctx, &amp;w);
+
+    server_ctx_t sctx = { .req = NULL };
+
+    /* bind a listener to 0.0.0.0:PORT with our connect callback */
+    struct sockaddr_in sa = { .sin_family = AF_INET,
+                              .sin_addr.s_addr = INADDR_ANY,
+                              .sin_port = htons(PORT) };
+    ucp_listener_params_t lp = {
+        .field_mask = UCP_LISTENER_PARAM_FIELD_SOCK_ADDR |
+                      UCP_LISTENER_PARAM_FIELD_CONN_HANDLER,
+        .sockaddr   = { .addr = (const struct sockaddr*)&amp;sa, .addrlen = sizeof(sa) },
+        .conn_handler = { .cb = on_connect, .arg = &amp;sctx },
+    };
+    ucp_listener_h listener;
+    ucp_listener_create(w, &amp;lp, &amp;listener);
+    printf("server: listening on :%d\n", PORT);
+
+    /* spin progress until a connection request arrives */
+    while (sctx.req == NULL) ucp_worker_progress(w);
+
+    /* accept: build an endpoint from the connection request */
+    ucp_ep_params_t ep_p = {
+        .field_mask   = UCP_EP_PARAM_FIELD_CONN_REQUEST,
+        .conn_request = sctx.req,
+    };
+    ucp_ep_h ep; ucp_ep_create(w, &amp;ep_p, &amp;ep);
+    printf("server: client connected\n");
+
+    /* PONG: receive then echo back, ITERS times */
+    char buf[MSG_LEN];
+    for (int i = 0; i &lt; ITERS; i++) {
+        recv_msg(w, buf, MSG_LEN);
+        printf("server: got  '%s'\n", buf);
+        send_msg(w, ep, buf, MSG_LEN);     /* bounce it back */
+    }
+
+    ucp_request_param_t p = { .op_attr_mask = 0 };
+    wait_req(w, ucp_ep_close_nbx(ep, &amp;p));
+    ucp_listener_destroy(listener);
+    ucp_worker_destroy(w); ucp_cleanup(ctx);
+    return 0;
+}</pre></div>
+
+  <h4>Client side</h4>
+  <div class="code"><div class="head"><span class="name">pingpong.c — client</span><span class="lang">C</span></div><pre data-lang="c">int run_client(const char *server_ip) {
+    ucp_context_h ctx; ucp_worker_h w;
+    boot(&amp;ctx, &amp;w);
+
+    /* connect an endpoint straight to the server's sockaddr */
+    struct sockaddr_in sa = { .sin_family = AF_INET, .sin_port = htons(PORT) };
+    inet_pton(AF_INET, server_ip, &amp;sa.sin_addr);
+
+    ucp_ep_params_t ep_p = {
+        .field_mask = UCP_EP_PARAM_FIELD_FLAGS |
+                      UCP_EP_PARAM_FIELD_SOCK_ADDR,
+        .flags      = UCP_EP_PARAMS_FLAGS_CLIENT_SERVER,
+        .sockaddr   = { .addr = (const struct sockaddr*)&amp;sa, .addrlen = sizeof(sa) },
+    };
+    ucp_ep_h ep; ucp_ep_create(w, &amp;ep_p, &amp;ep);
+    printf("client: connected to %s:%d\n", server_ip, PORT);
+
+    /* PING: send then await echo, timing the round trip */
+    char buf[MSG_LEN];
+    for (int i = 0; i &lt; ITERS; i++) {
+        snprintf(buf, MSG_LEN, "ping #%d", i);
+        send_msg(w, ep, buf, MSG_LEN);
+        recv_msg(w, buf, MSG_LEN);
+        printf("client: echo '%s'\n", buf);
+    }
+
+    ucp_request_param_t p = { .op_attr_mask = 0 };
+    wait_req(w, ucp_ep_close_nbx(ep, &amp;p));
+    ucp_worker_destroy(w); ucp_cleanup(ctx);
+    return 0;
+}
+
+int main(int argc, char **argv) {
+    /* usage:  ./pingpong            -> server
+     *         ./pingpong 10.0.0.5   -> client connecting to that server */
+    return (argc &gt; 1) ? run_client(argv[1]) : run_server();
+}</pre></div>
+
+  <div class="note tip">
+    <span class="tag">Run it</span>
+    <p>Terminal A (server): <code class="tt">./pingpong</code> &nbsp;·&nbsp; Terminal B (client): <code class="tt">./pingpong 127.0.0.1</code>. Across nodes, replace with the server's IP <em>on the fabric you want</em> — and set <code class="tt">UCX_TLS</code>/<code class="tt">UCX_NET_DEVICES</code> so the data plane uses IB/RoCE even though the bootstrap used the management network. Add <code class="tt">UCX_PROTO_INFO=y</code> to watch which protocol UCX picked for each message size.</p>
+  </div>
+</section>
+<section id="progress">
+  <h2><span class="num">§ 10</span>The Progress Engine</h2>
+  <hr class="section-rule">
+  <p>UCX is fundamentally a <strong>polled, run-to-completion state machine</strong>. Nothing advances unless someone calls <code class="tt">ucp_worker_progress(worker)</code>. This is the mental model that resolves most "my program hangs" confusion: a posted send/recv is just a promise; <code class="tt">progress</code> is the engine that fulfills it — pumping the NIC completion queues, matching tags, advancing rendezvous handshakes, and firing your callbacks.</p>
+
+  <div class="code"><div class="head"><span class="name">progress.c</span><span class="lang">C</span></div><pre data-lang="c">/* Returns nonzero if any work was performed. Cheap to call in a tight loop. */
+unsigned ucp_worker_progress(ucp_worker_h worker);
+
+/* The "I have nothing else to do, wake me on an event" path (needs
+   UCP_FEATURE_WAKEUP) — avoids burning a core spinning: */
+int efd; ucp_worker_get_efd(worker, &amp;efd);     /* an epoll-able fd */
+for (;;) {
+    if (work_pending) { ucp_worker_progress(worker); continue; }
+    ucp_worker_arm(worker);                     /* arm before blocking */
+    epoll_wait(epfd, &amp;ev, 1, -1);                /* sleep until the NIC signals */
+    ucp_worker_progress(worker);
+}</pre></div>
+
+  <div class="note warn">
+    <span class="tag">The #1 hang</span>
+    <p>You post a receive, then block waiting for it inside a loop that <em>doesn't call progress</em>. Nothing arrives because nothing is pumping the engine. Every blocking wait must include a <code class="tt">ucp_worker_progress</code> call (as the helper in §06 does). Symmetrically, a callback that never fires almost always means progress isn't being driven on that worker.</p>
+  </div>
+  <div class="note">
+    <span class="tag">Threading</span>
+    <p>A default worker is <code class="tt">UCS_THREAD_MODE_SINGLE</code> — exactly one thread may touch it. For multi-threaded designs you either (a) give each thread its own worker (the common, scalable choice), or (b) build with <code class="tt">--enable-mt</code> and create the worker <code class="tt">UCS_THREAD_MODE_MULTI</code>, accepting the locking overhead. Per-thread workers is why the worker, not the context, is the unit of concurrency.</p>
+  </div>
+</section>
+
+<section id="internals">
+  <h2><span class="num">§ 11</span>How It Works: Protocols &amp; Internals</h2>
+  <hr class="section-rule">
+  <p>When you hand UCP a buffer, it doesn't just "send" — it chooses a <em>protocol</em> based on message size, memory type, and transport capabilities. The three families below are the heart of UCX's performance, and their thresholds are the knobs you tune most.</p>
+
+  <h3>Eager — small messages, copy-based</h3>
+  <p>For small payloads, UCX sends the data <em>immediately</em>, optionally inlined into the transport header (the "short" path) or copied into a pre-registered bounce buffer ("bcopy"). If the receiver hasn't posted a matching receive yet, the data lands in an <strong>unexpected queue</strong> and is copied to the user buffer once the receive appears. The cost is the copy; the win is no handshake — for tiny messages, latency is dominated by round trips, so eager's single one-way trip is optimal.</p>
+
+  <h3>Rendezvous (rndv) — large messages, zero-copy</h3>
+  <p>For large payloads, copying is the enemy and registration must be amortized. The <strong>rendezvous protocol</strong> negotiates first, then moves bulk data by RDMA with no intermediate copy:</p>
+  <div class="diagram">
+  <svg viewBox="0 0 720 220" xmlns="http://www.w3.org/2000/svg">
+    <text class="svg-label" x="110" y="28" text-anchor="middle">SENDER</text>
+    <text class="svg-label" x="610" y="28" text-anchor="middle">RECEIVER</text>
+    <line class="svg-line" x1="110" y1="40" x2="110" y2="200"/>
+    <line class="svg-line" x1="610" y1="40" x2="610" y2="200"/>
+    <line class="svg-line" x1="110" y1="62" x2="610" y2="62" marker-end="url(#c)"/>
+    <text class="svg-sub" x="360" y="55" text-anchor="middle">RTS — "I have N bytes" + address/rkey</text>
+    <line class="svg-line" x1="610" y1="104" x2="110" y2="104" marker-end="url(#c)" stroke-dasharray="5 4"/>
+    <text class="svg-sub" x="360" y="97" text-anchor="middle">(matches a posted recv; chooses get vs put)</text>
+    <line class="svg-line" x1="610" y1="146" x2="110" y2="146" marker-end="url(#c)" stroke="var(--accent)" stroke-width="2.5"/>
+    <text class="svg-sub" x="360" y="139" text-anchor="middle" style="fill:var(--accent)">RDMA GET — receiver pulls data zero-copy (get_zcopy)</text>
+    <line class="svg-line" x1="110" y1="188" x2="610" y2="188" marker-end="url(#c)"/>
+    <text class="svg-sub" x="360" y="181" text-anchor="middle">ATS / completion — both sides notified</text>
+    <defs><marker id="c" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path class="svg-arrow" d="M0,0 L8,4 L0,8 Z"/></marker></defs>
+  </svg>
+  <div class="dg-cap">Rendezvous: a control handshake, then a single zero-copy RDMA. The data never touches a bounce buffer.</div>
+  </div>
+  <p>The crossover between eager and rendezvous is <code class="tt">UCX_RNDV_THRESH</code> (default <code class="tt">auto</code>, derived from the hardware). The scheme — receiver-driven <code class="tt">get_zcopy</code> vs sender-driven <code class="tt">put_zcopy</code> vs <code class="tt">auto</code> — is <code class="tt">UCX_RNDV_SCHEME</code>.</p>
+
+  <h3>Multi-rail striping</h3>
+  <p>If a node has several NICs (or several ports), UCX can split one large rendezvous transfer across them in parallel — "rails" — to aggregate bandwidth. <code class="tt">UCX_MAX_RNDV_RAILS</code> and lane limits control this. The same machinery picks multiple <em>lanes</em> for eager messages too.</p>
+
+  <h3>The registration cache (rcache)</h3>
+  <p>Because <code class="tt">ibv_reg_mr</code> is so costly, UCX keeps a cache (in UCS) of registrations keyed by virtual address range. The first zero-copy send from a buffer registers it; subsequent sends from the same (or overlapping) buffer reuse the registration for free. This is why <strong>reusing long-lived buffers</strong> dramatically outperforms registering fresh memory per transfer — and why a buggy allocator that recycles addresses with different sizes can cause subtle rcache invalidation stalls.</p>
+
+  <div class="note deep">
+    <span class="tag">Connection establishment, under the hood</span>
+    <p>Whether via address-exchange or the listener, the result is a <em>wire-up</em>: UCX picks transports usable between the two workers, creates the underlying UCT endpoints (e.g. IB queue pairs), and may use a scalable transport (UD/DC) for the handshake before promoting to RC for bulk data. Large-scale jobs lean on DC precisely so that connection state doesn't grow O(peers²).</p>
+  </div>
+</section>
+
+<section id="costmodel">
+  <h2><span class="num">§ 12</span>Protocol Selection as Cost-Model Compilation</h2>
+  <hr class="section-rule">
+  <p>This is the conceptual core of modern UCX, and it will feel familiar if you think about query planners. UCX does not hardcode "use eager below X, rendezvous above X." The newer protocol framework (often called <em>protocols v2</em>) builds an explicit <strong>performance cost model</strong> and picks the protocol with the lowest <em>estimated time</em> for each operation — exactly analogous to a cost-based optimizer choosing a physical plan from logical operators.</p>
+
+  <h3>The compilation analogy</h3>
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Query planner</th><th>UCX protocol engine</th></tr></thead>
+    <tbody>
+      <tr><td>Logical operation (join, scan)</td><td>Logical op: "send N bytes, this mem type, this peer"</td></tr>
+      <tr><td>Physical plan candidates (hash vs merge join)</td><td>Candidate protocols: short / eager-bcopy / eager-zcopy / rndv-get / rndv-put / multi-rail split</td></tr>
+      <tr><td>Cost model over cardinality &amp; I/O</td><td>Cost model over message size, per-transport latency &amp; bandwidth, registration cost, NIC count</td></tr>
+      <tr><td>Choose min-cost plan, cache it</td><td>Choose min-estimated-time protocol, memoize per (size-range, mem-type, peer)</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <p>Each candidate protocol contributes a piece-wise linear cost <em>latency + size / bandwidth</em> (plus fixed overheads like registration or handshake round trips). UCX evaluates these across the message-size axis and selects, for each size range, the protocol whose modeled time is lowest. The result is effectively a <strong>compiled dispatch table</strong> from (message size, memory type, peer) → concrete transport plan. This is precisely the "compile a logical topology/plan from a physical cost model" framing — the physical fabric's measured costs determine the logical send strategy.</p>
+
+  <div class="code"><div class="head"><span class="name">inspect-the-plan.sh</span><span class="lang">bash</span></div><pre data-lang="bash"># Print the protocol decisions UCX compiled for your run — invaluable:
+UCX_PROTO_INFO=y ./pingpong 127.0.0.1
+# Shows, per operation and size range, the chosen protocol + the lanes/transports,
+# e.g. "tag_send(eager_short)" for tiny msgs, "tag_send(rndv/get_zcopy)" for large,
+# and which device(s) each rail maps to.
+
+# Estimate costs analytically without running real traffic:
+ucx_info -e -u t            # tag-matching protocol estimates
+UCX_PROTO_INFO=y ucx_info -e -u t -n 1048576   # for a 1 MB message</pre></div>
+
+  <div class="note tip">
+    <span class="tag">Why this matters for a shuffle engine</span>
+    <p>When your exchange operator sends column batches of wildly varying sizes — tiny null-masks, medium dictionaries, huge data buffers — you don't want to choose a transfer strategy per batch. UCX's cost model does it for you, automatically promoting big buffers to multi-rail zero-copy RDMA while keeping small control messages on the eager fast path. Reading <code class="tt">UCX_PROTO_INFO</code> output tells you whether your batches are landing on the path you expect.</p>
+  </div>
+</section>
+
+<section id="topology">
+  <h2><span class="num">§ 13</span>Topology &amp; Locality</h2>
+  <hr class="section-rule">
+  <p>On a fat node — multiple sockets, multiple NICs, multiple GPUs hanging off a PCIe hierarchy — <em>which</em> device you use matters as much as which protocol. UCX builds a model of the physical topology and selects devices by <strong>locality</strong>, so a transfer to/from a given GPU prefers the NIC sharing its PCIe switch, not one across a socket.</p>
+
+  <h3>How UCX discovers and scores topology</h3>
+  <ul>
+    <li><strong>Device enumeration:</strong> at context init, UCX queries every transport for its devices and their capabilities (bandwidth, latency, max message, atomics, GPU support).</li>
+    <li><strong>Distance / locality:</strong> UCX reads system topology (NUMA node, PCIe path) to estimate the "distance" between a buffer's location (a particular CPU socket or GPU) and each NIC, then <em>scores</em> devices so the closest, highest-bandwidth one wins.</li>
+    <li><strong>Lane assignment:</strong> the winning device(s) become the lanes for that endpoint; multiple may be combined for multi-rail.</li>
+  </ul>
+
+  <h3>The knobs that override discovery</h3>
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Variable</th><th>Effect</th></tr></thead>
+    <tbody>
+      <tr><td><code>UCX_NET_DEVICES</code></td><td>Restrict to specific devices, e.g. <code>mlx5_0:1,mlx5_1:1</code>. Essential when you must bind traffic to a particular rail or keep it off the management NIC.</td></tr>
+      <tr><td><code>UCX_TLS</code></td><td>Restrict the transport set, e.g. <code>rc,cuda</code> to force IB+GPU, or <code>^tcp</code> to forbid the TCP fallback (a great way to catch silent slow paths).</td></tr>
+      <tr><td><code>UCX_IB_GPU_DIRECT_RDMA</code></td><td>Enable/disable letting the NIC DMA straight to/from GPU memory (skip the host bounce).</td></tr>
+      <tr><td><code>UCX_MAX_RNDV_RAILS</code> / <code>UCX_MAX_EAGER_LANES</code></td><td>How many parallel rails/lanes a transfer may stripe across.</td></tr>
+      <tr><td><code>UCX_NUM_EPS</code></td><td>Hint about scale, influencing UD/DC vs RC selection for connection-state scalability.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note deep">
+    <span class="tag">Physical → logical, concretely</span>
+    <p>Say node A has GPU0 + GPU1, each behind PCIe switch S0/S1, with NIC0 on S0 and NIC1 on S1. For a GPU0→remote send, UCX scores NIC0 above NIC1 (same switch, GPUDirect-eligible), selects it as the lane, and — if the batch is large — adds NIC1 as a second rail for bandwidth while still preferring the local one. You wrote one <code class="tt">ucp_tag_send_nbx</code>; UCX compiled it into a topology-aware multi-rail plan. That compilation step is the logical topology derived from the physical one.</p>
+  </div>
+</section>
+
+<section id="why">
+  <h2><span class="num">§ 14</span>Why UCX Is Fast</h2>
+  <hr class="section-rule">
+  <p>Five mechanisms, each attacking a specific source of overhead. None is exotic; the value is that UCX implements all of them carefully in one shared, well-tested place.</p>
+  <div class="two-col">
+    <div class="mini-card"><h5>1 · Zero-copy</h5><p>Rendezvous + RDMA move bulk data directly between user buffers — the data never visits a bounce buffer or kernel socket buffer, eliminating the dominant cost for large transfers.</p></div>
+    <div class="mini-card"><h5>2 · Hardware offload</h5><p>The NIC performs the transfer, RDMA, and even atomics autonomously. The CPU issues a descriptor and is free; remote CPUs aren't involved in one-sided ops at all.</p></div>
+    <div class="mini-card"><h5>3 · Kernel bypass</h5><p>RDMA verbs let the application post work directly to NIC queues from user space — no syscall, no kernel network stack, no context switch on the data path.</p></div>
+    <div class="mini-card"><h5>4 · Registration caching</h5><p>The expensive memory-pinning step is amortized across all transfers from a reused buffer, turning a per-message cost into a one-time one.</p></div>
+    <div class="mini-card"><h5>5 · Adaptive protocols</h5><p>The cost model picks the optimal strategy per message — eager for latency-bound small messages, zero-copy multi-rail for bandwidth-bound large ones — so you never pay the wrong protocol's tax.</p></div>
+    <div class="mini-card"><h5>+ · Topology awareness</h5><p>Choosing the NIC closest to the data (and skipping the host bounce for GPU memory) avoids cross-socket and PCIe-traversal penalties before a single byte moves.</p></div>
+  </div>
+  <div class="note">
+    <span class="tag">The throughput intuition</span>
+    <p>For small messages, the round-trip count dominates — UCX minimizes trips (eager, inline). For large messages, copies and registration dominate — UCX eliminates copies (zero-copy RDMA) and amortizes registration (rcache), then parallelizes across rails. There is no single trick; "fast" is the union of the right choice at every size.</p>
+  </div>
+</section>
+<section id="vsmpi">
+  <h2><span class="num">§ 15</span>UCX vs MPI</h2>
+  <hr class="section-rule">
+  <p>The most useful framing: <strong>they live at different layers.</strong> MPI is a high-level <em>programming model and standard</em>; UCX is a low-level <em>transport library</em>. They are not competitors — most MPI implementations <em>run on top of UCX</em>. Comparing them is like comparing "SQL" to "the storage engine."</p>
+
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Concern</th><th>MPI</th><th>UCX</th></tr></thead>
+    <tbody>
+      <tr><td>What it is</td><td>A standard with many implementations (Open MPI, MPICH, MVAPICH)</td><td>A single open-source library/framework</td></tr>
+      <tr><td>Process launch</td><td>Yes — <code>mpirun</code>/<code>mpiexec</code>, ranks, <code>MPI_COMM_WORLD</code></td><td><strong>No</strong> — you launch and bootstrap yourself</td></tr>
+      <tr><td>Communicators &amp; ranks</td><td>First-class</td><td>None — just workers and endpoints</td></tr>
+      <tr><td>Collectives</td><td>Yes — broadcast, allreduce, alltoall, …</td><td><strong>No</strong> (that's the separate UCC layer)</td></tr>
+      <tr><td>Datatypes</td><td>Rich derived datatypes</td><td>Contiguous / iov / generic callbacks</td></tr>
+      <tr><td>Point-to-point</td><td>Send/recv, one-sided windows</td><td>Tag, stream, RMA, atomics, AM (the substrate MPI uses)</td></tr>
+      <tr><td>Abstraction level</td><td>Application-facing</td><td>Runtime/framework-facing</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>When to drop to UCX directly</h3>
+  <ul>
+    <li>You're building a runtime that <em>isn't</em> MPI: a distributed query engine's shuffle/exchange, a parameter server, a custom RPC fabric, a dataframe library's transport (Dask/RAPIDS).</li>
+    <li>You need primitives MPI handles awkwardly — fine-grained active messages, custom rendezvous, direct GPU-memory transfers without MPI's datatype machinery.</li>
+    <li>You want to avoid MPI's process model entirely (e.g. a Kubernetes-scheduled service mesh where there is no <code class="tt">mpirun</code>).</li>
+  </ul>
+  <p>Conversely, if you have ranks, want collectives, and your problem fits SPMD — use MPI, and let it use UCX underneath. Don't reimplement MPI on UCX unless you have a reason MPI can't serve.</p>
+</section>
+
+<section id="withmpi">
+  <h2><span class="num">§ 16</span>Coordinating With MPI</h2>
+  <hr class="section-rule">
+  <p>A powerful and common hybrid: use MPI for what it's good at — process launch, ranks, collectives, and especially as the <strong>out-of-band (OOB) channel</strong> to bootstrap UCX — then use UCX directly for a custom high-performance data plane. This sidesteps UCX's lack of a bootstrap by borrowing MPI's.</p>
+
+  <h3>Pattern A — MPI bootstraps a UCX data plane</h3>
+  <p>Recall the hello-world needed each peer's worker <em>address</em>. Across nodes you must ship those addresses somehow. <code class="tt">MPI_Allgather</code> is the easiest possible OOB exchange:</p>
+  <div class="code"><div class="head"><span class="name">mpi_bootstrap_ucx.c</span><span class="lang">C</span></div><pre data-lang="c">MPI_Init(&amp;argc, &amp;argv);
+int rank, size;
+MPI_Comm_rank(MPI_COMM_WORLD, &amp;rank);
+MPI_Comm_size(MPI_COMM_WORLD, &amp;size);
+
+/* ... ucp_init + ucp_worker_create as usual ... */
+
+/* 1. Get THIS worker's address */
+ucp_address_t *my_addr; size_t my_len;
+ucp_worker_get_address(worker, &amp;my_addr, &amp;my_len);
+
+/* 2. Exchange address lengths, then the addresses themselves, over MPI */
+size_t *lens = malloc(size * sizeof(size_t));
+MPI_Allgather(&amp;my_len, sizeof(size_t), MPI_BYTE,
+              lens, sizeof(size_t), MPI_BYTE, MPI_COMM_WORLD);
+/* (use Allgatherv to collect the variable-length address blobs) */
+int *displs = ...; int total = ...;            /* compute from lens */
+char *all_addrs = malloc(total);
+MPI_Allgatherv(my_addr, my_len, MPI_BYTE,
+               all_addrs, /*counts*/..., displs, MPI_BYTE, MPI_COMM_WORLD);
+
+/* 3. Build a UCX endpoint to every other rank from its gathered address */
+ucp_ep_h *eps = malloc(size * sizeof(ucp_ep_h));
+for (int r = 0; r &lt; size; r++) {
+    if (r == rank) continue;
+    ucp_ep_params_t ep_p = {
+        .field_mask = UCP_EP_PARAM_FIELD_REMOTE_ADDRESS,
+        .address    = (ucp_address_t*)(all_addrs + displs[r]),
+    };
+    ucp_ep_create(worker, &amp;ep_p, &amp;eps[r]);
+}
+/* Now every rank has UCX endpoints to all peers — use tag/RMA/AM directly,
+   while still using MPI for collectives and control. */
+ucp_worker_release_address(worker, my_addr);</pre></div>
+
+  <div class="note warn">
+    <span class="tag">One process, one framework on the wire — pick the rail deliberately</span>
+    <p>When MPI <em>and</em> your direct UCX both run in the same job, they may both want the IB device. That's fine — they're independent UCX contexts — but watch resource contention and make sure both target the intended NIC via <code class="tt">UCX_NET_DEVICES</code>. Also ensure the MPI you link was itself built on UCX, or you'll have two different transport stacks fighting for the HCA.</p>
+  </div>
+
+  <h3>Pattern B — let MPI transparently <em>be</em> UCX</h3>
+  <p>If you just want fast MPI, you may not write any UCX at all — you select the UCX path inside your MPI:</p>
+  <div class="code"><div class="head"><span class="name">run-mpi-on-ucx.sh</span><span class="lang">bash</span></div><pre data-lang="bash"># Open MPI: force the UCX point-to-point component
+mpirun --mca pml ucx --mca osc ucx -np 64 ./my_mpi_app
+
+# MPICH / MVAPICH built with CH4:ucx use UCX automatically.
+# UCX_* env vars still apply and tune the underlying transport:
+UCX_TLS=rc,sm,cuda UCX_NET_DEVICES=mlx5_0:1 mpirun --mca pml ucx -np 64 ./app</pre></div>
+</section>
+
+<section id="unification">
+  <h2><span class="num">§ 17</span>How One Tool Backs MPI, NCCL &amp; the Rest</h2>
+  <hr class="section-rule">
+  <p>The "unified" in Unified Communication X is literal: UCX is the shared transport substrate that many higher-level libraries delegate to, instead of each re-implementing IB verbs, shared-memory transports, and rendezvous. The trick is that UCX exposes a <em>narrow, capability-rich, runtime-facing API</em> (UCP) that is general enough to serve very different consumers.</p>
+
+  <div class="diagram">
+  <svg viewBox="0 0 720 280" xmlns="http://www.w3.org/2000/svg">
+    <rect class="svg-box-b" x="40"  y="20" width="120" height="50" rx="8"/><text class="svg-label" x="100" y="42" text-anchor="middle">Open MPI</text><text class="svg-sub" x="100" y="58" text-anchor="middle">pml ucx</text>
+    <rect class="svg-box-b" x="175" y="20" width="120" height="50" rx="8"/><text class="svg-label" x="235" y="42" text-anchor="middle">MPICH</text><text class="svg-sub" x="235" y="58" text-anchor="middle">ch4:ucx</text>
+    <rect class="svg-box-b" x="310" y="20" width="120" height="50" rx="8"/><text class="svg-label" x="370" y="42" text-anchor="middle">NCCL</text><text class="svg-sub" x="370" y="58" text-anchor="middle">UCX net plugin</text>
+    <rect class="svg-box-b" x="445" y="20" width="110" height="50" rx="8"/><text class="svg-label" x="500" y="42" text-anchor="middle">RAPIDS</text><text class="svg-sub" x="500" y="58" text-anchor="middle">UCX-Py</text>
+    <rect class="svg-box-b" x="570" y="20" width="110" height="50" rx="8"/><text class="svg-label" x="625" y="42" text-anchor="middle">Spark / Dask</text><text class="svg-sub" x="625" y="58" text-anchor="middle">shuffle</text>
+
+    <rect class="svg-box-c" x="180" y="105" width="360" height="44" rx="8"/>
+    <text class="svg-label" x="360" y="132" text-anchor="middle">UCC — collectives (optional, sits beside UCP)</text>
+
+    <rect class="svg-box-a" x="120" y="165" width="480" height="50" rx="8"/>
+    <text class="svg-label" x="360" y="188" text-anchor="middle">UCP — one transport API for all of the above</text>
+    <text class="svg-sub" x="360" y="205" text-anchor="middle">tag · RMA · AM · rendezvous · multi-rail · GPU memory · cost model</text>
+
+    <rect class="svg-box" x="120" y="232" width="480" height="38" rx="8"/>
+    <text class="svg-sub" x="360" y="255" text-anchor="middle">UCT → IB/RoCE · NVLink (cuda_ipc) · GPUDirect · shared mem · TCP</text>
+
+    <!-- arrows down -->
+    <line class="svg-line" x1="100" y1="70" x2="280" y2="165" marker-end="url(#d)"/>
+    <line class="svg-line" x1="235" y1="70" x2="320" y2="165" marker-end="url(#d)"/>
+    <line class="svg-line" x1="370" y1="70" x2="370" y2="165" marker-end="url(#d)"/>
+    <line class="svg-line" x1="500" y1="70" x2="420" y2="165" marker-end="url(#d)"/>
+    <line class="svg-line" x1="625" y1="70" x2="450" y2="165" marker-end="url(#d)"/>
+    <line class="svg-line" x1="360" y1="149" x2="360" y2="165" marker-end="url(#d)"/>
+    <line class="svg-line" x1="360" y1="215" x2="360" y2="232" marker-end="url(#d)"/>
+    <defs><marker id="d" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path class="svg-arrow" d="M0,0 L8,4 L0,8 Z"/></marker></defs>
+  </svg>
+  <div class="dg-cap">Many runtimes, one substrate. Each consumer maps its own concepts onto UCP's primitives.</div>
+  </div>
+
+  <h3>How each consumer maps on</h3>
+  <ul>
+    <li><strong>Open MPI</strong> — the <code class="tt">pml ucx</code> component implements MPI point-to-point by encoding (communicator, source rank, MPI tag) into UCP's 64-bit tag and calling <code class="tt">ucp_tag_send/recv_nbx</code>. MPI one-sided maps to UCP RMA.</li>
+    <li><strong>MPICH / MVAPICH</strong> — the CH4 <code class="tt">ucx</code> netmod does the same at MPICH's lower layer.</li>
+    <li><strong>NCCL</strong> — NCCL owns intra-node GPU collectives via its own optimized rings/trees over NVLink, but its <em>network transport</em> is pluggable. A UCX net plugin lets NCCL's inter-node traffic ride UCX (reusing UCX's IB tuning, multi-rail, GPUDirect), instead of NCCL's built-in IB transport.</li>
+    <li><strong>RAPIDS / Dask-CUDA</strong> — <code class="tt">UCX-Py</code> wraps UCP for Python; dask-cuda uses it so GPU dataframe shuffles travel GPU→GPU over NVLink (<code class="tt">cuda_ipc</code>) intra-node and GPUDirect RDMA inter-node, never staging through host memory.</li>
+    <li><strong>Spark RAPIDS</strong> — its shuffle manager uses UCX to move columnar shuffle blocks between executors at RDMA speed.</li>
+  </ul>
+
+  <div class="note tip">
+    <span class="tag">The design lesson</span>
+    <p>Unification was achievable because UCP's API is <em>capability-oriented</em>, not <em>policy-oriented</em>. It exposes tag/RMA/AM and lets the consumer decide semantics — so MPI can build send/recv, NCCL can build a net transport, and a query engine can build a shuffle, all from the same five primitives. The hard, hardware-specific work (registration, rendezvous, device selection, GPU awareness) is done <em>once</em> below the API and inherited by everyone.</p>
+  </div>
+</section>
+
+<section id="ucc">
+  <h2><span class="num">§ 18</span>UCC — Where Collectives Live</h2>
+  <hr class="section-rule">
+  <p>UCX deliberately has no collectives. <strong>UCC (Unified Collective Communication)</strong> is the sibling project that does — allreduce, broadcast, alltoall, barrier, reduce-scatter — built on top of UCX's point-to-point and RMA, and able to dispatch to specialized backends.</p>
+  <ul>
+    <li><strong>Composable backends:</strong> UCC can route a collective to NCCL for intra-node GPU reductions, to UCX for inter-node movement, or to <strong>SHARP</strong> (in-network reduction performed by the InfiniBand switch itself) when available — choosing per collective and per message size.</li>
+    <li><strong>Used by:</strong> Open MPI's <code class="tt">coll ucc</code> component offloads MPI collectives to UCC; some DL training stacks use UCC directly for allreduce.</li>
+    <li><strong>The parallel to §17:</strong> just as UCP unifies transport, UCC unifies collectives over heterogeneous accelerators — same philosophy, one layer up.</li>
+  </ul>
+  <div class="note">
+    <span class="tag">Practical takeaway</span>
+    <p>If you need allreduce-style operations and you're already on UCX, reach for UCC rather than hand-rolling reductions over UCP tag messages — it will pick in-network or GPU-direct paths you'd never implement by hand.</p>
+  </div>
+</section>
+
+<section id="gpu">
+  <h2><span class="num">§ 19</span>GPU Memory, GPUDirect &amp; RAPIDS</h2>
+  <hr class="section-rule">
+  <p>The piece most relevant to GPU-accelerated query execution. UCX treats GPU memory as a first-class citizen: you pass a device pointer to the same <code class="tt">ucp_tag_send_nbx</code> / <code class="tt">ucp_put_nbx</code> you'd use for host memory, and UCX figures out the right path.</p>
+
+  <h3>The three GPU transports and when each fires</h3>
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Path</th><th>Transport</th><th>Used when</th></tr></thead>
+    <tbody>
+      <tr><td>Intra-node GPU↔GPU</td><td><code>cuda_ipc</code></td><td>Two GPUs in the same node — direct peer copy over NVLink/NVSwitch (or PCIe P2P). No host involvement.</td></tr>
+      <tr><td>Inter-node GPU↔GPU</td><td><code>rc</code> + GPUDirect RDMA</td><td>The NIC DMAs straight out of / into GPU memory across the fabric — the host never touches the payload.</td></tr>
+      <tr><td>GPU↔host staging</td><td><code>cuda_copy</code> / <code>gdr_copy</code></td><td>When a direct path isn't available, or for small/low-latency GPU-memory access via gdrcopy.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>Sending from a device pointer</h3>
+  <div class="code"><div class="head"><span class="name">gpu_send.c</span><span class="lang">C</span></div><pre data-lang="c">/* Build the context with the CUDA feature set available
+   (requires UCX compiled --with-cuda). */
+ucp_params_t cp = { .field_mask = UCP_PARAM_FIELD_FEATURES,
+                    .features   = UCP_FEATURE_TAG | UCP_FEATURE_RMA };
+
+float *d_buf;
+cudaMalloc(&amp;d_buf, n * sizeof(float));            /* device memory */
+
+/* Option 1: let UCX auto-detect the memory type (memtype cache). */
+ucp_request_param_t p1 = { .op_attr_mask = 0 };
+ucp_tag_send_nbx(ep, d_buf, n*sizeof(float), TAG, &amp;p1);
+
+/* Option 2: tell UCX explicitly — skips detection, slightly faster. */
+ucp_request_param_t p2 = {
+    .op_attr_mask = UCP_OP_ATTR_FIELD_MEMORY_TYPE,
+    .memory_type  = UCS_MEMORY_TYPE_CUDA,
+};
+ucp_tag_send_nbx(ep, d_buf, n*sizeof(float), TAG, &amp;p2);
+/* UCX now selects cuda_ipc / GPUDirect-RDMA / staging based on the peer's
+   location and the cost model — same call, topology-aware result. */</pre></div>
+
+  <div class="note deep">
+    <span class="tag">For a GPU exchange / shuffle operator</span>
+    <p>This is the whole reason UCX is the right substrate for a Velox/cuDF-style GPU exchange: one send path that (a) routes intra-node GPU↔GPU over NVLink via <code class="tt">cuda_ipc</code>, (b) crosses nodes via GPUDirect RDMA without a host bounce, (c) picks the NIC nearest the source GPU, and (d) promotes large column buffers to multi-rail zero-copy rendezvous automatically. You express "send this batch to that peer"; UCX compiles the physical plan. Verify it with <code class="tt">UCX_PROTO_INFO=y</code> and confirm <code class="tt">cuda_ipc</code>/GPUDirect appear — if you instead see <code class="tt">cuda_copy</code> + <code class="tt">tcp</code>, you're silently bouncing through host memory and the win is gone.</p>
+  </div>
+  <div class="note warn">
+    <span class="tag">GPUDirect prerequisites that bite</span>
+    <p>GPUDirect RDMA needs the kernel peer-memory module loaded (<code class="tt">nvidia_peermem</code>, or the older <code class="tt">nv_peer_mem</code>) and a NIC+GPU sharing a PCIe path. <code class="tt">gdr_copy</code> needs the <code class="tt">gdrdrv</code> module. If these aren't present, UCX silently falls back to host staging — functionally correct, dramatically slower. Always confirm with <code class="tt">ucx_info -d | grep -i cuda</code> and a <code class="tt">UCX_PROTO_INFO</code> check on a real transfer.</p>
+  </div>
+</section>
+<section id="debug">
+  <h2><span class="num">§ 20</span>Debugging UCX</h2>
+  <hr class="section-rule">
+  <p>UCX is highly introspectable once you know the tools. The workflow is almost always: <em>(1) confirm what's available</em> with <code class="tt">ucx_info</code>, <em>(2) confirm what got chosen</em> with <code class="tt">UCX_PROTO_INFO</code>, <em>(3) turn up the log level</em> to see why.</p>
+
+  <h3>The introspection toolkit</h3>
+  <div class="code"><div class="head"><span class="name">introspect.sh</span><span class="lang">bash</span></div><pre data-lang="bash">ucx_info -v                 # version + git revision
+ucx_info -b                 # build configuration: was --with-cuda on? which TLs?
+ucx_info -d                 # ALL devices + transports + capabilities (most useful)
+ucx_info -d | grep -i cuda  # did GPU transports compile + detect a GPU?
+ucx_info -c                 # every config variable + current value + docs
+ucx_info -e -u t            # estimate protocol selection for tag ops (no traffic)
+
+# Logging — escalate as needed:
+UCX_LOG_LEVEL=info  ./app    # high-level lifecycle
+UCX_LOG_LEVEL=debug ./app    # transport selection, connection setup
+UCX_LOG_LEVEL=trace ./app    # very verbose; per-operation
+UCX_LOG_LEVEL=data  ./app    # logs actual protocol decisions per message
+
+# See the compiled protocol plan (single most useful flag for perf):
+UCX_PROTO_INFO=y ./app
+
+# Force / forbid transports to isolate a problem:
+UCX_TLS=rc,sm,cuda ./app     # only these
+UCX_TLS=^tcp       ./app     # everything EXCEPT tcp (catches silent fallbacks)
+UCX_NET_DEVICES=mlx5_0:1 ./app
+</pre></div>
+
+  <h3>Reading common errors</h3>
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Symptom</th><th>Likely cause &amp; fix</th></tr></thead>
+    <tbody>
+      <tr><td><code>no active message transport to &lt;peer&gt;</code> / <code>Destination is unreachable</code></td><td>No transport is usable between the two workers. The two sides disagree on devices/TLs, or the chosen NIC isn't routable between them. Check <code>UCX_TLS</code>/<code>UCX_NET_DEVICES</code> on <em>both</em> sides; verify L2/IB connectivity.</td></tr>
+      <tr><td>Bandwidth is ~10× too low</td><td>You're on <code>tcp</code> or the wrong device. Run with <code>UCX_TLS=^tcp</code> — if it now fails, TCP was masking a misconfigured RDMA path. Check <code>UCX_PROTO_INFO</code> for the real transport.</td></tr>
+      <tr><td>GPU transfers slow; <code>cuda_copy</code> appears where you expected GPUDirect</td><td>Peer-memory kernel module missing, or NIC/GPU not on a shared PCIe path. Load <code>nvidia_peermem</code>; check topology with <code>nvidia-smi topo -m</code>.</td></tr>
+      <tr><td>Program hangs with no error</td><td>Progress isn't being driven (most common), or an OOB address exchange mismatched so endpoints never wired up, or a send has no matching recv. Add a progress call to every wait; verify tags/lengths match.</td></tr>
+      <tr><td><code>ibv_reg_mr failed</code> / registration errors</td><td>Locked-memory limit too low (<code>ulimit -l</code> → set unlimited), or registering more than the device allows. Raise limits; reuse buffers via rcache.</td></tr>
+      <tr><td>Version / ABI mismatch warnings</td><td>App linked against a different UCX than is loaded at runtime. Check <code>ldd ./app</code> and <code>LD_LIBRARY_PATH</code>; rebuild against the runtime UCX.</td></tr>
+      <tr><td>Deadlock under multithreading</td><td>Two threads touching one <code>SINGLE</code>-mode worker. Give each thread its own worker, or rebuild <code>--enable-mt</code> + create <code>MULTI</code>.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note tip">
+    <span class="tag">A reliable triage sequence</span>
+    <p>(1) <code class="tt">ucx_info -d</code> — is the device/transport even present? (2) <code class="tt">UCX_TLS=^tcp</code> — does forbidding the slow path expose a hidden failure? (3) <code class="tt">UCX_PROTO_INFO=y</code> — is the chosen protocol the one you wanted? (4) <code class="tt">UCX_LOG_LEVEL=debug</code> — what did connection setup decide and why? Ninety percent of issues resolve in those four steps.</p>
+  </div>
+</section>
+
+<section id="tuning">
+  <h2><span class="num">§ 21</span>Tuning Reference</h2>
+  <hr class="section-rule">
+  <p>The environment variables you'll actually reach for. All are read at startup (via UCS config); none require recompiling. Defaults are usually good — change one at a time and measure with <code class="tt">ucx_perftest</code>.</p>
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Variable</th><th>What it controls</th><th>Typical use</th></tr></thead>
+    <tbody>
+      <tr><td><code>UCX_TLS</code></td><td>Allowed transport set</td><td><code>rc,sm,cuda</code> to pin paths; <code>^tcp</code> to forbid fallback</td></tr>
+      <tr><td><code>UCX_NET_DEVICES</code></td><td>Allowed network devices</td><td><code>mlx5_0:1</code> to bind to a specific NIC/port</td></tr>
+      <tr><td><code>UCX_RNDV_THRESH</code></td><td>Eager→rendezvous crossover size</td><td>Lower it if large msgs aren't going zero-copy; <code>auto</code> by default</td></tr>
+      <tr><td><code>UCX_RNDV_SCHEME</code></td><td>Rendezvous strategy</td><td><code>get_zcopy</code> / <code>put_zcopy</code> / <code>auto</code></td></tr>
+      <tr><td><code>UCX_ZCOPY_THRESH</code></td><td>Copy→zero-copy crossover</td><td>Tune for your message-size distribution</td></tr>
+      <tr><td><code>UCX_MAX_RNDV_RAILS</code></td><td>Parallel NICs per large transfer</td><td>Raise to aggregate multi-NIC bandwidth</td></tr>
+      <tr><td><code>UCX_IB_GPU_DIRECT_RDMA</code></td><td>NIC↔GPU-memory DMA</td><td><code>y</code> to force on, <code>n</code> to isolate a GPUDirect problem</td></tr>
+      <tr><td><code>UCX_RCACHE_ENABLE</code></td><td>Registration cache</td><td>Keep <code>y</code>; disable only when debugging registration bugs</td></tr>
+      <tr><td><code>UCX_MEMTYPE_CACHE</code></td><td>Pointer mem-type caching</td><td>Disable if an allocator confuses host/device detection</td></tr>
+      <tr><td><code>UCX_PROTO_INFO</code></td><td>Print chosen protocols</td><td><code>y</code> — your primary perf-debugging lens</td></tr>
+      <tr><td><code>UCX_LOG_LEVEL</code></td><td>Verbosity</td><td><code>info</code>/<code>debug</code>/<code>trace</code>/<code>data</code></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="note">
+    <span class="tag">Tuning discipline</span>
+    <p>Treat defaults as a strong baseline — UCX's cost model already adapts to your hardware. Override only when <code class="tt">UCX_PROTO_INFO</code> proves a wrong choice, change one variable, and re-measure. Blind threshold-twiddling usually makes things worse and obscures the real issue (often a topology or module-loading problem, not a threshold).</p>
+  </div>
+</section>
+
+<section id="pitfalls">
+  <h2><span class="num">§ 22</span>Common Pitfalls Checklist</h2>
+  <hr class="section-rule">
+  <ul>
+    <li><strong>Forgetting to drive progress.</strong> The cause of most hangs. Every blocking wait and every "why didn't my callback fire" traces back here.</li>
+    <li><strong>Not freeing requests.</strong> A non-NULL, non-error <code class="tt">_nbx</code> return is an allocated handle you must <code class="tt">ucp_request_free</code> after completion. Leak them and you exhaust the request pool.</li>
+    <li><strong>Mishandling the three-valued return.</strong> Treating <code class="tt">NULL</code> (done) as an error, or calling <code class="tt">ucp_request_free</code> on <code class="tt">NULL</code>/an error pointer. Use the helper.</li>
+    <li><strong>Sharing a SINGLE-mode worker across threads.</strong> Silent corruption or deadlock. One worker per thread, or build MULTI.</li>
+    <li><strong>Mismatched send/recv length or tag.</strong> A recv buffer smaller than the message truncates or errors; a tag/mask mismatch means the recv never matches and the program hangs.</li>
+    <li><strong>Mixing the deprecated <code class="tt">_nb</code> API with <code class="tt">_nbx</code>.</strong> Different signatures and completion semantics. Standardize on <code class="tt">_nbx</code>.</li>
+    <li><strong>Assuming GPUDirect is on.</strong> Without the peer-memory kernel module, UCX silently stages through host memory. Always verify with <code class="tt">UCX_PROTO_INFO</code>.</li>
+    <li><strong>Letting TCP mask a broken RDMA path.</strong> Everything "works" but slowly. Periodically test with <code class="tt">UCX_TLS=^tcp</code> to force the fast path or fail loudly.</li>
+    <li><strong>Registering fresh memory per transfer.</strong> Defeats the rcache. Reuse long-lived, pre-registered buffers for hot paths.</li>
+    <li><strong>Closing endpoints without flushing.</strong> Outstanding RMA may not have landed remotely. <code class="tt">ucp_ep_flush_nbx</code> before close when correctness depends on completion.</li>
+  </ul>
+</section>
+
+<section id="mental">
+  <h2><span class="num">§ 23</span>Mental Model Recap</h2>
+  <hr class="section-rule">
+  <p>If you keep only a handful of sentences, keep these:</p>
+  <div class="note deep">
+    <span class="tag">The whole guide in seven lines</span>
+    <p><strong>1.</strong> UCX is a transport substrate, not an application framework — runtimes (MPI, NCCL, RAPIDS) sit on it.<br>
+    <strong>2.</strong> Three layers: you program <em>UCP</em>; <em>UCT</em> abstracts each interconnect; <em>UCS</em> is shared plumbing.<br>
+    <strong>3.</strong> You manage five objects: context, worker, endpoint, mem-handle, rkey — and the worker is the unit of progress and threading.<br>
+    <strong>4.</strong> Every op is <code class="tt">_nbx</code> + a request param, returning NULL / error / a handle you must drive and free.<br>
+    <strong>5.</strong> Nothing happens without <code class="tt">ucp_worker_progress</code>.<br>
+    <strong>6.</strong> UCX <em>compiles</em> each logical send into a physical plan via a cost model — eager vs rendezvous, which NICs, GPU-direct or staged — exactly like a query planner over the physical fabric.<br>
+    <strong>7.</strong> Debug with <code class="tt">ucx_info -d</code> → <code class="tt">UCX_TLS=^tcp</code> → <code class="tt">UCX_PROTO_INFO=y</code> → <code class="tt">UCX_LOG_LEVEL=debug</code>.</p>
+  </div>
+  <p>From here, the highest-leverage next steps are reading the reference programs (<code class="tt">ucp_client_server.c</code>, <code class="tt">ucp_hello_world.c</code>) and running <code class="tt">ucx_perftest</code> on your real hardware while watching <code class="tt">UCX_PROTO_INFO</code> — that loop teaches you more about your fabric than any amount of documentation.</p>
+</section>
+</main>
+</div>
+
+<footer class="foot">
+  UCX Programming Field Manual · A self-contained technical reference · Built for deep work on GPU communication, distributed query execution, and HPC transport.
+  Verify API signatures and defaults against the UCX version installed on your system (<code class="tt">ucx_info -v</code>), as thresholds and protocol internals evolve across releases.
+</footer>
+
+<script>
+/* ---------- theme toggle ---------- */
+const root = document.documentElement;
+const tbtn = document.getElementById('themeBtn');
+tbtn.addEventListener('click', () => {
+  const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  root.setAttribute('data-theme', next);
+  tbtn.textContent = next === 'dark' ? '◐ Theme' : '◑ Theme';
+});
+
+/* ---------- scrollspy + progress bar ---------- */
+const links = [...document.querySelectorAll('nav.toc a')];
+const sections = links.map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+const bar = document.getElementById('progress');
+function onScroll() {
+  const y = window.scrollY + 100;
+  let cur = sections[0];
+  for (const s of sections) { if (s.offsetTop <= y) cur = s; }
+  links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + cur.id));
+  const h = document.documentElement.scrollHeight - window.innerHeight;
+  bar.style.width = (100 * window.scrollY / h) + '%';
+}
+window.addEventListener('scroll', onScroll, { passive: true });
+onScroll();
+
+/* ---------- copy buttons ---------- */
+document.querySelectorAll('.code').forEach(block => {
+  const btn = document.createElement('button');
+  btn.className = 'copy'; btn.textContent = 'copy';
+  btn.addEventListener('click', () => {
+    const code = block.querySelector('pre').innerText;
+    navigator.clipboard.writeText(code).then(() => {
+      btn.textContent = 'copied'; setTimeout(() => btn.textContent = 'copy', 1300);
+    });
+  });
+  block.appendChild(btn);
+});
+
+/* ---------- lightweight syntax highlighter (C + bash) ---------- */
+const C_KW = new Set(('int void char float double const struct typedef return if else for while do '
+  + 'sizeof unsigned signed static volatile enum union switch case break continue goto extern inline '
+  + 'register short long').split(' '));
+const C_TY = /\b(ucp_[a-z_]+_[ht]|ucs_[a-z_]+_[ht]|uct_[a-z_]+_[ht]|ucp_[a-z_]+_params_t|ucs_status_t|ucs_status_ptr_t|size_t|ucp_tag_t|MPI_[A-Za-z_]+|cuda[A-Za-z]+|UCS_[A-Z0-9_]+|UCP_[A-Z0-9_]+|UCT_[A-Z0-9_]+)\b/g;
+const BASH_KW = new Set('if then else fi for do done while in function return export'.split(' '));
+
+function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function highlight(text, lang) {
+  // tokenize into: comments, strings, then word/number runs
+  let out = '';
+  let i = 0;
+  const isC = (lang === 'c');
+  while (i < text.length) {
+    const rest = text.slice(i);
+    // line comment
+    if (isC && rest.startsWith('//')) { const e = rest.indexOf('\n'); const t = e<0?rest:rest.slice(0,e); out += '<span class="tk-com">'+esc(t)+'</span>'; i += t.length; continue; }
+    if (!isC && rest[0] === '#') { const e = rest.indexOf('\n'); const t = e<0?rest:rest.slice(0,e); out += '<span class="tk-com">'+esc(t)+'</span>'; i += t.length; continue; }
+    // block comment
+    if (isC && rest.startsWith('/*')) { const e = rest.indexOf('*/'); const t = e<0?rest:rest.slice(0,e+2); out += '<span class="tk-com">'+esc(t)+'</span>'; i += t.length; continue; }
+    // preprocessor
+    if (isC && (i===0 || text[i-1]==='\n') && rest.match(/^\s*#/)) {
+      const e = rest.indexOf('\n'); const t = e<0?rest:rest.slice(0,e);
+      out += '<span class="tk-pp">'+esc(t)+'</span>'; i += t.length; continue;
+    }
+    // strings
+    const ch = text[i];
+    if (ch === '"' || ch === '\'') {
+      let j = i+1; while (j < text.length && text[j] !== ch) { if (text[j]==='\\') j++; j++; }
+      const t = text.slice(i, Math.min(j+1, text.length));
+      out += '<span class="tk-str">'+esc(t)+'</span>'; i = j+1; continue;
+    }
+    // identifiers / keywords / functions
+    if (/[A-Za-z_]/.test(ch)) {
+      let j = i+1; while (j < text.length && /[A-Za-z0-9_]/.test(text[j])) j++;
+      const word = text.slice(i, j);
+      const after = text.slice(j).match(/^\s*\(/);
+      if ((isC?C_KW:BASH_KW).has(word)) out += '<span class="tk-kw">'+esc(word)+'</span>';
+      else if (isC && /^(ucp|ucs|uct|UCP|UCS|UCT|MPI|UCS_|cuda)/.test(word) && word.length>3) out += '<span class="tk-ty">'+esc(word)+'</span>';
+      else if (after) out += '<span class="tk-fn">'+esc(word)+'</span>';
+      else out += esc(word);
+      i = j; continue;
+    }
+    // numbers
+    if (/[0-9]/.test(ch)) {
+      let j = i+1; while (j < text.length && /[0-9a-fA-FxX._]/.test(text[j])) j++;
+      out += '<span class="tk-num">'+esc(text.slice(i,j))+'</span>'; i = j; continue;
+    }
+    out += esc(ch); i++;
+  }
+  // re-apply type regex pass is skipped (handled inline) — return
+  return out;
+}
+
+document.querySelectorAll('pre[data-lang]').forEach(pre => {
+  const lang = pre.getAttribute('data-lang');
+  const raw = pre.textContent;            // browser already un-escaped entities
+  pre.innerHTML = highlight(raw, lang);
+});
+</script>
+</body>
+</html>
