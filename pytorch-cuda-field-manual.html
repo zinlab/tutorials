@@ -1,0 +1,2068 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PyTorch × CUDA — Field Manual · NVIDIA Core Interview Prep</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;0,8..60,700;1,8..60,400;1,8..60,600&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   FIELD MANUAL — design tokens
+   Dark default · copper / cyan / sage · editorial serif body
+   ============================================================ */
+:root{
+  --bg:        #0d1014;
+  --bg-2:      #11161e;
+  --panel:     #161c26;
+  --panel-2:   #1a212c;
+  --inset:     #090c10;   /* code wells: darker than bg for depth */
+  --border:    #283039;
+  --hair:      #1e242d;
+
+  --ink:       #ece8df;   /* serif body */
+  --muted:     #adb3bd;
+  --faint:     #767f8c;
+
+  --copper:    #d68c5b;
+  --copper-2:  #e0a079;
+  --cyan:      #5ec1d1;
+  --cyan-2:    #84d2df;
+  --sage:      #9dc096;
+  --amber:     #d9ab5e;
+  --rust:      #d8705d;
+
+  --link:      var(--cyan);
+  --rule:      linear-gradient(90deg, var(--copper), transparent);
+
+  --serif: 'Source Serif 4','Iowan Old Style',Georgia,'Times New Roman',serif;
+  --sans: 'Instrument Sans',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --mono: 'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+
+  --maxw: 50rem;       /* reading column */
+  --rail: 18.5rem;     /* sidebar */
+
+  --shadow: 0 1px 0 rgba(255,255,255,.02), 0 18px 40px -24px rgba(0,0,0,.7);
+}
+[data-theme="light"]{
+  --bg:        #f6f2e9;
+  --bg-2:      #efe9dc;
+  --panel:     #fffdf7;
+  --panel-2:   #f4eee1;
+  --inset:     #1b2129;   /* code stays dark in light mode — terminal feel */
+  --border:    #d9cfbb;
+  --hair:      #e3dac8;
+
+  --ink:       #20242b;
+  --muted:     #4f5862;
+  --faint:     #7b7466;
+
+  --copper:    #b3672f;
+  --copper-2:  #9a5526;
+  --cyan:      #1d7c8c;
+  --cyan-2:    #14606e;
+  --sage:      #4f7a45;
+  --amber:     #9a6e16;
+  --rust:      #b34a39;
+
+  --shadow: 0 1px 0 rgba(255,255,255,.6), 0 22px 48px -30px rgba(60,40,20,.45);
+}
+
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--serif);
+  font-size:18px;
+  line-height:1.62;
+  font-optical-sizing:auto;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+[data-theme="light"] body{
+  background-image:radial-gradient(120% 80% at 80% -10%, rgba(214,140,91,.07), transparent 60%);
+}
+[data-theme="dark"] body{
+  background-image:radial-gradient(120% 80% at 82% -12%, rgba(94,193,209,.05), transparent 55%),
+                   radial-gradient(90% 60% at -5% 0%, rgba(214,140,91,.05), transparent 50%);
+}
+
+/* ---------- top progress ---------- */
+#progress{position:fixed;top:0;left:0;height:2px;width:0;z-index:60;
+  background:linear-gradient(90deg,var(--copper),var(--cyan));transition:width .12s linear}
+
+/* ---------- utility bar ---------- */
+.util{position:sticky;top:0;z-index:40;display:flex;align-items:center;justify-content:space-between;
+  gap:1rem;padding:.55rem 1.4rem;background:color-mix(in oklab,var(--bg) 86%,transparent);
+  backdrop-filter:blur(9px);border-bottom:1px solid var(--hair);font-family:var(--mono);font-size:.7rem}
+.util .sig{color:var(--faint);letter-spacing:.14em;text-transform:uppercase}
+.util .sig b{color:var(--copper);font-weight:700}
+.util-right{display:flex;align-items:center;gap:.75rem}
+.navtoggle{display:none;background:none;border:1px solid var(--border);color:var(--muted);
+  font-family:var(--mono);font-size:.7rem;padding:.3rem .55rem;border-radius:5px;cursor:pointer}
+.themebtn{background:none;border:1px solid var(--border);color:var(--muted);cursor:pointer;
+  font-family:var(--mono);font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;
+  padding:.32rem .6rem;border-radius:5px;display:inline-flex;align-items:center;gap:.4rem;transition:border-color .15s,color .15s}
+.themebtn:hover{border-color:var(--copper);color:var(--ink)}
+
+/* ---------- shell ---------- */
+.shell{display:grid;grid-template-columns:var(--rail) minmax(0,1fr);gap:0;max-width:90rem;margin:0 auto}
+nav.toc{position:sticky;top:2.9rem;align-self:start;height:calc(100vh - 2.9rem);overflow-y:auto;
+  padding:1.6rem 1rem 3rem 1.4rem;border-right:1px solid var(--hair);font-family:var(--sans)}
+nav.toc .tochead{font-family:var(--mono);font-size:.64rem;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--faint);margin:.2rem 0 1rem .2rem}
+nav.toc ol{list-style:none;margin:0;padding:0;counter-reset:toc}
+nav.toc li{margin:.06rem 0}
+nav.toc a{display:flex;gap:.6rem;align-items:baseline;text-decoration:none;color:var(--muted);
+  font-size:.84rem;line-height:1.32;padding:.3rem .5rem;border-radius:6px;border-left:2px solid transparent;transition:background .14s,color .14s,border-color .14s}
+nav.toc a .n{font-family:var(--mono);font-size:.68rem;color:var(--faint);min-width:1.6rem;flex:0 0 auto}
+nav.toc a:hover{background:var(--panel);color:var(--ink)}
+nav.toc a.active{color:var(--ink);background:color-mix(in oklab,var(--copper) 12%,transparent);border-left-color:var(--copper)}
+nav.toc a.active .n{color:var(--copper)}
+nav.toc .grp{font-family:var(--mono);font-size:.62rem;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--faint);margin:1.25rem 0 .35rem .5rem;opacity:.8}
+
+main{min-width:0;padding:0 clamp(1.2rem,4vw,3.4rem)}
+.wrap{max-width:var(--maxw);margin:0 auto}
+
+/* ---------- masthead ---------- */
+.mast{padding:3.4rem 0 2.2rem;border-bottom:1px solid var(--border);margin-bottom:2.6rem}
+.mast .eyebrow{font-family:var(--mono);font-size:.72rem;letter-spacing:.2em;text-transform:uppercase;color:var(--copper);margin-bottom:1.1rem}
+.mast h1{font-family:var(--serif);font-weight:700;font-size:clamp(2.4rem,5.6vw,3.7rem);line-height:1.02;
+  letter-spacing:-.02em;margin:.2rem 0 .4rem}
+.mast h1 .x{color:var(--copper);font-style:italic;font-weight:600}
+.mast .sub{font-family:var(--sans);font-size:1.02rem;color:var(--muted);max-width:42rem;line-height:1.5}
+.mast .thesis{font-size:1.18rem;line-height:1.6;margin:1.8rem 0 0;max-width:43rem}
+.mast .thesis b{color:var(--ink);font-weight:600}
+.dateline{font-family:var(--mono);font-size:.7rem;color:var(--faint);letter-spacing:.06em;margin-top:1.6rem;
+  display:flex;flex-wrap:wrap;gap:.4rem 1.2rem}
+.dateline span b{color:var(--cyan);font-weight:500}
+
+/* ---------- dossier card ---------- */
+.dossier{margin:2.2rem 0 0;background:var(--panel);border:1px solid var(--border);border-radius:12px;
+  box-shadow:var(--shadow);overflow:hidden}
+.dossier .top{display:flex;align-items:center;gap:.7rem;padding:.7rem 1.1rem;background:var(--panel-2);
+  border-bottom:1px solid var(--border);font-family:var(--mono);font-size:.7rem;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
+.dossier .top .dot{width:7px;height:7px;border-radius:50%;background:var(--copper);box-shadow:0 0 0 3px color-mix(in oklab,var(--copper) 25%,transparent)}
+.dossier .body{padding:1.1rem 1.2rem 1.3rem}
+.dossier h3{margin:0;font-family:var(--sans);font-weight:700;font-size:1.18rem;letter-spacing:-.01em}
+.dossier .role{font-family:var(--mono);font-size:.74rem;color:var(--cyan);margin:.2rem 0 .8rem}
+.dossier p{margin:.5rem 0;font-size:.97rem;color:var(--muted)}
+.dossier .owns{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.9rem}
+.tag{font-family:var(--mono);font-size:.68rem;letter-spacing:.03em;padding:.22rem .55rem;border-radius:5px;
+  border:1px solid var(--border);color:var(--muted);background:var(--bg-2)}
+.tag.c{border-color:color-mix(in oklab,var(--copper) 40%,var(--border));color:var(--copper-2)}
+.tag.y{border-color:color-mix(in oklab,var(--cyan) 40%,var(--border));color:var(--cyan-2)}
+.tag.s{border-color:color-mix(in oklab,var(--sage) 40%,var(--border));color:var(--sage)}
+
+/* ---------- sections ---------- */
+section{padding:2.4rem 0 1rem;border-top:1px solid var(--hair);scroll-margin-top:3.4rem}
+section:first-of-type{border-top:none}
+.kicker{font-family:var(--mono);font-size:.72rem;letter-spacing:.18em;text-transform:uppercase;color:var(--copper);display:flex;align-items:center;gap:.7rem;margin-bottom:.6rem}
+.kicker::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,color-mix(in oklab,var(--copper) 45%,transparent),transparent)}
+h2{font-family:var(--serif);font-weight:700;font-size:clamp(1.7rem,3.4vw,2.25rem);line-height:1.08;
+  letter-spacing:-.018em;margin:.1rem 0 .5rem}
+h3{font-family:var(--serif);font-weight:600;font-size:1.32rem;line-height:1.18;margin:2rem 0 .5rem;letter-spacing:-.01em}
+h4{font-family:var(--sans);font-weight:700;font-size:.86rem;letter-spacing:.04em;text-transform:uppercase;color:var(--copper-2);margin:1.5rem 0 .4rem}
+.lede{font-size:1.12rem;color:var(--muted);line-height:1.58;margin:.4rem 0 1.2rem;max-width:43rem}
+p{margin:.85rem 0;max-width:43rem}
+strong{color:var(--ink);font-weight:600}
+em{color:var(--ink)}
+a{color:var(--link);text-decoration:none;border-bottom:1px solid color-mix(in oklab,var(--link) 40%,transparent);transition:border-color .15s,color .15s}
+a:hover{color:var(--cyan-2);border-bottom-color:var(--cyan)}
+ul,ol.list{max-width:43rem;padding-left:1.2rem;margin:.7rem 0}
+ul li,ol.list li{margin:.4rem 0}
+ul li::marker{color:var(--copper)}
+.mono-i{font-family:var(--mono);font-size:.86em;color:var(--cyan-2);background:color-mix(in oklab,var(--cyan) 8%,transparent);padding:.05em .35em;border-radius:4px;border:1px solid color-mix(in oklab,var(--cyan) 18%,transparent)}
+[data-theme="light"] .mono-i{background:color-mix(in oklab,var(--cyan) 12%,transparent)}
+.term{font-family:var(--mono);font-size:.86em;color:var(--copper-2);font-weight:500}
+
+/* ---------- code ---------- */
+figure.code{margin:1.3rem 0;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--inset);box-shadow:var(--shadow)}
+figure.code .cap{display:flex;align-items:center;justify-content:space-between;gap:1rem;
+  padding:.5rem .85rem;background:#10151c;border-bottom:1px solid #232c37;font-family:var(--mono);font-size:.7rem}
+[data-theme="light"] figure.code .cap{background:#11161d;border-bottom-color:#262f39}
+figure.code .cap .fn{color:#7f8a98;letter-spacing:.04em}
+figure.code .cap .fn b{color:var(--copper-2);font-weight:500}
+.copy{background:none;border:1px solid #2c3641;color:#8a94a1;font-family:var(--mono);font-size:.66rem;
+  padding:.2rem .5rem;border-radius:5px;cursor:pointer;letter-spacing:.06em;transition:.15s}
+.copy:hover{border-color:var(--cyan);color:var(--cyan-2)}
+.copy.ok{border-color:var(--sage);color:var(--sage)}
+figure.code pre{margin:0;padding:1rem 1.1rem;overflow-x:auto;background:var(--inset)}
+figure.code code,pre code{font-family:var(--mono);font-size:.83rem;line-height:1.62;color:#cdd4dd;white-space:pre;display:block}
+[data-theme="light"] figure.code code{color:#d4dae2}
+.tok-com{color:#6f7884;font-style:italic}
+.tok-str{color:#a9c9a0}
+.tok-kw{color:#df9a6a;font-weight:500}
+.tok-num{color:#7fcedb}
+.tok-pre{color:#c98ad0}
+.tok-fn{color:#86cfdd}
+.tok-type{color:#c7b07e}
+
+/* inline code in prose */
+:not(pre) > code{font-family:var(--mono);font-size:.84em;background:var(--bg-2);border:1px solid var(--hair);
+  color:var(--copper-2);padding:.06em .36em;border-radius:5px}
+[data-theme="light"] :not(pre) > code{background:#efe7d6}
+
+/* ---------- callouts ---------- */
+.call{position:relative;margin:1.4rem 0;padding:1rem 1.1rem 1.05rem 1.15rem;border-radius:10px;
+  border:1px solid var(--border);background:var(--panel);border-left-width:3px}
+.call .lbl{font-family:var(--mono);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;font-weight:700;
+  display:flex;align-items:center;gap:.5rem;margin-bottom:.45rem}
+.call p{margin:.4rem 0;font-size:.96rem}
+.call p:first-of-type{margin-top:0}
+.call code{font-size:.82em}
+.call.probe{border-left-color:var(--copper);background:color-mix(in oklab,var(--copper) 7%,var(--panel))}
+.call.probe .lbl{color:var(--copper-2)}
+.call.pitfall{border-left-color:var(--rust);background:color-mix(in oklab,var(--rust) 7%,var(--panel))}
+.call.pitfall .lbl{color:var(--rust)}
+.call.note{border-left-color:var(--sage);background:color-mix(in oklab,var(--sage) 7%,var(--panel))}
+.call.note .lbl{color:var(--sage)}
+.call.record{border-left-color:var(--cyan);background:color-mix(in oklab,var(--cyan) 7%,var(--panel))}
+.call.record .lbl{color:var(--cyan-2)}
+.call.spec{border-left-color:var(--faint);background:var(--bg-2)}
+.call.spec .lbl{color:var(--muted)}
+.call .src{font-family:var(--mono);font-size:.72rem;margin-top:.55rem;color:var(--faint)}
+.call .src a{border-bottom-style:dotted}
+
+/* answer block inside probe */
+.ans{margin-top:.5rem;padding-top:.5rem;border-top:1px dashed color-mix(in oklab,var(--copper) 30%,transparent)}
+.ans .mini{font-family:var(--mono);font-size:.64rem;letter-spacing:.12em;text-transform:uppercase;color:var(--copper);margin-bottom:.2rem}
+
+/* ---------- figures / svg ---------- */
+figure.fig{margin:1.7rem 0;border:1px solid var(--border);border-radius:12px;background:var(--panel);padding:1.2rem 1.1rem .8rem;box-shadow:var(--shadow)}
+figure.fig svg{width:100%;height:auto;display:block}
+figure.fig figcaption{font-family:var(--sans);font-size:.82rem;color:var(--faint);margin-top:.7rem;padding-top:.6rem;border-top:1px solid var(--hair);text-align:left}
+figure.fig figcaption b{color:var(--muted);font-weight:600}
+.svg-bg{fill:var(--bg-2)}
+.svg-panel{fill:var(--panel-2)}
+.svg-stroke{stroke:var(--border)}
+.svg-ink{fill:var(--ink)}
+.svg-muted{fill:var(--muted)}
+.svg-faint{fill:var(--faint)}
+.svg-copper{fill:var(--copper)}
+.svg-cyan{fill:var(--cyan)}
+.svg-sage{fill:var(--sage)}
+.svg-mono{font-family:var(--mono)}
+.svg-sans{font-family:var(--sans)}
+
+/* ---------- tables ---------- */
+.tablewrap{overflow-x:auto;margin:1.3rem 0;border:1px solid var(--border);border-radius:10px}
+table{border-collapse:collapse;width:100%;font-family:var(--sans);font-size:.86rem;min-width:30rem}
+th,td{text-align:left;padding:.6rem .8rem;border-bottom:1px solid var(--hair);vertical-align:top}
+th{font-family:var(--mono);font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;color:var(--copper-2);background:var(--panel-2);font-weight:600}
+tr:last-child td{border-bottom:none}
+td code{font-size:.8em}
+td b{color:var(--ink)}
+
+/* ---------- ref list ---------- */
+.refs{font-family:var(--sans);font-size:.86rem}
+.refs li{margin:.5rem 0;color:var(--muted)}
+.refs a{word-break:break-word}
+.refgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(15rem,1fr));gap:.4rem 1.4rem;font-family:var(--mono);font-size:.78rem}
+.refgrid a{display:block;padding:.15rem 0;border-bottom:1px dotted color-mix(in oklab,var(--cyan) 30%,transparent);overflow-wrap:anywhere;word-break:break-word}
+
+/* ---------- footer ---------- */
+footer{margin:3rem 0 4rem;padding-top:1.4rem;border-top:1px solid var(--border);
+  font-family:var(--mono);font-size:.72rem;color:var(--faint);line-height:1.7}
+footer b{color:var(--copper)}
+
+/* ---------- misc ---------- */
+.hr-note{font-family:var(--mono);font-size:.7rem;color:var(--faint);letter-spacing:.05em;margin:.4rem 0 0}
+hr.soft{border:none;border-top:1px solid var(--hair);margin:2rem 0}
+.pull{font-family:var(--serif);font-style:italic;font-size:1.3rem;line-height:1.4;color:var(--ink);
+  border-left:3px solid var(--copper);padding:.2rem 0 .2rem 1.1rem;margin:1.6rem 0;max-width:40rem}
+.kbd{font-family:var(--mono);font-size:.78em;border:1px solid var(--border);border-bottom-width:2px;border-radius:5px;padding:.05em .4em;background:var(--bg-2);color:var(--muted)}
+
+::selection{background:color-mix(in oklab,var(--copper) 35%,transparent);color:var(--ink)}
+:focus-visible{outline:2px solid var(--cyan);outline-offset:2px;border-radius:3px}
+nav.toc::-webkit-scrollbar,figure.code pre::-webkit-scrollbar,.tablewrap::-webkit-scrollbar{height:9px;width:9px}
+nav.toc::-webkit-scrollbar-thumb,figure.code pre::-webkit-scrollbar-thumb,.tablewrap::-webkit-scrollbar-thumb{background:var(--border);border-radius:6px}
+
+/* ---------- responsive ---------- */
+@media (max-width: 60rem){
+  body{font-size:17px}
+  .shell{grid-template-columns:1fr}
+  nav.toc{position:fixed;top:2.9rem;left:0;width:min(20rem,84vw);height:calc(100vh - 2.9rem);
+    background:var(--bg);z-index:45;transform:translateX(-105%);transition:transform .22s ease;border-right:1px solid var(--border)}
+  nav.toc.open{transform:translateX(0)}
+  .navtoggle{display:inline-block}
+  main{padding:0 1.15rem}
+  .scrim{position:fixed;inset:2.9rem 0 0 0;background:rgba(0,0,0,.5);z-index:44;opacity:0;pointer-events:none;transition:opacity .2s}
+  .scrim.show{opacity:1;pointer-events:auto}
+}
+@media (prefers-reduced-motion: reduce){*{transition:none !important;animation:none !important}}
+@media print{
+  .util,nav.toc,#progress,.scrim,.copy{display:none}
+  .shell{display:block}
+  main{padding:0}
+  body{background:#fff;color:#000;font-size:11pt}
+  figure.code,figure.fig,.call,.dossier{break-inside:avoid}
+}
+</style>
+</head>
+<body>
+<div id="progress"></div>
+
+<div class="util">
+  <div class="sig"><b>FIELD MANUAL</b> · NV-CORE / TORCH-CUDA</div>
+  <div class="util-right">
+    <button class="navtoggle" id="navToggle" aria-label="Toggle contents">☰ Contents</button>
+    <button class="themebtn" id="themeBtn" aria-label="Toggle theme"><span id="themeIcon">◐</span> <span id="themeTxt">Light</span></button>
+  </div>
+</div>
+
+<div class="scrim" id="scrim"></div>
+
+<div class="shell">
+<nav class="toc" id="toc" aria-label="Table of contents">
+  <div class="tochead">Contents</div>
+  <div class="grp">Orientation</div>
+  <ol>
+    <li><a href="#interviewer"><span class="n">00</span><span>The interviewer &amp; the team</span></a></li>
+    <li><a href="#map"><span class="n">01</span><span>The stack, end to end</span></a></li>
+  </ol>
+  <div class="grp">Core mechanism</div>
+  <ol>
+    <li><a href="#tensor"><span class="n">02</span><span>Tensor · TensorImpl · Storage</span></a></li>
+    <li><a href="#dispatcher"><span class="n">03</span><span>The dispatcher</span></a></li>
+    <li><a href="#aten"><span class="n">04</span><span>ATen CUDA kernels &amp; TensorIterator</span></a></li>
+    <li><a href="#autograd"><span class="n">05</span><span>Autograd &amp; autocast as keys</span></a></li>
+  </ol>
+  <div class="grp">The CUDA runtime layer</div>
+  <ol>
+    <li><a href="#allocator"><span class="n">06</span><span>The caching allocator</span></a></li>
+    <li><a href="#streams"><span class="n">07</span><span>Streams, events, async model</span></a></li>
+    <li><a href="#graphs"><span class="n">08</span><span>CUDA graphs</span></a></li>
+  </ol>
+  <div class="grp">Eddie's home turf</div>
+  <ol>
+    <li><a href="#cudnn"><span class="n">09</span><span>cuDNN integration</span></a></li>
+    <li><a href="#sdpa"><span class="n">10</span><span>SDPA &amp; backend dispatch</span></a></li>
+    <li><a href="#cublas"><span class="n">11</span><span>cuBLAS / cuBLASLt &amp; matmul</span></a></li>
+    <li><a href="#tf32"><span class="n">12</span><span>TF32 &amp; the fp32_precision migration</span></a></li>
+  </ol>
+  <div class="grp">Compilation &amp; lifecycle</div>
+  <ol>
+    <li><a href="#compile"><span class="n">13</span><span>torch.compile / Inductor</span></a></li>
+    <li><a href="#lifecycle"><span class="n">14</span><span>Build, CI &amp; release engineering</span></a></li>
+  </ol>
+  <div class="grp">The room</div>
+  <ol>
+    <li><a href="#mock"><span class="n">15</span><span>Mock questions &amp; answers</span></a></li>
+    <li><a href="#edge"><span class="n">16</span><span>Your edge: how to connect it</span></a></li>
+    <li><a href="#appendix"><span class="n">17</span><span>Source index &amp; cheat-sheets</span></a></li>
+  </ol>
+</nav>
+
+<main>
+<div class="wrap">
+
+<header class="mast">
+  <div class="eyebrow">Interview Dossier · Prepared for Zoey</div>
+  <h1>PyTorch <span class="x">×</span> CUDA</h1>
+  <div class="sub">A systematic field manual for the Senior C++ Software Engineer interview — Deep Learning Frameworks (CUDA core team), NVIDIA. Built around the parts of the stack your panel actually owns.</div>
+
+  <p class="thesis">There is one sentence to keep in your head the whole hour: <b>PyTorch is a dispatcher wrapping a tensor library, and the CUDA core team owns everything from the moment dispatch lands on the CUDA key down to the driver</b> — the caching allocator, streams and graphs, the cuDNN/cuBLAS bindings, the SDPA and convolution backends, mixed precision, and the build that ships it all. Everything below is organized so you can speak fluently about that path, in both directions.</p>
+
+  <div class="dateline">
+    <span>COMPILED · <b>2026-06-09</b></span>
+    <span>TARGET · <b>JR2016185-adjacent (core)</b></span>
+    <span>PANEL LEAD · <b>Eddie Yan · @eqy</b></span>
+    <span>BASELINE · <b>PyTorch 2.9 → main</b></span>
+  </div>
+
+  <div class="dossier">
+    <div class="top"><span class="dot"></span> Dossier · primary interviewer</div>
+    <div class="body">
+      <h3>Eddie Yan <span style="color:var(--faint);font-weight:400;font-family:var(--mono);font-size:.8rem">github.com/eqy</span></h3>
+      <div class="role">Technical Lead, PyTorch @ NVIDIA · Deep Learning Frameworks</div>
+      <p>Profile tagline reads <em>"nvprof is dead, long live nsys nvprof"</em> — read that as: he lives in profilers and expects you to reason about <strong>where time and memory actually go</strong>, not just API surface. He presented at GTC 2025 on using cuDNN's CUDA-graph support to avoid graph rebuilds. He is the person who lands and reviews most of the cuDNN plumbing in core.</p>
+      <p>His commit and review history clusters tightly. Expect questions to start concrete (a kernel, an allocator behavior, a backend-selection rule) and widen into design tradeoffs.</p>
+      <div class="owns">
+        <span class="tag c">cuDNN integration</span>
+        <span class="tag c">conv + SDPA backends</span>
+        <span class="tag y">CUDA graphs</span>
+        <span class="tag y">TF32 / fp32 precision</span>
+        <span class="tag s">build / CI / wheels</span>
+        <span class="tag s">profiling (nsys / ncu)</span>
+      </div>
+    </div>
+  </div>
+
+  <p class="hr-note">↓ Read top-to-bottom once for the mental model; jump via the rail when you want to drill. Code wells are copyable. Callouts marked <span style="color:var(--copper)">PROBE</span> are likely questions with answer sketches.</p>
+</header>
+
+<!-- ============ 00 INTERVIEWER ============ -->
+<section id="interviewer">
+  <div class="kicker">Section 00 · Orientation</div>
+  <h2>The interviewer &amp; the team</h2>
+  <p class="lede">You applied to a "Life Cycle Engineer" posting, but the hiring manager routed you to the <strong>core CUDA team</strong> inside Deep Learning Frameworks — the group that maintains the CUDA half of <code>libtorch</code>. That reroute matters: it tells you the bar is real C++/CUDA systems engineering, not just CI plumbing. Calibrate accordingly.</p>
+
+  <h3>Who is in the room (and who reviews their code)</h3>
+  <p>NVIDIA's PyTorch group is small and senior. Even if Eddie is your only scheduled interviewer, knowing the cast helps you name-drop accurately and understand review culture.</p>
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Person</th><th>Handle</th><th>Owns / known for</th></tr></thead>
+    <tbody>
+      <tr><td><b>Eddie Yan</b></td><td><code>@eqy</code></td><td>Tech Lead. cuDNN integration, conv, cuDNN-SDPA, TF32, CUDA-graph/cuDNN, build matrices.</td></tr>
+      <tr><td><b>Piotr Bialecki</b></td><td><code>@ptrblck</code></td><td>The public face of PyTorch+CUDA support; cc'd on essentially every CUDA PR. Deep allocator/runtime knowledge.</td></tr>
+      <tr><td><b>Christian Sarofeen</b></td><td><code>@csarofeen</code></td><td>Fusion (nvFuser lineage), normalization, CUDA perf. cc'd on cudnn/cuda labels.</td></tr>
+      <tr><td><b>Mike Ruberry</b></td><td>—</td><td>Distinguished Engineer; primitives/reference ops, the <em>composite</em> op philosophy.</td></tr>
+      <tr><td><b>Masaki Kozuki</b></td><td><code>@crcrpar</code></td><td>AMP / <code>foreach</code> / optimizer fusion, CUDA graphs in training.</td></tr>
+      <tr><td><b>Driss Guessous</b></td><td><code>@drisspg</code></td><td>SDPA / FlexAttention owner — your cuDNN-SDPA conversations will reference his dispatch code.</td></tr>
+      <tr><td><b>Xiao Wang</b></td><td><code>@xwang233</code></td><td>cuDNN/cuBLAS, benchmarking, precision flags. Frequent co-author with Eddie.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>What the core team actually owns</h3>
+  <p>Concretely, this is the surface area. Be able to point at the directory for each:</p>
+  <ul>
+    <li><strong>The CUDA backend of ATen</strong> — <code>aten/src/ATen/native/cuda/</code> (elementwise, reductions, indexing, sort, etc.) and the <code>cudnn/</code>, <code>miopen/</code>, <code>transformers/cuda/</code> trees.</li>
+    <li><strong>The c10 CUDA runtime</strong> — <code>c10/cuda/</code>: the caching allocator, stream pool, device guards, the CUDA error wrappers.</li>
+    <li><strong>Library bindings</strong> — cuDNN, cuBLAS/cuBLASLt, cuSPARSE, cuSOLVER, NCCL, and increasingly CUTLASS-derived kernels.</li>
+    <li><strong>Numerical-precision policy</strong> — TF32, reduced-precision reductions, the new <code>fp32_precision</code> knobs.</li>
+    <li><strong>The build &amp; ship pipeline</strong> — multi-CUDA wheels, cuDNN/cuBLAS bundling, the version matrices, symbol/linking correctness. This is literally the "life cycle" the original JD names.</li>
+  </ul>
+
+  <div class="call note">
+    <div class="lbl">◈ What they are screening for</div>
+    <p>From the posting and Eddie's footprint: <strong>C++ fluency under real constraints</strong> (the JD calls out "symbol resolution, and linking problems"), the ability to <strong>debug across the whole vertical</strong> (Python → ATen → cuDNN → driver), <strong>profiler literacy</strong>, and judgment about <strong>tradeoffs</strong> (when to add a backend vs. unify, when to autotune vs. fix an algorithm). They are not screening for ML modeling knowledge.</p>
+  </div>
+
+  <h3>How to drive the conversation</h3>
+  <p>Senior interviews reward candidates who <em>structure</em> the answer. A reliable move: when asked "how does X work," answer in three beats — <strong>(1) the mechanism</strong> (what the code does), <strong>(2) why it's designed that way</strong> (the constraint it serves), <strong>(3) where it breaks</strong> (the failure mode and how you'd debug it). That last beat is where Eddie's profiler instinct lives, and it's what separates "read the docs" from "shipped the code."</p>
+
+  <div class="call probe">
+    <div class="lbl">▸ Probe · likely opener</div>
+    <p>"Walk me through what happens when I call <code>y = torch.relu(x)</code> on a CUDA tensor."</p>
+    <div class="ans">
+      <div class="mini">Answer arc</div>
+      <p>Python binding → ATen op → the <strong>dispatcher</strong> computes a <code>DispatchKeySet</code> from <code>x</code> (CUDA, plus Autograd if <code>requires_grad</code>, plus Autocast if enabled) → Autograd key records the node and redispatches → lands on the <strong>CUDA</strong> kernel → <code>TensorIterator</code> sets up shapes/dtypes → <code>gpu_kernel</code> launches an elementwise CUDA kernel on the <strong>current stream</strong>, with output memory from the <strong>caching allocator</strong>. Then name the failure modes: launch overhead if x is tiny (→ graphs/fusion), and the fact that the kernel is queued async so timing needs an event or <code>synchronize()</code>. That single answer touches half this manual — use it to signal range.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 01 MAP ============ -->
+<section id="map">
+  <div class="kicker">Section 01 · Orientation</div>
+  <h2>The stack, end to end</h2>
+  <p class="lede">Hold the whole vertical in one picture. The genius of PyTorch's design is that the <em>same</em> operator definition flows through optional cross-cutting layers (autograd, autocast, tracing) before resolving to a device kernel — and the CUDA team owns the bottom third of this diagram.</p>
+
+  <figure class="fig">
+    <svg viewBox="0 0 720 470" role="img" aria-label="PyTorch stack from Python frontend down to the CUDA driver">
+      <defs>
+        <marker id="arr" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" class="svg-faint"/></marker>
+      </defs>
+      <!-- layers -->
+      <g class="svg-sans" font-size="13">
+        <!-- python -->
+        <rect x="40" y="20" width="640" height="52" rx="8" class="svg-panel svg-stroke" stroke-width="1"/>
+        <text x="60" y="42" class="svg-ink" font-weight="700">Python frontend</text>
+        <text x="60" y="60" class="svg-muted" font-size="11.5">torch.* · nn.Module · autograd.Function · torch.compile entry</text>
+        <text x="660" y="50" text-anchor="end" class="svg-mono svg-faint" font-size="10.5">torch/</text>
+
+        <!-- bindings -->
+        <rect x="40" y="84" width="640" height="46" rx="8" class="svg-panel svg-stroke" stroke-width="1"/>
+        <text x="60" y="104" class="svg-ink" font-weight="700">C++ bindings &amp; autograd engine</text>
+        <text x="60" y="121" class="svg-muted" font-size="11.5">pybind / codegen'd Python_*.cpp · the reverse-mode tape</text>
+        <text x="660" y="112" text-anchor="end" class="svg-mono svg-faint" font-size="10.5">torch/csrc/</text>
+
+        <!-- dispatcher band -->
+        <rect x="40" y="142" width="640" height="84" rx="8" fill="none" stroke="var(--copper)" stroke-width="1.4" stroke-dasharray="4 3"/>
+        <text x="56" y="160" class="svg-copper svg-mono" font-size="10.5" font-weight="700">THE DISPATCHER — one fn-pointer table per operator, keyed by DispatchKey</text>
+        <g font-size="10.5">
+          <rect x="56" y="170" width="118" height="44" rx="6" class="svg-bg svg-stroke" stroke-width="1"/>
+          <text x="115" y="188" text-anchor="middle" class="svg-muted">Autocast</text>
+          <text x="115" y="203" text-anchor="middle" class="svg-faint" font-size="9">cast policy</text>
+          <rect x="184" y="170" width="118" height="44" rx="6" class="svg-bg svg-stroke" stroke-width="1"/>
+          <text x="243" y="188" text-anchor="middle" class="svg-muted">Autograd</text>
+          <text x="243" y="203" text-anchor="middle" class="svg-faint" font-size="9">record + redispatch</text>
+          <rect x="312" y="170" width="150" height="44" rx="6" class="svg-bg svg-stroke" stroke-width="1"/>
+          <text x="387" y="188" text-anchor="middle" class="svg-muted">ADInplaceOrView</text>
+          <text x="387" y="203" text-anchor="middle" class="svg-faint" font-size="9">alias / version bump</text>
+          <rect x="472" y="170" width="150" height="44" rx="6" fill="none" stroke="var(--copper)" stroke-width="1.4"/>
+          <text x="547" y="188" text-anchor="middle" class="svg-copper" font-weight="700">CPU / CUDA</text>
+          <text x="547" y="203" text-anchor="middle" class="svg-faint" font-size="9">the real kernel</text>
+        </g>
+
+        <!-- aten cuda -->
+        <rect x="40" y="238" width="640" height="58" rx="8" class="svg-panel svg-stroke" stroke-width="1"/>
+        <text x="60" y="258" class="svg-ink" font-weight="700">ATen — CUDA kernels</text>
+        <text x="60" y="276" class="svg-muted" font-size="11.5">TensorIterator · gpu_kernel · reductions · indexing · structured kernels</text>
+        <text x="660" y="266" text-anchor="end" class="svg-mono svg-faint" font-size="10.5">aten/src/ATen/native/cuda/</text>
+
+        <!-- libs row -->
+        <g font-size="11">
+          <rect x="40" y="308" width="152" height="50" rx="8" class="svg-bg svg-stroke" stroke-width="1"/>
+          <text x="116" y="330" text-anchor="middle" class="svg-cyan" font-weight="700">cuDNN</text>
+          <text x="116" y="346" text-anchor="middle" class="svg-faint" font-size="9.5">conv · SDPA · norm</text>
+          <rect x="200" y="308" width="152" height="50" rx="8" class="svg-bg svg-stroke" stroke-width="1"/>
+          <text x="276" y="330" text-anchor="middle" class="svg-cyan" font-weight="700">cuBLAS(Lt)</text>
+          <text x="276" y="346" text-anchor="middle" class="svg-faint" font-size="9.5">matmul · GEMM</text>
+          <rect x="360" y="308" width="152" height="50" rx="8" class="svg-bg svg-stroke" stroke-width="1"/>
+          <text x="436" y="330" text-anchor="middle" class="svg-cyan" font-weight="700">NCCL</text>
+          <text x="436" y="346" text-anchor="middle" class="svg-faint" font-size="9.5">collectives</text>
+          <rect x="520" y="308" width="160" height="50" rx="8" class="svg-bg svg-stroke" stroke-width="1"/>
+          <text x="600" y="330" text-anchor="middle" class="svg-cyan" font-weight="700">CUTLASS / Triton</text>
+          <text x="600" y="346" text-anchor="middle" class="svg-faint" font-size="9.5">codegen'd kernels</text>
+        </g>
+
+        <!-- c10 cuda runtime -->
+        <rect x="40" y="370" width="640" height="52" rx="8" fill="none" stroke="var(--sage)" stroke-width="1.4"/>
+        <text x="60" y="390" class="svg-sage" font-weight="700">c10 CUDA runtime</text>
+        <text x="60" y="408" class="svg-muted" font-size="11.5">caching allocator · stream pool · CUDA graphs · device guards</text>
+        <text x="660" y="400" text-anchor="end" class="svg-mono svg-faint" font-size="10.5">c10/cuda/</text>
+
+        <!-- driver -->
+        <rect x="40" y="434" width="640" height="26" rx="6" class="svg-bg svg-stroke" stroke-width="1"/>
+        <text x="360" y="451" text-anchor="middle" class="svg-faint svg-mono" font-size="10.5">CUDA Runtime / Driver · PTX · SASS · the GPU</text>
+      </g>
+      <!-- connectors -->
+      <g stroke="var(--faint)" stroke-width="1.2" fill="none" opacity=".7">
+        <line x1="360" y1="72" x2="360" y2="82" marker-end="url(#arr)"/>
+        <line x1="360" y1="130" x2="360" y2="140" marker-end="url(#arr)"/>
+        <line x1="360" y1="226" x2="360" y2="236" marker-end="url(#arr)"/>
+        <line x1="360" y1="296" x2="360" y2="306" marker-end="url(#arr)"/>
+        <line x1="360" y1="358" x2="360" y2="368" marker-end="url(#arr)"/>
+        <line x1="360" y1="422" x2="360" y2="432" marker-end="url(#arr)"/>
+      </g>
+    </svg>
+    <figcaption><b>The vertical.</b> Cross-cutting concerns (autocast, autograd, view-tracking) are <em>dispatch keys</em> layered above the device kernel, each able to intercept and re-dispatch. The CUDA team owns the dashed-copper CUDA path and everything below it.</figcaption>
+  </figure>
+
+  <h3>The five repos-within-the-repo you should name</h3>
+  <ol class="list">
+    <li><strong>c10</strong> — "Caffe2 + ATen 10", the core library: <code>TensorImpl</code>, <code>Storage</code>, <code>Device</code>, <code>DispatchKey</code>, <code>ScalarType</code>, and the CUDA runtime (<code>c10/cuda</code>). No autograd, no ops — just the substrate.</li>
+    <li><strong>ATen</strong> — the tensor library and the ~2,000+ operators. <code>native_functions.yaml</code> is its registry.</li>
+    <li><strong>torch/csrc</strong> — the C++ that binds ATen to Python and houses the autograd engine, the JIT, and distributed.</li>
+    <li><strong>torch (python)</strong> — the user-facing package, plus Dynamo/Inductor (<code>torch/_dynamo</code>, <code>torch/_inductor</code>).</li>
+    <li><strong>functorch / vmap / decompositions</strong> — the transform layer that AOTAutograd and Inductor lean on.</li>
+  </ol>
+
+  <div class="call record">
+    <div class="lbl">◆ On the record</div>
+    <p>The canonical internal explainer is ezyang's dispatcher talk — if Eddie asks where you learned the internals, this is the right citation, alongside the in-tree wiki walkthrough.</p>
+    <div class="src">→ <a href="https://blog.ezyang.com/2020/09/lets-talk-about-the-pytorch-dispatcher/" target="_blank" rel="noopener">ezyang — "Let's talk about the PyTorch dispatcher"</a> · <a href="https://github.com/pytorch/pytorch/wiki/PyTorch-dispatcher-walkthrough" target="_blank" rel="noopener">in-tree dispatcher walkthrough</a></div>
+  </div>
+</section>
+
+<!-- ============ 02 TENSOR ============ -->
+<section id="tensor">
+  <div class="kicker">Section 02 · Core mechanism</div>
+  <h2>Tensor · TensorImpl · Storage</h2>
+  <p class="lede">Before dispatch makes sense, the data model has to. A <code>Tensor</code> in PyTorch is a thin, reference-counted <em>handle</em>; the metadata and the bytes live in two separate objects. Getting this triple right is the foundation for views, aliasing, and why the caching allocator can hand out device pointers safely.</p>
+
+  <h3>The triple</h3>
+  <ul>
+    <li><strong><code>at::Tensor</code></strong> — a <code>c10::intrusive_ptr&lt;TensorImpl&gt;</code>. Copying a Tensor bumps a refcount; it does not copy data. This is why passing tensors by value is cheap.</li>
+    <li><strong><code>TensorImpl</code></strong> — the metadata: <code>sizes</code>, <code>strides</code>, <code>storage_offset</code>, <code>dtype</code> (<code>ScalarType</code>), <code>device</code>, the <strong><code>DispatchKeySet</code></strong>, autograd metadata (<code>AutogradMeta</code>), and a pointer to the <code>Storage</code>.</li>
+    <li><strong><code>Storage</code></strong> — a refcounted buffer holding a <code>DataPtr</code> = <em>{raw pointer, Allocator, Device}</em>. For a CUDA tensor the raw pointer is a <strong>device address</strong> and the allocator is the <code>CUDACachingAllocator</code>.</li>
+  </ul>
+
+  <p>A <strong>view</strong> (<code>x.transpose(0,1)</code>, <code>x[2:]</code>, <code>x.view(...)</code>) makes a new <code>TensorImpl</code> that points at the <em>same</em> <code>Storage</code> with different sizes/strides/offset. No bytes move. That single fact drives the <em>ADInplaceOrView</em> dispatch key (version counters so autograd can detect a mutation through an alias) and a whole class of correctness bugs you should be ready to discuss.</p>
+
+  <figure class="code">
+    <div class="cap"><span class="fn">repl · <b>tensor metadata is just sizes + strides over a flat buffer</b></span><button class="copy">copy</button></div>
+<pre><code data-lang="py">import torch
+x = torch.arange(12, device="cuda").reshape(3, 4)   # contiguous
+xt = x.t()                                           # a VIEW: shares storage
+
+x.stride(), xt.stride()        # (4, 1)  vs  (1, 4)  — same bytes, swapped strides
+xt.is_contiguous()             # False — row-major no longer holds
+xt.data_ptr() == x.data_ptr()  # True   — identical Storage / device pointer
+
+# Materialize a contiguous copy only when a kernel needs it:
+xtc = xt.contiguous()          # allocates fresh memory, copies, stride (4,1)
+
+# storage_offset lets a view start partway into the buffer:
+x[1].storage_offset()          # 4  (skips the first row)</code></pre>
+  </figure>
+
+  <div class="call spec">
+    <div class="lbl">▤ Spec · contiguity, precisely</div>
+    <p>A tensor is <em>contiguous</em> (in the default sense) when iterating its logical indices in row-major order walks memory with monotonically packed strides — i.e. <code>stride[i] == stride[i+1] * size[i+1]</code> and the innermost stride is 1. Channels-last (<code>NHWC</code>) is a different but equally "contiguous" memory format; cuDNN convolutions are sensitive to it, which is why <code>x.to(memory_format=torch.channels_last)</code> is a real performance lever, not a no-op.</p>
+  </div>
+
+  <h3>dtype dispatch in kernels</h3>
+  <p>Inside a CUDA kernel you don't write per-dtype branches by hand — you use the <code>AT_DISPATCH_*</code> macros, which switch on the runtime <code>ScalarType</code> and instantiate the templated lambda for the concrete C++ type. This is the bridge between dynamic Python dtypes and static C++ templates.</p>
+
+  <figure class="code">
+    <div class="cap"><span class="fn">C++ · <b>AT_DISPATCH turns a runtime dtype into a compile-time type</b></span><button class="copy">copy</button></div>
+<pre><code data-lang="cpp">// a simplified CUDA kernel entry point
+Tensor& my_op_cuda(const Tensor& self, Tensor& out) {
+  AT_DISPATCH_FLOATING_TYPES_AND2(
+      at::kHalf, at::kBFloat16, self.scalar_type(), "my_op_cuda", [&] {
+    // scalar_t is now float / double / at::Half / at::BFloat16
+    auto iter = TensorIterator::unary_op(out, self);
+    gpu_kernel(iter, [] GPU_LAMBDA (scalar_t a) -> scalar_t {
+      return a > scalar_t(0) ? a : scalar_t(0);   // relu, elementwise
+    });
+  });
+  return out;
+}</code></pre>
+  </figure>
+</section>
+
+<!-- ============ 03 DISPATCHER ============ -->
+<section id="dispatcher">
+  <div class="kicker">Section 03 · Core mechanism</div>
+  <h2>The dispatcher</h2>
+  <p class="lede">This is the heart of PyTorch and the single most likely deep-dive in a core interview. The dispatcher is, in ezyang's framing, a per-operator table of function pointers indexed by <strong>dispatch key</strong> — and dispatch keys correspond to the cross-cutting concerns (device, autograd, autocast, tracing) that compose to define an operator's full behavior.</p>
+
+  <h3>How a key is chosen</h3>
+  <p>Every <code>TensorImpl</code> carries a <code>DispatchKeySet</code> (a 64-bit bitset). On an operator call, the dispatcher unions the key sets of the relevant tensor arguments, applies any thread-local includes/excludes (this is how <code>autocast</code> and <code>no_grad</code> toggle behavior), and selects the <strong>highest-priority key still in the set</strong>. Priority order is fixed: roughly <em>Autocast &gt; Autograd &gt; ADInplaceOrView &gt; backend (CUDA/CPU)</em>. The chosen kernel may do its work and then <strong>re-dispatch</strong> to the next key down — that's the whole trick.</p>
+
+  <figure class="fig">
+    <svg viewBox="0 0 720 330" role="img" aria-label="Dispatch flow for a CUDA op with autocast and autograd active">
+      <defs><marker id="arr2" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" class="svg-copper"/></marker></defs>
+      <g class="svg-sans" font-size="12">
+        <text x="30" y="26" class="svg-mono svg-faint" font-size="10.5">call: torch.mm(a, b)  ·  a,b are CUDA, requires_grad=True, autocast on</text>
+
+        <!-- compute keyset -->
+        <rect x="30" y="40" width="200" height="58" rx="8" class="svg-panel svg-stroke" stroke-width="1"/>
+        <text x="44" y="62" class="svg-ink" font-weight="700">1 · compute keyset</text>
+        <text x="44" y="80" class="svg-faint svg-mono" font-size="10">{CUDA, Autograd,</text>
+        <text x="44" y="92" class="svg-faint svg-mono" font-size="10"> Autocast, ...}</text>
+
+        <!-- autocast -->
+        <rect x="260" y="40" width="180" height="58" rx="8" class="svg-bg" stroke="var(--cyan)" stroke-width="1.3"/>
+        <text x="350" y="60" text-anchor="middle" class="svg-cyan" font-weight="700">2 · Autocast</text>
+        <text x="350" y="78" text-anchor="middle" class="svg-faint" font-size="10">cast fp32→fp16</text>
+        <text x="350" y="91" text-anchor="middle" class="svg-faint" font-size="10">then redispatch ↓</text>
+
+        <!-- autograd -->
+        <rect x="470" y="40" width="220" height="58" rx="8" class="svg-bg" stroke="var(--copper)" stroke-width="1.3"/>
+        <text x="580" y="60" text-anchor="middle" class="svg-copper" font-weight="700">3 · Autograd</text>
+        <text x="580" y="78" text-anchor="middle" class="svg-faint" font-size="10">record MmBackward node</text>
+        <text x="580" y="91" text-anchor="middle" class="svg-faint" font-size="10">redispatch ↓ (excl. Autograd)</text>
+
+        <!-- inplaceorview -->
+        <rect x="260" y="150" width="180" height="56" rx="8" class="svg-bg svg-stroke" stroke-width="1"/>
+        <text x="350" y="172" text-anchor="middle" class="svg-muted" font-weight="700">4 · ADInplaceOrView</text>
+        <text x="350" y="190" text-anchor="middle" class="svg-faint" font-size="10">(no-op for mm; bumps</text>
+        <text x="350" y="201" text-anchor="middle" class="svg-faint" font-size="10">version for in-place ops)</text>
+
+        <!-- CUDA kernel -->
+        <rect x="470" y="150" width="220" height="56" rx="8" class="svg-panel" stroke="var(--copper)" stroke-width="1.6"/>
+        <text x="580" y="172" text-anchor="middle" class="svg-copper" font-weight="700">5 · CUDA kernel</text>
+        <text x="580" y="190" text-anchor="middle" class="svg-faint" font-size="10">at::native::mm_cuda →</text>
+        <text x="580" y="201" text-anchor="middle" class="svg-faint" font-size="10">cuBLAS(Lt) GEMM</text>
+
+        <!-- result -->
+        <rect x="470" y="250" width="220" height="44" rx="8" class="svg-bg" stroke="var(--sage)" stroke-width="1.3"/>
+        <text x="580" y="277" text-anchor="middle" class="svg-sage" font-weight="700">out tensor (fp16) + grad_fn</text>
+
+        <g stroke="var(--copper)" stroke-width="1.4" fill="none">
+          <line x1="230" y1="69" x2="258" y2="69" marker-end="url(#arr2)"/>
+          <line x1="440" y1="69" x2="468" y2="69" marker-end="url(#arr2)"/>
+          <path d="M580,98 L580,124 L350,124 L350,148" marker-end="url(#arr2)"/>
+          <line x1="440" y1="178" x2="468" y2="178" marker-end="url(#arr2)"/>
+          <line x1="580" y1="206" x2="580" y2="248" marker-end="url(#arr2)"/>
+        </g>
+      </g>
+    </svg>
+    <figcaption><b>Compose, don't branch.</b> Each layer does its slice of work and re-dispatches with its own key excluded, so it never re-enters itself. The backend kernel sits at the bottom and does the actual compute — here, a cuBLAS GEMM on fp16 inputs that autocast produced.</figcaption>
+  </figure>
+
+  <h3>Where kernels come from: codegen + <code>native_functions.yaml</code></h3>
+  <p>You almost never call <code>m.impl()</code> by hand for a standard op. Instead you declare the operator and its per-backend kernels in <code>native_functions.yaml</code>, and codegen emits the registration into files like <code>RegisterCUDA.cpp</code>. <strong>Structured kernels</strong> go further: you write a <code>meta()</code> function (shape/dtype inference + output allocation) once, and an <code>impl()</code> that fills the pre-allocated output, and codegen generates the functional/out/inplace variants for you.</p>
+
+  <figure class="code">
+    <div class="cap"><span class="fn">aten/src/ATen/native/<b>native_functions.yaml</b> · the operator registry</span><button class="copy">copy</button></div>
+<pre><code data-lang="yaml"># a structured op declares its variants and per-key kernels
+- func: relu(Tensor self) -> Tensor
+  structured_delegate: relu.out          # share meta() with the .out variant
+  dispatch:
+    CPU, CUDA: relu                       # one symbol, two backend impls
+    MPS: relu_mps
+  autogen: relu.out
+
+# the .out variant is where structured meta+impl live
+- func: relu.out(Tensor self, *, Tensor(a!) out) -> Tensor(a!)
+  structured: True
+  dispatch:
+    CPU: relu_out_cpu
+    CUDA: relu_out_cuda</code></pre>
+  </figure>
+
+  <h4>Boxed vs unboxed — the one paragraph that impresses</h4>
+  <p>Eager Python/C++ calls use the <strong>unboxed</strong> path: templated metaprogramming reads only the tensor arguments to build the key, then calls a concrete function pointer — fast, no allocation. JIT, mobile, and cross-cutting <em>fallbacks</em> (autocast, profiling, a future Lazy backend) use the <strong>boxed</strong> path: arguments are packed into a stack of <code>IValue</code>s so one generic function can handle <em>any</em> operator. PyTorch maintains a bridge (<code>make_boxed_from_unboxed_functor</code>) so a kernel written one way can be called the other. The payoff of boxed fallbacks is binary size: one function instead of one-per-op across 2,000+ ops — which is exactly why mobile cares.</p>
+
+  <div class="call probe">
+    <div class="lbl">▸ Probe · design judgment</div>
+    <p>"cuDNN SDPA is just another attention backend. Why is it a <em>separate dispatched op</em> rather than folded into the existing attention op?"</p>
+    <div class="ans">
+      <div class="mini">Answer arc</div>
+      <p>This is a real tension Eddie and albanD debated on the cuDNN-SDPA PR. Adding a backend as its own op grows the operator surface (more ops, more coverage matrix) — "op bloat." The alternative is a <em>composite explicit</em> op that unifies many backends behind one schema (the path batch-norm consolidation took). The pragmatic call on SDPA was to accept the backend tech debt <strong>for velocity</strong>, because cuDNN-SDPA's support matrix doesn't neatly cover flash/mem-efficient anyway, so unification would be lossy. The mature answer names the tradeoff (surface area &amp; maintainability vs. shipping speed &amp; clean dispatch rules) and notes that consolidation is an ongoing, deliberate effort — not an accident.</p>
+    </div>
+    <div class="src">→ <a href="https://github.com/pytorch/pytorch/pull/122510" target="_blank" rel="noopener">PR #122510 — cuDNN SDPA backward (the discussion thread)</a></div>
+  </div>
+</section>
+
+<!-- ============ 04 ATEN CUDA ============ -->
+<section id="aten">
+  <div class="kicker">Section 04 · Core mechanism</div>
+  <h2>ATen CUDA kernels &amp; TensorIterator</h2>
+  <p class="lede">Once dispatch lands on the CUDA key, most pointwise and reduction ops route through <code>TensorIterator</code> — the component that turns "apply this scalar lambda over these tensors" into a launched, vectorized, broadcasting-aware CUDA kernel. If you've read ATen internals, this is where to show it.</p>
+
+  <h3>What TensorIterator actually does</h3>
+  <p>It is a configuration + execution engine. Given inputs and (optional) outputs it: computes the <strong>broadcasted</strong> shape; resolves <strong>type promotion</strong> and the common compute dtype; <strong>allocates outputs</strong> if absent; <strong>collapses</strong> adjacent dimensions whose strides allow it (so a contiguous N-D tensor becomes effectively 1-D); decides whether inputs are <strong>contiguous and identically-strided</strong> (the fast path) or need per-element offset computation; and picks a <strong>vectorized</strong> launch (<code>float4</code>-style 128-bit loads) when alignment and dtype permit.</p>
+
+  <p>The launcher is <code>gpu_kernel</code> (and <code>gpu_kernel_with_scalars</code> for ops with scalar operands). Under the hood it runs a <strong>grid-stride loop</strong> so any input size maps onto a fixed grid, and it dispatches to <code>launch_vectorized_kernel</code> when the iterator reports contiguity. When input and output dtypes differ, it inserts a <em>dynamic cast</em> per element instead of failing — convenient, but a measurable cost worth naming.</p>
+
+  <figure class="code">
+    <div class="cap"><span class="fn">C++ · <b>the shape of every elementwise CUDA op in ATen</b> · aten/src/ATen/native/cuda/</span><button class="copy">copy</button></div>
+<pre><code data-lang="cpp">Tensor saxpy_cuda(const Tensor& x, const Tensor& y, const Scalar& a) {
+  // builds broadcast shape, common dtype, allocates `out`
+  auto iter = TensorIteratorConfig()
+      .add_output(Tensor())
+      .add_input(x)
+      .add_input(y)
+      .build();
+
+  AT_DISPATCH_FLOATING_TYPES_AND2(kHalf, kBFloat16,
+      iter.common_dtype(), "saxpy_cuda", [&] {
+    auto alpha = a.to&lt;scalar_t&gt;();
+    // GPU_LAMBDA = __device__ __host__; gpu_kernel handles launch config,
+    // grid-stride iteration, and vectorized loads when contiguous.
+    gpu_kernel(iter, [alpha] GPU_LAMBDA (scalar_t xi, scalar_t yi) -> scalar_t {
+      return alpha * xi + yi;
+    });
+  });
+  return iter.output();
+}</code></pre>
+  </figure>
+
+  <div class="call note">
+    <div class="lbl">◈ Reductions are a different machine</div>
+    <p>Sums, norms, softmax-numerators, etc. don't fit the elementwise launcher. ATen has a dedicated reduction infrastructure (<code>Reduce.cuh</code>) doing hierarchical reduction — warp-shuffle within a warp, shared memory across warps, then a grid-level pass — with vectorized loads and an accumulation dtype that's often wider than the storage dtype (e.g. fp32 accumulate for fp16 inputs). This <em>accumulate-in-fp32</em> detail connects straight to the precision discussion in §12.</p>
+  </div>
+
+  <div class="call pitfall">
+    <div class="lbl">✕ Pitfall · the fast path is fragile</div>
+    <p>Non-contiguous inputs, mixed dtypes, and broadcasting can each knock an op off the vectorized path onto the slower offset-calculating kernel. A common real-world "why is this slow" is a transpose upstream that left a tensor non-contiguous; the elementwise op then reads with strided, uncoalesced access. The fix is usually an explicit <code>.contiguous()</code> (paying one copy) or choosing the right <code>memory_format</code> — and you can confirm the uncoalesced access in <strong>Nsight Compute</strong>'s memory workload analysis. Naming the profiler here is exactly Eddie's wavelength.</p>
+  </div>
+
+  <div class="call probe">
+    <div class="lbl">▸ Probe · CUDA fundamentals</div>
+    <p>"Why a grid-stride loop instead of launching exactly N threads?"</p>
+    <div class="ans">
+      <div class="mini">Answer arc</div>
+      <p>Decouples the launch configuration from the problem size: one tuned grid (sized to the device's SM count × occupancy) handles any N, threads are reused across multiple elements, and the kernel stays correct when N exceeds the max grid dimension. It also improves instruction-level parallelism and lets the compiler keep more work in flight. Bonus: it makes the kernel trivially compatible with CUDA-graph capture because the launch geometry is fixed.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 05 AUTOGRAD/AUTOCAST ============ -->
+<section id="autograd">
+  <div class="kicker">Section 05 · Core mechanism</div>
+  <h2>Autograd &amp; autocast as dispatch keys</h2>
+  <p class="lede">Both are implemented as <em>keys layered above the device kernel</em> — the cleanest demonstration of why the dispatcher is designed the way it is. Neither knows or cares whether the backend is CPU or CUDA; they intercept, do their slice, and re-dispatch.</p>
+
+  <h3>Autograd: a tape woven by codegen</h3>
+  <p>For each differentiable op, codegen emits a <code>VariableType</code> kernel registered to the <strong>Autograd</strong> key. On the forward call it: allocates a backward <code>Node</code> (the <code>grad_fn</code>) wired to the inputs' <code>grad_fn</code>s, <strong>saves</strong> exactly the tensors the backward formula needs (from <code>derivatives.yaml</code>), then re-dispatches with Autograd excluded to run the real forward. <code>loss.backward()</code> hands the leaf nodes to the engine, which topologically walks the DAG and accumulates gradients into <code>.grad</code>.</p>
+
+  <p>The <strong>version counter</strong> on <code>TensorImpl</code> ties this to §02: if a saved tensor is later mutated in place through any alias, the counter advances and autograd raises rather than silently computing a wrong gradient. That is the ADInplaceOrView key earning its keep.</p>
+
+  <h3>Autocast (AMP): a per-op casting policy</h3>
+  <p>The <strong>Autocast</strong> key sits <em>above</em> Autograd in priority. When enabled it consults a per-operator policy and casts arguments before redispatching:</p>
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Policy</th><th>Behavior</th><th>Example ops</th></tr></thead>
+    <tbody>
+      <tr><td><b>lower_precision_fp</b></td><td>cast inputs to fp16/bf16 — the speed win</td><td><code>mm</code>, <code>conv</code>, <code>linear</code>, <code>bmm</code></td></tr>
+      <tr><td><b>fp32</b></td><td>force fp32 — numerically sensitive</td><td><code>softmax</code>, <code>log</code>, <code>norm</code>, <code>sum</code>, losses</td></tr>
+      <tr><td><b>promote</b></td><td>run at the widest input dtype</td><td><code>cat</code>, <code>stack</code>, <code>addcdiv</code></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>It also keeps a <strong>cast cache</strong> keyed on the source tensor, so a weight that's used many times per iteration is cast fp32→fp16 once, not repeatedly. This is a small but real allocator-and-bandwidth optimization the team cares about.</p>
+
+  <figure class="code">
+    <div class="cap"><span class="fn">py · <b>the canonical mixed-precision training step</b></span><button class="copy">copy</button></div>
+<pre><code data-lang="py">scaler = torch.amp.GradScaler("cuda")          # fp16 needs loss scaling; bf16 usually doesn't
+for x, target in loader:
+    opt.zero_grad(set_to_none=True)
+    with torch.autocast("cuda", dtype=torch.bfloat16):   # Autocast key ON inside this block
+        out  = model(x)                        # mm/conv run in bf16, softmax stays fp32
+        loss = loss_fn(out, target)            # loss computed in fp32 per policy
+    scaler.scale(loss).backward()              # scale to keep fp16 grads out of subnormals
+    scaler.step(opt)                           # unscales, skips step if grads overflowed
+    scaler.update()                            # adapts the scale factor</code></pre>
+  </figure>
+
+  <div class="call record">
+    <div class="lbl">◆ On the record · why this is Eddie-adjacent</div>
+    <p>Autocast's cast policy and the precision of fused backends overlap with TF32 and reduced-precision reductions (§12) — and Masaki Kozuki (<code>@crcrpar</code>) on the same team owns much of the AMP/<code>foreach</code> machinery. If asked "how do bf16 and TF32 relate," the crisp distinction is: <strong>autocast/bf16 changes the storage dtype of operands; TF32 changes the internal math precision of an fp32 op without changing its storage dtype</strong>. They're orthogonal knobs that both trade accuracy for tensor-core throughput.</p>
+  </div>
+</section>
+
+<!-- ============ 06 ALLOCATOR ============ -->
+<section id="allocator">
+  <div class="kicker">Section 06 · The CUDA runtime layer</div>
+  <h2>The caching allocator</h2>
+  <p class="lede">If there is one component the CUDA core team is defined by, it's <code>c10/cuda/CUDACachingAllocator.cpp</code>. Understand <em>why it exists</em> and you understand most CUDA-side performance and memory behavior in PyTorch. Be ready to draw it.</p>
+
+  <div class="pull">"Why not just <code>cudaMalloc</code> per tensor?" Because <code>cudaMalloc</code> and <code>cudaFree</code> synchronize the device — and synchronization destroys the one optimization PyTorch's eager mode depends on.</div>
+
+  <h3>The load-bearing idea: CPU runs ahead of the GPU</h3>
+  <p>PyTorch hides the latency of the Python interpreter and dispatch behind GPU execution: the CPU races ahead, queuing kernels onto a stream, while the GPU chews through earlier work. <code>cudaMalloc</code>/<code>cudaFree</code> introduce implicit synchronization that stalls this pipeline. So the allocator's goal is a <strong>steady state</strong> where it never has to call into the driver for memory — it requests big blocks once and recycles them internally.</p>
+
+  <h3>Two levels: segments and blocks</h3>
+  <ul>
+    <li><strong>Segment</strong> — a contiguous region obtained from CUDA (a <code>cudaMalloc</code>, or a virtual mapping with expandable segments). The unit of OS-level allocation.</li>
+    <li><strong>Block</strong> — a sub-region within a segment tracking one allocation. On request, the allocator finds a free block ≥ the (rounded-up) size; if it's too big it <strong>splits</strong>, returning the front and leaving the back as a new free block. On free, it tries to <strong>coalesce</strong> with immediate neighbors — but <em>only if they're in the same segment and also free</em>.</li>
+  </ul>
+  <p>Allocations are <strong>rounded up</strong> (to reduce odd-shaped leftovers) and pulled from a <strong>small pool</strong> (≤ 1&nbsp;MB) or <strong>large pool</strong>, and pools are <strong>per-stream</strong>. The cross-segment no-merge rule is the crux of fragmentation:</p>
+
+  <figure class="fig">
+    <svg viewBox="0 0 720 360" role="img" aria-label="Caching allocator segments and blocks, and expandable segments">
+      <g class="svg-sans">
+        <text x="24" y="22" class="svg-mono svg-faint" font-size="10.5">DEFAULT — independent cudaMalloc segments cannot merge across the gap</text>
+        <!-- segment A -->
+        <rect x="24" y="34" width="318" height="58" rx="6" class="svg-bg svg-stroke" stroke-width="1"/>
+        <rect x="28" y="38" width="120" height="50" rx="3" class="svg-copper" opacity=".82"/>
+        <rect x="150" y="38" width="80" height="50" rx="3" fill="none" class="svg-stroke" stroke-width="1" stroke-dasharray="3 2"/>
+        <rect x="232" y="38" width="106" height="50" rx="3" class="svg-copper" opacity=".82"/>
+        <text x="88" y="67" text-anchor="middle" class="svg-bg" font-size="10.5" font-weight="700" style="fill:var(--bg)">used</text>
+        <text x="190" y="64" text-anchor="middle" class="svg-faint" font-size="10">free 16M</text>
+        <text x="285" y="67" text-anchor="middle" style="fill:var(--bg)" font-size="10.5" font-weight="700">used</text>
+        <text x="24" y="106" class="svg-mono svg-faint" font-size="9.5">segment 0 (cudaMalloc)</text>
+
+        <!-- gap -->
+        <text x="358" y="68" class="svg-faint" font-size="20">✕</text>
+        <text x="350" y="106" class="svg-faint svg-mono" font-size="9">no merge</text>
+
+        <!-- segment B -->
+        <rect x="378" y="34" width="318" height="58" rx="6" class="svg-bg svg-stroke" stroke-width="1"/>
+        <rect x="382" y="38" width="100" height="50" rx="3" fill="none" class="svg-stroke" stroke-width="1" stroke-dasharray="3 2"/>
+        <rect x="484" y="38" width="120" height="50" rx="3" class="svg-copper" opacity=".82"/>
+        <rect x="606" y="38" width="86" height="50" rx="3" fill="none" class="svg-stroke" stroke-width="1" stroke-dasharray="3 2"/>
+        <text x="432" y="64" text-anchor="middle" class="svg-faint" font-size="10">free 16M</text>
+        <text x="544" y="67" text-anchor="middle" style="fill:var(--bg)" font-size="10.5" font-weight="700">used</text>
+        <text x="649" y="64" text-anchor="middle" class="svg-faint" font-size="10">free</text>
+        <text x="378" y="106" class="svg-mono svg-faint" font-size="9.5">segment 1 (cudaMalloc)</text>
+
+        <text x="24" y="130" class="svg-muted" font-size="11.5">Two free 16M blocks exist, but a 32M request OOMs — they live in different segments.</text>
+
+        <!-- expandable -->
+        <text x="24" y="172" class="svg-mono svg-faint" font-size="10.5">EXPANDABLE — one virtual reservation, physical pages mapped on demand (CUDA VMM)</text>
+        <rect x="24" y="184" width="672" height="64" rx="6" fill="none" stroke="var(--sage)" stroke-width="1.4"/>
+        <!-- mapped pages -->
+        <rect x="30" y="190" width="92" height="52" rx="3" class="svg-sage" opacity=".8"/>
+        <rect x="124" y="190" width="92" height="52" rx="3" class="svg-sage" opacity=".8"/>
+        <rect x="218" y="190" width="92" height="52" rx="3" class="svg-sage" opacity=".55"/>
+        <rect x="312" y="190" width="92" height="52" rx="3" fill="none" stroke="var(--sage)" stroke-width="1" stroke-dasharray="4 3"/>
+        <rect x="406" y="190" width="92" height="52" rx="3" fill="none" stroke="var(--sage)" stroke-width="1" stroke-dasharray="4 3"/>
+        <rect x="500" y="190" width="92" height="52" rx="3" fill="none" stroke="var(--sage)" stroke-width="1" stroke-dasharray="4 3"/>
+        <rect x="594" y="190" width="98" height="52" rx="3" fill="none" stroke="var(--sage)" stroke-width="1" stroke-dasharray="4 3"/>
+        <text x="76" y="221" text-anchor="middle" style="fill:var(--bg)" font-size="10" font-weight="700">mapped</text>
+        <text x="170" y="221" text-anchor="middle" style="fill:var(--bg)" font-size="10" font-weight="700">mapped</text>
+        <text x="540" y="221" text-anchor="middle" class="svg-faint" font-size="10">reserved, unmapped</text>
+        <text x="24" y="260" class="svg-muted" font-size="11">One contiguous address range that grows/shrinks by mapping pages —</text>
+        <text x="24" y="277" class="svg-muted" font-size="11">varying batch sizes no longer strand memory in separate segments.</text>
+
+        <!-- knobs -->
+        <text x="24" y="300" class="svg-mono svg-copper" font-size="10.5" font-weight="700">PYTORCH_CUDA_ALLOC_CONF</text>
+        <text x="24" y="320" class="svg-mono svg-faint" font-size="10">expandable_segments:True · max_split_size_mb:N · garbage_collection_threshold:0.8</text>
+        <text x="24" y="336" class="svg-mono svg-faint" font-size="10">roundup_power2_divisions:N · pinned_use_cuda_host_register:True</text>
+      </g>
+    </svg>
+    <figcaption><b>Fragmentation, and the fix.</b> The default allocator can strand free memory across segments. <em>Expandable segments</em> (PR-era CUDA VMM work) reserve one huge virtual range per (pool, stream) and map physical pages on demand, so the pool behaves as a single growable segment — the dominant mitigation for batch-size jitter and graph capture.</figcaption>
+  </figure>
+
+  <h3>Things to be able to say cold</h3>
+  <ul>
+    <li><strong>Why fragmentation happens:</strong> sizes vary across iterations (batch N then N−1), allocations interleave, and freed blocks can't merge across segment boundaries. The June 2026 eager devlog walks concrete lab cases of exactly this.</li>
+    <li><strong>Expandable segments</strong> use CUDA's low-level VMM APIs (akin to <code>mmap</code>) to separate the reservation of <em>virtual address space</em> from the mapping of <em>physical pages</em>. Caveat to mention: tensors in expandable segments <em>can't be shared across processes</em>, so data-loader workers may need it off.</li>
+    <li><strong><code>record_stream</code></strong> is the bridge to §07: if you allocate on stream A and use the tensor on stream B, you must <code>tensor.record_stream(B)</code> so the allocator doesn't recycle the block while B's queued work still reads it. Forgetting this is a classic silent corruption.</li>
+    <li><strong>CUDA graphs use a private memory pool</strong> so captured allocations have stable addresses across replays; the allocator checkpoints/restores pool state around capture. Expandable segments were extended to interoperate with CUDA-graph trees.</li>
+    <li><strong>NCCL interop:</strong> there's active RFC work so expandable-segment (VMM) buffers can be registered for NCCL user-buffer / NVLS paths — directly relevant to your distributed-comms background.</li>
+  </ul>
+
+  <figure class="code">
+    <div class="cap"><span class="fn">py · <b>diagnosing memory like the team does</b></span><button class="copy">copy</button></div>
+<pre><code data-lang="py"># capture an allocation timeline, then view at pytorch.org/memory_viz
+torch.cuda.memory._record_memory_history(max_entries=100_000)
+train_a_few_steps()
+torch.cuda.memory._dump_snapshot("snap.pickle")
+torch.cuda.memory._record_memory_history(enabled=None)   # stop
+
+print(torch.cuda.memory_summary())          # reserved vs allocated vs fragmentation
+torch.cuda.max_memory_allocated() / 1e9     # peak live bytes
+torch.cuda.max_memory_reserved()  / 1e9     # peak bytes held from the driver</code></pre>
+  </figure>
+
+  <div class="call probe">
+    <div class="lbl">▸ Probe · the allocator classic</div>
+    <p>"My job OOMs at iteration 500 even though <code>memory_allocated</code> is well under the GPU's capacity. What's going on and what do you try?"</p>
+    <div class="ans">
+      <div class="mini">Answer arc</div>
+      <p>Reserved ≫ allocated means <strong>fragmentation</strong>: the allocator holds enough total free memory but no single contiguous block large enough. First confirm with <code>memory_summary()</code> (large reserved-minus-allocated gap) and a memory snapshot. Then: try <code>expandable_segments:True</code> (usually the biggest lever); cap <code>max_split_size_mb</code> so huge blocks aren't carved into unusable slivers; stabilize allocation sizes (fixed batch/seq, pad to buckets); and as a blunt tool, <code>empty_cache()</code> at a safe boundary — noting it forces sync and returns memory to the driver, so it's a steady-state killer, not a fix. Name the profiler/snapshot at each step.</p>
+    </div>
+    <div class="src">→ <a href="https://docs.pytorch.org/devlogs/eager/2026-06-01-cuda-caching-allocator/" target="_blank" rel="noopener">eager devlog — when fragmentation occurs (2026-06)</a> · <a href="https://zdevito.github.io/2022/08/04/cuda-caching-allocator.html" target="_blank" rel="noopener">DeVito — a guide to the caching allocator</a></div>
+  </div>
+</section>
+<!-- ============ 07 STREAMS / EVENTS ============ -->
+<section id="streams">
+  <div class="kicker">Section 07 · The CUDA runtime layer</div>
+  <h2>Streams, events &amp; the async model</h2>
+  <p class="lede">Almost every performance question about PyTorch on GPU reduces to one fact: <strong>the Python/C++ host thread runs ahead of the device.</strong> Operations enqueue work onto a CUDA stream and return immediately; the GPU drains that queue asynchronously. Understanding where that illusion breaks — and where it must be synchronized — is core-team table stakes.</p>
+
+  <h3>The model in one paragraph</h3>
+  <p>A CUDA <strong>stream</strong> is an ordered FIFO of work (kernels, copies). Work on one stream executes in issue order; work on <em>different</em> streams may overlap and has <strong>no ordering guarantee</strong> unless you create one with an event. When you call <code>y = x.relu()</code>, ATen launches the kernel on the <strong>current stream</strong> for that device and returns to Python before the GPU has run anything. The result tensor is real, but its <em>contents</em> are a promise. PyTorch keeps the promise consistent by always issuing dependent ops onto the same stream, so program-order correctness is automatic <em>within</em> a stream.</p>
+
+  <figure class="fig">
+    <svg viewBox="0 0 720 308" role="img" aria-label="Host thread running ahead of two GPU streams, with an event creating a cross-stream dependency">
+      <rect class="svg-bg" x="0" y="0" width="720" height="308" rx="10"/>
+      <!-- lane labels -->
+      <text x="18" y="40" class="svg-mono svg-faint" font-size="11">HOST (python)</text>
+      <text x="18" y="138" class="svg-mono svg-faint" font-size="11">STREAM s0</text>
+      <text x="18" y="236" class="svg-mono svg-faint" font-size="11">STREAM s1</text>
+      <!-- lane rules -->
+      <line x1="150" y1="44" x2="700" y2="44" class="svg-stroke" stroke-width="1"/>
+      <line x1="150" y1="142" x2="700" y2="142" class="svg-stroke" stroke-width="1"/>
+      <line x1="150" y1="240" x2="700" y2="240" class="svg-stroke" stroke-width="1"/>
+      <!-- host enqueue ticks (fast, bunched left) -->
+      <g class="svg-copper">
+        <rect x="160" y="22" width="30" height="22" rx="3" fill="currentColor" opacity=".85"/>
+        <rect x="196" y="22" width="30" height="22" rx="3" fill="currentColor" opacity=".85"/>
+        <rect x="232" y="22" width="30" height="22" rx="3" fill="currentColor" opacity=".85"/>
+        <rect x="268" y="22" width="30" height="22" rx="3" fill="currentColor" opacity=".55"/>
+      </g>
+      <text x="305" y="38" class="svg-mono svg-muted" font-size="10">host returns, keeps issuing →</text>
+      <!-- s0 kernels (start later, run longer) -->
+      <g class="svg-cyan">
+        <rect x="175" y="120" width="90" height="22" rx="3" fill="currentColor" opacity=".8"/>
+        <rect x="270" y="120" width="120" height="22" rx="3" fill="currentColor" opacity=".8"/>
+      </g>
+      <text x="180" y="135" class="svg-mono" font-size="9.5" fill="#06222a">matmul</text>
+      <text x="275" y="135" class="svg-mono" font-size="9.5" fill="#06222a">attention</text>
+      <!-- event recorded on s0 after attention -->
+      <circle cx="392" cy="142" r="5" class="svg-copper" fill="currentColor"/>
+      <text x="398" y="118" class="svg-mono svg-copper" font-size="9.5">event.record()</text>
+      <!-- dependency arrow s0 -> s1 -->
+      <path d="M392 147 C392 190, 470 196, 470 218" fill="none" class="svg-copper" stroke="currentColor" stroke-width="1.5" stroke-dasharray="3 3"/>
+      <polygon points="470,224 466,214 474,214" class="svg-copper" fill="currentColor"/>
+      <!-- s1 waits then runs -->
+      <rect x="175" y="218" width="120" height="22" rx="3" class="svg-sage" fill="currentColor" opacity=".35"/>
+      <text x="182" y="233" class="svg-mono svg-faint" font-size="9">idle / wait_event</text>
+      <rect x="470" y="218" width="150" height="22" rx="3" class="svg-sage" fill="currentColor" opacity=".8"/>
+      <text x="478" y="233" class="svg-mono" font-size="9.5" fill="#0a2410">all-reduce (NCCL)</text>
+      <!-- time axis -->
+      <text x="650" y="285" class="svg-mono svg-faint" font-size="10">time →</text>
+    </svg>
+    <figcaption><b>Three timelines, one truth.</b> The host enqueues all four ops and races ahead. <code>s0</code> runs them in order; <code>s1</code>'s NCCL collective must not start until attention's output exists, so an <em>event</em> recorded on <code>s0</code> and waited on by <code>s1</code> stitches the two streams together. No event ⇒ the collective could read garbage.</figcaption>
+  </figure>
+
+  <h3>The API surface you should name</h3>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Primitive</th><th>What it is</th><th>When it matters</th></tr></thead>
+      <tbody>
+        <tr><td><code>current_stream()</code> / <code>default_stream()</code></td><td>The stream ops land on; the per-device default</td><td>Everything enqueues here unless you say otherwise</td></tr>
+        <tr><td><code>torch.cuda.stream(s)</code></td><td>Context manager switching the current stream</td><td>Overlapping independent work (e.g. H2D copy ∥ compute)</td></tr>
+        <tr><td><code>torch.cuda.Event</code></td><td>A marker recorded into a stream</td><td>Cross-stream ordering; precise GPU timing</td></tr>
+        <tr><td><code>s.wait_event(e)</code> / <code>s.wait_stream(s2)</code></td><td>Make <code>s</code> block on a marker / another stream</td><td>The correct way to express a dependency</td></tr>
+        <tr><td><code>synchronize()</code> / <code>e.synchronize()</code></td><td>Block the <em>host</em> until device work completes</td><td>Before reading results on CPU; a perf cliff if overused</td></tr>
+        <tr><td><code>e.query()</code></td><td>Non-blocking "is it done?"</td><td>Polling without stalling the host</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <figure class="code">
+    <div class="cap"><span class="fn">py · <b>overlapping a host-to-device copy with compute</b></span><button class="copy">copy</button></div>
+<pre><code data-lang="py">copy_stream = torch.cuda.Stream()
+compute_stream = torch.cuda.current_stream()
+
+# stage next batch on a side stream while the main stream computes
+with torch.cuda.stream(copy_stream):
+    nxt = batch.pin_memory().to("cuda", non_blocking=True)   # async H2D
+
+done = torch.cuda.Event()
+done.record(copy_stream)              # mark "copy finished" on copy_stream
+compute_stream.wait_event(done)       # main stream won't touch nxt until then
+out = model(nxt)                      # safe: ordered after the copy
+
+# precise GPU timing (NOT time.time(), which only sees host enqueue):
+start, end = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+start.record(); out = model(nxt); end.record()
+torch.cuda.synchronize()
+ms = start.elapsed_time(end)          # device-side milliseconds</code></pre>
+  </figure>
+
+  <div class="call note">
+    <div class="lbl">◈ <code>non_blocking=True</code> needs pinned memory to actually be async</div>
+    <p>A host→device copy is only truly asynchronous if the host buffer is <strong>page-locked</strong> (<code>pin_memory()</code>). From pageable memory the driver must stage through a pinned bounce buffer and the copy effectively serializes. This is the single most common reason a "async" data pipeline shows no overlap in Nsight Systems.</p>
+  </div>
+
+  <div class="call pitfall">
+    <div class="lbl">✕ Pitfall · the hidden synchronization</div>
+    <p>Many innocuous-looking operations force a <strong>device→host sync</strong>: <code>print(tensor)</code>, <code>tensor.item()</code>, <code>.cpu()</code>, <code>.numpy()</code>, <code>tensor.tolist()</code>, a Python <code>if tensor &gt; 0:</code>, and even <code>nonzero()</code> / <code>.unique()</code> (data-dependent output shapes). Each drains the host's run-ahead and exposes raw kernel latency. In a tight loop this can dominate. The interview-grade move: enumerate these, then say you'd confirm with an <strong>nsys</strong> timeline showing the host blocked on a <code>cudaStreamSynchronize</code>.</p>
+  </div>
+
+  <div class="call probe">
+    <div class="lbl">▸ Probe · the async model</div>
+    <p>"You add a <code>print(loss)</code> inside your training loop and step time doubles. Why, and how do you keep the logging?"</p>
+    <div class="ans">
+      <div class="mini">Answer arc</div>
+      <p><code>print(loss)</code> calls <code>loss.item()</code>, which forces <code>cudaStreamSynchronize</code> — the host stops running ahead and waits for the whole queued step to finish, so you're now paying full latency every iteration instead of pipelining. Fixes: log every N steps; accumulate losses in a GPU tensor and sync once per epoch; or stash <code>loss.detach()</code> and only call <code>.item()</code> outside the hot loop. The general principle — keep the host ahead of the device — is what the allocator's <code>record_stream</code> and CUDA graphs both exist to protect.</p>
+    </div>
+    <div class="src">→ <a href="https://docs.pytorch.org/docs/stable/notes/cuda.html" target="_blank" rel="noopener">CUDA semantics — asynchronous execution &amp; streams</a></div>
+  </div>
+</section>
+
+<!-- ============ 08 CUDA GRAPHS ============ -->
+<section id="graphs">
+  <div class="kicker">Section 08 · The CUDA runtime layer</div>
+  <h2>CUDA graphs</h2>
+  <p class="lede">When a workload is <strong>launch-bound</strong> — lots of tiny kernels where the CPU can't enqueue fast enough to keep the GPU fed — CUDA graphs collapse an entire sequence of launches into a single replayable unit. This is Eddie's territory: his GTC 2025 talk was specifically about making <strong>cuDNN</strong> play well with CUDA graphs so the graph doesn't have to be rebuilt.</p>
+
+  <h3>The mechanism</h3>
+  <p>You <strong>capture</strong> a stream: instead of executing, CUDA records the topology of every kernel launch, copy, and their dependencies into a graph object. Thereafter a single <code>cudaGraphLaunch</code> <strong>replays</strong> the whole thing, skipping per-op Python overhead, C++ dispatch, and most driver-side launch cost. For a decoder doing dozens of small kernels per token, replay can be dramatically cheaper than re-issuing them.</p>
+
+  <figure class="fig">
+    <svg viewBox="0 0 720 300" role="img" aria-label="Capture phase records a graph of kernel nodes; replay launches the whole graph in one call">
+      <rect class="svg-bg" x="0" y="0" width="720" height="300" rx="10"/>
+      <!-- capture side -->
+      <text x="24" y="34" class="svg-mono svg-copper" font-size="11" font-weight="700">CAPTURE  (once)</text>
+      <text x="24" y="50" class="svg-mono svg-faint" font-size="9.5">host issues ops; nothing runs, topology is recorded</text>
+      <g>
+        <rect x="30" y="64" width="86" height="26" rx="4" class="svg-panel" stroke="currentColor" class="svg-cyan" fill="none"/>
+      </g>
+      <!-- nodes -->
+      <g class="svg-cyan" font-size="9.5">
+        <rect x="30" y="66" width="92" height="24" rx="4" fill="currentColor" opacity=".18" stroke="currentColor"/>
+        <text x="42" y="82" class="svg-mono svg-ink">cast</text>
+        <rect x="30" y="100" width="92" height="24" rx="4" fill="currentColor" opacity=".18" stroke="currentColor"/>
+        <text x="42" y="116" class="svg-mono svg-ink">layernorm</text>
+        <rect x="30" y="134" width="92" height="24" rx="4" fill="currentColor" opacity=".18" stroke="currentColor"/>
+        <text x="42" y="150" class="svg-mono svg-ink">qkv matmul</text>
+        <rect x="30" y="168" width="92" height="24" rx="4" fill="currentColor" opacity=".18" stroke="currentColor"/>
+        <text x="42" y="184" class="svg-mono svg-ink">sdpa</text>
+        <rect x="30" y="202" width="92" height="24" rx="4" fill="currentColor" opacity=".18" stroke="currentColor"/>
+        <text x="42" y="218" class="svg-mono svg-ink">proj matmul</text>
+      </g>
+      <g class="svg-stroke" stroke="currentColor" stroke-width="1.3">
+        <line x1="76" y1="90" x2="76" y2="100"/>
+        <line x1="76" y1="124" x2="76" y2="134"/>
+        <line x1="76" y1="158" x2="76" y2="168"/>
+        <line x1="76" y1="192" x2="76" y2="202"/>
+      </g>
+      <text x="150" y="148" class="svg-mono svg-faint" font-size="22">⇒</text>
+      <!-- graph object -->
+      <rect x="200" y="70" width="150" height="160" rx="10" class="svg-panel" stroke="currentColor" stroke-dasharray="4 3" fill="none"/>
+      <text x="214" y="92" class="svg-mono svg-copper" font-size="10">cudaGraph_t</text>
+      <text x="214" y="110" class="svg-mono svg-faint" font-size="9">frozen node DAG</text>
+      <text x="214" y="124" class="svg-mono svg-faint" font-size="9">fixed launch params</text>
+      <text x="214" y="138" class="svg-mono svg-faint" font-size="9">fixed pointers</text>
+      <rect x="214" y="150" width="120" height="16" rx="3" class="svg-cyan" fill="currentColor" opacity=".3"/>
+      <rect x="214" y="170" width="120" height="16" rx="3" class="svg-cyan" fill="currentColor" opacity=".3"/>
+      <rect x="214" y="190" width="120" height="16" rx="3" class="svg-cyan" fill="currentColor" opacity=".3"/>
+      <!-- replay side -->
+      <line x1="380" y1="40" x2="380" y2="260" class="svg-stroke" stroke="currentColor" stroke-dasharray="2 4"/>
+      <text x="404" y="34" class="svg-mono svg-sage" font-size="11" font-weight="700">REPLAY  (every step)</text>
+      <text x="404" y="50" class="svg-mono svg-faint" font-size="9.5">one host call launches all nodes</text>
+      <rect x="404" y="76" width="200" height="34" rx="6" class="svg-sage" fill="currentColor" opacity=".25" stroke="currentColor"/>
+      <text x="416" y="98" class="svg-mono svg-ink" font-size="11">graph.replay()  →  cudaGraphLaunch</text>
+      <!-- collapsed bar -->
+      <text x="404" y="140" class="svg-mono svg-faint" font-size="9.5">GPU executes the whole DAG back-to-back:</text>
+      <rect x="404" y="150" width="280" height="22" rx="3" class="svg-sage" fill="currentColor" opacity=".7"/>
+      <text x="412" y="165" class="svg-mono" font-size="9.5" fill="#0a2410">cast│ln│qkv│sdpa│proj  (no per-kernel host gap)</text>
+      <text x="404" y="200" class="svg-mono svg-copper" font-size="9.5">host overhead per step:  ~one launch, not five</text>
+      <text x="404" y="222" class="svg-mono svg-faint" font-size="9">precondition: inputs copied into the SAME static buffers</text>
+    </svg>
+    <figcaption><b>Record once, replay forever.</b> Capture freezes kernel nodes, their launch parameters, and their pointers into an immutable DAG. Replay fires the whole thing with a single host-side call — which is why the captured addresses must stay valid (hence the allocator's private graph pool) and why you must copy fresh data <em>into</em> the original input tensors rather than allocating new ones.</figcaption>
+  </figure>
+
+  <h3>The constraints — and why each exists</h3>
+  <ul>
+    <li><strong>Static shapes &amp; addresses.</strong> The graph bakes in pointers and launch geometry. New input tensors at a new address ⇒ the graph reads stale memory. You therefore allocate <em>static</em> input/output buffers once and <code>copy_</code> each iteration's data in. This is also why the caching allocator gives graphs a <strong>private pool</strong> (§06): captured allocations must land at reproducible addresses.</li>
+    <li><strong>No CPU synchronization during capture.</strong> Anything that syncs the host (an <code>.item()</code>, a data-dependent shape) can't be captured. Data-dependent control flow is out.</li>
+    <li><strong>Warm up first.</strong> Before capturing you run a few eager iterations so cuBLAS/cuDNN finish their <em>algorithm selection</em> and the allocator reaches steady state — otherwise the autotuning work gets captured or the addresses churn.</li>
+  </ul>
+
+  <figure class="code">
+    <div class="cap"><span class="fn">py · <b>manual capture with static buffers</b> · the pattern to be able to write on a whiteboard</span><button class="copy">copy</button></div>
+<pre><code data-lang="py">static_in  = torch.empty_like(sample)           # fixed address
+static_out = None
+g = torch.cuda.CUDAGraph()
+
+# 1) warm up on a side stream so cuBLAS/cuDNN pick algorithms
+s = torch.cuda.Stream(); s.wait_stream(torch.cuda.current_stream())
+with torch.cuda.stream(s):
+    for _ in range(3):
+        static_out = model(static_in)
+torch.cuda.current_stream().wait_stream(s)
+
+# 2) capture the real step
+with torch.cuda.graph(g):
+    static_out = model(static_in)
+
+# 3) per iteration: refill the SAME buffer, replay, read the SAME output
+for batch in loader:
+    static_in.copy_(batch)        # do NOT reassign static_in
+    g.replay()
+    consume(static_out)           # contents updated in place</code></pre>
+  </figure>
+
+  <div class="call note">
+    <div class="lbl">◈ The ergonomic wrappers</div>
+    <p>You rarely hand-roll the above. <code>torch.cuda.make_graphed_callables(fn, sample_args)</code> wraps a module so capture/replay is transparent <em>and autograd-aware</em> — it captures forward and backward and splices them into the autograd graph. And <code>torch.compile(model, mode="reduce-overhead")</code> turns on Inductor's <strong>CUDA Graph Trees</strong>, which capture compiled regions and share one memory pool across many graphs so you don't pay a full static allocation per graph. Mentioning both shows you know the manual primitive <em>and</em> the production path.</p>
+  </div>
+
+  <div class="call record">
+    <div class="lbl">◆ Eddie connection · cuDNN × CUDA graphs</div>
+    <p>His GTC 2025 session was about cuDNN gaining first-class CUDA-graph support so a captured graph doesn't need to be <em>rebuilt</em> when cuDNN would otherwise re-plan. The friction: cuDNN historically did internal work (workspace, planning) that wasn't graph-capturable, forcing rebuilds that defeat the point. If graphs come up, pivot to "the hard part is the libraries underneath being capture-safe — cuDNN, the allocator's graph pool, and NCCL all had to be taught to cooperate." That's the systems-level framing he'll recognize.</p>
+    <div class="src">→ <a href="https://pytorch.org/blog/pytorch-at-gtc/" target="_blank" rel="noopener">PyTorch at GTC 2025</a> · <a href="https://docs.pytorch.org/docs/stable/torch.compiler_cudagraph_trees.html" target="_blank" rel="noopener">CUDAGraph Trees</a> · <a href="https://pytorch.org/blog/accelerating-pytorch-with-cuda-graphs/" target="_blank" rel="noopener">Accelerating PyTorch with CUDA graphs</a></div>
+  </div>
+
+  <div class="call probe">
+    <div class="lbl">▸ Probe · when NOT to reach for graphs</div>
+    <p>"When do CUDA graphs give little or no benefit — or actively hurt?"</p>
+    <div class="ans">
+      <div class="mini">Answer arc</div>
+      <p>They help when you're <em>launch-bound</em> (many small kernels, host can't keep up). They give little when you're <em>compute-bound</em> — large matmuls already saturate the GPU, so launch overhead is noise. They hurt or simply don't apply when shapes vary every step (dynamic sequence lengths, variable batch), when there's data-dependent control flow, or when capture's static-buffer requirement balloons memory because you need many graphs for many shapes. The diagnostic is an nsys timeline: visible host-side gaps between kernels ⇒ launch-bound ⇒ graphs are worth it; wall-to-wall kernels ⇒ look elsewhere.</p>
+    </div>
+  </div>
+</section>
+<!-- ============ 09 cuDNN ============ -->
+<section id="cudnn">
+  <div class="kicker">Section 09 · Eddie's home turf</div>
+  <h2>cuDNN integration</h2>
+  <p class="lede">This is the section to over-prepare. Eddie's PyTorch work is concentrated in cuDNN: convolution backends, the cuDNN SDPA path, precision flags, and the unglamorous-but-critical job of keeping cuDNN <em>versions</em> from breaking the build. If you can speak fluently about algorithm selection, the V8 graph API, and version-compat fire drills, you're speaking his language.</p>
+
+  <h3>What cuDNN is, and where PyTorch plugs it in</h3>
+  <p>cuDNN is NVIDIA's library of hand-tuned deep-learning primitives — convolutions, pooling, normalization, RNN cells, and now fused attention. PyTorch's integration lives under <code>aten/src/ATen/native/cudnn/</code>. The dispatcher (§03) routes, say, <code>aten::convolution</code> to a cuDNN-backed kernel when the tensor is on CUDA, cuDNN is available, and the configuration is supported; otherwise it falls back to a native ATen kernel or another backend. cuDNN is itself one <em>backend</em> among several for ops like convolution and attention.</p>
+
+  <h3>Algorithm selection: the core idea</h3>
+  <p>For a single convolution, cuDNN exposes <strong>multiple algorithms</strong> — implicit GEMM, implicit precomputed GEMM, Winograd, FFT-based, and direct — each with different speed/memory tradeoffs that depend on the exact tensor shapes, strides, dtype, and the GPU. PyTorch can either ask cuDNN for a heuristic pick or, if you opt in, <strong>empirically time them</strong>:</p>
+
+  <figure class="fig">
+    <svg viewBox="0 0 720 286" role="img" aria-label="cudnn.benchmark timing search caches the fastest convolution algorithm keyed by input configuration">
+      <rect class="svg-bg" x="0" y="0" width="720" height="286" rx="10"/>
+      <text x="24" y="34" class="svg-mono svg-copper" font-size="11" font-weight="700">conv call arrives</text>
+      <!-- key box -->
+      <rect x="24" y="48" width="200" height="74" rx="8" class="svg-panel" stroke="currentColor" class="svg-stroke" fill="none"/>
+      <text x="36" y="68" class="svg-mono svg-faint" font-size="9">cache key =</text>
+      <text x="36" y="84" class="svg-mono svg-ink" font-size="9.5">(N,C,H,W), (K,R,S),</text>
+      <text x="36" y="98" class="svg-mono svg-ink" font-size="9.5">stride, pad, dilation,</text>
+      <text x="36" y="112" class="svg-mono svg-ink" font-size="9.5">dtype, device, fmt</text>
+      <!-- decision -->
+      <path d="M236 85 L300 85" class="svg-stroke" stroke="currentColor" stroke-width="1.3"/>
+      <polygon points="300,85 292,81 292,89" class="svg-stroke" fill="currentColor"/>
+      <rect x="304" y="58" width="120" height="54" rx="8" class="svg-cyan" fill="currentColor" opacity=".16" stroke="currentColor"/>
+      <text x="316" y="82" class="svg-mono svg-ink" font-size="10">in cache?</text>
+      <text x="316" y="98" class="svg-mono svg-faint" font-size="9">benchmark=True</text>
+      <!-- hit -->
+      <path d="M424 72 L520 72" class="svg-sage" stroke="currentColor" stroke-width="1.3"/>
+      <text x="438" y="66" class="svg-mono svg-sage" font-size="9">HIT</text>
+      <rect x="520" y="54" width="176" height="34" rx="6" class="svg-sage" fill="currentColor" opacity=".22" stroke="currentColor"/>
+      <text x="532" y="75" class="svg-mono svg-ink" font-size="10">reuse cached algo → launch</text>
+      <!-- miss -->
+      <path d="M424 100 L470 100 L470 150" class="svg-copper" stroke="currentColor" stroke-width="1.3" fill="none"/>
+      <text x="430" y="120" class="svg-mono svg-copper" font-size="9">MISS</text>
+      <rect x="360" y="150" width="336" height="58" rx="8" class="svg-copper" fill="currentColor" opacity=".14" stroke="currentColor"/>
+      <text x="372" y="170" class="svg-mono svg-ink" font-size="10">time every candidate algorithm once</text>
+      <g class="svg-copper" font-size="8.5">
+        <rect x="372" y="178" width="40" height="18" rx="3" fill="currentColor" opacity=".5"/><text x="378" y="191" fill="#1a0f06">gemm</text>
+        <rect x="416" y="178" width="52" height="18" rx="3" fill="currentColor" opacity=".5"/><text x="422" y="191" fill="#1a0f06">winograd</text>
+        <rect x="472" y="178" width="34" height="18" rx="3" fill="currentColor" opacity=".5"/><text x="478" y="191" fill="#1a0f06">fft</text>
+        <rect x="510" y="178" width="80" height="18" rx="3" fill="currentColor" opacity=".85"/><text x="516" y="191" fill="#1a0f06">✓ fastest→cache</text>
+      </g>
+      <!-- warning -->
+      <rect x="24" y="150" width="316" height="58" rx="8" class="svg-bg" stroke="currentColor" class="svg-stroke" fill="none" stroke-dasharray="3 3"/>
+      <text x="36" y="170" class="svg-mono svg-faint" font-size="9">if shapes change every call →</text>
+      <text x="36" y="186" class="svg-mono svg-faint" font-size="9">every call MISSES → re-benchmarks →</text>
+      <text x="36" y="200" class="svg-mono svg-faint" font-size="9">search cost dominates. Fixed shapes win.</text>
+      <text x="24" y="246" class="svg-mono svg-faint" font-size="9.5">torch.backends.cudnn.benchmark = True   ·   .deterministic = True forces reproducible (often slower) algos</text>
+    </svg>
+    <figcaption><b>Why <code>cudnn.benchmark</code> is a double-edged sword.</b> With it on, the first conv at each unique configuration pays a one-time timing search; the winner is cached and every later call is fast. With <em>varying</em> shapes the cache never hits, so you re-benchmark constantly — the classic "my model got slower when I turned benchmark on" footgun.</figcaption>
+  </figure>
+
+  <figure class="code">
+    <div class="cap"><span class="fn">py · <b>the cuDNN knobs and what they trade</b></span><button class="copy">copy</button></div>
+<pre><code data-lang="py">import torch.backends.cudnn as cudnn
+
+cudnn.benchmark = True        # time algos per-shape, cache winner. GREAT for fixed
+                              # shapes (CNN with constant input size); BAD if shapes vary.
+cudnn.deterministic = True    # restrict to reproducible algos (may be slower, more memory)
+cudnn.allow_tf32 = True       # legacy precision flag — see §12 for the new fp32_precision API
+print(cudnn.version())        # the number that shows up in every version-compat bug
+</code></pre>
+  </figure>
+
+  <h3>V7 vs V8: the legacy API and the graph frontend</h3>
+  <p>cuDNN's classic ("V7") API exposed fixed entry points per primitive. The modern <strong>V8 graph API</strong> lets you describe an operation graph (e.g. conv → bias → activation) that cuDNN can fuse and plan as a unit — the same direction of travel as CUDA graphs and Inductor fusion. PyTorch consumes this through <strong>cudnn-frontend</strong>, NVIDIA's header-only C++ wrapper around the graph API (with Python bindings). Eddie's PR to <em>always build the cuDNN V8 API</em> was part of making this the default integration path; the frontend is also where the cuDNN <strong>SDPA</strong> graph lives.</p>
+
+  <div class="call record">
+    <div class="lbl">◆ Eddie's fingerprints · representative work</div>
+    <p>Skim these before the call — they show <em>how</em> he works, not just what:</p>
+    <ul>
+      <li><strong>cuDNN SDPA backward</strong> — adds the attention backward through cuDNN; the PR thread debates op/backend bloat vs velocity. <a href="https://github.com/pytorch/pytorch/pull/122510" target="_blank" rel="noopener">#122510</a></li>
+      <li><strong>Always build cuDNN V8 API</strong> — committing to the graph-API path. <a href="https://github.com/pytorch/pytorch/pull/91527" target="_blank" rel="noopener">#91527</a></li>
+      <li><strong>User-specified cuDNN benchmark limit</strong> — bounding the algo search. <a href="https://github.com/pytorch/pytorch/pull/145779" target="_blank" rel="noopener">#145779</a></li>
+      <li><strong>64-bit indexing for conv3d</strong> — large-tensor correctness when element counts exceed 32-bit. <a href="https://github.com/pytorch/pytorch/pull/161177" target="_blank" rel="noopener">#161177</a></li>
+    </ul>
+    <div class="src">repo: <a href="https://github.com/NVIDIA/cudnn-frontend" target="_blank" rel="noopener">NVIDIA/cudnn-frontend</a> (graph API, header-only C++, pybind, torch.compile-compatible custom ops)</div>
+  </div>
+
+  <h3>Version compatibility is half the job</h3>
+  <p>A recurring theme in his recent activity: cuDNN version bumps that ripple through the build and CI. This is exactly the lifecycle/CI work the job description emphasizes, viewed from the cuDNN end.</p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Episode</th><th>What it teaches</th></tr></thead>
+      <tbody>
+        <tr><td><a href="https://github.com/pytorch/pytorch/pull/137978" target="_blank" rel="noopener">cuDNN 9.5.1 bump (#137978)</a></td><td>A point release can fix a real numerical/stride bug (see §10) — bumps aren't cosmetic.</td></tr>
+        <tr><td><a href="https://github.com/pytorch/pytorch/issues/165801" target="_blank" rel="noopener">9.10.2 vs CI 9.8 (#165801)</a></td><td>The cuDNN your wheel ships can differ from what CI tests against — a whole class of "works in CI, breaks for users" bugs.</td></tr>
+        <tr><td><a href="https://github.com/pytorch/pytorch/pull/162322" target="_blank" rel="noopener">Windows 9.13→9.12 rollback (#162322)</a></td><td>Sometimes the right move is to <em>revert</em> a version on one platform. Per-OS version matrices are real.</td></tr>
+        <tr><td><a href="https://github.com/pytorch/pytorch/pull/123475" target="_blank" rel="noopener">9.1.0.70 update (#123475)</a></td><td>The steady cadence of keeping the bundled cuDNN current across CUDA versions.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="call pitfall">
+    <div class="lbl">✕ Pitfall · determinism vs speed vs memory</div>
+    <p><code>cudnn.deterministic = True</code> forbids algorithms that use atomics / non-deterministic reductions, so results are reproducible run-to-run — but the allowed algorithms can be slower and use more workspace. Conversely <code>benchmark = True</code> is <em>not</em> deterministic across processes because the timed winner can vary. Know that these two flags interact, and that "reproducible," "fast," and "low-memory" are three corners you usually can't all have.</p>
+  </div>
+
+  <div class="call probe">
+    <div class="lbl">▸ Probe · the benchmark flag</div>
+    <p>"A teammate sets <code>torch.backends.cudnn.benchmark = True</code> and their detection model gets <em>slower</em>. Diagnose it."</p>
+    <div class="ans">
+      <div class="mini">Answer arc</div>
+      <p>Detection models often run <strong>variable input resolutions</strong> (or variable batch). The benchmark cache is keyed by the full conv configuration, so every new shape is a miss that triggers a fresh timing search over all candidate algorithms — and that search cost recurs instead of amortizing. The fix: only enable benchmark when input shapes are <em>fixed</em> (or bucket/pad to a small set of shapes); otherwise leave it off and rely on cuDNN's heuristics, or cap the search with the user-specified benchmark limit. Confirm with a profile showing repeated algo-search regions, or by logging cache misses.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 10 SDPA ============ -->
+<section id="sdpa">
+  <div class="kicker">Section 10 · Eddie's home turf</div>
+  <h2>SDPA &amp; backend dispatch</h2>
+  <p class="lede"><code>scaled_dot_product_attention</code> is the cleanest example in PyTorch of <strong>one operator, many backends, chosen at runtime</strong>. It's also directly Eddie-adjacent: he built the cuDNN attention backend. Knowing how the selector works — and how it can silently pick the slow path — is a high-value talking point.</p>
+
+  <h3>One op, four backends</h3>
+  <p>A single call to <code>F.scaled_dot_product_attention(q, k, v, ...)</code> can be served by any of four implementations, in descending preference: <strong>FlashAttention</strong>, <strong>memory-efficient attention</strong>, the <strong>cuDNN</strong> backend, and a pure-ATen <strong>math</strong> fallback. Each fused backend avoids materializing the full <code>N×N</code> attention matrix (the math path does materialize it — correct, but O(N²) memory). The selection logic lives in <code>aten/src/ATen/native/transformers/cuda/sdp_utils.cpp</code>.</p>
+
+  <figure class="fig">
+    <svg viewBox="0 0 720 318" role="img" aria-label="SDPA dispatch funnel: backends are checked in priority order against a support matrix, first viable one is chosen, math is the always-valid fallback">
+      <rect class="svg-bg" x="0" y="0" width="720" height="318" rx="10"/>
+      <text x="24" y="32" class="svg-mono svg-copper" font-size="11" font-weight="700">F.scaled_dot_product_attention(q,k,v, is_causal, attn_mask, dropout_p)</text>
+      <text x="24" y="50" class="svg-mono svg-faint" font-size="9.5">priority_order(params) → check each backend's support matrix → take the first that fits</text>
+
+      <!-- funnel rows -->
+      <g font-size="10">
+        <!-- flash -->
+        <rect x="40" y="66" width="300" height="40" rx="8" class="svg-cyan" fill="currentColor" opacity=".18" stroke="currentColor"/>
+        <text x="54" y="84" class="svg-mono svg-ink">1 · FLASH ATTENTION</text>
+        <text x="54" y="99" class="svg-mono svg-faint" font-size="8.5">fp16/bf16 · head_dim ≤ 256 · aligned · limited mask support</text>
+        <path d="M360 86 L412 86" class="svg-stroke" stroke="currentColor" stroke-width="1.2"/><polygon points="412,86 404,82 404,90" class="svg-stroke" fill="currentColor"/>
+        <rect x="416" y="70" width="120" height="32" rx="6" class="svg-sage" fill="currentColor" opacity=".25" stroke="currentColor"/>
+        <text x="428" y="90" class="svg-mono svg-ink" font-size="9.5">fits? → RUN ✓</text>
+        <text x="548" y="90" class="svg-mono svg-faint" font-size="9">else ↓</text>
+
+        <!-- mem efficient -->
+        <rect x="40" y="116" width="300" height="40" rx="8" class="svg-cyan" fill="currentColor" opacity=".14" stroke="currentColor"/>
+        <text x="54" y="134" class="svg-mono svg-ink">2 · MEMORY-EFFICIENT</text>
+        <text x="54" y="149" class="svg-mono svg-faint" font-size="8.5">more dtypes/shapes · arbitrary mask · slightly slower</text>
+        <text x="548" y="140" class="svg-mono svg-faint" font-size="9">else ↓</text>
+
+        <!-- cudnn -->
+        <rect x="40" y="166" width="300" height="40" rx="8" class="svg-copper" fill="currentColor" opacity=".16" stroke="currentColor"/>
+        <text x="54" y="184" class="svg-mono svg-ink">3 · cuDNN ATTENTION</text>
+        <text x="54" y="199" class="svg-mono svg-faint" font-size="8.5">Eddie's backend · newer GPUs · graph-API fused · strict strides</text>
+        <text x="548" y="190" class="svg-mono svg-faint" font-size="9">else ↓</text>
+
+        <!-- math -->
+        <rect x="40" y="216" width="496" height="40" rx="8" class="svg-rust" fill="#d8705d" opacity=".16" stroke="#d8705d"/>
+        <text x="54" y="234" class="svg-mono svg-ink">4 · MATH (pure ATen)</text>
+        <text x="54" y="249" class="svg-mono svg-faint" font-size="8.5">ALWAYS valid · materializes full N×N scores → O(N²) memory · the slow safety net</text>
+      </g>
+      <text x="40" y="284" class="svg-mono svg-faint" font-size="9.5">override: with torch.nn.attention.sdpa_kernel([SDPBackend.FLASH_ATTENTION]):  ← force / restrict</text>
+      <text x="40" y="300" class="svg-mono svg-faint" font-size="9.5">limitation (#138907): the order is STATIC — one global ranking can't be optimal for every shape × GPU</text>
+    </svg>
+    <figcaption><b>First fit wins.</b> The selector walks the priority list and runs the first backend whose support matrix accepts the dtype, head dimension, mask, dropout, and alignment. If none of the fused backends fit, it falls to math — which always works but quietly costs O(N²) memory. The whole point of <code>sdpa_kernel</code> is to override this when the default choice is wrong for your case.</figcaption>
+  </figure>
+
+  <figure class="code">
+    <div class="cap"><span class="fn">py · <b>seeing and forcing the backend</b></span><button class="copy">copy</button></div>
+<pre><code data-lang="py">import torch.nn.functional as F
+from torch.nn.attention import sdpa_kernel, SDPBackend
+
+out = F.scaled_dot_product_attention(q, k, v, is_causal=True)   # selector decides
+
+# force a specific backend (and get a loud error if it can't run, instead of
+# a silent fall-through to the slow math path):
+with sdpa_kernel([SDPBackend.FLASH_ATTENTION]):
+    out = F.scaled_dot_product_attention(q, k, v, is_causal=True)
+
+# allow an ordered subset — try cuDNN, else efficient, never math:
+with sdpa_kernel([SDPBackend.CUDNN_ATTENTION, SDPBackend.EFFICIENT_ATTENTION]):
+    out = F.scaled_dot_product_attention(q, k, v, attn_mask=mask)</code></pre>
+  </figure>
+
+  <div class="call record">
+    <div class="lbl">◆ War story to internalize · the cuDNN-SDPA stride bug</div>
+    <p>The cuDNN attention backend assumed the backward's incoming gradient <code>dO</code> shared the same strides as the forward output <code>O</code>. When an upstream op produced a differently-strided <code>dO</code>, the kernel read it wrong — a correctness bug fixed by a cuDNN <strong>9.5.1</strong> bump (§09's <a href="https://github.com/pytorch/pytorch/pull/137978" target="_blank" rel="noopener">#137978</a>). The lesson, and a great thing to say out loud: <em>fused backends bake in layout assumptions, so stride/contiguity correctness is as important as the math.</em> It also explains why a version bump can be a genuine bugfix, not housekeeping.</p>
+  </div>
+
+  <div class="call note">
+    <div class="lbl">◈ The static-order limitation (#138907)</div>
+    <p>Because <code>priority_order</code> returns one global ranking, it can't be optimal for every (shape, head-dim, GPU) combination — the fastest backend for short sequences may differ from long ones. This is an <em>open design tension</em>, which makes it a fantastic discussion topic: it shows you read the dispatch code <em>and</em> can reason about where its design is imperfect. Floating a per-shape heuristic or autotuned selection is exactly the kind of contribution this team makes.</p>
+    <div class="src">→ <a href="https://github.com/pytorch/pytorch/issues/138907" target="_blank" rel="noopener">#138907 — SDPA backend selection is order-static</a> · <a href="https://docs.pytorch.org/tutorials/intermediate/scaled_dot_product_attention_tutorial.html" target="_blank" rel="noopener">SDPA tutorial</a></div>
+  </div>
+
+  <div class="call probe">
+    <div class="lbl">▸ Probe · the silent fallback</div>
+    <p>"Your attention layer OOMs on long sequences even though you 'use FlashAttention.' What happened and how do you prove it?"</p>
+    <div class="ans">
+      <div class="mini">Answer arc</div>
+      <p>Almost certainly the selector <strong>fell through to the math backend</strong> — some constraint (an unsupported attn-mask shape, a head dimension over the limit, a misaligned/odd stride, an unsupported dtype) disqualified all fused backends, so it materialized the full N×N score matrix → O(N²) memory → OOM. Prove it by wrapping the call in <code>sdpa_kernel([SDPBackend.FLASH_ATTENTION])</code>: if it now raises instead of OOMs, the default was silently downgrading. Then fix the disqualifying condition (mask layout, pad head_dim, make contiguous) so a fused backend qualifies. Naming the support matrix and the math-path memory cost is the whole answer.</p>
+    </div>
+  </div>
+</section>
+<!-- ============ 11 cuBLAS ============ -->
+<section id="cublas">
+  <div class="kicker">Section 11 · Eddie's home turf</div>
+  <h2>cuBLAS / cuBLASLt &amp; matmul</h2>
+  <p class="lede">Every linear layer, attention projection, and embedding matmul bottoms out in a GEMM served by <strong>cuBLAS</strong> or its lightweight successor <strong>cuBLASLt</strong>. The integration questions here mirror cuDNN's: algorithm/heuristic selection, workspace, precision flags, and <em>epilogue fusion</em>.</p>
+
+  <h3>The routing</h3>
+  <p><code>torch.mm</code>, <code>torch.bmm</code>, <code>torch.matmul</code>, and <code>torch.addmm</code> dispatch (CUDA key) into <code>aten/src/ATen/native/cuda/Blas.cpp</code>, which calls the thin wrappers in <code>aten/src/ATen/cuda/CUDABlas.cpp</code>. Classic <strong>cuBLAS</strong> gives you the standard BLAS-3 GEMM. <strong>cuBLASLt</strong> ("Lt" = lightweight) is a newer API that exposes algorithm <em>variants</em>, better tensor-core targeting, flexible layouts, and crucially an <strong>epilogue</strong> stage that can fuse a bias add and an activation directly into the GEMM — so an <code>nn.Linear</code> followed by a GELU can become a single fused kernel instead of three.</p>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Op</th><th>Computes</th><th>Backend note</th></tr></thead>
+      <tbody>
+        <tr><td><code>mm(A,B)</code></td><td>A·B</td><td>plain GEMM</td></tr>
+        <tr><td><code>addmm(b,A,B)</code></td><td>β·b + α·(A·B)</td><td><b>nn.Linear's fast path</b>; bias fuses into the Lt epilogue</td></tr>
+        <tr><td><code>bmm(A,B)</code></td><td>batched A·B</td><td>batched GEMM; attention's QKᵀ and ·V</td></tr>
+        <tr><td><code>matmul</code></td><td>broadcasted</td><td>reshapes to mm/bmm under the hood</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <figure class="code">
+    <div class="cap"><span class="fn">py · <b>why nn.Linear is addmm, and the reduced-precision GEMM flags</b></span><button class="copy">copy</button></div>
+<pre><code data-lang="py"># nn.Linear(x) is effectively addmm: bias + x @ Wᵀ, with the bias add
+# fused into the cuBLASLt epilogue rather than a separate kernel.
+y = torch.addmm(bias, x, weight.t())          # one fused GEMM+bias on the Lt path
+
+# fp16/bf16 GEMMs may accumulate partials in reduced precision for speed.
+# These toggles trade a little accuracy for throughput (default-on historically):
+torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = False
+torch.backends.cuda.matmul.allow_bf16_reduced_precision_reduction = False
+
+# determinism / workspace: cuBLAS needs a fixed workspace to be reproducible
+#   export CUBLAS_WORKSPACE_CONFIG=:4096:8   (or :16:8)
+torch.use_deterministic_algorithms(True)      # will complain if the env isn't set</code></pre>
+  </figure>
+
+  <div class="call note">
+    <div class="lbl">◈ Epilogue fusion is the headline feature</div>
+    <p>cuBLASLt's epilogue can fold <strong>bias</strong>, <strong>ReLU/GELU</strong>, and sometimes the auxiliary outputs needed for the backward, into the matmul itself. That removes extra kernel launches and, more importantly, extra round-trips of the output tensor through global memory. When you say "the Lt path fuses the linear's bias and activation into the GEMM epilogue," you're naming the exact reason modern transformer MLP blocks are fast.</p>
+  </div>
+
+  <div class="call pitfall">
+    <div class="lbl">✕ Pitfall · layout and size surprises</div>
+    <p>Two recurring GEMM gotchas: <strong>(1)</strong> non-contiguous / awkwardly-transposed operands can force cuBLAS into a slower path or an implicit copy — the leading dimension and transpose flags matter, and a stray <code>.contiguous()</code> upstream sometimes <em>fixes</em> a slow matmul. <strong>(2)</strong> Many small GEMMs are <em>launch-bound</em>, not compute-bound — the fix is batching (<code>bmm</code>), fusing, or CUDA graphs (§08), not a "faster" GEMM algorithm. As always, Nsight Compute tells you which regime you're in (tensor-core utilization, achieved occupancy).</p>
+  </div>
+
+  <div class="call probe">
+    <div class="lbl">▸ Probe · addmm vs mm</div>
+    <p>"Why does <code>nn.Linear</code> call <code>addmm</code> instead of <code>mm</code> then a bias add?"</p>
+    <div class="ans">
+      <div class="mini">Answer arc</div>
+      <p><code>addmm</code> expresses "bias + x·Wᵀ" as one operation, so the cuBLASLt <strong>epilogue</strong> fuses the bias add into the GEMM — no separate elementwise kernel, no extra read/write of the output through global memory. Doing <code>mm</code> then <code>+ bias</code> launches a second kernel and re-streams the whole activation tensor, which for a memory-bound bias add is pure overhead. The same epilogue mechanism extends to fusing the activation. It's a clean example of why PyTorch maps a high-level layer onto the lowest-level fused primitive available.</p>
+    </div>
+    <div class="src">→ <code>aten/src/ATen/native/cuda/Blas.cpp</code> · <code>aten/src/ATen/cuda/CUDABlas.cpp</code></div>
+  </div>
+</section>
+
+<!-- ============ 12 TF32 / fp32_precision ============ -->
+<section id="tf32">
+  <div class="kicker">Section 12 · Eddie's home turf</div>
+  <h2>TF32 &amp; the fp32_precision migration</h2>
+  <p class="lede">Precision flags are squarely Eddie's domain, and they just went through a <strong>breaking API redesign in PyTorch 2.9 (Oct 2025)</strong>. Knowing both the old and new APIs — and the regression the migration caused — signals you track the codebase as it is <em>today</em>, not as a tutorial from two years ago.</p>
+
+  <h3>What TF32 actually is</h3>
+  <p><strong>TF32</strong> ("TensorFloat-32") is a tensor-core math mode for fp32 inputs: it keeps fp32's 8-bit exponent but truncates the mantissa to <strong>10 bits</strong> (≈19 bits total internally), so tensor cores run the multiply far faster at the cost of a little mantissa precision. Storage stays fp32 — this is the key distinction from bf16/fp16, which reduce the <em>stored</em> dtype. TF32 affects how fp32 matmuls and convolutions are <em>computed</em>, not how tensors are stored. For most training it's a large speedup with negligible quality impact; for precision-sensitive numerics it can matter.</p>
+
+  <div class="call record">
+    <div class="lbl">◆ Keep this distinction crisp (it's a classic interview trap)</div>
+    <p><strong>TF32:</strong> fp32 storage, reduced-mantissa compute on tensor cores, controlled by precision flags. <strong>AMP / bf16 / fp16:</strong> genuinely reduced-precision <em>storage</em> chosen by autocast (§05). A tensor can be fp32 and still be multiplied in TF32. Conflating "I'm using TF32" with "I'm in mixed precision" is exactly the kind of slip a precision-focused interviewer listens for.</p>
+  </div>
+
+  <h3>The API, old → new</h3>
+  <p>The pre-2.9 controls were a handful of coarse, awkwardly-named globals. PyTorch 2.9 replaced them with a <strong>hierarchical, per-backend, per-op</strong> system so you can, say, allow TF32 for cuDNN convolutions but force IEEE fp32 for matmuls.</p>
+
+  <figure class="code">
+    <div class="cap"><span class="fn">py · <b>the migration you should be able to write from memory</b></span><button class="copy">copy</button></div>
+<pre><code data-lang="py"># ---- OLD API (deprecated after 2.9) ----
+torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cudnn.allow_tf32 = True
+torch.set_float32_matmul_precision("high")    # "highest" | "high" | "medium"
+
+# ---- NEW API (PyTorch 2.9+) : granular, per-backend, per-op ----
+torch.backends.cuda.matmul.fp32_precision = "tf32"   # or "ieee" for true fp32
+torch.backends.cudnn.conv.fp32_precision = "tf32"    # convolutions, independently
+torch.backends.cudnn.rnn.fp32_precision  = "ieee"    # RNNs, independently
+# "ieee"  → full fp32 math      "tf32" → tensor-core reduced-mantissa</code></pre>
+  </figure>
+
+  <p>The mental model for the new names: <code>fp32_precision = "ieee"</code> means "compute fp32 ops in true IEEE fp32"; <code>"tf32"</code> means "you may use the TF32 tensor-core path." Granularity is the whole point — previously one switch governed all matmuls; now matmul, conv, and RNN are independent knobs under their respective backends.</p>
+
+  <div class="call pitfall">
+    <div class="lbl">✕ Pitfall · the migration shipped a regression</div>
+    <p>The redesign wasn't free: <strong>FlexAttention</strong> changed its effective default from IEEE to TF32 during the transition, a measurable precision/behavior regression tracked in <a href="https://github.com/pytorch/pytorch/issues/161022" target="_blank" rel="noopener">#161022</a>. The takeaway to voice: cross-cutting precision-default changes are <em>dangerous</em> precisely because they're invisible — nothing errors, results just shift — so they demand careful per-op defaults and regression tests. That is exactly the kind of subtle, high-blast-radius change this team has to get right.</p>
+    <div class="src">→ RFCs <a href="https://github.com/pytorch/pytorch/issues/121791" target="_blank" rel="noopener">#121791</a>, <a href="https://github.com/pytorch/pytorch/issues/76440" target="_blank" rel="noopener">#76440</a> · doc <a href="https://docs.pytorch.org/docs/stable/generated/torch.set_float32_matmul_precision.html" target="_blank" rel="noopener">set_float32_matmul_precision</a> · the flag plumbing lives in <code>aten/src/ATen/Context.cpp</code></div>
+  </div>
+
+  <div class="call probe">
+    <div class="lbl">▸ Probe · precision, current events edition</div>
+    <p>"What is TF32, and what changed about how PyTorch exposes it recently?"</p>
+    <div class="ans">
+      <div class="mini">Answer arc</div>
+      <p>Lead with the mechanism: TF32 is a tensor-core mode that runs fp32 matmuls/convs with a 10-bit mantissa — fp32 storage, reduced-mantissa compute, big speedup, small accuracy cost. Then the news: pre-2.9 you toggled coarse globals (<code>allow_tf32</code>, <code>set_float32_matmul_precision</code>); 2.9 deprecated those for a granular <code>fp32_precision</code> API set per backend and per op (<code>cuda.matmul</code>, <code>cudnn.conv</code>, <code>cudnn.rnn</code>) taking <code>"ieee"</code> or <code>"tf32"</code>. Close with judgment: the migration even caused a FlexAttention default regression, which is a cautionary tale about how invisible precision changes are. That arc — mechanism, current state, and a real failure — is exactly what he's probing for.</p>
+    </div>
+  </div>
+</section>
+<!-- ============ 13 torch.compile / Inductor ============ -->
+<section id="compile">
+  <div class="kicker">Section 13 · Compilation &amp; lifecycle</div>
+  <h2>torch.compile / Inductor</h2>
+  <p class="lede">The CUDA team doesn't just hand-write kernels — increasingly the <em>compiler</em> generates them. Knowing how <code>torch.compile</code> lowers a model to Triton, where it breaks, and how a hand-written CUDA op is made visible to it, connects your low-level work to PyTorch's strategic direction.</p>
+
+  <h3>The four stages</h3>
+  <figure class="fig">
+    <svg viewBox="0 0 720 250" role="img" aria-label="torch.compile pipeline: Dynamo to AOTAutograd to Inductor to Triton kernels and optional CUDA graphs">
+      <rect class="svg-bg" x="0" y="0" width="720" height="250" rx="10"/>
+      <text x="24" y="32" class="svg-mono svg-copper" font-size="11" font-weight="700">model(x)  →  torch.compile pipeline</text>
+      <g font-size="9.5">
+        <!-- dynamo -->
+        <rect x="24" y="52" width="150" height="74" rx="8" class="svg-cyan" fill="currentColor" opacity=".16" stroke="currentColor"/>
+        <text x="36" y="72" class="svg-mono svg-ink" font-weight="700">1 · DYNAMO</text>
+        <text x="36" y="88" class="svg-mono svg-faint">bytecode → FX graph</text>
+        <text x="36" y="101" class="svg-mono svg-faint">+ guards</text>
+        <text x="36" y="114" class="svg-mono svg-faint">graph breaks → eager</text>
+        <path d="M174 89 L196 89" class="svg-stroke" stroke="currentColor" stroke-width="1.3"/><polygon points="196,89 188,85 188,93" class="svg-stroke" fill="currentColor"/>
+        <!-- aotautograd -->
+        <rect x="200" y="52" width="150" height="74" rx="8" class="svg-cyan" fill="currentColor" opacity=".13" stroke="currentColor"/>
+        <text x="212" y="72" class="svg-mono svg-ink" font-weight="700">2 · AOTAUTOGRAD</text>
+        <text x="212" y="88" class="svg-mono svg-faint">trace fwd + bwd</text>
+        <text x="212" y="101" class="svg-mono svg-faint">functionalize</text>
+        <text x="212" y="114" class="svg-mono svg-faint">decompose ops</text>
+        <path d="M350 89 L372 89" class="svg-stroke" stroke="currentColor" stroke-width="1.3"/><polygon points="372,89 364,85 364,93" class="svg-stroke" fill="currentColor"/>
+        <!-- inductor -->
+        <rect x="376" y="52" width="150" height="74" rx="8" class="svg-copper" fill="currentColor" opacity=".16" stroke="currentColor"/>
+        <text x="388" y="72" class="svg-mono svg-ink" font-weight="700">3 · INDUCTOR</text>
+        <text x="388" y="88" class="svg-mono svg-faint">lower + FUSE</text>
+        <text x="388" y="101" class="svg-mono svg-faint">schedule tiling</text>
+        <text x="388" y="114" class="svg-mono svg-faint">codegen</text>
+        <path d="M526 89 L548 89" class="svg-stroke" stroke="currentColor" stroke-width="1.3"/><polygon points="548,89 540,85 540,93" class="svg-stroke" fill="currentColor"/>
+        <!-- triton -->
+        <rect x="552" y="52" width="146" height="74" rx="8" class="svg-sage" fill="currentColor" opacity=".2" stroke="currentColor"/>
+        <text x="564" y="72" class="svg-mono svg-ink" font-weight="700">4 · OUTPUT</text>
+        <text x="564" y="88" class="svg-mono svg-faint">Triton GPU kernels</text>
+        <text x="564" y="101" class="svg-mono svg-faint">C++/OpenMP (CPU)</text>
+        <text x="564" y="114" class="svg-mono svg-faint">+ CUDA graphs*</text>
+      </g>
+      <text x="24" y="160" class="svg-mono svg-faint" font-size="9.5">*mode="reduce-overhead" wraps the compiled region in CUDA Graph Trees (§08), sharing one memory pool</text>
+      <!-- fusion illustration -->
+      <text x="24" y="190" class="svg-mono svg-copper" font-size="10">FUSION, the payoff:</text>
+      <g font-size="8.5" class="svg-faint">
+        <rect x="150" y="178" width="48" height="16" rx="3" class="svg-stroke" fill="none" stroke="currentColor"/><text x="158" y="190">mul</text>
+        <rect x="202" y="178" width="48" height="16" rx="3" class="svg-stroke" fill="none" stroke="currentColor"/><text x="210" y="190">add</text>
+        <rect x="254" y="178" width="52" height="16" rx="3" class="svg-stroke" fill="none" stroke="currentColor"/><text x="262" y="190">gelu</text>
+        <text x="316" y="190" class="svg-mono" font-size="14">⇒</text>
+        <rect x="340" y="176" width="150" height="20" rx="4" class="svg-sage" fill="currentColor" opacity=".4"/><text x="352" y="190" fill="#0a2410" class="svg-mono">1 fused Triton kernel</text>
+        <text x="500" y="190" class="svg-mono svg-faint">3 launches + 3 mem round-trips → 1</text>
+      </g>
+      <text x="24" y="226" class="svg-mono svg-faint" font-size="9.5">Dynamo guards check assumptions each call; a violated guard (new shape, new type) → RECOMPILE</text>
+    </svg>
+    <figcaption><b>From Python to Triton.</b> Dynamo captures a graph and guards; AOTAutograd produces the joint forward/backward and decomposes to a smaller op set; Inductor fuses pointwise+reduction chains and generates Triton; an optional CUDA-graph pass removes launch overhead. Fusion is the same memory-traffic win as TensorIterator (§04), but applied across whole subgraphs.</figcaption>
+  </figure>
+
+  <h3>Making a hand-written CUDA kernel visible to the compiler</h3>
+  <p>This is the bridge from your kernel work to the framework. If you write a custom CUDA op, you register it through <code>torch.library</code> with both a real implementation <em>and</em> a <strong>fake/meta</strong> function that propagates shapes &amp; dtypes without touching data. The meta function is what lets the dispatcher (§03), AOTAutograd, and Inductor reason about your op during tracing — so it composes with <code>torch.compile</code> instead of forcing a graph break. NVIDIA's <strong>cudnn-frontend</strong> ships exactly such torch.compile-compatible custom ops for its fused attention.</p>
+
+  <figure class="code">
+    <div class="cap"><span class="fn">py · <b>a custom CUDA op that the compiler can reason about</b></span><button class="copy">copy</button></div>
+<pre><code data-lang="py">from torch.library import custom_op, register_fake
+
+@custom_op("mylib::fused_rmsnorm", mutates_args=())
+def fused_rmsnorm(x: torch.Tensor, w: torch.Tensor, eps: float) -&gt; torch.Tensor:
+    return _my_cuda_extension.fused_rmsnorm(x, w, eps)   # the real kernel
+
+@register_fake("mylib::fused_rmsnorm")     # shape/dtype only — no data, no GPU
+def _(x, w, eps):
+    return torch.empty_like(x)             # lets Dynamo/Inductor trace through it
+
+# now this composes with torch.compile instead of causing a graph break:
+compiled = torch.compile(model, mode="reduce-overhead")</code></pre>
+  </figure>
+
+  <div class="call pitfall">
+    <div class="lbl">✕ Pitfall · graph breaks &amp; recompilation storms</div>
+    <p>Two failure modes to name. <strong>Graph breaks:</strong> data-dependent Python control flow, <code>.item()</code>, printing, or an unsupported op makes Dynamo split the graph and run that region in eager — each break is a fusion boundary and a perf leak; inspect with <code>torch._dynamo.explain()</code> or <code>TORCH_LOGS="graph_breaks"</code>. <strong>Recompilation storms:</strong> if a tensor's shape changes every call, guards keep failing and Inductor recompiles repeatedly — mark the axis dynamic with <code>torch._dynamo.mark_dynamic(x, 0)</code> (or rely on automatic dynamic shapes) so one compiled artifact covers many sizes.</p>
+  </div>
+
+  <div class="call probe">
+    <div class="lbl">▸ Probe · compile gone wrong</div>
+    <p>"You wrap your model in <code>torch.compile</code> and it's <em>slower</em>, with the log full of recompiles. What's happening?"</p>
+    <div class="ans">
+      <div class="mini">Answer arc</div>
+      <p>First, separate one-time compile cost from steady state — the first iterations pay tracing+codegen; benchmark after warmup. If it recompiles continuously, guards are failing: almost always <strong>dynamic shapes</strong> (variable batch/seq) blowing the cache, or frequent graph breaks forcing re-entry. Fixes: <code>mark_dynamic</code> the varying dims (or enable dynamic shapes) so guards generalize; remove graph breaks found via <code>torch._dynamo.explain()</code> / <code>TORCH_LOGS=recompiles</code>; and only use <code>mode="reduce-overhead"</code> when shapes are stable, since its CUDA graphs need static buffers. The structured answer — compile-time vs runtime, guards, dynamic shapes, graph breaks — is the point.</p>
+    </div>
+    <div class="src">→ <a href="https://docs.pytorch.org/docs/stable/torch.compiler_cudagraph_trees.html" target="_blank" rel="noopener">CUDAGraph Trees</a> · custom ops via <code>torch.library</code></div>
+  </div>
+</section>
+
+<!-- ============ 14 BUILD / CI / RELEASE ============ -->
+<section id="lifecycle">
+  <div class="kicker">Section 14 · Compilation &amp; lifecycle</div>
+  <h2>Build, CI &amp; release engineering</h2>
+  <p class="lede">This is the section that maps <em>directly</em> to the job description you applied for — "continuous integration, testing, and delivery… down to NVIDIA's math libraries, compilers, and drivers… C++ build systems, dependency issues, symbol resolution, and linking problems." Even though you're interviewing with the CUDA core team, this is the work the role is funded to do, and your CI/CD background is a direct hit (§16).</p>
+
+  <h3>The combinatorial release matrix</h3>
+  <p>A PyTorch release isn't one artifact — it's a <strong>matrix</strong>: several CUDA toolkit versions × supported Python versions × {Linux, Windows, macOS} × {CPU, CUDA, ROCm/XPU}, each a separately-built, separately-tested wheel. Every cell bundles a compatible <strong>cuDNN, cuBLAS, NCCL</strong> (shipped as the <code>nvidia-*-cuXX</code> pip dependencies), pinned to versions known to work with that CUDA. Keeping those pins correct — and keeping the cuDNN that CI tests against equal to the one the wheel ships — is precisely the class of problem in Eddie's recent issues (§09).</p>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Axis</th><th>Why it multiplies the work</th></tr></thead>
+      <tbody>
+        <tr><td>CUDA toolkit versions</td><td>Each needs its own build + a matched cuDNN/cuBLAS/NCCL; ABI and driver-compat differ</td></tr>
+        <tr><td>Python versions</td><td>Separate wheels; C-extension ABI tied to the interpreter</td></tr>
+        <tr><td>OS / platform</td><td>Different linkers, default ABIs, packaging (manylinux, Windows DLLs)</td></tr>
+        <tr><td>Accelerator</td><td>CUDA vs ROCm vs CPU-only — divergent kernels and libraries</td></tr>
+        <tr><td><code>TORCH_CUDA_ARCH_LIST</code></td><td>Which GPU architectures (sm_80, sm_90, …) to compile fatbins for; more arches = bigger, slower build</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>C++ build, ABI, and the linking problems they explicitly ask about</h3>
+  <p>libtorch is split into shared libraries — notably <code>libtorch_cpu</code> and <code>libtorch_cuda</code> — plus <code>libc10</code>/<code>libc10_cuda</code>. The build (driven by <code>setup.py</code> over CMake) has to get several things right that the JD calls out by name:</p>
+  <ul>
+    <li><strong>The C++11 ABI flag</strong> (<code>_GLIBCXX_USE_CXX11_ABI</code>). A C++ extension built against one ABI but loaded next to a libtorch built with the other yields link-time or, worse, run-time <code>std::string</code>/<code>std::list</code> mismatches. Matching it is the first thing to check when a custom extension won't load.</li>
+    <li><strong>Symbol visibility &amp; resolution.</strong> Undefined-symbol errors at <code>import torch</code> usually mean a version skew (an extension referencing a symbol the installed libtorch doesn't export) or two libraries exporting the same symbol (ODR violation). The toolchain study you've done — linkers, symbol tables, <code>nm</code>/<code>ldd</code> — is exactly the debugging vocabulary here.</li>
+    <li><strong>One CUDA runtime, please.</strong> Mixing two CUDA runtimes (e.g. the wheel's bundled libs and a system toolkit) in one process causes context/allocator weirdness. Static-vs-dynamic linking of the CUDA runtime is a deliberate packaging decision.</li>
+  </ul>
+
+  <figure class="code">
+    <div class="cap"><span class="fn">sh · <b>the commands you'd actually reach for on a link/import failure</b></span><button class="copy">copy</button></div>
+<pre><code data-lang="sh"># which shared libs does the extension pull, and are any missing?
+ldd _C.so | grep -i "not found"
+
+# does libtorch actually export the symbol the extension wants? (demangled)
+nm -DC libtorch_cuda.so | grep -i "the_missing_symbol"
+
+# what ABI / CUDA / cuDNN does the installed torch report?
+python -c "import torch; print(torch.__version__, torch.version.cuda, \
+torch.backends.cudnn.version(), torch._C._GLIBCXX_USE_CXX11_ABI)"
+
+# build a CUDA extension for specific arches only (smaller, faster CI build)
+TORCH_CUDA_ARCH_LIST='8.0;9.0' python setup.py develop</code></pre>
+  </figure>
+
+  <div class="call note">
+    <div class="lbl">◈ "Without on-call… drives software quality and reliability"</div>
+    <p>The JD frames this as <em>development-focused</em> infra work: building the tools, test systems, and pipelines that keep the whole stack shippable — not paging at 3am. When you talk about it, emphasize <strong>making failures reproducible and caught early</strong>: sharded CI across the matrix, nightly builds that exercise real GPUs, version-pin audits, and bisecting a regression to the offending cuDNN/cuBLAS bump. That's the posture they're hiring for.</p>
+  </div>
+
+  <div class="call probe">
+    <div class="lbl">▸ Probe · the import-time linker failure</div>
+    <p>"A user reports <code>ImportError: undefined symbol</code> (or <code>libcudnn.so.X: cannot open shared object file</code>) on <code>import torch</code>. Walk me through debugging it."</p>
+    <div class="ans">
+      <div class="mini">Answer arc</div>
+      <p>Triage which class it is. <strong>"cannot open libcudnn"</strong> = a <em>loader</em> problem: the bundled or system cuDNN isn't on the search path, or the wheel's CUDA version doesn't match the installed one — check <code>ldd</code> for "not found," verify the <code>nvidia-cudnn-cuXX</code> dependency installed, confirm CUDA-version match. <strong>"undefined symbol"</strong> = a <em>resolution</em> problem: usually a custom C++ extension built against a different libtorch/ABI than the one loaded — confirm with <code>nm -DC</code> that the symbol's exported, check the C++11 ABI flag matches, and rebuild the extension against the installed torch. The discriminator is loader-can't-find-file vs symbol-not-resolved, and naming <code>ldd</code>/<code>nm</code>/ABI shows you've actually done this.</p>
+    </div>
+  </div>
+</section>
+<!-- ============ 15 MOCK Q&A ============ -->
+<section id="mock">
+  <div class="kicker">Section 15 · The room</div>
+  <h2>Mock questions &amp; answers</h2>
+  <p class="lede">A bank tuned to Eddie's profile: profiler-first, cuDNN/precision-heavy, with systems-design judgment and the build/CI thread from the JD. For each, the goal isn't a memorized script — it's an <em>answer arc</em> that names mechanisms and ends with how you'd verify. Read these as "what shape should my answer take."</p>
+
+  <h4>Warm-up &amp; architecture</h4>
+  <p><strong>Q · Walk me through what happens when I call <code>y = x.relu()</code> on a CUDA tensor.</strong><br>
+  Python C-binding → the <code>relu</code> op enters the dispatcher → a <code>DispatchKeySet</code> is computed from the args (here just the CUDA backend key, plus Autograd/Autocast if active) → the highest-priority key selects the kernel from the op's function table → if autograd is on, the Autograd kernel records a node then redispatches → the CUDA kernel runs through TensorIterator/<code>gpu_kernel</code> as a grid-stride elementwise launch on the current stream → returns a tensor whose contents are a promise the GPU will fulfill asynchronously. Hitting dispatcher → TensorIterator → stream-async in one breath shows the whole stack. (§02–§07)</p>
+
+  <p><strong>Q · What's the difference between a Tensor, TensorImpl, and Storage?</strong><br>
+  <code>Tensor</code> is an <code>intrusive_ptr</code> handle (cheap to copy, refcounted). <code>TensorImpl</code> holds the metadata — sizes, strides, dtype, device, the dispatch key set. <code>Storage</code> is the actual contiguous byte buffer on a device. Many Tensors/TensorImpls can <em>view</em> one Storage (that's what slicing and <code>.view()</code> do — new strides, shared bytes). This is why views are free and why <code>.contiguous()</code> may or may not copy. (§02)</p>
+
+  <h4>CUDA-deep</h4>
+  <p><strong>Q · Why a grid-stride loop?</strong><br>
+  Decouples launch geometry from problem size: one occupancy-tuned grid handles any N, threads reuse across elements, correctness holds when N exceeds max grid dim, and it's CUDA-graph-friendly because the launch shape is fixed. (§04)</p>
+
+  <p><strong>Q · Explain the caching allocator and why it exists.</strong><br>
+  <code>cudaMalloc</code>/<code>cudaFree</code> synchronize the device, which would stall the host's run-ahead every allocation. So PyTorch suballocates from large cached segments — split/coalesce blocks, per-stream pools, size rounding — to hit a steady state with near-zero driver calls. The cost is fragmentation (free memory stranded across segments), mitigated by <code>expandable_segments</code> (CUDA VMM: one virtual reservation, physical pages mapped on demand). (§06)</p>
+
+  <p><strong>Q · A tensor allocated on stream A is used on stream B and you get intermittent garbage. Why?</strong><br>
+  The allocator tracks which stream a block is "live" on; if B uses it without <code>tensor.record_stream(B)</code>, the allocator may recycle the block once A's work finishes even though B's queued kernels haven't run yet. <code>record_stream</code> (or an explicit event) tells the allocator to wait for B too. Classic cross-stream hazard. (§06–§07)</p>
+
+  <h4>cuDNN, precision &amp; SDPA — his core</h4>
+  <p><strong>Q · What does <code>torch.backends.cudnn.benchmark</code> do, and when does it hurt?</strong><br>
+  It empirically times cuDNN's candidate conv algorithms for each unique input configuration and caches the winner. Great for fixed shapes; harmful for varying shapes because every new shape is a cache miss that re-runs the search. (§09)</p>
+
+  <p><strong>Q · What is TF32 and what changed in the 2.9 precision API?</strong><br>
+  TF32 = tensor-core mode for fp32 ops with a 10-bit mantissa: fp32 storage, reduced-mantissa compute, big speedup, small accuracy cost. 2.9 deprecated the coarse globals (<code>allow_tf32</code>, <code>set_float32_matmul_precision</code>) for a granular per-backend/per-op <code>fp32_precision = "ieee"|"tf32"</code> API — and the migration even shipped a FlexAttention default regression, a lesson in how invisible precision changes are. (§12)</p>
+
+  <p><strong>Q · I "use FlashAttention" but my long-sequence model OOMs. Why?</strong><br>
+  The SDPA selector silently fell through to the math backend (some constraint — mask shape, head dim, stride, dtype — disqualified the fused backends), and math materializes the full N×N scores → O(N²) memory. Prove it by forcing <code>sdpa_kernel([FLASH_ATTENTION])</code> so it raises instead of downgrading, then fix the disqualifying condition. (§10)</p>
+
+  <p><strong>Q · Why can a cuDNN point-release bump be a real bugfix?</strong><br>
+  Because fused backends bake in layout assumptions. The cuDNN SDPA path once assumed <code>dO</code> shared strides with <code>O</code>; a differently-strided gradient produced wrong results, fixed by the 9.5.1 bump. Version bumps can carry correctness fixes, not just features. (§09–§10)</p>
+
+  <h4>Debugging &amp; performance</h4>
+  <p><strong>Q · Adding <code>print(loss)</code> in the loop doubled step time. Explain.</strong><br>
+  <code>.item()</code> forces <code>cudaStreamSynchronize</code>, killing the host run-ahead so you pay full latency every step. Log every N steps or accumulate on-GPU and sync once. (§07)</p>
+
+  <p><strong>Q · A model OOMs at iteration 500 with memory_allocated well under capacity.</strong><br>
+  Reserved ≫ allocated ⇒ fragmentation. Confirm with <code>memory_summary()</code> + a snapshot; then <code>expandable_segments:True</code>, cap <code>max_split_size_mb</code>, stabilize allocation sizes. (§06)</p>
+
+  <p><strong>Q · An elementwise op is unexpectedly slow. How do you find out why?</strong><br>
+  Suspect it fell off TensorIterator's vectorized fast path — a non-contiguous input (often a transpose upstream), mixed dtype forcing per-element dynamic casts, or broadcasting. Confirm uncoalesced access in Nsight Compute's memory workload analysis; fix with <code>.contiguous()</code> or the right <code>memory_format</code>. (§04)</p>
+
+  <p><strong>Q · How do you decide whether a workload is launch-bound or compute-bound?</strong><br>
+  An nsys timeline: visible host-side gaps between kernels ⇒ launch-bound ⇒ CUDA graphs / batching / fusion help. Wall-to-wall kernels with high tensor-core utilization (per ncu) ⇒ compute-bound ⇒ look at algorithm/precision instead. Never optimize before classifying. (§08, §11)</p>
+
+  <h4>Design judgment</h4>
+  <p><strong>Q · Should a new fused attention variant be its own ATen op + backend, or composed from existing ops?</strong><br>
+  Trade-off the team actually litigates (see PR #122510): a dedicated backend gives peak performance and clean autocast/precision control but adds dispatch surface, backend bloat, and maintenance/version-compat burden; a composite op reuses infrastructure and stays portable but may leave performance on the table. Reasonable answer: prototype composite, promote to a fused backend when profiling justifies it and the op is stable — and be explicit about the tech-debt you're accepting. (§03, §10)</p>
+
+  <p><strong>Q · SDPA's backend priority order is static. How might you improve it?</strong><br>
+  Acknowledge the limitation (#138907): one global ranking can't be optimal across shapes/GPUs. Options: a lightweight per-shape heuristic keyed on (seq, head_dim, dtype, sm), an autotuning pass that times backends once and caches (à la cudnn.benchmark), or a learned/cost-model selector. Note the cost: added complexity and the need for a fallback when autotuning isn't possible. (§10)</p>
+
+  <h4>The JD thread — build, CI, release</h4>
+  <p><strong>Q · How would you debug <code>undefined symbol</code> vs <code>cannot open libcudnn.so</code> at <code>import torch</code>?</strong><br>
+  Loader-can't-find-file vs symbol-not-resolved. For the former: <code>ldd</code> for "not found," verify the <code>nvidia-cudnn-cuXX</code> install and CUDA-version match. For the latter: usually an extension built against a different libtorch/ABI — <code>nm -DC</code> to confirm the symbol, check the C++11 ABI flag, rebuild against the installed torch. (§14)</p>
+
+  <p><strong>Q · Why is keeping CI's cuDNN equal to the shipped cuDNN important?</strong><br>
+  Because divergence creates "passes in CI, breaks for users" bugs (issue #165801): the wheel can carry a different cuDNN than CI tested, so a real numerical or perf regression slips through. Part of release hygiene is auditing those pins per platform — sometimes even rolling a version back on one OS (#162322). (§09, §14)</p>
+
+  <div class="call spec">
+    <div class="lbl">▣ Reverse questions — ask at least two</div>
+    <p>Good questions signal seniority and genuine interest in <em>his</em> work:</p>
+    <ul>
+      <li>"Where's the line today between hand-written CUDA/cuDNN kernels and what Inductor generates — and which way is it moving?"</li>
+      <li>"How do you weigh adding a fused backend (more dispatch surface, version-compat burden) against keeping things composite? Has #122510-style bloat changed the team's bar?"</li>
+      <li>"What does the cuDNN-version-bump workflow actually look like end to end — who catches a regression, and how early?"</li>
+      <li>"Is per-shape or autotuned SDPA backend selection on the roadmap, or is the static order good enough in practice?"</li>
+      <li>"For a new hire on the CUDA core team, what's the first surface you'd want them to own?"</li>
+    </ul>
+  </div>
+</section>
+<!-- ============ 16 YOUR EDGE ============ -->
+<section id="edge">
+  <div class="kicker">Section 16 · The room</div>
+  <h2>Your edge: how to connect it</h2>
+  <p class="lede">You're not arriving as a generic candidate — your day job is GPU-to-GPU communication, shuffle operators, and a UCX-based exchange in a distributed query engine, sitting right on the RAPIDS/NVIDIA stack. That's an unusually direct match for a CUDA-core role. The trick is to <em>map</em> each strength onto something on Eddie's surface so the relevance is obvious.</p>
+
+  <h3>The bridges — say the left, it lands because of the right</h3>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Your background</th><th>Where it connects on this team</th></tr></thead>
+      <tbody>
+        <tr><td><b>UCX exchange / GPU-to-GPU comms / shuffle</b></td><td>The NCCL × caching-allocator VMM interop work (§06, RFC #165419) and cross-stream correctness (§07, <code>record_stream</code>). You've <em>lived</em> the "buffer registered on one stream, consumed on another, across devices" hazard that PyTorch is formalizing.</td></tr>
+        <tr><td><b>cuDF / Arrow columnar integration</b></td><td>TensorIterator strides, contiguity, and <code>memory_format</code> (§04). You reason about columnar memory layout natively — exactly the lens for why an op fell off the vectorized path.</td></tr>
+        <tr><td><b>GPU hash join, prefix scan, warp shuffle</b></td><td>ATen's reduction infrastructure (§04, <code>Reduce.cuh</code>: warp-shuffle → shared-mem → grid). You can discuss warp-level primitives without hand-waving.</td></tr>
+        <tr><td><b>pybind11 / pydisort (~239K downloads)</b></td><td>Custom-op registration via <code>torch.library</code> + fake/meta functions (§13) and the C++/Python build boundary (§14). You've shipped a real extension, not just imported one.</td></tr>
+        <tr><td><b>Distributed PyTorch/Ray, DDP, NCCL (400× speedup)</b></td><td>Collective/compute overlap through streams (§07) and the allocator's role in comms. You understand the systems-level concurrency the framework is protecting.</td></tr>
+        <tr><td><b>ATen internals study (TensorIterator, <code>gpu_kernel</code>, type erasure)</b></td><td>You've already read the dispatcher and kernel code in §03–§04. The boxed/unboxed type erasure is the same idea you studied — lean on that.</td></tr>
+        <tr><td><b>CUDA memory optimization (coalescing, bank conflicts, tiling)</b></td><td>The fast-path-fragility story (§04) and Nsight Compute memory-workload analysis — your home turf, and Eddie's tooling wavelength.</td></tr>
+        <tr><td><b>Build-toolchain depth (Make/CMake, linking, ABI)</b></td><td>§14 verbatim — symbol resolution, the C++11 ABI flag, <code>ldd</code>/<code>nm</code>. This is the JD's "dependency issues, symbol resolution, and linking problems."</td></tr>
+        <tr><td><b>Nsight Systems / Nsight Compute fluency</b></td><td>Eddie's tagline is literally "nsys nvprof." Every perf answer you give should end at a profiler — you already work this way.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Lead with these three</h3>
+  <ol class="list">
+    <li><strong>Cross-device comms correctness.</strong> "My exchange operator deals with exactly the allocator/stream hazards PyTorch is formalizing in the NCCL-VMM interop work — registering VMM buffers for collectives, getting <code>record_stream</code> semantics right across the shuffle." This is rare, senior, and directly on their roadmap.</li>
+    <li><strong>Profiler-driven kernel work with receipts.</strong> Lead a perf story with the profile, the bottleneck classification (launch- vs compute-bound), the fix, and the measured result (your 124× LeNet, the MHD solver at LBNL). Concrete numbers + nsys/ncu = his language.</li>
+    <li><strong>You read the source.</strong> When a topic comes up, reference the actual file (<code>sdp_utils.cpp</code>, <code>CUDACachingAllocator.cpp</code>, <code>Blas.cpp</code>). Few candidates do; it instantly separates "I use PyTorch" from "I could maintain PyTorch."</li>
+  </ol>
+
+  <div class="call note">
+    <div class="lbl">◈ Honest framing of the gap</div>
+    <p>You're coming from distributed-query/data systems, not years inside the framework itself. Don't paper over it — frame it as an asset: you've been a <em>demanding downstream consumer</em> of exactly these CUDA primitives (allocator, streams, collectives, cuDF interop), so you know where they chafe in production. "I've hit the sharp edges of this stack from the outside; I want to work on them from the inside." That's a credible, confident bridge — and it's true.</p>
+  </div>
+
+  <div class="call record">
+    <div class="lbl">◆ One-liners to have ready</div>
+    <ul>
+      <li><b>On comms:</b> "Cross-stream buffer lifetime is the bug I debug most — <code>record_stream</code> and event ordering are muscle memory for me."</li>
+      <li><b>On columnar:</b> "From cuDF I think in strides and validity buffers, so contiguity and memory_format regressions are second nature."</li>
+      <li><b>On extensions:</b> "pydisort taught me the pybind11/ABI boundary the hard way — symbol visibility, the C++11 ABI flag, the lot."</li>
+      <li><b>On scale:</b> "I got 400× on a distributed PyTorch/Ray pipeline by overlapping comms with compute — same stream/event reasoning, one layer up."</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============ 17 APPENDIX ============ -->
+<section id="appendix">
+  <div class="kicker">Section 17 · The room</div>
+  <h2>Source index &amp; cheat-sheets</h2>
+  <p class="lede">The map of the territory: the source files to have skimmed, the canonical references, and the profiler commands to be able to type without thinking. Skim the source paths the night before — being able to say "that's in <code>sdp_utils.cpp</code>" is disproportionately convincing.</p>
+
+  <h3>Source files worth having open</h3>
+  <div class="refgrid">
+    <a>aten/src/ATen/native/native_functions.yaml</a>
+    <a>aten/src/ATen/core/dispatch/Dispatcher.h</a>
+    <a>c10/core/DispatchKey.h</a>
+    <a>aten/src/ATen/native/cuda/Loops.cuh</a>
+    <a>aten/src/ATen/native/cuda/CUDALoops.cuh</a>
+    <a>aten/src/ATen/native/cuda/Reduce.cuh</a>
+    <a>aten/src/ATen/native/cuda/TensorIterator.cpp</a>
+    <a>aten/src/ATen/native/cuda/Blas.cpp</a>
+    <a>aten/src/ATen/cuda/CUDABlas.cpp</a>
+    <a>aten/src/ATen/native/cudnn/</a>
+    <a>aten/src/ATen/native/transformers/cuda/sdp_utils.cpp</a>
+    <a>aten/src/ATen/native/transformers/cuda/attention.cu</a>
+    <a>aten/src/ATen/cuda/CUDAGraph.cpp</a>
+    <a>aten/src/ATen/Context.cpp  (fp32_precision)</a>
+    <a>c10/cuda/CUDACachingAllocator.cpp / .h</a>
+    <a>c10/cuda/CUDAStream.cpp / .h</a>
+  </div>
+
+  <h3>Canonical references</h3>
+  <ul class="refs">
+    <li><a href="https://blog.ezyang.com/2020/09/lets-talk-about-the-pytorch-dispatcher/" target="_blank" rel="noopener">ezyang — Let's talk about the PyTorch dispatcher</a> (the dispatcher mental model)</li>
+    <li><a href="https://github.com/pytorch/pytorch/wiki/PyTorch-dispatcher-walkthrough" target="_blank" rel="noopener">PyTorch wiki — dispatcher walkthrough</a> · <a href="https://github.com/pytorch/pytorch/wiki/Boxing-and-Unboxing-in-the-PyTorch-Operator-Library" target="_blank" rel="noopener">boxing &amp; unboxing</a></li>
+    <li><a href="https://zdevito.github.io/2022/08/04/cuda-caching-allocator.html" target="_blank" rel="noopener">DeVito — a guide to the CUDA caching allocator</a> · <a href="https://docs.pytorch.org/devlogs/eager/2026-06-01-cuda-caching-allocator/" target="_blank" rel="noopener">eager devlog (2026-06)</a></li>
+    <li><a href="https://docs.pytorch.org/docs/stable/notes/cuda.html" target="_blank" rel="noopener">CUDA semantics</a> (streams, events, async, TF32 notes)</li>
+    <li><a href="https://pytorch.org/blog/accelerating-pytorch-with-cuda-graphs/" target="_blank" rel="noopener">Accelerating PyTorch with CUDA graphs</a> · <a href="https://docs.pytorch.org/docs/stable/torch.compiler_cudagraph_trees.html" target="_blank" rel="noopener">CUDAGraph Trees</a></li>
+    <li><a href="https://docs.pytorch.org/tutorials/intermediate/scaled_dot_product_attention_tutorial.html" target="_blank" rel="noopener">SDPA tutorial</a> · <a href="https://github.com/NVIDIA/cudnn-frontend" target="_blank" rel="noopener">NVIDIA/cudnn-frontend</a></li>
+    <li><a href="https://docs.pytorch.org/docs/stable/generated/torch.set_float32_matmul_precision.html" target="_blank" rel="noopener">set_float32_matmul_precision</a> · RFCs <a href="https://github.com/pytorch/pytorch/issues/121791" target="_blank" rel="noopener">#121791</a>, <a href="https://github.com/pytorch/pytorch/issues/76440" target="_blank" rel="noopener">#76440</a></li>
+    <li><a href="https://pytorch.org/blog/pytorch-at-gtc/" target="_blank" rel="noopener">PyTorch at GTC 2025</a> (Eddie's cuDNN × CUDA-graphs talk)</li>
+    <li>Eddie's PRs: <a href="https://github.com/pytorch/pytorch/pull/122510" target="_blank" rel="noopener">#122510</a> · <a href="https://github.com/pytorch/pytorch/pull/91527" target="_blank" rel="noopener">#91527</a> · <a href="https://github.com/pytorch/pytorch/pull/145779" target="_blank" rel="noopener">#145779</a> · <a href="https://github.com/pytorch/pytorch/pull/161177" target="_blank" rel="noopener">#161177</a> · <a href="https://github.com/pytorch/pytorch/pull/137978" target="_blank" rel="noopener">#137978</a> · issues <a href="https://github.com/pytorch/pytorch/issues/165801" target="_blank" rel="noopener">#165801</a>, <a href="https://github.com/pytorch/pytorch/issues/138907" target="_blank" rel="noopener">#138907</a>, <a href="https://github.com/pytorch/pytorch/issues/161022" target="_blank" rel="noopener">#161022</a></li>
+  </ul>
+
+  <h3>Profiler cheat-sheet — speak his tooling</h3>
+  <figure class="code">
+    <div class="cap"><span class="fn">sh · <b>Nsight Systems (nsys) — timeline / "where is time going"</b></span><button class="copy">copy</button></div>
+<pre><code data-lang="sh"># whole-program timeline: kernels, memcpys, NCCL, and host gaps
+nsys profile -t cuda,nvtx,osrt -o run python train.py
+# narrow to a window and force a clean DB
+nsys profile --capture-range=cudaProfilerApi -o run python train.py
+# read it: look for host-side gaps between kernels (launch-bound) vs
+# wall-to-wall kernels (compute-bound), and cudaStreamSynchronize stalls</code></pre>
+  </figure>
+  <figure class="code">
+    <div class="cap"><span class="fn">sh · <b>Nsight Compute (ncu) — per-kernel "why is THIS kernel slow"</b></span><button class="copy">copy</button></div>
+<pre><code data-lang="sh"># detailed counters for a few launches of one kernel (regex-filter the name)
+ncu -k "regex:elementwise|gemm" -c 5 --set full -o kern python train.py
+# the sections that answer the usual questions:
+#   MemoryWorkloadAnalysis  → coalescing / uncoalesced access (the §04 fast-path check)
+#   ComputeWorkloadAnalysis → tensor-core utilization (compute-bound?)
+#   Occupancy               → are there enough warps in flight
+# torch-side, the quick one:
+#   with torch.profiler.profile(activities=[CUDA]) as p: ...; p.key_averages()</code></pre>
+  </figure>
+
+  <div class="call spec">
+    <div class="lbl">▣ Night-before checklist</div>
+    <ul>
+      <li>Re-skim §09–§12 (cuDNN, SDPA, cuBLAS, TF32) — his core, highest question density.</li>
+      <li>Be able to draw three diagrams cold: dispatch flow, the allocator segment/block + fragmentation, and the SDPA funnel.</li>
+      <li>Have your 124× / 400× / MHD / pydisort stories phrased as profile → bottleneck → fix → measured result.</li>
+      <li>Open <code>sdp_utils.cpp</code> and <code>CUDACachingAllocator.cpp</code> once so the names are fresh.</li>
+      <li>Pick two reverse questions from §15 and make them yours.</li>
+      <li>Default every perf answer to ending at nsys/ncu. That alone tracks his "nsys nvprof" worldview.</li>
+    </ul>
+  </div>
+
+  <p class="hr-note">Built as a single self-contained file · dark/light · no external dependencies beyond Google Fonts (with system fallbacks). Good luck, Zoey — you've done the hard part already; this is just making it legible to the room.</p>
+</section>
+
+<footer>
+  <b>FIELD MANUAL · TORCH-CUDA / NV-CORE</b> — prepared for an interview with Eddie Yan (<a href="https://github.com/eqy" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">@eqy</a>), PyTorch CUDA core, NVIDIA Deep Learning Frameworks.<br>
+  Single self-contained file · no build step · dark/light · syntax highlighting and navigation are local-only JavaScript. Source links point at <b>pytorch/pytorch</b> on GitHub and the official docs; verify line numbers against the commit you actually build, since the tree moves fast.<br>
+  Not affiliated with or endorsed by NVIDIA. Assembled from public PRs, issues, talks, and documentation as a study aid.
+</footer>
+
+</div><!-- /.wrap -->
+</main>
+</div><!-- /.shell -->
+
+<script>
+(function () {
+  "use strict";
+
+  /* ---------- helpers ---------- */
+  function esc(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+  function $(sel, root) { return (root || document).querySelector(sel); }
+  function $all(sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); }
+
+  /* ============================================================
+     1. THEME TOGGLE  (persisted, defensively)
+     ============================================================ */
+  (function theme() {
+    var root = document.documentElement;
+    var btnIcon = $("#themeIcon");
+    var btnTxt = $("#themeTxt");
+    var btn = $("#themeBtn");
+
+    function label(t) {
+      // button advertises the theme you'd switch TO
+      if (btnTxt) btnTxt.textContent = (t === "dark") ? "Light" : "Dark";
+      if (btnIcon) btnIcon.textContent = (t === "dark") ? "\u25D0" : "\u25D1";
+    }
+    function apply(t, persist) {
+      root.setAttribute("data-theme", t);
+      label(t);
+      if (persist) { try { localStorage.setItem("fm-theme", t); } catch (e) {} }
+    }
+
+    // initial: stored pref wins, else keep the markup default (dark)
+    var stored = null;
+    try { stored = localStorage.getItem("fm-theme"); } catch (e) {}
+    apply(stored === "light" || stored === "dark" ? stored : (root.getAttribute("data-theme") || "dark"), false);
+
+    if (btn) btn.addEventListener("click", function () {
+      var cur = root.getAttribute("data-theme") === "light" ? "light" : "dark";
+      apply(cur === "dark" ? "light" : "dark", true);
+    });
+  })();
+
+  /* ============================================================
+     2. SCROLL PROGRESS BAR
+     ============================================================ */
+  (function progress() {
+    var bar = $("#progress");
+    if (!bar) return;
+    var ticking = false;
+    function update() {
+      var h = document.documentElement;
+      var max = (h.scrollHeight - h.clientHeight) || 1;
+      var p = Math.min(1, Math.max(0, (h.scrollTop || document.body.scrollTop) / max));
+      bar.style.width = (p * 100).toFixed(2) + "%";
+      ticking = false;
+    }
+    window.addEventListener("scroll", function () {
+      if (!ticking) { window.requestAnimationFrame(update); ticking = true; }
+    }, { passive: true });
+    window.addEventListener("resize", update);
+    update();
+  })();
+
+  /* ============================================================
+     3. SCROLL-SPY  (active section in the TOC)
+     ============================================================ */
+  (function spy() {
+    var nav = $("#toc");
+    if (!nav) return;
+    var sections = $all("section[id]");
+    if (!sections.length) return;
+
+    var linkFor = {};
+    $all("a[href^='#']", nav).forEach(function (a) {
+      linkFor[a.getAttribute("href").slice(1)] = a;
+    });
+
+    function setActive(id) {
+      $all("a.active", nav).forEach(function (a) { a.classList.remove("active"); });
+      var a = linkFor[id];
+      if (a) {
+        a.classList.add("active");
+        // keep the active item in view within the sidebar (no page scroll)
+        if (a.scrollIntoView) {
+          var r = a.getBoundingClientRect();
+          if (r.top < 60 || r.bottom > window.innerHeight) {
+            try { a.scrollIntoView({ block: "nearest" }); } catch (e) {}
+          }
+        }
+      }
+    }
+
+    // Geometric: the active section is the last one whose top has crossed a
+    // detection line near the top of the viewport. Robust at both extremes —
+    // at scrollTop 0 it resolves to the first section, at the very bottom to
+    // the last, and it never gets "stuck" the way topmost-intersecting can.
+    var current = null;
+    function computeActive() {
+      var line = window.innerHeight * 0.18;
+      var id = sections[0].id;
+      for (var i = 0; i < sections.length; i++) {
+        if (sections[i].getBoundingClientRect().top - line <= 0) id = sections[i].id;
+        else break;
+      }
+      var doc = document.documentElement;
+      if ((window.innerHeight + (window.scrollY || doc.scrollTop)) >= (doc.scrollHeight - 4)) {
+        id = sections[sections.length - 1].id; // pin last when scrolled to bottom
+      }
+      if (id !== current) { current = id; setActive(id); }
+    }
+
+    var ticking = false;
+    function onScroll() {
+      if (!ticking) { window.requestAnimationFrame(function () { computeActive(); ticking = false; }); ticking = true; }
+    }
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    computeActive();
+  })();
+
+  /* ============================================================
+     4. MOBILE DRAWER
+     ============================================================ */
+  (function drawer() {
+    var nav = $("#toc");
+    var scrim = $("#scrim");
+    var toggle = $("#navToggle");
+    if (!nav || !toggle) return;
+
+    function open() { nav.classList.add("open"); if (scrim) scrim.classList.add("show"); }
+    function close() { nav.classList.remove("open"); if (scrim) scrim.classList.remove("show"); }
+
+    toggle.addEventListener("click", function () {
+      if (nav.classList.contains("open")) close(); else open();
+    });
+    if (scrim) scrim.addEventListener("click", close);
+    $all("a[href^='#']", nav).forEach(function (a) {
+      a.addEventListener("click", close);
+    });
+    window.addEventListener("keydown", function (e) { if (e.key === "Escape") close(); });
+  })();
+
+  /* ============================================================
+     5. COPY BUTTONS
+     ============================================================ */
+  (function copy() {
+    $all("figure.code .copy").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var fig = btn.closest("figure.code");
+        var code = fig ? fig.querySelector("pre code, code") : null;
+        if (!code) return;
+        var text = code.textContent;
+        function flash() {
+          btn.classList.add("ok");
+          var prev = btn.textContent;
+          btn.textContent = "copied";
+          setTimeout(function () { btn.classList.remove("ok"); btn.textContent = prev || "copy"; }, 1300);
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(flash, function () { legacy(text, flash); });
+        } else {
+          legacy(text, flash);
+        }
+      });
+    });
+    function legacy(text, done) {
+      try {
+        var ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed"; ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+        done();
+      } catch (e) {}
+    }
+  })();
+
+  /* ============================================================
+     6. SYNTAX HIGHLIGHTER  (token-stream; runs on raw textContent)
+     Each rule's internal groups MUST be non-capturing (?:...) so
+     that one capture group per rule keeps index alignment.
+     ============================================================ */
+  (function highlighter() {
+    var RULES = {
+      cpp: {
+        flags: "g",
+        rules: [
+          ["tok-com",  /\/\/[^\n]*|\/\*[\s\S]*?\*\//],
+          ["tok-str",  /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/],
+          ["tok-pre",  /#[a-zA-Z_]\w*/],
+          ["tok-kw",   /__(?:global|device|host|shared|constant|restrict|forceinline|launch_bounds)__/],
+          ["tok-kw",   /\b(?:auto|const|constexpr|consteval|static|inline|void|int|float|double|bool|char|unsigned|signed|long|short|struct|class|template|typename|namespace|using|return|if|else|for|while|switch|case|break|continue|new|delete|public|private|protected|virtual|override|final|nullptr|true|false|this|sizeof|enum|union|friend|operator|explicit|mutable|volatile|extern|throw|try|catch|noexcept|decltype|static_cast|reinterpret_cast|dynamic_cast|const_cast|default|typedef|do|goto|alignas|alignof|thread_local|requires|concept)\b/],
+          ["tok-type", /\b(?:Tensor|TensorImpl|TensorIterator|TensorIteratorBase|Storage|DispatchKey|DispatchKeySet|IntArrayRef|ArrayRef|ScalarType|scalar_t|opmath_t|acc_t|index_t|size_t|ptrdiff_t|int8_t|int16_t|int32_t|int64_t|uint8_t|uint16_t|uint32_t|uint64_t|cudaStream_t|cudaError_t|cudaEvent_t|cublasHandle_t|cudnnHandle_t|dim3|half|c10|at|cuda|nv_bfloat16|__half|float2|float4|std|Optional|c10::optional)\b/],
+          ["tok-num",  /\b(?:0[xX][0-9a-fA-F]+|\d+\.?\d*(?:[eE][+-]?\d+)?)[fFuUlL]*\b/],
+          ["tok-fn",   /\b[A-Za-z_]\w*(?=\s*\()/]
+        ]
+      },
+      py: {
+        flags: "g",
+        rules: [
+          ["tok-com",  /#[^\n]*/],
+          ["tok-str",  /(?:[rfbRFB]{0,2})(?:"""[\s\S]*?"""|'''[\s\S]*?'''|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')/],
+          ["tok-pre",  /@[\w.]+/],
+          ["tok-kw",   /\b(?:def|class|return|if|elif|else|for|while|import|from|as|with|try|except|finally|raise|pass|break|continue|lambda|yield|global|nonlocal|assert|del|in|is|not|and|or|None|True|False|self|cls|async|await)\b/],
+          ["tok-type", /\b(?:int|float|str|bool|list|dict|tuple|set|bytes|object|print|len|range|enumerate|zip|map|super|isinstance|getattr|setattr|hasattr|torch|nn|np)\b/],
+          ["tok-num",  /\b(?:0[xX][0-9a-fA-F]+|\d+\.?\d*(?:[eE][+-]?\d+)?)\b/],
+          ["tok-fn",   /\b[A-Za-z_]\w*(?=\s*\()/]
+        ]
+      },
+      yaml: {
+        flags: "gm",
+        rules: [
+          ["tok-com",  /#[^\n]*/],
+          ["tok-kw",   /^\s*(?:- )?[\w.\-]+(?=\s*:)/],
+          ["tok-str",  /"(?:\\.|[^"\\])*"|'[^']*'/],
+          ["tok-num",  /\b(?:true|false|null|yes|no|on|off)\b|\b\d+\.?\d*\b/]
+        ]
+      },
+      sh: {
+        flags: "gm",
+        rules: [
+          ["tok-com",  /#[^\n]*/],
+          ["tok-str",  /"(?:\\.|[^"\\])*"|'[^']*'/],
+          ["tok-num",  /(?<=^|\s)--?[A-Za-z][\w-]*/],
+          ["tok-kw",   /\b(?:python|python3|nsys|ncu|nvidia-smi|cd|echo|pip|pip3|git|export|make|cmake|ldd|nm|objdump|readelf|cat|grep|sudo|conda|cuda-gdb|compute-sanitizer|time)\b/],
+          ["tok-fn",   /\b\d+\b/]
+        ]
+      }
+    };
+
+    function build(spec) {
+      var src = spec.rules.map(function (r) { return "(" + r[1].source + ")"; }).join("|");
+      return new RegExp(src, spec.flags);
+    }
+
+    function run(code, spec) {
+      var re = build(spec);
+      var out = "";
+      var last = 0;
+      var m;
+      while ((m = re.exec(code)) !== null) {
+        if (m.index > last) out += esc(code.slice(last, m.index));
+        var gi = -1;
+        for (var i = 1; i < m.length; i++) { if (m[i] !== undefined) { gi = i; break; } }
+        var cls = (gi > 0) ? spec.rules[gi - 1][0] : null;
+        var tok = esc(m[0]);
+        out += cls ? ('<span class="' + cls + '">' + tok + "</span>") : tok;
+        last = re.lastIndex;
+        if (m.index === re.lastIndex) re.lastIndex++; // zero-width guard
+      }
+      if (last < code.length) out += esc(code.slice(last));
+      return out;
+    }
+
+    $all("code[data-lang]").forEach(function (code) {
+      var lang = code.getAttribute("data-lang");
+      var spec = RULES[lang];
+      var raw = code.textContent;
+      if (!spec) { code.innerHTML = esc(raw); return; }
+      try {
+        code.innerHTML = run(raw, spec);
+      } catch (e) {
+        code.innerHTML = esc(raw); // stay readable monospace if anything throws
+      }
+    });
+  })();
+
+})();
+</script>
+</body>
+</html>
