@@ -1,0 +1,1816 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Evolution of Distributed Analytical Query Engines — A Field Manual</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,300..700;1,8..60,400..600&family=Instrument+Sans:ital,wght@0,400..700;1,400..600&family=JetBrains+Mono:ital,wght@0,400..700;1,400..600&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   DESIGN TOKENS
+   ============================================================ */
+:root {
+  --bg:        #15120e;
+  --bg-raised: #1d1915;
+  --bg-inset:  #100d0a;
+  --ink:       #e9e0d2;
+  --ink-soft:  #b6aa98;
+  --ink-faint: #837868;
+  --rule:      #322b23;
+  --rule-soft: #241e18;
+  --copper:    #c98b56;
+  --copper-bright: #dd9b62;
+  --cyan:      #5fb0c2;
+  --sage:      #94a878;
+  --copper-wash: rgba(201,139,86,0.10);
+  --cyan-wash:   rgba(95,176,194,0.10);
+  --sage-wash:   rgba(148,168,120,0.10);
+  --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.25);
+  --measure: 44rem;
+}
+[data-theme="light"] {
+  --bg:        #f4eee2;
+  --bg-raised: #fbf7ee;
+  --bg-inset:  #ece3d2;
+  --ink:       #2b251f;
+  --ink-soft:  #5d5345;
+  --ink-faint: #8a7e6c;
+  --rule:      #dcd0bc;
+  --rule-soft: #e7ddca;
+  --copper:    #a8612e;
+  --copper-bright: #8f5022;
+  --cyan:      #3a8294;
+  --sage:      #5f7a44;
+  --copper-wash: rgba(168,97,46,0.09);
+  --cyan-wash:   rgba(58,130,148,0.09);
+  --sage-wash:   rgba(95,122,68,0.09);
+  --shadow: 0 1px 2px rgba(80,60,30,0.06), 0 8px 22px rgba(80,60,30,0.07);
+}
+
+/* ============================================================
+   RESET & BASE
+   ============================================================ */
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+  font-size: 18px;
+  line-height: 1.66;
+  font-optical-sizing: auto;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  transition: background-color 0.4s ease, color 0.4s ease;
+}
+::selection { background: var(--copper); color: var(--bg); }
+
+/* ============================================================
+   LAYOUT SHELL
+   ============================================================ */
+.shell { display: flex; align-items: flex-start; }
+
+.sidebar {
+  position: sticky;
+  top: 0;
+  width: 290px;
+  flex: 0 0 290px;
+  height: 100vh;
+  overflow-y: auto;
+  padding: 2.2rem 1.6rem 3rem 2rem;
+  border-right: 1px solid var(--rule);
+  background: linear-gradient(180deg, var(--bg) 0%, var(--bg) 60%, var(--bg-raised) 140%);
+  font-family: 'Instrument Sans', system-ui, sans-serif;
+}
+.sidebar::-webkit-scrollbar { width: 8px; }
+.sidebar::-webkit-scrollbar-thumb { background: var(--rule); border-radius: 4px; }
+
+.brandmark {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--copper);
+  margin-bottom: 0.5rem;
+}
+.brandtitle {
+  font-family: 'Source Serif 4', serif;
+  font-weight: 600;
+  font-size: 1.18rem;
+  line-height: 1.18;
+  letter-spacing: -0.01em;
+  margin-bottom: 1.6rem;
+  color: var(--ink);
+}
+
+.toc-label {
+  font-size: 0.6rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 1.5rem 0 0.7rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--rule-soft);
+}
+nav.toc ol { list-style: none; margin: 0; padding: 0; counter-reset: toc; }
+nav.toc li { margin: 0; }
+nav.toc a {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  text-decoration: none;
+  color: var(--ink-soft);
+  font-size: 0.83rem;
+  line-height: 1.3;
+  padding: 0.36rem 0.5rem 0.36rem 0.55rem;
+  border-radius: 5px;
+  border-left: 2px solid transparent;
+  transition: color 0.18s, background 0.18s, border-color 0.18s;
+}
+nav.toc a .num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.68rem;
+  color: var(--ink-faint);
+  flex: 0 0 auto;
+  min-width: 1.6em;
+}
+nav.toc a:hover { color: var(--ink); background: var(--copper-wash); }
+nav.toc a.active {
+  color: var(--copper-bright);
+  border-left-color: var(--copper);
+  background: var(--copper-wash);
+}
+nav.toc a.active .num { color: var(--copper); }
+
+.theme-toggle {
+  margin-top: 2rem;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: transparent;
+  border: 1px solid var(--rule);
+  color: var(--ink-soft);
+  font-family: 'Instrument Sans', sans-serif;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.6rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.theme-toggle:hover { border-color: var(--copper); color: var(--copper); }
+
+/* ============================================================
+   MAIN COLUMN
+   ============================================================ */
+main {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0 clamp(1.5rem, 5vw, 5rem) 8rem;
+  max-width: calc(var(--measure) + 10rem);
+  margin: 0 auto;
+}
+
+/* MASTHEAD */
+.masthead {
+  padding: 5rem 0 2.5rem;
+  border-bottom: 2px solid var(--ink);
+  margin-bottom: 3.5rem;
+}
+.masthead .eyebrow {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--copper);
+  margin-bottom: 1.6rem;
+}
+.masthead h1 {
+  font-family: 'Source Serif 4', serif;
+  font-weight: 600;
+  font-size: clamp(2.3rem, 5.5vw, 3.7rem);
+  line-height: 1.04;
+  letter-spacing: -0.025em;
+  margin: 0 0 1.3rem;
+}
+.masthead h1 em { font-style: italic; color: var(--copper); }
+.masthead .standfirst {
+  font-size: 1.22rem;
+  line-height: 1.55;
+  color: var(--ink-soft);
+  max-width: 38rem;
+  font-weight: 300;
+}
+.masthead .meta {
+  margin-top: 2.2rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  color: var(--ink-faint);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.6rem;
+  letter-spacing: 0.02em;
+}
+.masthead .meta span { white-space: nowrap; }
+.masthead .meta b { color: var(--cyan); font-weight: 400; }
+
+/* SECTIONS */
+section.chapter { padding: 2rem 0 1rem; scroll-margin-top: 1.5rem; }
+.chapter-head { margin-bottom: 1.8rem; }
+.chapter-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.95rem;
+  color: var(--copper);
+  letter-spacing: 0.05em;
+  display: block;
+  margin-bottom: 0.4rem;
+}
+.chapter h2 {
+  font-family: 'Source Serif 4', serif;
+  font-weight: 600;
+  font-size: clamp(1.7rem, 3.6vw, 2.4rem);
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  margin: 0 0 0.4rem;
+}
+.chapter h2 .kicker {
+  display:block;
+  font-family: 'Instrument Sans', sans-serif;
+  font-weight: 500;
+  font-size: 0.78rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-bottom: 0.7rem;
+}
+.chapter-rule {
+  height: 1px;
+  background: var(--rule);
+  margin: 4.5rem 0 0;
+}
+
+h3 {
+  font-family: 'Source Serif 4', serif;
+  font-weight: 600;
+  font-size: 1.32rem;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  margin: 2.6rem 0 0.7rem;
+  color: var(--ink);
+}
+h4 {
+  font-family: 'Instrument Sans', sans-serif;
+  font-weight: 600;
+  font-size: 0.96rem;
+  letter-spacing: 0.01em;
+  margin: 1.8rem 0 0.5rem;
+  color: var(--copper-bright);
+}
+
+p { margin: 0 0 1.15rem; max-width: var(--measure); }
+.chapter > p, .chapter > h3, .chapter > h4, .chapter > ul, .chapter > ol { }
+
+a.ref { color: var(--cyan); text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--cyan) 35%, transparent); }
+a.ref:hover { border-bottom-color: var(--cyan); }
+
+strong { font-weight: 600; color: var(--ink); }
+em { font-style: italic; }
+code, .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+p code, li code, td code {
+  font-size: 0.84em;
+  background: var(--bg-inset);
+  padding: 0.12em 0.4em;
+  border-radius: 4px;
+  color: var(--copper-bright);
+  border: 1px solid var(--rule-soft);
+}
+
+ul, ol { max-width: var(--measure); padding-left: 1.3rem; margin: 0 0 1.3rem; }
+li { margin-bottom: 0.5rem; }
+ul.tight li, ol.tight li { margin-bottom: 0.2rem; }
+li::marker { color: var(--copper); }
+
+/* LEAD PARAGRAPH */
+.lead {
+  font-size: 1.16rem;
+  line-height: 1.6;
+  color: var(--ink-soft);
+}
+.lead strong { color: var(--ink); }
+
+/* DROP-CAP for chapter openers */
+.dropcap::first-letter {
+  font-family: 'Source Serif 4', serif;
+  font-weight: 600;
+  font-size: 3.4em;
+  line-height: 0.8;
+  float: left;
+  margin: 0.06em 0.12em 0 0;
+  color: var(--copper);
+}
+
+/* ============================================================
+   CALLOUTS
+   ============================================================ */
+.callout {
+  background: var(--bg-raised);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--copper);
+  border-radius: 0 8px 8px 0;
+  padding: 1.2rem 1.4rem;
+  margin: 1.8rem 0;
+  max-width: var(--measure);
+}
+.callout .tag {
+  font-family: 'Instrument Sans', sans-serif;
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--copper);
+  display: block;
+  margin-bottom: 0.5rem;
+}
+.callout p:last-child { margin-bottom: 0; }
+.callout p { font-size: 0.98rem; line-height: 1.58; }
+.callout.cyan { border-left-color: var(--cyan); }
+.callout.cyan .tag { color: var(--cyan); }
+.callout.sage { border-left-color: var(--sage); }
+.callout.sage .tag { color: var(--sage); }
+
+.insight {
+  border: none;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  border-radius: 0;
+  background: transparent;
+  padding: 1.5rem 0;
+  margin: 2.2rem 0;
+  font-family: 'Source Serif 4', serif;
+  font-size: 1.28rem;
+  line-height: 1.5;
+  font-style: italic;
+  color: var(--ink);
+  max-width: var(--measure);
+}
+.insight b { font-style: normal; color: var(--copper); font-weight: 600; }
+
+/* TWO-COLUMN TRADEOFF */
+.tradeoff {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  margin: 1.8rem 0;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  overflow: hidden;
+  max-width: var(--measure);
+}
+.tradeoff > div { padding: 1.1rem 1.3rem; }
+.tradeoff > div:first-child { border-right: 1px solid var(--rule); }
+.tradeoff h5 {
+  font-family: 'Instrument Sans', sans-serif;
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin: 0 0 0.7rem;
+}
+.tradeoff .win h5 { color: var(--sage); }
+.tradeoff .cost h5 { color: var(--copper); }
+.tradeoff ul { padding-left: 1.1rem; margin: 0; }
+.tradeoff li { font-size: 0.9rem; line-height: 1.45; margin-bottom: 0.4rem; }
+@media (max-width: 620px) {
+  .tradeoff { grid-template-columns: 1fr; }
+  .tradeoff > div:first-child { border-right: none; border-bottom: 1px solid var(--rule); }
+}
+
+/* ============================================================
+   CODE BLOCKS
+   ============================================================ */
+.code {
+  position: relative;
+  background: var(--bg-inset);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  margin: 1.5rem 0;
+  max-width: var(--measure);
+  overflow: hidden;
+}
+.code-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.9rem;
+  border-bottom: 1px solid var(--rule);
+  background: color-mix(in srgb, var(--bg-raised) 60%, transparent);
+}
+.code-lang {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.copy-btn {
+  font-family: 'Instrument Sans', sans-serif;
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: transparent;
+  border: 1px solid var(--rule);
+  color: var(--ink-faint);
+  padding: 0.22rem 0.55rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.18s;
+}
+.copy-btn:hover { color: var(--copper); border-color: var(--copper); }
+.copy-btn.done { color: var(--sage); border-color: var(--sage); }
+.code pre {
+  margin: 0;
+  padding: 1rem 1.1rem;
+  overflow-x: auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  color: var(--ink);
+}
+.code pre::-webkit-scrollbar { height: 8px; }
+.code pre::-webkit-scrollbar-thumb { background: var(--rule); border-radius: 4px; }
+.tok-c { color: var(--ink-faint); font-style: italic; }   /* comment */
+.tok-k { color: var(--copper-bright); }                    /* keyword */
+.tok-s { color: var(--sage); }                             /* string */
+.tok-f { color: var(--cyan); }                             /* function/type */
+.tok-n { color: var(--ink); }
+
+/* ============================================================
+   FIGURES / DIAGRAMS
+   ============================================================ */
+figure {
+  margin: 2.2rem 0;
+  max-width: var(--measure);
+}
+figure.wide { max-width: none; }
+.fig-frame {
+  background: var(--bg-raised);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  padding: 1.6rem 1.3rem 1.2rem;
+  overflow-x: auto;
+}
+figure svg { display: block; width: 100%; height: auto; }
+figcaption {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.68rem;
+  color: var(--ink-faint);
+  margin-top: 0.9rem;
+  line-height: 1.5;
+  letter-spacing: 0.01em;
+}
+figcaption b { color: var(--copper); font-weight: 400; }
+
+/* SVG text defaults */
+svg text { font-family: 'Instrument Sans', sans-serif; }
+.svg-mono { font-family: 'JetBrains Mono', monospace !important; }
+
+/* ============================================================
+   TABLES
+   ============================================================ */
+.table-wrap { overflow-x: auto; margin: 1.8rem 0; max-width: var(--measure); }
+table.grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.86rem;
+  min-width: 540px;
+}
+table.grid th {
+  font-family: 'Instrument Sans', sans-serif;
+  font-weight: 600;
+  font-size: 0.66rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-align: left;
+  color: var(--copper);
+  padding: 0.7rem 0.85rem;
+  border-bottom: 2px solid var(--rule);
+  vertical-align: bottom;
+}
+table.grid td {
+  padding: 0.7rem 0.85rem;
+  border-bottom: 1px solid var(--rule-soft);
+  vertical-align: top;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+table.grid td:first-child { color: var(--ink); font-weight: 600; }
+table.grid tr:hover td { background: var(--copper-wash); }
+table.grid .yr { font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; color: var(--cyan); white-space: nowrap; }
+
+/* ============================================================
+   TIMELINE
+   ============================================================ */
+.timeline { margin: 2rem 0; max-width: var(--measure); position: relative; padding-left: 1.4rem; }
+.timeline::before {
+  content: ""; position: absolute; left: 4px; top: 6px; bottom: 6px;
+  width: 2px; background: linear-gradient(var(--copper), var(--cyan), var(--sage));
+}
+.tl-item { position: relative; padding: 0 0 1.5rem 1.2rem; }
+.tl-item::before {
+  content: ""; position: absolute; left: -1.4rem; top: 6px;
+  width: 11px; height: 11px; border-radius: 50%;
+  background: var(--bg); border: 2px solid var(--copper);
+}
+.tl-item .tl-year {
+  font-family: 'JetBrains Mono', monospace; font-size: 0.74rem;
+  color: var(--cyan); letter-spacing: 0.04em; margin-bottom: 0.15rem;
+}
+.tl-item .tl-title { font-weight: 600; font-size: 1.02rem; margin-bottom: 0.1rem; }
+.tl-item .tl-body { font-size: 0.92rem; color: var(--ink-soft); line-height: 1.5; }
+
+/* PILLS */
+.pills { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.8rem 0 1.4rem; max-width: var(--measure); }
+.pill {
+  font-family: 'JetBrains Mono', monospace; font-size: 0.68rem;
+  padding: 0.25rem 0.6rem; border-radius: 20px;
+  border: 1px solid var(--rule); color: var(--ink-soft);
+  background: var(--bg-raised);
+}
+.pill.cu { border-color: color-mix(in srgb, var(--copper) 50%, transparent); color: var(--copper-bright); }
+.pill.cy { border-color: color-mix(in srgb, var(--cyan) 50%, transparent); color: var(--cyan); }
+.pill.sg { border-color: color-mix(in srgb, var(--sage) 50%, transparent); color: var(--sage); }
+
+/* FOOTER */
+.colophon {
+  margin-top: 5rem; padding-top: 2rem; border-top: 1px solid var(--rule);
+  font-family: 'JetBrains Mono', monospace; font-size: 0.72rem;
+  color: var(--ink-faint); line-height: 1.7;
+}
+.colophon b { color: var(--copper); font-weight: 400; }
+
+/* MOBILE NAV */
+.mobile-bar { display: none; }
+@media (max-width: 940px) {
+  .shell { display: block; }
+  .sidebar {
+    position: fixed; left: 0; top: 0; bottom: 0; z-index: 50;
+    transform: translateX(-100%); transition: transform 0.3s ease;
+    width: 84vw; max-width: 320px; flex-basis: auto;
+    box-shadow: var(--shadow);
+  }
+  .sidebar.open { transform: translateX(0); }
+  .mobile-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0; z-index: 40;
+    padding: 0.8rem 1.1rem; background: var(--bg);
+    border-bottom: 1px solid var(--rule);
+    font-family: 'Instrument Sans', sans-serif;
+  }
+  .mobile-bar .mb-title { font-family:'Source Serif 4',serif; font-weight:600; font-size:0.95rem; }
+  .mobile-bar button {
+    background: transparent; border: 1px solid var(--rule); color: var(--ink);
+    border-radius: 6px; padding: 0.4rem 0.7rem; cursor: pointer;
+    font-family:'Instrument Sans',sans-serif; font-size: 0.8rem;
+  }
+  .scrim { display:none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 45; }
+  .scrim.show { display: block; }
+  main { padding-top: 1rem; }
+}
+@media (max-width: 480px) {
+  body { font-size: 17px; }
+  .masthead { padding-top: 2.5rem; }
+}
+</style>
+</head>
+<body>
+
+<div class="mobile-bar">
+  <span class="mb-title">Analytical Query Engines</span>
+  <button id="menuBtn" aria-label="Open table of contents">☰ Contents</button>
+</div>
+<div class="scrim" id="scrim"></div>
+
+<div class="shell">
+
+  <!-- ===================== SIDEBAR ===================== -->
+  <aside class="sidebar" id="sidebar">
+    <div class="brandmark">Field Manual · No. 14</div>
+    <div class="brandtitle">The Evolution of Distributed Analytical Query Engines</div>
+
+    <div class="toc-label">Contents</div>
+    <nav class="toc">
+      <ol>
+        <li><a href="#s0"><span class="num">§0</span><span>The lens: what actually varies</span></a></li>
+        <li><a href="#s1"><span class="num">§1</span><span>Before Hadoop — the MPP warehouse</span></a></li>
+        <li><a href="#s2"><span class="num">§2</span><span>The Hadoop revolution</span></a></li>
+        <li><a href="#s3"><span class="num">§3</span><span>The cracks in MapReduce</span></a></li>
+        <li><a href="#s4"><span class="num">§4</span><span>Divergence: Spark</span></a></li>
+        <li><a href="#s5"><span class="num">§5</span><span>Divergence: Presto &amp; the MPP-SQL family</span></a></li>
+        <li><a href="#s6"><span class="num">§6</span><span>The storage &amp; format layer</span></a></li>
+        <li><a href="#s7"><span class="num">§7</span><span>Cloud, decoupling &amp; the lakehouse</span></a></li>
+        <li><a href="#s8"><span class="num">§8</span><span>The native / vectorized renaissance</span></a></li>
+        <li><a href="#s9"><span class="num">§9</span><span>The GPU frontier — RAPIDS, cuDF, Velox</span></a></li>
+        <li><a href="#s10"><span class="num">§10</span><span>The composable-systems movement</span></a></li>
+        <li><a href="#s11"><span class="num">§11</span><span>The specialized-database zoo</span></a></li>
+        <li><a href="#s12"><span class="num">§12</span><span>Synthesis — the decision lens</span></a></li>
+      </ol>
+    </nav>
+
+    <button class="theme-toggle" id="themeBtn">
+      <span id="themeIcon">◐</span> <span id="themeLabel">Light mode</span>
+    </button>
+  </aside>
+
+  <!-- ===================== MAIN ===================== -->
+  <main>
+
+    <header class="masthead">
+      <div class="eyebrow">Systems Field Manual · Distributed Data · Rev. 2026</div>
+      <h1>How we learned to <em>query everything,</em> fast</h1>
+      <p class="standfirst">A guided walk through forty years of analytical query engines — from the MPP appliances of the 1980s, through Hadoop and the great Spark/Presto schism, to the columnar lakehouse, the C++ vectorized renaissance, and the GPU-native composable stack now taking shape around Velox and cuDF.</p>
+      <div class="meta">
+        <span>SCOPE · <b>OLAP execution engines</b></span>
+        <span>THREAD · <b>why each paradigm appeared</b></span>
+        <span>FORMAT · <b>self-contained reference</b></span>
+      </div>
+    </header>
+
+    <!-- ============================================================
+         §0 — THE LENS
+         ============================================================ -->
+    <section class="chapter" id="s0">
+      <div class="chapter-head">
+        <span class="chapter-num">§0</span>
+        <h2><span class="kicker">Orientation</span>The lens — what actually varies between data systems</h2>
+      </div>
+
+      <p class="lead dropcap">Before tracing the history, it helps to fix the coordinate system, because "database" is one word covering a dozen genuinely different machines. Almost every engine in this manual can be located by where it sits on a handful of axes. The whole evolutionary story is engineers discovering that you cannot be excellent at all positions on all axes simultaneously — so they kept building new systems that traded one virtue for another.</p>
+
+      <p>Keep these axes in mind; the rest of the manual is essentially a tour of where each system chose to stand.</p>
+
+      <h3>The seven axes</h3>
+      <div class="table-wrap">
+        <table class="grid">
+          <thead><tr><th>Axis</th><th>One end</th><th>Other end</th><th>What it buys</th></tr></thead>
+          <tbody>
+            <tr><td>Workload</td><td>OLTP — many tiny point reads/writes</td><td>OLAP — few huge scans &amp; aggregations</td><td>Transactional integrity vs analytical throughput</td></tr>
+            <tr><td>Storage layout</td><td>Row-oriented</td><td>Column-oriented</td><td>Fast single-record access vs fast wide scans &amp; compression</td></tr>
+            <tr><td>Topology</td><td>Single node</td><td>Distributed / shared-nothing</td><td>Simplicity &amp; low latency vs raw scale</td></tr>
+            <tr><td>Working set</td><td>Disk-resident</td><td>In-memory</td><td>Capacity &amp; durability vs speed</td></tr>
+            <tr><td>Deployment</td><td>Embedded / in-process</td><td>Client–server</td><td>Zero-ops &amp; locality vs shared concurrent access</td></tr>
+            <tr><td>Coupling</td><td>Storage + compute fused</td><td>Storage / compute decoupled</td><td>Predictable performance vs elasticity &amp; cost control</td></tr>
+            <tr><td>Optimization target</td><td>Latency (interactive)</td><td>Throughput (batch)</td><td>Sub-second answers vs cheap completion of huge jobs</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout">
+        <span class="tag">Why this matters for your question</span>
+        <p>Your instinct — "we already had Hadoop, why Presto?" — is really a question about <em>two different axes at once</em>. Hadoop chose <em>throughput, disk-resident, distributed</em>. Presto chose <em>latency, in-memory, distributed</em>. They are different points in the same space, not better/worse versions of one thing. No amount of GPUs or scheduler tuning moves you from one corner to the other; you have to rebuild the execution model. That is the thread running through every section below.</p>
+      </div>
+
+      <h3>The other lens: the cost hierarchy</h3>
+      <p>The second thing to internalize is the brutal latency gap between where data can live. Every major leap in this story is, at bottom, someone moving the working set <em>up</em> this hierarchy — off spinning disk, into RAM, into CPU cache, into GPU high-bandwidth memory — or eliminating a trip down it (a disk write, a network shuffle, a serialization step).</p>
+
+      <figure>
+        <div class="fig-frame">
+          <svg viewBox="0 0 680 280" role="img" aria-label="Latency hierarchy from CPU registers to network and disk">
+            <!-- bars -->
+            <g font-size="12">
+              <!-- helper: each row -->
+              <rect x="170" y="20"  width="40"  height="26" rx="3" fill="var(--copper)"/>
+              <text x="160" y="38" text-anchor="end" fill="var(--ink)">CPU register / L1</text>
+              <text x="220" y="38" fill="var(--ink-faint)" class="svg-mono">~1 ns</text>
+
+              <rect x="170" y="54"  width="70"  height="26" rx="3" fill="var(--copper)"/>
+              <text x="160" y="72" text-anchor="end" fill="var(--ink)">L2 / L3 cache</text>
+              <text x="250" y="72" fill="var(--ink-faint)" class="svg-mono">~5–20 ns</text>
+
+              <rect x="170" y="88"  width="120" height="26" rx="3" fill="var(--copper-bright)"/>
+              <text x="160" y="106" text-anchor="end" fill="var(--ink)">DRAM (CPU)</text>
+              <text x="300" y="106" fill="var(--ink-faint)" class="svg-mono">~100 ns · ~100 GB/s</text>
+
+              <rect x="170" y="122" width="150" height="26" rx="3" fill="var(--cyan)"/>
+              <text x="160" y="140" text-anchor="end" fill="var(--ink)">GPU HBM</text>
+              <text x="330" y="140" fill="var(--ink-faint)" class="svg-mono">~200 ns · 1–3 TB/s</text>
+
+              <rect x="170" y="156" width="220" height="26" rx="3" fill="var(--sage)"/>
+              <text x="160" y="174" text-anchor="end" fill="var(--ink)">NVMe SSD</text>
+              <text x="400" y="174" fill="var(--ink-faint)" class="svg-mono">~100 µs</text>
+
+              <rect x="170" y="190" width="320" height="26" rx="3" fill="#7a6a55"/>
+              <text x="160" y="208" text-anchor="end" fill="var(--ink)">Network (datacenter)</text>
+              <text x="500" y="208" fill="var(--ink-faint)" class="svg-mono">~0.5 ms RTT</text>
+
+              <rect x="170" y="224" width="460" height="26" rx="3" fill="#5e5040"/>
+              <text x="160" y="242" text-anchor="end" fill="var(--ink)">Spinning disk seek</text>
+              <text x="635" y="242" text-anchor="end" fill="var(--ink-faint)" class="svg-mono">~10 ms</text>
+            </g>
+            <text x="170" y="272" fill="var(--ink-faint)" font-size="10.5">bar length ∝ log(latency) — each step down is roughly an order of magnitude slower</text>
+          </svg>
+        </div>
+        <figcaption><b>FIG. 0.1</b> — The latency hierarchy. MapReduce lived at the bottom (disk + network per stage). Spark pulled the working set into DRAM. Presto pipelines through DRAM without disk round-trips. Velox squeezes the DRAM→cache step. cuDF moves the whole thing onto HBM. Same story, repeated at finer and finer granularity.</figcaption>
+      </figure>
+
+      <div class="insight">Every generation of this technology is the same move at a smaller scale: <b>stop touching the slow tier.</b> First we stopped writing to disk between jobs. Then we stopped re-reading from disk at all. Then we stopped wasting CPU cycles per row. Then we stopped leaving the GPU idle.</div>
+    </section>
+    <div class="chapter-rule"></div>
+
+    <!-- ============================================================
+         §1 — BEFORE HADOOP
+         ============================================================ -->
+    <section class="chapter" id="s1">
+      <div class="chapter-head">
+        <span class="chapter-num">§1</span>
+        <h2><span class="kicker">Prologue · 1979–2005</span>Before Hadoop — the MPP data warehouse</h2>
+      </div>
+
+      <p class="lead dropcap">Large-scale analytics did not begin with Hadoop. For roughly three decades, "do analytics on a lot of data" meant buying a <strong>Massively Parallel Processing (MPP) data warehouse</strong> — often a physical appliance — from a vendor like Teradata. These systems were genuinely parallel, genuinely fast, and they pioneered nearly every idea we now consider modern. They lost the 2000s not on technical merit but on economics and rigidity.</p>
+
+      <h3>The shared-nothing idea</h3>
+      <p>The foundational architecture, articulated by Michael Stonebraker in the 1980s, is <strong>shared-nothing</strong>: partition the data across many independent nodes, each owning its slice of disk and memory, and push the computation to the data. A query is decomposed so each node works on its own partition in parallel, then partial results are merged. <a class="ref" href="#">Teradata</a> (1979) built a commercial empire on exactly this, and every distributed engine since — Hadoop, Spark, Presto, Snowflake — is a descendant of the shared-nothing principle.</p>
+
+      <h3>The column-store and vectorization breakthroughs</h3>
+      <p>Two academic results from this era are load-bearing for everything later in this manual, so it is worth naming them precisely:</p>
+
+      <ul>
+        <li><strong>C-Store (Stonebraker et al., 2005)</strong> — the canonical argument for <em>column-oriented</em> storage in analytics: store each column contiguously, so a scan reads only the columns a query touches, and compresses brilliantly because adjacent values are similar. This paper became the commercial database <strong>Vertica</strong>.</li>
+        <li><strong>MonetDB/X100 (Boncz, Zukowski, Nes; 2005)</strong> — the canonical argument for <em>vectorized execution</em>: instead of pushing one row at a time through the operator tree (the classic "Volcano" model, with a virtual function call per row), push a <em>batch</em> — a vector of ~1000 values — at a time. This amortizes per-call overhead, enables SIMD, and stays in CPU cache. This idea sat dormant in mainstream big-data tools for fifteen years before re-emerging as the core thesis of <a class="ref" href="#s8">DuckDB, Velox, Photon, and ClickHouse</a> (§8).</li>
+      </ul>
+
+      <div class="callout cyan">
+        <span class="tag">The seed planted here</span>
+        <p>Hold onto C-Store and MonetDB/X100. The entire §8 "native renaissance" is the database research community quietly waiting for the Hadoop-era to rediscover what they proved in 2005. CWI in Amsterdam — birthplace of MonetDB — is <em>also</em> the birthplace of DuckDB. The lineage is direct.</p>
+      </div>
+
+      <h3>The contenders</h3>
+      <div class="table-wrap">
+        <table class="grid">
+          <thead><tr><th>System</th><th class="yr">Era</th><th>Idea it pioneered / sold</th><th>Fate</th></tr></thead>
+          <tbody>
+            <tr><td>Teradata</td><td class="yr">1979</td><td>Commercial shared-nothing MPP; the enterprise data warehouse</td><td>Still alive; the incumbent that everyone else priced against</td></tr>
+            <tr><td>Netezza</td><td class="yr">2000</td><td>FPGA-accelerated "data warehouse appliance" — hardware filtering near the disk</td><td>Acquired by IBM (2010)</td></tr>
+            <tr><td>Greenplum</td><td class="yr">2003</td><td>MPP built <em>on top of PostgreSQL</em> — open-ish, software-only</td><td>Acquired by EMC/Pivotal; later open-sourced</td></tr>
+            <tr><td>Vertica</td><td class="yr">2005</td><td>Productized C-Store; the canonical analytical column store</td><td>Acquired by HP (2011); still sold</td></tr>
+            <tr><td>ParAccel</td><td class="yr">2005</td><td>Columnar MPP — its codebase was licensed by Amazon</td><td>Became the seed of <strong>Amazon Redshift</strong> (2012)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Why this paradigm hit a wall</h3>
+      <div class="tradeoff">
+        <div class="win">
+          <h5>What MPP got right</h5>
+          <ul>
+            <li>True parallelism, SQL, proven optimizers</li>
+            <li>Column stores &amp; vectorization (a decade early)</li>
+            <li>Low query latency for modeled data</li>
+          </ul>
+        </div>
+        <div class="cost">
+          <h5>Why it lost the 2000s</h5>
+          <ul>
+            <li><strong>Cost:</strong> proprietary appliances, per-terabyte licensing — punishing at web scale</li>
+            <li><strong>Schema-on-write:</strong> you had to model &amp; clean data <em>before</em> loading it</li>
+            <li><strong>Couldn't ingest the mess:</strong> logs, clickstreams, JSON, images had no place</li>
+            <li><strong>Scaling = buying another box</strong> from one vendor</li>
+          </ul>
+        </div>
+      </div>
+
+      <p>Then the web companies arrived with petabytes of unstructured logs, no budget for Teradata at that scale, and a willingness to trade SQL elegance for raw, cheap, fault-tolerant scale. Enter Hadoop.</p>
+    </section>
+    <div class="chapter-rule"></div>
+
+    <!-- ============================================================
+         §2 — HADOOP
+         ============================================================ -->
+    <section class="chapter" id="s2">
+      <div class="chapter-head">
+        <span class="chapter-num">§2</span>
+        <h2><span class="kicker">2003–2013</span>The Hadoop revolution — and its ecosystem</h2>
+      </div>
+
+      <p class="lead dropcap">Hadoop did not start as a database at all. It started as an answer to a different question: how does a company with thousands of cheap, failure-prone commodity servers store and process more data than any single machine — or any affordable appliance — could hold? The answer, copied openly from three Google papers, reorganized the entire industry.</p>
+
+      <h3>The three Google papers</h3>
+      <p>Google, operating at a scale no vendor sold for, built its own stack and then published how:</p>
+      <ul>
+        <li><strong>GFS — the Google File System (2003):</strong> store enormous files by chopping them into blocks, spreading the blocks across many machines, and replicating each block (typically 3×) so node death is routine, not catastrophic.</li>
+        <li><strong>MapReduce (2004):</strong> a programming model for processing those distributed blocks. Express your computation as a <code>map</code> (transform each record) followed by a <code>reduce</code> (aggregate records sharing a key). The framework handles distribution, shuffling, and failure-retry.</li>
+        <li><strong>Bigtable (2006):</strong> a distributed, sparse, sorted key-value store on top of GFS — the ancestor of HBase and the wide-column NoSQL family.</li>
+      </ul>
+
+      <p>Doug Cutting and Mike Cafarella implemented open-source versions; Yahoo invested heavily; the result, named after Cutting's son's toy elephant, became <strong>Apache Hadoop</strong>: HDFS (the GFS clone) + MapReduce (the compute clone).</p>
+
+      <h3>Why it was revolutionary</h3>
+      <div class="callout sage">
+        <span class="tag">The three unlocks</span>
+        <p><strong>1 · Commodity hardware.</strong> Scale by adding cheap x86 boxes, not by buying a bigger appliance. <strong>2 · Schema-on-read.</strong> Dump raw data in any format now; impose structure at query time. The "data lake" was born. <strong>3 · Fault tolerance as a default.</strong> Replication in HDFS and automatic task-retry in MapReduce meant a cluster of unreliable machines behaved like one reliable system.</p>
+      </div>
+
+      <h3>How a MapReduce job actually moves</h3>
+      <figure class="wide">
+        <div class="fig-frame">
+          <svg viewBox="0 0 760 250" role="img" aria-label="MapReduce dataflow showing disk writes between phases">
+            <defs>
+              <marker id="ah" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--copper)"/></marker>
+            </defs>
+            <!-- HDFS in -->
+            <rect x="10" y="95" width="78" height="56" rx="6" fill="var(--bg-inset)" stroke="var(--sage)" stroke-width="1.5"/>
+            <text x="49" y="118" text-anchor="middle" fill="var(--ink)" font-size="11">HDFS</text>
+            <text x="49" y="134" text-anchor="middle" fill="var(--ink-faint)" font-size="9">input blocks</text>
+            <!-- Map -->
+            <rect x="135" y="40" width="74" height="34" rx="5" fill="var(--copper-wash)" stroke="var(--copper)"/>
+            <text x="172" y="61" text-anchor="middle" fill="var(--ink)" font-size="11">map</text>
+            <rect x="135" y="108" width="74" height="34" rx="5" fill="var(--copper-wash)" stroke="var(--copper)"/>
+            <text x="172" y="129" text-anchor="middle" fill="var(--ink)" font-size="11">map</text>
+            <rect x="135" y="176" width="74" height="34" rx="5" fill="var(--copper-wash)" stroke="var(--copper)"/>
+            <text x="172" y="197" text-anchor="middle" fill="var(--ink)" font-size="11">map</text>
+            <!-- spill to disk -->
+            <rect x="250" y="95" width="92" height="56" rx="6" fill="var(--bg-inset)" stroke="#7a6a55" stroke-width="1.5" stroke-dasharray="4 3"/>
+            <text x="296" y="116" text-anchor="middle" fill="#c98b56" font-size="10" class="svg-mono">SPILL</text>
+            <text x="296" y="132" text-anchor="middle" fill="var(--ink-faint)" font-size="9">→ local disk</text>
+            <!-- shuffle -->
+            <text x="395" y="40" text-anchor="middle" fill="var(--cyan)" font-size="10" class="svg-mono">SHUFFLE</text>
+            <text x="395" y="54" text-anchor="middle" fill="var(--ink-faint)" font-size="8.5">(sort + network)</text>
+            <!-- Reduce -->
+            <rect x="448" y="74" width="74" height="34" rx="5" fill="var(--cyan-wash)" stroke="var(--cyan)"/>
+            <text x="485" y="95" text-anchor="middle" fill="var(--ink)" font-size="11">reduce</text>
+            <rect x="448" y="142" width="74" height="34" rx="5" fill="var(--cyan-wash)" stroke="var(--cyan)"/>
+            <text x="485" y="163" text-anchor="middle" fill="var(--ink)" font-size="11">reduce</text>
+            <!-- HDFS out -->
+            <rect x="575" y="95" width="86" height="56" rx="6" fill="var(--bg-inset)" stroke="var(--sage)" stroke-width="1.5"/>
+            <text x="618" y="116" text-anchor="middle" fill="var(--ink)" font-size="11">HDFS</text>
+            <text x="618" y="132" text-anchor="middle" fill="var(--ink-faint)" font-size="9">output (3×)</text>
+            <!-- arrows -->
+            <g stroke="var(--copper)" stroke-width="1.4" fill="none">
+              <path d="M90,118 L133,57" marker-end="url(#ah)"/>
+              <path d="M90,122 L133,125" marker-end="url(#ah)"/>
+              <path d="M90,128 L133,193" marker-end="url(#ah)"/>
+              <path d="M211,57 L248,112" marker-end="url(#ah)"/>
+              <path d="M211,125 L248,123" marker-end="url(#ah)"/>
+              <path d="M211,193 L248,134" marker-end="url(#ah)"/>
+              <path d="M344,118 L446,91" marker-end="url(#ah)"/>
+              <path d="M344,128 L446,159" marker-end="url(#ah)"/>
+              <path d="M524,91 L573,118" marker-end="url(#ah)"/>
+              <path d="M524,159 L573,128" marker-end="url(#ah)"/>
+            </g>
+            <text x="296" y="172" text-anchor="middle" fill="#b06a36" font-size="9.5" font-style="italic">⟵ every stage boundary is a disk write ⟶</text>
+          </svg>
+        </div>
+        <figcaption><b>FIG. 2.1</b> — A single MapReduce job. Note the dashed disk-spill box and the 3×-replicated output. A multi-stage query (a join, then a group-by, then a sort) becomes a <em>chain</em> of these jobs, each materializing its full output to HDFS before the next can start. This materialization is the original sin that Spark and Presto were built to avoid.</figcaption>
+      </figure>
+
+      <h3>The ecosystem that grew on top</h3>
+      <p>Raw MapReduce was painful to program, so an ecosystem of higher-level tools accreted around HDFS. This is the "Hadoop ecosystem" people refer to:</p>
+      <div class="table-wrap">
+        <table class="grid">
+          <thead><tr><th>Component</th><th>Role</th><th>Why it existed</th></tr></thead>
+          <tbody>
+            <tr><td>HDFS</td><td>Distributed storage</td><td>The durable, replicated foundation</td></tr>
+            <tr><td>MapReduce</td><td>Batch compute engine</td><td>The original parallel processing model</td></tr>
+            <tr><td><strong>YARN</strong></td><td>Cluster resource manager (Hadoop 2.0, ~2012)</td><td>Split scheduling out of MapReduce so <em>any</em> framework could run on the cluster</td></tr>
+            <tr><td><strong>Hive</strong></td><td>SQL-on-Hadoop (Facebook, 2009)</td><td>Compiled <code>HiveQL</code> into MapReduce jobs — let analysts use SQL, not Java</td></tr>
+            <tr><td>Pig</td><td>Dataflow scripting (Yahoo)</td><td>A procedural alternative to Hive's declarative SQL</td></tr>
+            <tr><td>HBase</td><td>Wide-column NoSQL store</td><td>The open Bigtable — random read/write on HDFS</td></tr>
+            <tr><td>ZooKeeper</td><td>Distributed coordination</td><td>Leader election, config, locks for the whole zoo</td></tr>
+            <tr><td>Sqoop / Flume</td><td>Ingestion</td><td>Move data in from RDBMSs / streaming logs</td></tr>
+            <tr><td>Oozie</td><td>Workflow scheduler</td><td>Chain jobs into pipelines</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout">
+        <span class="tag">YARN, precisely — because it's central to your question</span>
+        <p>Before YARN, MapReduce <em>was</em> both the resource manager and the compute engine (the old JobTracker/TaskTracker). YARN (Yet Another Resource Negotiator) factored cluster scheduling into a standalone layer — a <code>ResourceManager</code>, per-application <code>ApplicationMaster</code>s, and per-node <code>NodeManager</code>s. <strong>This is what let Spark, Tez, Presto-on-YARN, and friends share a Hadoop cluster.</strong> But — and this is the crux — YARN allocates <em>containers</em> (CPU, memory, and yes, eventually GPUs). It does not change how a query <em>executes inside</em> those containers. It is a landlord, not an architect. We'll cash this in directly in §3.</p>
+      </div>
+
+      <h3>The role of Hive in particular</h3>
+      <p>Hive deserves emphasis because it is the protagonist of the next plot turn. Facebook built it so the thousands of people who knew SQL but not distributed Java could query the warehouse. It worked — Hive made Hadoop usable. But each Hive query compiled down to a chain of MapReduce jobs (FIG. 2.1), inheriting all of MapReduce's disk-bound latency. A query that <em>felt</em> like it should take three seconds took three minutes. That gap — between SQL's interactive expectations and MapReduce's batch reality — is precisely the vacuum that Presto and Impala rushed to fill.</p>
+    </section>
+    <div class="chapter-rule"></div>
+
+    <!-- ============================================================
+         §3 — THE CRACKS
+         ============================================================ -->
+    <section class="chapter" id="s3">
+      <div class="chapter-head">
+        <span class="chapter-num">§3</span>
+        <h2><span class="kicker">The pivot</span>The cracks in MapReduce — why one paradigm split into two</h2>
+      </div>
+
+      <p class="lead dropcap">By around 2010, MapReduce's limitations were not subtle, and they pointed in two different directions. Two distinct communities, irritated by two distinct failures, walked off to build two distinct things. Understanding <em>which</em> failure motivated <em>which</em> successor is the key that unlocks the whole rest of the manual.</p>
+
+      <h3>The four structural problems</h3>
+      <ol>
+        <li><strong>Disk materialization between every stage.</strong> MapReduce writes intermediate results to disk (and the final output to 3×-replicated HDFS) at every job boundary. A query with five logical steps writes and re-reads the entire dataset from disk roughly five times.</li>
+        <li><strong>Batch latency.</strong> JVM spin-up, container allocation, and scheduling impose tens of seconds to minutes of fixed overhead — fatal for interactive, human-in-the-loop analytics.</li>
+        <li><strong>A rigid two-verb vocabulary.</strong> Everything had to be bent into <code>map</code> + <code>reduce</code>. Multi-way joins, iteration, and graph algorithms were awkward, multi-job contortions.</li>
+        <li><strong>No reuse of hot data.</strong> An iterative algorithm (almost all of machine learning) re-reads its input from disk on <em>every single iteration</em>, because there is no notion of keeping a dataset resident in memory across steps.</li>
+      </ol>
+
+      <h3>Now — your exact question, answered head-on</h3>
+      <div class="callout">
+        <span class="tag">"We had Hadoop, and YARN can even schedule GPUs. Why did Presto appear?"</span>
+        <p>Because the bottleneck Presto attacks lives at problems <strong>#1 and #2</strong> — the <em>execution model</em> — and YARN/GPUs touch neither.</p>
+        <p>YARN decides <em>which machine</em> a task runs on and <em>how much</em> CPU/RAM/GPU it gets. It cannot decide that intermediate results should stream through memory instead of landing on disk, or that there should be no per-query JVM cold-start. Those are properties of the engine running <em>inside</em> the container.</p>
+        <p>Running MapReduce on a GPU would make each map task's arithmetic faster — but a Hive query isn't slow because the arithmetic is slow. It's slow because it writes the whole dataset to disk between stages and pays minutes of job-startup tax. <strong>You cannot GPU your way out of an architecture whose cost is dominated by disk I/O and scheduling latency.</strong> Presto is not "Hadoop, faster." It is a <em>different execution model</em>: long-lived worker daemons that pipeline data through memory across the cluster with no inter-stage disk writes. That is an architectural change, and it had to be a new system.</p>
+      </div>
+
+      <div class="insight">A scheduler decides <b>where</b> work runs. An execution engine decides <b>how</b> work runs. MapReduce's pain was a <b>how</b> problem, so the cure had to be a new <b>how</b> — not a better <b>where.</b></div>
+
+      <h3>The fork in the road</h3>
+      <p>Crucially, the four problems above don't all matter for the same use case, so two cures emerged — and they optimize opposite ends of the latency/throughput axis from §0:</p>
+
+      <div class="tradeoff">
+        <div class="win">
+          <h5>Cure A → Spark (§4)</h5>
+          <ul>
+            <li>Motivated by <strong>#1 + #3 + #4</strong></li>
+            <li>"Keep data in memory across many operations; give us a rich API and iteration"</li>
+            <li>Target: large multi-stage ETL &amp; iterative ML where <em>fault tolerance still matters</em></li>
+            <li>General-purpose compute engine</li>
+          </ul>
+        </div>
+        <div class="cost">
+          <h5>Cure B → Presto / Impala (§5)</h5>
+          <ul>
+            <li>Motivated by <strong>#1 + #2</strong></li>
+            <li>"Give us sub-second interactive SQL; we'll sacrifice mid-query fault tolerance to get it"</li>
+            <li>Target: ad-hoc analyst queries over the warehouse</li>
+            <li>Specialized MPP SQL engine</li>
+          </ul>
+        </div>
+      </div>
+
+      <p>Both ran on the same Hadoop foundation (HDFS for storage, often YARN for scheduling). Both replaced MapReduce as the thing doing the actual work. They are siblings, born of the same frustration, who chose opposite corners of the design space. The next two sections take each in turn.</p>
+    </section>
+    <div class="chapter-rule"></div>
+
+    <!-- ============================================================
+         §4 — SPARK
+         ============================================================ -->
+    <section class="chapter" id="s4">
+      <div class="chapter-head">
+        <span class="chapter-num">§4</span>
+        <h2><span class="kicker">Divergence A · 2009–present</span>Spark — general-purpose in-memory compute</h2>
+      </div>
+
+      <p class="lead dropcap">Apache Spark came out of UC Berkeley's AMPLab, led by Matei Zaharia, and its central abstraction is one of the most influential ideas in the field. Spark's pitch was not "faster SQL." It was "a unified engine for <em>all</em> large-scale data processing — batch, SQL, streaming, ML, and graph — that keeps data in memory and recovers from failure without replicating intermediate data."</p>
+
+      <h3>The RDD — the load-bearing idea</h3>
+      <p>The 2012 paper introduced the <strong>Resilient Distributed Dataset (RDD)</strong>: an immutable, partitioned collection of records held across the cluster's memory. Two properties make it work:</p>
+      <ul>
+        <li><strong>Lineage-based fault tolerance.</strong> Rather than replicating intermediate data to survive failures (MapReduce's expensive approach), an RDD remembers <em>how it was computed</em> — the chain of transformations from its inputs. If a partition is lost to a node failure, Spark simply recomputes that one partition from its lineage. You get fault tolerance without the disk-write tax.</li>
+        <li><strong>Lazy DAG execution.</strong> Transformations (<code>map</code>, <code>filter</code>, <code>join</code>) build up a directed acyclic graph but don't execute. Only when an <em>action</em> (<code>count</code>, <code>collect</code>, <code>save</code>) is called does Spark plan the whole DAG at once — pipelining operations, fusing stages, and materializing only where a shuffle genuinely requires it.</li>
+      </ul>
+
+      <figure>
+        <div class="fig-frame">
+          <svg viewBox="0 0 640 200" role="img" aria-label="Spark RDD lineage DAG with narrow and wide dependencies">
+            <defs><marker id="ah2" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--cyan)"/></marker></defs>
+            <g font-size="10.5">
+              <rect x="14" y="80" width="86" height="40" rx="5" fill="var(--sage-wash)" stroke="var(--sage)"/>
+              <text x="57" y="104" text-anchor="middle" fill="var(--ink)">textFile</text>
+
+              <rect x="150" y="80" width="86" height="40" rx="5" fill="var(--copper-wash)" stroke="var(--copper)"/>
+              <text x="193" y="100" text-anchor="middle" fill="var(--ink)">filter</text>
+              <text x="193" y="113" text-anchor="middle" fill="var(--ink-faint)" font-size="8.5">narrow</text>
+
+              <rect x="286" y="80" width="86" height="40" rx="5" fill="var(--copper-wash)" stroke="var(--copper)"/>
+              <text x="329" y="100" text-anchor="middle" fill="var(--ink)">map</text>
+              <text x="329" y="113" text-anchor="middle" fill="var(--ink-faint)" font-size="8.5">narrow</text>
+
+              <rect x="422" y="80" width="96" height="40" rx="5" fill="var(--cyan-wash)" stroke="var(--cyan)"/>
+              <text x="470" y="100" text-anchor="middle" fill="var(--ink)">reduceByKey</text>
+              <text x="470" y="113" text-anchor="middle" fill="#c98b56" font-size="8.5">WIDE · shuffle</text>
+
+              <rect x="556" y="80" width="74" height="40" rx="5" fill="var(--sage-wash)" stroke="var(--sage)"/>
+              <text x="593" y="104" text-anchor="middle" fill="var(--ink)">collect</text>
+
+              <g stroke="var(--cyan)" stroke-width="1.4" fill="none">
+                <path d="M102,100 L148,100" marker-end="url(#ah2)"/>
+                <path d="M238,100 L284,100" marker-end="url(#ah2)"/>
+                <path d="M374,100 L420,100" marker-end="url(#ah2)"/>
+                <path d="M520,100 L554,100" marker-end="url(#ah2)"/>
+              </g>
+              <!-- stage brackets -->
+              <path d="M150,140 L372,140" stroke="var(--copper)" stroke-width="1.2" fill="none"/>
+              <text x="261" y="158" text-anchor="middle" fill="var(--copper)" font-size="9">Stage 1 — pipelined, no materialization</text>
+              <path d="M422,140 L518,140" stroke="var(--cyan)" stroke-width="1.2" fill="none"/>
+              <text x="470" y="158" text-anchor="middle" fill="var(--cyan)" font-size="9">Stage 2 — after shuffle</text>
+            </g>
+          </svg>
+        </div>
+        <figcaption><b>FIG. 4.1</b> — A Spark lineage DAG. <b>Narrow</b> dependencies (filter, map) pipeline within a stage with no disk write. Only the <b>wide</b> dependency (<span class="svg-mono">reduceByKey</span>, which needs a shuffle) forces a stage boundary. Contrast with FIG. 2.1, where <em>every</em> operator boundary was a disk write.</figcaption>
+      </figure>
+
+      <h3>The unified platform</h3>
+      <p>Spark's commercial and adoption advantage was breadth: one engine, one API, many workloads.</p>
+      <div class="pills">
+        <span class="pill cu">Spark Core — RDDs / batch</span>
+        <span class="pill cy">Spark SQL — DataFrames</span>
+        <span class="pill sg">Structured Streaming</span>
+        <span class="pill cu">MLlib — machine learning</span>
+        <span class="pill cy">GraphX — graphs</span>
+      </div>
+
+      <h3>Spark SQL, Catalyst, and Tungsten</h3>
+      <p>The <strong>DataFrame</strong> API (and Spark SQL) moved users up from hand-written RDD code to a declarative, relational interface — which, crucially, gave Spark room to <em>optimize</em>. Two subsystems made it competitive with purpose-built databases:</p>
+      <ul>
+        <li><strong>Catalyst</strong> — an extensible query optimizer (rule-based rewrites plus cost-based planning) that turns a DataFrame/SQL query into an efficient physical plan.</li>
+        <li><strong>Tungsten</strong> — Spark's answer to the JVM's inefficiency. It introduced <em>whole-stage code generation</em> (compile a chain of operators into a single tight Java loop instead of chained iterators), off-heap memory management to dodge garbage-collection pauses, and cache-aware layouts. This was Spark reaching toward the bare-metal efficiency that §8 pushes much further.</li>
+      </ul>
+
+      <div class="code">
+        <div class="code-head"><span class="code-lang">The same group-by, three ways</span><button class="copy-btn">Copy</button></div>
+<pre><span class="tok-c"># 1. Raw MapReduce (Java) — dozens of lines of Mapper/Reducer boilerplate, omitted.</span>
+
+<span class="tok-c"># 2. Spark — RDD style (functional, in-memory, lineage-tracked)</span>
+(sc.textFile(<span class="tok-s">"events"</span>)
+   .map(<span class="tok-k">lambda</span> line: (line.split(<span class="tok-s">","</span>)[<span class="tok-n">0</span>], <span class="tok-n">1</span>))
+   .reduceByKey(<span class="tok-k">lambda</span> a, b: a + b)   <span class="tok-c"># the one shuffle</span>
+   .collect())
+
+<span class="tok-c"># 3. Spark SQL — declarative; Catalyst plans it, Tungsten codegens it</span>
+spark.sql(<span class="tok-s">"SELECT user_id, COUNT(*) FROM events GROUP BY user_id"</span>)</pre>
+      </div>
+
+      <h3>Where Spark sits — and its competitors</h3>
+      <p>Spark fit <em>into</em> the Hadoop world (read HDFS, schedule on YARN) while displacing MapReduce as the engine. Today it runs equally on Kubernetes, Mesos, or standalone, reading from S3 far more often than HDFS. Its sweet spot is large, fault-tolerant, multi-stage ETL and ML pipelines — jobs that run for minutes to hours, where mid-job node failure is a real risk worth paying for.</p>
+
+      <div class="table-wrap">
+        <table class="grid">
+          <thead><tr><th>Competitor / sibling</th><th>Relationship to Spark</th></tr></thead>
+          <tbody>
+            <tr><td>MapReduce</td><td>The predecessor Spark replaced — 10–100× slower on iterative work</td></tr>
+            <tr><td>Apache Flink</td><td>The streaming-first rival; true event-at-a-time streaming with strong state — Spark answered with Structured Streaming (micro-batch, later continuous)</td></tr>
+            <tr><td>Dask</td><td>The Python-native parallel framework — friendlier to the PyData/NumPy world; the basis for <code>dask-cudf</code> (§9)</td></tr>
+            <tr><td>Ray</td><td>Distributed Python for ML/AI workloads — task &amp; actor model rather than dataflow</td></tr>
+            <tr><td>Presto / Trino</td><td>Not really a competitor — different corner: interactive SQL vs general batch (see §5)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout cyan">
+        <span class="tag">Foreshadowing §8</span>
+        <p>Tungsten took Spark a long way, but it still executes on the JVM. The next great efficiency leap — <strong>Photon</strong> (Databricks) and <strong>Gluten+Velox</strong> — is about replacing Spark's JVM execution with native, vectorized C++ <em>underneath the same DataFrame API</em>. Spark keeps the optimizer and the API; the engine room gets rebuilt in C++. Hold that thought.</p>
+      </div>
+    </section>
+    <div class="chapter-rule"></div>
+
+    <!-- ============================================================
+         §5 — PRESTO & MPP-SQL FAMILY
+         ============================================================ -->
+    <section class="chapter" id="s5">
+      <div class="chapter-head">
+        <span class="chapter-num">§5</span>
+        <h2><span class="kicker">Divergence B · 2012–present</span>Presto &amp; the interactive MPP-SQL family</h2>
+      </div>
+
+      <p class="lead dropcap">Presto was born at Facebook in 2012 (open-sourced 2013) to solve the exact pain from §2: analysts needed interactive SQL over a petabyte-scale warehouse, and Hive-on-MapReduce delivered answers in minutes. Presto's design is the mirror image of Spark's — where Spark generalized, Presto specialized, and where Spark kept fault tolerance, Presto threw it overboard to win latency.</p>
+
+      <h3>The architecture: pipelined, in-memory MPP</h3>
+      <p>Presto is a pure <strong>query engine</strong> — it stores nothing. A cluster is one <strong>coordinator</strong> (parses SQL, plans, schedules) and many long-lived <strong>workers</strong> (execute). A query is decomposed into <em>stages</em>, stages into parallel <em>tasks</em>, tasks into <em>splits</em> (chunks of input), processed by a pipeline of operators. The defining property: <strong>data streams from stage to stage through memory and over the network — it is never written to disk between stages</strong>, and there is no per-query JVM cold-start because the workers are always running.</p>
+
+      <figure>
+        <div class="fig-frame">
+          <svg viewBox="0 0 600 250" role="img" aria-label="Presto coordinator and worker architecture">
+            <defs><marker id="ah3" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--copper)"/></marker></defs>
+            <!-- coordinator -->
+            <rect x="210" y="14" width="180" height="44" rx="6" fill="var(--copper-wash)" stroke="var(--copper)" stroke-width="1.5"/>
+            <text x="300" y="34" text-anchor="middle" fill="var(--ink)" font-size="12" font-weight="600">Coordinator</text>
+            <text x="300" y="49" text-anchor="middle" fill="var(--ink-faint)" font-size="9">parse · plan · schedule</text>
+            <!-- workers -->
+            <g>
+              <rect x="40"  y="100" width="150" height="40" rx="5" fill="var(--cyan-wash)" stroke="var(--cyan)"/>
+              <text x="115" y="124" text-anchor="middle" fill="var(--ink)" font-size="11">Worker</text>
+              <rect x="225" y="100" width="150" height="40" rx="5" fill="var(--cyan-wash)" stroke="var(--cyan)"/>
+              <text x="300" y="124" text-anchor="middle" fill="var(--ink)" font-size="11">Worker</text>
+              <rect x="410" y="100" width="150" height="40" rx="5" fill="var(--cyan-wash)" stroke="var(--cyan)"/>
+              <text x="485" y="124" text-anchor="middle" fill="var(--ink)" font-size="11">Worker</text>
+            </g>
+            <text x="300" y="166" text-anchor="middle" fill="#c98b56" font-size="9.5" font-style="italic">workers exchange data in-memory (no disk between stages)</text>
+            <line x1="115" y1="146" x2="225" y2="146" stroke="var(--copper)" stroke-dasharray="3 3"/>
+            <line x1="375" y1="146" x2="410" y2="146" stroke="var(--copper)" stroke-dasharray="3 3"/>
+            <!-- connectors -->
+            <g font-size="9.5">
+              <rect x="30"  y="196" width="92" height="36" rx="5" fill="var(--bg-inset)" stroke="var(--sage)"/>
+              <text x="76" y="218" text-anchor="middle" fill="var(--sage)">Hive / S3</text>
+              <rect x="135" y="196" width="92" height="36" rx="5" fill="var(--bg-inset)" stroke="var(--sage)"/>
+              <text x="181" y="218" text-anchor="middle" fill="var(--sage)">MySQL</text>
+              <rect x="240" y="196" width="92" height="36" rx="5" fill="var(--bg-inset)" stroke="var(--sage)"/>
+              <text x="286" y="218" text-anchor="middle" fill="var(--sage)">Kafka</text>
+              <rect x="345" y="196" width="92" height="36" rx="5" fill="var(--bg-inset)" stroke="var(--sage)"/>
+              <text x="391" y="218" text-anchor="middle" fill="var(--sage)">Cassandra</text>
+              <rect x="450" y="196" width="110" height="36" rx="5" fill="var(--bg-inset)" stroke="var(--sage)"/>
+              <text x="505" y="218" text-anchor="middle" fill="var(--sage)">PostgreSQL</text>
+            </g>
+            <g stroke="var(--copper)" stroke-width="1.3" fill="none">
+              <path d="M250,58 L120,98" marker-end="url(#ah3)"/>
+              <path d="M300,58 L300,98" marker-end="url(#ah3)"/>
+              <path d="M350,58 L480,98" marker-end="url(#ah3)"/>
+            </g>
+            <text x="498" y="78" fill="var(--ink-faint)" font-size="9">↕ connectors</text>
+          </svg>
+        </div>
+        <figcaption><b>FIG. 5.1</b> — Presto's coordinator/worker topology and its <b>connector</b> layer. The connectors are the second big idea: one query can join Hive data against a MySQL table and a Kafka stream. This is <em>query federation</em> — querying data where it lives, without first loading it into a warehouse.</figcaption>
+      </figure>
+
+      <h3>The two defining design choices</h3>
+
+      <h4>1 · No mid-query fault tolerance (originally)</h4>
+      <p>This is the trade that makes Presto fast, and it is a deliberate inversion of Spark's choice. If a worker dies mid-query, the query fails and you re-run it. For a 5-second interactive query, re-running is cheaper than the constant checkpointing and lineage machinery that fault tolerance demands. Spark made the opposite bet because its jobs run for hours. <em>Same axis, opposite end.</em> (Presto later added optional fault-tolerant execution — "Project Tardigrade" — for longer ETL-style queries, narrowing the gap.)</p>
+
+      <h4>2 · Connectors &amp; federation</h4>
+      <p>Presto separates the query engine from storage entirely and talks to dozens of systems through a pluggable connector SPI. The same ANSI-SQL query can span a data lake, an operational database, and a message queue. Hive could only see HDFS; Presto sees everything.</p>
+
+      <div class="tradeoff">
+        <div class="win">
+          <h5>Presto / Trino — strengths</h5>
+          <ul>
+            <li>Sub-second to seconds interactive SQL</li>
+            <li>Full ANSI SQL (not HiveQL)</li>
+            <li>Federation across many sources in one query</li>
+            <li>Decoupled from storage — query the lake in place</li>
+          </ul>
+        </div>
+        <div class="cost">
+          <h5>Presto / Trino — costs</h5>
+          <ul>
+            <li>Historically fragile for hours-long jobs (a node death kills the query)</li>
+            <li>Memory-bound — a query whose intermediate state exceeds cluster RAM struggles</li>
+            <li>Not a system of record; no storage, no transactions of its own</li>
+          </ul>
+        </div>
+      </div>
+
+      <h3>The Presto fork: PrestoDB vs Trino</h3>
+      <div class="callout">
+        <span class="tag">A fact that confuses everyone — worth getting straight</span>
+        <p>In 2018–19 the original creators (Martin Traverso, Dain Sundstrom, David Phillips, Eric Hwang) left Facebook and forked the project as <strong>PrestoSQL</strong>, renamed <strong>Trino</strong> in late 2020 over trademark issues. Facebook kept the name <strong>PrestoDB</strong> under the Linux Foundation's Presto Foundation. So today "Presto" is two projects. Trino tends to carry the more active community momentum; PrestoDB is the lineage Meta continues to invest in — and notably the one being rebuilt in C++ as <strong>Prestissimo</strong> on top of Velox (§8–§9). AWS Athena began life as a hosted Presto.</p>
+      </div>
+
+      <h3>The wider interactive-SQL family (the competitors)</h3>
+      <p>Presto was not alone; several engines attacked the "interactive SQL on Hadoop" gap at once, each with a different bet:</p>
+      <div class="table-wrap">
+        <table class="grid">
+          <thead><tr><th>Engine</th><th class="yr">Origin</th><th>Distinct bet</th></tr></thead>
+          <tbody>
+            <tr><td>Apache Impala</td><td class="yr">2012 · Cloudera</td><td>Written in <strong>C++, not the JVM</strong>; LLVM codegen; daemon-per-node MPP. The native-execution argument, years before Velox made it mainstream.</td></tr>
+            <tr><td>Apache Drill</td><td class="yr">2012 · MapR</td><td>Schema-free SQL — query raw JSON/Parquet with no pre-defined schema. Inspired by Google's <strong>Dremel</strong>.</td></tr>
+            <tr><td>Apache Tez</td><td class="yr">2013 · Hortonworks</td><td>A DAG framework to run <em>under Hive</em>, replacing MapReduce without a new language. "Make Hive fast" — the incremental path.</td></tr>
+            <tr><td>Hive LLAP</td><td class="yr">2016</td><td>Persistent daemons + in-memory caching bolted onto Hive for lower latency.</td></tr>
+            <tr><td>Apache Kylin</td><td class="yr">2014 · eBay</td><td>Pre-compute OLAP cubes so dashboard queries return in milliseconds. The "materialize everything up front" bet.</td></tr>
+            <tr><td>Google Dremel → BigQuery</td><td class="yr">2010 paper</td><td>The serverless, columnar, tree-architecture engine whose ideas seeded Drill, Impala, and Parquet. BigQuery is its commercial form.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="insight">Spark and Presto are <b>not rivals on the same axis</b>. Asking "Spark or Presto?" is like asking "freight train or sports car?" One moves enormous loads reliably over long distances; the other gets a person somewhere fast. Most mature data platforms run <b>both</b> — Spark for the heavy ETL that builds the tables, Presto/Trino for the analysts who interactively query them.</div>
+    </section>
+    <div class="chapter-rule"></div>
+
+    <!-- ============================================================
+         §6 — STORAGE & FORMAT LAYER
+         ============================================================ -->
+    <section class="chapter" id="s6">
+      <div class="chapter-head">
+        <span class="chapter-num">§6</span>
+        <h2><span class="kicker">The substrate · 2013–2016</span>The storage &amp; format layer — the quiet revolution</h2>
+      </div>
+
+      <p class="lead dropcap">The engines get the headlines, but a parallel revolution in <em>how bytes are laid out</em> did as much for performance as any execution-engine change. Once you decouple compute from storage (§5, §7), the format that data sits in becomes a shared contract — and getting it right speeds up every engine that reads it. This section is short but disproportionately important.</p>
+
+      <h3>Row vs columnar — the central choice, revisited</h3>
+      <p>An analytical query like <code>SELECT AVG(price) FROM sales WHERE region='EU'</code> touches two columns out of perhaps fifty. In a <strong>row</strong> format, the disk must read every row in full to reach those two fields. In a <strong>columnar</strong> format, each column is stored contiguously, so the engine reads <em>only</em> <code>price</code> and <code>region</code> — and because a column holds values of one type with high similarity, it compresses far better and enables vectorized, SIMD-friendly processing.</p>
+
+      <figure>
+        <div class="fig-frame">
+          <svg viewBox="0 0 620 180" role="img" aria-label="Row layout versus columnar layout on disk">
+            <text x="10" y="22" fill="var(--copper)" font-size="11" font-weight="600">ROW-ORIENTED</text>
+            <g font-size="9.5" class="svg-mono">
+              <rect x="10" y="32" width="50" height="22" fill="var(--copper-wash)" stroke="var(--rule)"/><text x="35" y="47" text-anchor="middle" fill="var(--ink)">id</text>
+              <rect x="60" y="32" width="60" height="22" fill="var(--cyan-wash)" stroke="var(--rule)"/><text x="90" y="47" text-anchor="middle" fill="var(--ink)">region</text>
+              <rect x="120" y="32" width="55" height="22" fill="var(--sage-wash)" stroke="var(--rule)"/><text x="147" y="47" text-anchor="middle" fill="var(--ink)">price</text>
+              <rect x="175" y="32" width="50" height="22" fill="var(--copper-wash)" stroke="var(--rule)"/><text x="200" y="47" text-anchor="middle" fill="var(--ink)">id</text>
+              <rect x="225" y="32" width="60" height="22" fill="var(--cyan-wash)" stroke="var(--rule)"/><text x="255" y="47" text-anchor="middle" fill="var(--ink)">region</text>
+              <rect x="285" y="32" width="55" height="22" fill="var(--sage-wash)" stroke="var(--rule)"/><text x="312" y="47" text-anchor="middle" fill="var(--ink)">price</text>
+              <text x="350" y="47" fill="var(--ink-faint)">… one whole row, then the next →</text>
+            </g>
+            <text x="10" y="74" fill="var(--ink-faint)" font-size="9">scan of <tspan font-style="italic">price</tspan> must read past every other field</text>
+
+            <text x="10" y="108" fill="var(--cyan)" font-size="11" font-weight="600">COLUMN-ORIENTED</text>
+            <g font-size="9.5" class="svg-mono">
+              <rect x="10" y="118" width="44" height="22" fill="var(--copper-wash)" stroke="var(--rule)"/><text x="32" y="133" text-anchor="middle" fill="var(--ink)">id</text>
+              <rect x="54" y="118" width="44" height="22" fill="var(--copper-wash)" stroke="var(--rule)"/><text x="76" y="133" text-anchor="middle" fill="var(--ink)">id</text>
+              <rect x="98" y="118" width="44" height="22" fill="var(--copper-wash)" stroke="var(--rule)"/><text x="120" y="133" text-anchor="middle" fill="var(--ink)">id</text>
+              <rect x="158" y="118" width="60" height="22" fill="var(--cyan-wash)" stroke="var(--cyan)"/><text x="188" y="133" text-anchor="middle" fill="var(--ink)">region</text>
+              <rect x="218" y="118" width="60" height="22" fill="var(--cyan-wash)" stroke="var(--cyan)"/><text x="248" y="133" text-anchor="middle" fill="var(--ink)">region</text>
+              <rect x="294" y="118" width="55" height="22" fill="var(--sage-wash)" stroke="var(--sage)"/><text x="321" y="133" text-anchor="middle" fill="var(--ink)">price</text>
+              <rect x="349" y="118" width="55" height="22" fill="var(--sage-wash)" stroke="var(--sage)"/><text x="376" y="133" text-anchor="middle" fill="var(--ink)">price</text>
+              <text x="415" y="133" fill="var(--ink-faint)">all of one column together</text>
+            </g>
+            <text x="10" y="160" fill="var(--sage)" font-size="9">read only the <tspan font-style="italic">price</tspan> + <tspan font-style="italic">region</tspan> blocks · compress each column independently · vectorize</text>
+          </svg>
+        </div>
+        <figcaption><b>FIG. 6.1</b> — Row vs columnar physical layout. Columnar is the foundation of nearly every analytical system from Vertica (§1) through Parquet, Arrow, DuckDB, ClickHouse, and cuDF. Row layout remains correct for OLTP, where you fetch whole records.</figcaption>
+      </figure>
+
+      <h3>The formats that won</h3>
+      <div class="table-wrap">
+        <table class="grid">
+          <thead><tr><th>Format</th><th>Kind</th><th>Role &amp; origin</th></tr></thead>
+          <tbody>
+            <tr><td>Avro</td><td>Row, on-disk</td><td>Schema-carrying row format; good for streaming/ingest &amp; record-at-a-time writes</td></tr>
+            <tr><td><strong>Parquet</strong></td><td>Columnar, on-disk</td><td>From Twitter+Cloudera, inspired by Dremel. The de-facto columnar lake format — compression, predicate &amp; projection pushdown. Read by everything.</td></tr>
+            <tr><td><strong>ORC</strong></td><td>Columnar, on-disk</td><td>The Hive/Hortonworks columnar format; similar goals to Parquet, strong in the Hive world</td></tr>
+            <tr><td><strong>Apache Arrow</strong></td><td>Columnar, <em>in-memory</em></td><td>Not a file format — a standard in-memory representation (2016, Wes McKinney et al.) for zero-copy data interchange <em>between systems and languages</em></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Arrow — the most important entry in this section</h3>
+      <div class="callout cyan">
+        <span class="tag">Why Arrow is the connective tissue of the modern stack</span>
+        <p>Before Arrow, every time data crossed a boundary — Spark→Python, pandas→a database, CPU→GPU — it was serialized into one system's internal format and deserialized into another's. That copy-and-convert tax was enormous. <strong>Apache Arrow defines one columnar memory layout that everyone agrees on</strong>, so a buffer produced by one tool can be read by another with <em>zero copying</em>. pandas, Spark, DuckDB, Polars, cuDF, DataFusion, and Velox all speak Arrow. It is the reason the §9 GPU story and the §10 composable story are even possible: cuDF's GPU buffers are Arrow-compatible, so handing data from a CPU engine to a GPU kernel doesn't require reformatting it. Arrow Flight extends the same idea to network transport.</p>
+      </div>
+
+      <div class="insight">Execution engines compete; <b>formats federate.</b> The winners of the format wars (Parquet on disk, Arrow in memory) succeeded precisely by being neutral ground that no single engine owns — which is exactly what let the engines above them specialize and interoperate.</div>
+    </section>
+    <div class="chapter-rule"></div>
+
+    <!-- ============================================================
+         §7 — CLOUD / LAKEHOUSE
+         ============================================================ -->
+    <section class="chapter" id="s7">
+      <div class="chapter-head">
+        <span class="chapter-num">§7</span>
+        <h2><span class="kicker">2012–present</span>Cloud, decoupling &amp; the lakehouse</h2>
+      </div>
+
+      <p class="lead dropcap">The cloud took the §5 idea of "separate compute from storage" and pushed it to its logical extreme. When storage is a cheap, infinite, durable object store (S3, GCS, Azure Blob) that any number of compute clusters can read independently, the economics of analytics change fundamentally — and a new class of system, the <strong>lakehouse</strong>, emerges to reconcile the data lake's flexibility with the warehouse's rigor.</p>
+
+      <h3>The decoupling and what it bought</h3>
+      <p>In the appliance era (§1), compute and storage were welded together: to store more, you bought more compute, and vice versa. In the cloud, you store petabytes in S3 for pennies and spin up compute <em>only when a query runs</em>, sizing it independently. This is the architecture behind every modern cloud warehouse.</p>
+
+      <div class="tradeoff">
+        <div class="win">
+          <h5>Data lake (raw files in object storage)</h5>
+          <ul>
+            <li>Cheap, infinite, any format</li>
+            <li>Schema-on-read flexibility</li>
+            <li>Open — many engines read it</li>
+            <li><em>But:</em> no transactions, no schema enforcement, easy to turn into a "data swamp"</li>
+          </ul>
+        </div>
+        <div class="cost">
+          <h5>Data warehouse (managed, structured)</h5>
+          <ul>
+            <li>ACID, schema enforcement, governance</li>
+            <li>Fast, optimized, reliable</li>
+            <li>Curated &amp; trustworthy</li>
+            <li><em>But:</em> expensive, proprietary, rigid ingest</li>
+          </ul>
+        </div>
+      </div>
+
+      <h3>The lakehouse: getting both</h3>
+      <p>The lakehouse keeps data as open columnar files (Parquet) in cheap object storage, but layers a <strong>table format</strong> on top that adds the warehouse virtues — ACID transactions, schema evolution, time-travel (querying a past snapshot), and efficient upserts/deletes — via a transaction log and metadata. Three table formats compete:</p>
+
+      <div class="table-wrap">
+        <table class="grid">
+          <thead><tr><th>Table format</th><th class="yr">Origin</th><th>Emphasis</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Apache Hudi</strong></td><td class="yr">Uber · 2016</td><td>Fast upserts &amp; incremental processing — born from CDC / streaming-update needs</td></tr>
+            <tr><td><strong>Apache Iceberg</strong></td><td class="yr">Netflix · 2017</td><td>Open table spec with hidden partitioning, robust schema evolution, snapshot isolation. The current momentum leader; engine-neutral by design.</td></tr>
+            <tr><td><strong>Delta Lake</strong></td><td class="yr">Databricks · 2019</td><td>ACID transaction log over Parquet; tightly integrated with Spark/Databricks</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>The cloud warehouses &amp; platforms</h3>
+      <div class="table-wrap">
+        <table class="grid">
+          <thead><tr><th>System</th><th class="yr">Origin</th><th>What made it land</th></tr></thead>
+          <tbody>
+            <tr><td>Amazon Redshift</td><td class="yr">2012</td><td>MPP cloud warehouse seeded from ParAccel (§1); the first mainstream "warehouse as a service"</td></tr>
+            <tr><td>Google BigQuery</td><td class="yr">2011</td><td>Serverless &amp; Dremel-based — no clusters to manage; query, pay per byte scanned</td></tr>
+            <tr><td><strong>Snowflake</strong></td><td class="yr">2014</td><td>Fully decoupled storage/compute with elastic, isolated "virtual warehouses"; sold the cloud-native warehouse so well it defined the category</td></tr>
+            <tr><td>Databricks SQL + Photon</td><td class="yr">2020+</td><td>The lakehouse pitch: warehouse performance directly on lake data, via a native C++ engine (§8)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout">
+        <span class="tag">Where Presto/Trino fit in this picture</span>
+        <p>Trino/Presto are a natural <em>query layer</em> for the open lakehouse: point them at Iceberg or Delta tables in S3 and you get interactive SQL over the lake without loading into a proprietary warehouse. The competition here is philosophical — the <strong>open lakehouse</strong> (Iceberg + Trino + your choice of engine, no lock-in) versus the <strong>integrated platform</strong> (Snowflake or Databricks, more convenient, more locked in). Both are thriving; the tension between them drives much of today's roadmap.</p>
+      </div>
+    </section>
+    <div class="chapter-rule"></div>
+
+    <!-- ============================================================
+         §8 — NATIVE / VECTORIZED RENAISSANCE
+         ============================================================ -->
+    <section class="chapter" id="s8">
+      <div class="chapter-head">
+        <span class="chapter-num">§8</span>
+        <h2><span class="kicker">2016–present</span>The native &amp; vectorized renaissance — escaping the JVM</h2>
+      </div>
+
+      <p class="lead dropcap">By the late 2010s, the distributed problem was largely solved — Spark and Presto scaled fine. The new frontier was <em>single-node efficiency</em>: the realization that JVM-based engines were leaving a 5–30× performance factor on the table by ignoring how modern CPUs actually work. The cure was to rediscover the 2005 database research from §1 — vectorization and compilation — and rebuild execution engines in native C++/Rust. This is the direct lineage of Velox.</p>
+
+      <h3>The problem: the Volcano model meets the modern CPU</h3>
+      <p>The classic query execution model (the "Volcano" or iterator model) processes <em>one tuple at a time</em>: each operator's <code>next()</code> method pulls a single row from its child, via a virtual function call. On a 1980s CPU this was fine. On a modern CPU it is a disaster:</p>
+      <ul>
+        <li><strong>Virtual call overhead</strong> per row, per operator, dwarfs the actual work for simple operations.</li>
+        <li><strong>No SIMD.</strong> Modern CPUs can apply one instruction to 8–16 values at once (AVX-512), but one-tuple-at-a-time can't feed those lanes.</li>
+        <li><strong>Cache &amp; branch-prediction hostility.</strong> Jumping between operators per row thrashes the instruction cache and defeats the branch predictor.</li>
+        <li><strong>On the JVM, additionally:</strong> garbage-collection pauses, object header overhead, and pointer-chasing through boxed objects.</li>
+      </ul>
+
+      <h3>The two cures (a genuine rivalry of philosophies)</h3>
+      <figure>
+        <div class="fig-frame">
+          <svg viewBox="0 0 640 230" role="img" aria-label="Tuple-at-a-time versus vectorized versus compiled execution">
+            <!-- volcano -->
+            <text x="14" y="22" fill="var(--copper)" font-size="11" font-weight="600">VOLCANO · 1 tuple/call</text>
+            <g>
+              <rect x="14" y="32" width="22" height="18" fill="var(--copper-wash)" stroke="var(--rule)"/>
+              <text x="46" y="46" fill="var(--ink-faint)" font-size="9.5" class="svg-mono">→ filter() → map() → agg()  ×N rows</text>
+            </g>
+            <text x="14" y="66" fill="var(--ink-faint)" font-size="9">one virtual call per operator per row · cache-hostile · no SIMD</text>
+
+            <!-- vectorized -->
+            <text x="14" y="100" fill="var(--cyan)" font-size="11" font-weight="600">VECTORIZED · 1 batch/call  (MonetDB/X100 → Velox, DuckDB, ClickHouse, Photon)</text>
+            <g class="svg-mono" font-size="9">
+              <rect x="14" y="110" width="120" height="20" fill="var(--cyan-wash)" stroke="var(--cyan)"/><text x="74" y="124" text-anchor="middle" fill="var(--ink)">vector[1024] →</text>
+              <rect x="150" y="110" width="80" height="20" fill="var(--cyan-wash)" stroke="var(--cyan)"/><text x="190" y="124" text-anchor="middle" fill="var(--ink)">filter</text>
+              <rect x="244" y="110" width="80" height="20" fill="var(--cyan-wash)" stroke="var(--cyan)"/><text x="284" y="124" text-anchor="middle" fill="var(--ink)">map</text>
+              <rect x="338" y="110" width="80" height="20" fill="var(--cyan-wash)" stroke="var(--cyan)"/><text x="378" y="124" text-anchor="middle" fill="var(--ink)">agg</text>
+            </g>
+            <text x="14" y="146" fill="var(--ink-faint)" font-size="9">amortize call cost over ~1000 values · tight SIMD loops · stays in cache · easy to debug/extend</text>
+
+            <!-- compiled -->
+            <text x="14" y="180" fill="var(--sage)" font-size="11" font-weight="600">COMPILED · fuse to machine code  (HyPer → DuckDB also, Spark Tungsten)</text>
+            <g class="svg-mono" font-size="9">
+              <rect x="14" y="190" width="404" height="20" fill="var(--sage-wash)" stroke="var(--sage)"/>
+              <text x="216" y="204" text-anchor="middle" fill="var(--ink)">for (row : input) { if(pred) out += f(row); }  // one fused loop, JIT-compiled</text>
+            </g>
+            <text x="14" y="226" fill="var(--ink-faint)" font-size="9">no operator boundaries at all · maximal locality · harder to build &amp; debug</text>
+          </svg>
+        </div>
+        <figcaption><b>FIG. 8.1</b> — Three execution models. <b>Vectorization</b> (the MonetDB/X100 lineage) and <b>compilation</b> (the HyPer / Neumann 2011 lineage) are competing answers to the same question. Vectorization is easier to build and extend and dominates the modern open-source engines; compilation can edge it out on some queries. Several systems blend the two.</figcaption>
+      </figure>
+
+      <h3>The modern native engines</h3>
+      <div class="table-wrap">
+        <table class="grid">
+          <thead><tr><th>Engine</th><th class="yr">Origin</th><th>What it is &amp; why it matters</th></tr></thead>
+          <tbody>
+            <tr><td><strong>ClickHouse</strong></td><td class="yr">Yandex · 2016</td><td>C++ vectorized column-store OLAP DBMS. Built for real-time analytics on huge event/log streams; among the fastest things in existence for its niche.</td></tr>
+            <tr><td><strong>DuckDB</strong></td><td class="yr">CWI · 2019</td><td>"SQLite for analytics." In-process, embedded, vectorized column engine. Same lab as MonetDB — the §1 lineage made literal. See callout below.</td></tr>
+            <tr><td><strong>Velox</strong></td><td class="yr">Meta · 2021</td><td>Not a database — a C++ <em>library</em> of vectorized operators, expression evaluation, and memory management, meant to be the <em>shared execution core</em> for many engines. The centerpiece of this section.</td></tr>
+            <tr><td><strong>Photon</strong></td><td class="yr">Databricks · 2022</td><td>Proprietary C++ vectorized engine that transparently accelerates Spark SQL — reads Spark's plans, executes them natively instead of on the JVM.</td></tr>
+            <tr><td><strong>DataFusion</strong></td><td class="yr">Apache Arrow · Rust</td><td>An embeddable query engine in Rust, built on Arrow; the Rust-ecosystem analogue to Velox. Ballista adds distribution.</td></tr>
+            <tr><td>Polars</td><td class="yr">2020 · Rust</td><td>A DataFrame library (a pandas rival) on Arrow + vectorized Rust — same efficiency thesis, DataFrame ergonomics.</td></tr>
+            <tr><td>Doris / StarRocks</td><td class="yr">2017+</td><td>MPP analytical databases, vectorized C++, targeting real-time + ad-hoc analytics with their own storage.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Velox, in focus — the engine as a library</h3>
+      <p>Velox's thesis (the VLDB 2022 paper, "Velox: Meta's Unified Execution Engine") is that every data system was reimplementing the same execution machinery — vectorized operators, expression evaluation, type systems, memory arenas — slightly differently and to slightly different quality. Velox factors that machinery into one reusable, heavily optimized C++ library that many <em>front ends</em> can adopt. It operates on Arrow-compatible columnar vectors ("Velox Vectors"). Consumers include:</p>
+      <div class="pills">
+        <span class="pill cu">Prestissimo — Presto C++ workers on Velox</span>
+        <span class="pill cy">Gluten — Spark offloaded to Velox</span>
+        <span class="pill sg">PyTorch data preprocessing</span>
+        <span class="pill cu">Meta's internal engines</span>
+      </div>
+
+      <h4>Gluten — the bridge that lets Spark keep its API but swap its engine</h4>
+      <p>This pays off the §4 foreshadowing. <strong>Gluten</strong> (Intel and collaborators) is a Spark plugin that intercepts Spark's physical plan and, instead of executing it on the JVM, hands it to a native backend — most prominently Velox (also ClickHouse). You keep Spark's DataFrame API, Catalyst optimizer, and ecosystem; the actual row-crunching happens in native vectorized C++. It uses <strong>Substrait</strong> (§10) as the neutral plan format passed across the JVM→native boundary.</p>
+
+      <div class="callout">
+        <span class="tag">Why DuckDB "thrived" despite being single-node — answering part of your question</span>
+        <p>DuckDB rode a deflating myth: <em>"big data" is usually not that big.</em> The overwhelming majority of real analytical datasets fit comfortably on one modern machine with hundreds of GB of RAM and fast NVMe — and standing up a Spark cluster to crunch 20 GB is grotesque over-engineering. DuckDB is in-process (it runs <em>inside</em> your Python/R/Node process, like SQLite), needs zero servers, reads Parquet/Arrow at native speed, and integrates seamlessly with pandas. It is the data world's correction to a decade of distributed over-reach: for the single-node case, an embedded vectorized engine beats a cluster on both speed and operational simplicity. That is its entire justification — and it is a very strong one.</p>
+      </div>
+
+      <div class="insight">The native renaissance is the field finally <b>cashing the cheque written in 2005.</b> C-Store and MonetDB/X100 proved columnar + vectorized execution; the big-data era was a fifteen-year detour through the JVM and distribution; Velox, DuckDB, and Photon are the return to those principles, now armed with Arrow and modern hardware.</div>
+    </section>
+    <div class="chapter-rule"></div>
+
+    <!-- ============================================================
+         §9 — GPU FRONTIER
+         ============================================================ -->
+    <section class="chapter" id="s9">
+      <div class="chapter-head">
+        <span class="chapter-num">§9</span>
+        <h2><span class="kicker">2018–present</span>The GPU frontier — RAPIDS, cuDF, and GPU-native execution</h2>
+      </div>
+
+      <p class="lead dropcap">If §8 was about using the CPU fully, §9 is about leaving it behind for workloads where the GPU's brute-force memory bandwidth and parallelism dominate. Analytical queries — wide columnar scans, filters, hash joins, group-bys — are often bandwidth-bound and embarrassingly parallel, which is exactly what GPUs are built for. This is the present cutting edge, and the place where Velox, cuDF, and high-performance GPU interconnect converge.</p>
+
+      <h3>Why a GPU at all for SQL?</h3>
+      <p>Two hardware facts (recall FIG. 0.1): a modern data-center GPU offers <strong>1–3 TB/s of memory bandwidth</strong> (HBM) versus a CPU's ~100–400 GB/s of DRAM bandwidth, and <strong>thousands of arithmetic units</strong> versus a CPU's dozens. A columnar scan-and-aggregate is mostly "stream a lot of bytes through simple arithmetic in parallel" — a near-perfect match. The catch is the <strong>PCIe bottleneck</strong> getting data <em>onto</em> the GPU, and the relatively small GPU memory; both shape the architecture below.</p>
+
+      <h3>The RAPIDS stack</h3>
+      <p>NVIDIA's RAPIDS (announced 2018) is the open-source GPU data-science suite. The core pieces:</p>
+      <div class="table-wrap">
+        <table class="grid">
+          <thead><tr><th>Component</th><th>Role</th></tr></thead>
+          <tbody>
+            <tr><td><strong>cuDF</strong></td><td>GPU DataFrame library with a pandas-like API; <code>libcudf</code> is its C++/CUDA core. Data lives in GPU memory in <strong>Arrow-compatible columnar layout</strong>.</td></tr>
+            <tr><td><strong>libcudf</strong></td><td>The C++ engine under cuDF — the CUDA kernels for joins, group-bys, sorts, string ops, etc.</td></tr>
+            <tr><td><strong>RMM</strong></td><td>RAPIDS Memory Manager — pooled GPU allocation, because raw <code>cudaMalloc</code> is too slow to call per operation.</td></tr>
+            <tr><td><strong>cudf.pandas</strong></td><td>Zero-code-change pandas accelerator: import it and existing pandas code runs on GPU, falling back to CPU when needed.</td></tr>
+            <tr><td><strong>dask-cudf</strong></td><td>Distributes cuDF across many GPUs / many nodes via Dask — the multi-GPU scale-out path.</td></tr>
+            <tr><td>cuML / cuGraph</td><td>GPU machine learning &amp; graph analytics — the rest of the suite.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="code">
+        <div class="code-head"><span class="code-lang">cuDF — pandas-shaped, GPU-executed</span><button class="copy-btn">Copy</button></div>
+<pre><span class="tok-k">import</span> cudf
+
+gdf = cudf.read_parquet(<span class="tok-s">"sales.parquet"</span>)        <span class="tok-c"># lands in GPU HBM, Arrow layout</span>
+out = (gdf[gdf[<span class="tok-s">"region"</span>] == <span class="tok-s">"EU"</span>]                <span class="tok-c"># filter — parallel over rows</span>
+          .groupby(<span class="tok-s">"category"</span>)[<span class="tok-s">"price"</span>]
+          .mean())                              <span class="tok-c"># hash-group-by on thousands of cores</span>
+<span class="tok-c"># identical to pandas to the eye; libcudf CUDA kernels underneath</span></pre>
+      </div>
+
+      <h3>GPU query engines &amp; the Velox + cuDF convergence</h3>
+      <p>Beyond DataFrames, several efforts put a full SQL engine on the GPU:</p>
+      <div class="table-wrap">
+        <table class="grid">
+          <thead><tr><th>Effort</th><th>Idea</th></tr></thead>
+          <tbody>
+            <tr><td>HeavyDB (OmniSci / MapD)</td><td>GPU-native OLAP database with built-in visual rendering of results — early proof that SQL-on-GPU works.</td></tr>
+            <tr><td>BlazingSQL</td><td>SQL engine over cuDF (now largely folded into the broader RAPIDS/ecosystem direction).</td></tr>
+            <tr><td>Theseus (Voltron Data)</td><td>A GPU-native, distributed, composable query engine built on Arrow/cuDF/Substrait — productizing the §10 vision on accelerators.</td></tr>
+            <tr><td><strong>Velox + cuDF</strong></td><td>Adding a <strong>GPU execution backend to Velox's operators</strong>, so Prestissimo/Presto-C++ can run stages on the GPU via libcudf — your territory. The Velox vector format being Arrow-compatible is what makes the CPU↔GPU handoff cheap.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>The hard part: getting data <em>between</em> GPUs</h3>
+      <p>Once execution is on the GPU, the bottleneck migrates to the network. A distributed join or aggregation needs a <strong>shuffle/exchange</strong> — repartitioning data across nodes by key. If every GPU buffer has to travel GPU→CPU→NIC→network→NIC→CPU→GPU, the staging copies dominate and the GPU's speed is wasted. This is precisely the problem your UCX-based exchange/shuffle work addresses.</p>
+
+      <figure>
+        <div class="fig-frame">
+          <svg viewBox="0 0 620 200" role="img" aria-label="Naive GPU shuffle versus GPUDirect RDMA path">
+            <!-- naive -->
+            <text x="14" y="20" fill="var(--copper)" font-size="11" font-weight="600">NAÏVE PATH — staging copies dominate</text>
+            <g font-size="9" class="svg-mono">
+              <rect x="14"  y="30" width="58" height="26" rx="4" fill="var(--cyan-wash)" stroke="var(--cyan)"/><text x="43" y="47" text-anchor="middle" fill="var(--ink)">GPU A</text>
+              <rect x="96"  y="30" width="58" height="26" rx="4" fill="var(--copper-wash)" stroke="var(--copper)"/><text x="125" y="47" text-anchor="middle" fill="var(--ink)">CPU A</text>
+              <rect x="178" y="30" width="50" height="26" rx="4" fill="var(--bg-inset)" stroke="var(--rule)"/><text x="203" y="47" text-anchor="middle" fill="var(--ink)">NIC</text>
+              <rect x="252" y="30" width="64" height="26" rx="4" fill="var(--bg-inset)" stroke="#7a6a55"/><text x="284" y="47" text-anchor="middle" fill="var(--ink-faint)">network</text>
+              <rect x="340" y="30" width="50" height="26" rx="4" fill="var(--bg-inset)" stroke="var(--rule)"/><text x="365" y="47" text-anchor="middle" fill="var(--ink)">NIC</text>
+              <rect x="414" y="30" width="58" height="26" rx="4" fill="var(--copper-wash)" stroke="var(--copper)"/><text x="443" y="47" text-anchor="middle" fill="var(--ink)">CPU B</text>
+              <rect x="496" y="30" width="58" height="26" rx="4" fill="var(--cyan-wash)" stroke="var(--cyan)"/><text x="525" y="47" text-anchor="middle" fill="var(--ink)">GPU B</text>
+              <g stroke="var(--ink-faint)" stroke-width="1"><line x1="72" y1="43" x2="94" y2="43"/><line x1="154" y1="43" x2="176" y2="43"/><line x1="228" y1="43" x2="250" y2="43"/><line x1="316" y1="43" x2="338" y2="43"/><line x1="390" y1="43" x2="412" y2="43"/><line x1="472" y1="43" x2="494" y2="43"/></g>
+            </g>
+            <text x="14" y="76" fill="#b06a36" font-size="9" font-style="italic">6 hops · two device↔host copies each way · GPU sits idle waiting</text>
+
+            <!-- gpudirect -->
+            <text x="14" y="112" fill="var(--sage)" font-size="11" font-weight="600">GPUDirect RDMA / UCX — NIC reads GPU memory directly</text>
+            <g font-size="9" class="svg-mono">
+              <rect x="14"  y="122" width="64" height="28" rx="4" fill="var(--cyan-wash)" stroke="var(--cyan)"/><text x="46" y="140" text-anchor="middle" fill="var(--ink)">GPU A</text>
+              <rect x="120" y="122" width="50" height="28" rx="4" fill="var(--bg-inset)" stroke="var(--sage)"/><text x="145" y="140" text-anchor="middle" fill="var(--ink)">NIC</text>
+              <rect x="200" y="122" width="80" height="28" rx="4" fill="var(--bg-inset)" stroke="#7a6a55"/><text x="240" y="140" text-anchor="middle" fill="var(--ink-faint)">network</text>
+              <rect x="310" y="122" width="50" height="28" rx="4" fill="var(--bg-inset)" stroke="var(--sage)"/><text x="335" y="140" text-anchor="middle" fill="var(--ink)">NIC</text>
+              <rect x="402" y="122" width="64" height="28" rx="4" fill="var(--cyan-wash)" stroke="var(--cyan)"/><text x="434" y="140" text-anchor="middle" fill="var(--ink)">GPU B</text>
+              <g stroke="var(--sage)" stroke-width="1.4"><line x1="78" y1="136" x2="118" y2="136"/><line x1="170" y1="136" x2="198" y2="136"/><line x1="280" y1="136" x2="308" y2="136"/><line x1="360" y1="136" x2="400" y2="136"/></g>
+            </g>
+            <text x="14" y="172" fill="var(--sage)" font-size="9">CPU off the data path · zero staging copies · UCX picks NVLink / RDMA / TCP per topology</text>
+            <text x="14" y="190" fill="var(--ink-faint)" font-size="8.5">one-sided RMA &amp; active messages suit irregular, key-skewed shuffle patterns better than tag-matched send/recv</text>
+          </svg>
+        </div>
+        <figcaption><b>FIG. 9.1</b> — Why GPU interconnect matters for distributed analytics. The naïve shuffle drowns the GPU in host-staging copies; <b>GPUDirect RDMA via UCX</b> lets the NIC move data straight out of GPU memory, choosing NVLink intra-node or RDMA inter-node. For irregular exchange patterns, UCX's one-sided RMA and active messages avoid the rendezvous overhead of strict tag matching — the rationale behind GPU-to-GPU exchange in a Velox/Presto shuffle.</figcaption>
+      </figure>
+
+      <h3>The GPU paradigm's honest trade-offs</h3>
+      <div class="tradeoff">
+        <div class="win">
+          <h5>When GPU analytics wins</h5>
+          <ul>
+            <li>Scan/filter/aggregate/join-heavy queries that fit (or stream through) GPU memory</li>
+            <li>Bandwidth-bound work — the TB/s HBM advantage is decisive</li>
+            <li>Pipelines already on-GPU (ML feature prep feeding training)</li>
+          </ul>
+        </div>
+        <div class="cost">
+          <h5>When it doesn't</h5>
+          <ul>
+            <li>Small data — PCIe transfer &amp; kernel-launch overhead swamp the gain</li>
+            <li>Working set ≫ GPU memory — forces host spilling (a problem you work on directly)</li>
+            <li>Highly branchy, irregular control flow — GPUs hate divergence</li>
+            <li>Cost/availability of GPUs vs commodity CPU</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+    <div class="chapter-rule"></div>
+
+    <!-- ============================ §10 ============================ -->
+    <section class="chapter" id="s10">
+      <div class="chapter-head">
+        <span class="chapter-num">§10</span>
+        <h2><span class="kicker">2020–present</span>The composable-systems movement — stop rebuilding the same database</h2>
+      </div>
+
+      <p class="lead dropcap">Step back and look at everything from §4 onward. Spark, Presto, Trino, Impala, ClickHouse, DuckDB, Snowflake, BigQuery — each is a complete, monolithic data system, and each independently re-implemented the <em>same four things</em>: a language frontend, a query optimizer, an execution engine, and a set of connectors to storage. The industry built the same wheel a dozen times. The composable movement is the recognition that this is wasteful, and that those layers should be <strong>reusable components with clean interfaces</strong> rather than welded-shut internals.</p>
+
+      <p>This was crystallized in <strong>“The Composable Data Management System Manifesto”</strong> (Pedreira et al., VLDB 2023) — a paper out of Meta and collaborators arguing that the next generation of data systems should be assembled from interchangeable open components, the way the compiler world standardized on LLVM IR so that any language frontend could target any hardware backend. The economic argument is simple and brutal: a feature built once in a shared component benefits every system that adopts it, instead of being re-implemented N times at N× the cost and N× the bugs.</p>
+
+      <h3>The stack, decomposed</h3>
+      <p>The monolith splits into five horizontal layers. The interfaces <em>between</em> the layers are where the standards live — and standards are what make the pieces swappable.</p>
+
+      <figure>
+        <div class="fig-frame">
+          <svg viewBox="0 0 640 350" role="img" aria-label="The composable data stack in five layers">
+            <defs>
+              <style>.lyr-t{font-weight:600;font-size:12px}.lyr-s{font-size:9.5px;letter-spacing:.02em}.lyr-x{font-size:9px}</style>
+            </defs>
+
+            <!-- L1 frontend -->
+            <rect x="40" y="14" width="560" height="50" rx="6" fill="var(--copper-wash)" stroke="var(--copper)"/>
+            <text x="56" y="34" class="lyr-t" fill="var(--copper-bright)">① Language frontend</text>
+            <text x="56" y="50" class="lyr-s" fill="var(--ink-soft)">SQL parsers · DataFrame APIs · the surface a user actually writes</text>
+            <text x="584" y="42" text-anchor="end" class="lyr-x svg-mono" fill="var(--ink-faint)">Presto SQL · Spark DataFrame · pandas · Ibis</text>
+
+            <!-- arrow -->
+            <text x="320" y="78" text-anchor="middle" class="lyr-x" fill="var(--ink-faint)">▼ produces a logical plan</text>
+
+            <!-- L2 IR -->
+            <rect x="40" y="84" width="560" height="50" rx="6" fill="var(--cyan-wash)" stroke="var(--cyan)"/>
+            <text x="56" y="104" class="lyr-t" fill="var(--cyan)">② Intermediate representation (IR)</text>
+            <text x="56" y="120" class="lyr-s" fill="var(--ink-soft)">a portable, engine-agnostic query plan — the “LLVM IR for databases”</text>
+            <text x="584" y="112" text-anchor="end" class="lyr-x svg-mono" fill="var(--ink-faint)">Substrait</text>
+
+            <text x="320" y="148" text-anchor="middle" class="lyr-x" fill="var(--ink-faint)">▼ optimized &amp; rewritten</text>
+
+            <!-- L3 optimizer -->
+            <rect x="40" y="154" width="560" height="50" rx="6" fill="var(--sage-wash)" stroke="var(--sage)"/>
+            <text x="56" y="174" class="lyr-t" fill="var(--sage)">③ Query optimizer</text>
+            <text x="56" y="190" class="lyr-s" fill="var(--ink-soft)">cost-based planning, join ordering, predicate pushdown, rule rewrites</text>
+            <text x="584" y="182" text-anchor="end" class="lyr-x svg-mono" fill="var(--ink-faint)">Apache Calcite · Orca · DataFusion planner</text>
+
+            <text x="320" y="218" text-anchor="middle" class="lyr-x" fill="var(--ink-faint)">▼ physical plan handed to the runtime</text>
+
+            <!-- L4 execution -->
+            <rect x="40" y="224" width="560" height="58" rx="6" fill="var(--copper-wash)" stroke="var(--copper)" stroke-width="2"/>
+            <text x="56" y="244" class="lyr-t" fill="var(--copper-bright)">④ Execution engine &nbsp;— the vectorized runtime that moves the bytes</text>
+            <text x="56" y="260" class="lyr-s" fill="var(--ink-soft)">operators, expression eval, memory mgmt, spilling, <strong>data exchange / shuffle</strong></text>
+            <text x="584" y="252" text-anchor="end" class="lyr-x svg-mono" fill="var(--ink-faint)">Velox · DataFusion · Photon · cuDF (GPU)</text>
+            <text x="56" y="275" class="lyr-x svg-mono" fill="var(--copper-bright)">↳ data movement substrate: UCX / GPUDirect RDMA / NVLink  ← your layer</text>
+
+            <text x="320" y="296" text-anchor="middle" class="lyr-x" fill="var(--ink-faint)">▼ reads / writes</text>
+
+            <!-- L5 storage -->
+            <rect x="40" y="302" width="560" height="42" rx="6" fill="var(--bg-inset)" stroke="var(--rule)"/>
+            <text x="56" y="322" class="lyr-t" fill="var(--ink)">⑤ Storage &amp; format</text>
+            <text x="584" y="322" text-anchor="end" class="lyr-x svg-mono" fill="var(--ink-faint)">Arrow (memory) · Parquet/ORC (disk) · Iceberg/Delta/Hudi (table)</text>
+          </svg>
+        </div>
+        <figcaption><b>FIG. 10.1</b> — The composable stack. Each layer has at least one open, reusable implementation, and the seams between them are standardized (Substrait as the plan IR, Arrow as the in-memory data format). A new system no longer needs all five layers from scratch — it picks a frontend, points it at an IR, and lets a shared execution engine do the heavy lifting. <b>Velox</b> is the canonical example of layer ④ extracted into a library; <b>cuDF</b> is its GPU-resident counterpart; high-performance interconnect is the substrate beneath the exchange operator.</figcaption>
+      </figure>
+
+      <div class="callout cyan">
+        <h4>Substrait — the keystone standard</h4>
+        <p>If Arrow standardized how data looks <em>in memory</em>, Substrait standardizes how a <em>query plan</em> looks on the wire. A Spark frontend can emit a Substrait plan that a Velox or DataFusion backend executes, with no shared code between them. This is exactly the decoupling that lets <strong>Gluten</strong> offload Spark SQL onto Velox: Spark plans the query, serializes it to Substrait, and Velox runs it natively in C++ — the JVM never touches the hot loop. Without a plan IR, every frontend↔backend pairing would need a bespoke translator.</p>
+      </div>
+
+      <h3>Why this is the through-line of the whole story</h3>
+      <p>Every chapter of this manual has been a step toward separation of concerns. MPP warehouses fused everything (§1). Hadoop split <em>storage</em> from <em>compute scheduling</em> (§2). The lakehouse split <em>storage</em> from <em>the query engine</em> entirely (§7). The native renaissance split the <em>execution engine</em> out as a reusable library (§8). GPUs split <em>where execution physically runs</em> from the engine that orchestrates it (§9). Composability is the name for the destination all of those steps were heading toward: a stack where each layer is best-of-breed, independently improvable, and shared across systems.</p>
+
+      <div class="insight">
+        <p><strong>Where your work sits.</strong> You are squarely in layer ④ and the substrate just beneath it. Velox is the reusable execution engine; cuDF is the GPU kernel library that fills the same slot on the GPU; and UCX-based GPU-to-GPU exchange is the data-movement layer the shuffle operator stands on. When you make Velox’s exchange move data over GPUDirect RDMA instead of staging through host memory, every consumer of Velox — Prestissimo, Gluten-on-Spark, any future frontend — inherits faster distributed joins for free. That compounding leverage is the entire point of building in the composable layer rather than inside one monolith.</p>
+      </div>
+    </section>
+    <div class="chapter-rule"></div>
+
+    <!-- ============================ §11 ============================ -->
+    <section class="chapter" id="s11">
+      <div class="chapter-head">
+        <span class="chapter-num">§11</span>
+        <h2><span class="kicker">the parallel universe</span>The specialized-database zoo — why a hundred databases all thrived</h2>
+      </div>
+
+      <p class="lead dropcap">The engines in §1–§10 all answer one question well: “run a big analytical query over a lot of data.” But that is only one corner of a much larger space. Your intuition — that DuckDB, Redis, Postgres, Spark SQL, and the rest each thrived despite being wildly different — is exactly right, and the reason is that <strong>they don’t actually compete</strong>. They occupy different coordinates on a surface defined by access pattern, data model, latency target, and consistency. “Best database” is a category error; there is only “best fit for this workload.”</p>
+
+      <h3>The two forces that shattered the monolith</h3>
+      <p>For decades the relational database was assumed to be the answer to everything. Two pressures broke that assumption:</p>
+      <p><strong>1 · The access-pattern axis.</strong> A system tuned for millions of tiny point reads and writes (OLTP — “charge this card, update this row”) is architecturally opposite to one tuned for sweeping aggregate scans (OLAP — “average revenue by region over three years”). Row stores win the first; column stores win the second. No single physical layout is optimal for both, which is why the field bifurcated and never rejoined.</p>
+      <p><strong>2 · The CAP / scale axis.</strong> Google’s and Amazon’s papers (Bigtable 2006, <em>Dynamo</em> 2007) showed that to scale writes across many machines and survive network partitions, you must <em>relax</em> the strong consistency a classic SQL database guarantees. The CAP theorem made the trade explicit: under a partition you choose consistency <em>or</em> availability, not both. The entire “NoSQL” explosion — key-value, wide-column, document stores — is the design space you reach once you’re willing to give up some consistency for availability and horizontal scale. The industry term for the resulting reality is <strong>polyglot persistence</strong>: a single product uses Postgres for orders, Redis for sessions, Elasticsearch for search, and ClickHouse for analytics, each chosen on purpose.</p>
+
+      <h3>The zoo, family by family</h3>
+      <div class="table-wrap">
+        <table class="grid">
+          <thead>
+            <tr><th>System</th><th>Type / model</th><th>Dist?</th><th>The problem it nails</th><th>Why it thrived</th><th>Main competitors</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>PostgreSQL</td><td>Relational OLTP (row)</td><td class="yr">opt.</td><td>Correct, versatile transactional system of record</td><td>Rock-solid ACID, absurdly extensible (PostGIS, pgvector, TimescaleDB) — the sane default</td><td>MySQL, Oracle, SQL Server</td></tr>
+            <tr><td>MySQL / MariaDB</td><td>Relational OLTP (row)</td><td class="yr">opt.</td><td>Fast, simple web-app backing store</td><td>The “M” in LAMP; ubiquitous, easy, huge hosting ecosystem</td><td>PostgreSQL, Aurora</td></tr>
+            <tr><td>SQLite</td><td>Embedded relational (row)</td><td class="yr">no</td><td>Zero-config local storage <em>inside</em> an app</td><td>Most-deployed DB on Earth — every phone, browser, and app ships it; a file, not a server</td><td>DuckDB (for analytics), LevelDB</td></tr>
+            <tr><td><strong>DuckDB</strong></td><td>Embedded <em>OLAP</em> (column, vectorized)</td><td class="yr">no</td><td>Fast analytics on one machine, in-process</td><td>“SQLite for analytics” — pip-install, reads Parquet directly, no cluster; most data isn’t actually big</td><td>chDB, Polars, pandas</td></tr>
+            <tr><td><strong>Redis</strong></td><td>In-memory key-value</td><td class="yr">opt.</td><td>Sub-millisecond cache / queue / counter / session</td><td>A <em>latency tool</em>, not a warehouse; the universal speed-layer in front of slower stores</td><td>Memcached, Valkey, KeyDB</td></tr>
+            <tr><td><strong>ClickHouse</strong></td><td>Columnar OLAP (server)</td><td class="yr">yes</td><td>Real-time analytics on huge event streams</td><td>Insanely fast scans; powers observability &amp; web-analytics dashboards (open-sourced by Yandex 2016)</td><td>Druid, Pinot, StarRocks/Doris</td></tr>
+            <tr><td>Druid / Pinot</td><td>Real-time OLAP (server)</td><td class="yr">yes</td><td>Sub-second queries with streaming ingestion</td><td>Power user-facing dashboards at LinkedIn/Uber where freshness + latency both matter</td><td>ClickHouse, Kylin</td></tr>
+            <tr><td>Cassandra / ScyllaDB</td><td>Wide-column (AP, Dynamo-style)</td><td class="yr">yes</td><td>Always-on, write-heavy, linear scale-out</td><td>No single point of failure; tunable consistency; Scylla = C++ rewrite for lower latency</td><td>HBase, DynamoDB, Bigtable</td></tr>
+            <tr><td>MongoDB</td><td>Document (JSON/BSON)</td><td class="yr">yes</td><td>Flexible-schema storage that maps to objects</td><td>Developer ergonomics — store what your app already has; schema evolves without migrations</td><td>Couchbase, DocumentDB, PG JSONB</td></tr>
+            <tr><td>Elasticsearch / OpenSearch</td><td>Inverted-index search</td><td class="yr">yes</td><td>Full-text search &amp; log analytics</td><td>The “E” in the ELK logging stack; relevance-ranked search at scale</td><td>Solr, Loki, Quickwit</td></tr>
+            <tr><td>InfluxDB · TimescaleDB · Prometheus</td><td>Time-series</td><td class="yr">opt.</td><td>Timestamped metrics: ingest, downsample, range-query</td><td>Purpose-built for the metrics/IoT/monitoring shape; Timescale rides on Postgres, Prometheus owns k8s monitoring</td><td>QuestDB, VictoriaMetrics</td></tr>
+            <tr><td>pgvector · Pinecone · Weaviate · Milvus · Qdrant</td><td>Vector / ANN index</td><td class="yr">opt.</td><td>Nearest-neighbor search over embeddings</td><td>The LLM/RAG era — semantic retrieval needs fast approximate vector search; the newest branch of the tree</td><td>FAISS (lib), Chroma, Elastic kNN</td></tr>
+            <tr><td>Apache Kafka</td><td>Distributed log (<em>not</em> a DB)</td><td class="yr">yes</td><td>Durable, ordered event stream / backbone</td><td>The central nervous system feeding every other store; decouples producers from consumers</td><td>Pulsar, Redpanda, Kinesis</td></tr>
+            <tr><td>Apache Flink</td><td>Stateful stream processor</td><td class="yr">yes</td><td>True event-at-a-time streaming computation</td><td>Real per-event latency &amp; exactly-once state, where Spark’s micro-batch can’t go low enough</td><td>Spark Streaming, Kafka Streams</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout">
+        <h4>The DuckDB lesson, restated</h4>
+        <p>DuckDB is the most instructive entry in this table because it is a quiet rebuttal to the entire distributed-systems arc. After a decade of “scale out to a cluster,” it pointed out that a modern laptop has dozens of cores and tens of gigabytes of RAM, that <em>most</em> analytical datasets fit comfortably in that envelope, and that a cluster you don’t need is pure cost and operational pain. By packaging MonetDB-lineage vectorized execution (§8) into a single-file, in-process library that reads Parquet and Arrow with zero setup, it made “just run it locally” the right answer for a huge fraction of real workloads. The right scale is the smallest one that fits.</p>
+      </div>
+
+      <div class="callout sage">
+        <h4>Redis vs the warehouses — different axis entirely</h4>
+        <p>It’s tempting to ask “is Redis faster than ClickHouse?” but the question is malformed. Redis answers <em>“give me the value for this one key, right now”</em> in microseconds and keeps everything in RAM; ClickHouse answers <em>“scan a billion rows and aggregate”</em> in milliseconds. One is a point-lookup latency tool, the other a throughput scan engine. A real system uses both — Redis as the speed layer caching results, ClickHouse as the analytical store behind it. That is polyglot persistence in one sentence.</p>
+      </div>
+
+      <div class="insight">
+        <p><strong>The map, not the ranking.</strong> Every system here is a point on a surface with axes of <em>access pattern</em> (point lookup ↔ full scan), <em>data model</em> (relational ↔ document ↔ KV ↔ graph ↔ vector), <em>consistency</em> (strong ↔ eventual), and <em>latency vs throughput</em>. New databases keep appearing not because the old ones are bad, but because new regions of that surface become valuable — the vector-DB explosion happened the instant LLM embeddings made approximate nearest-neighbor search a mainstream need. When you evaluate a store, locate the workload on the surface first; the shortlist falls out almost mechanically.</p>
+      </div>
+    </section>
+    <div class="chapter-rule"></div>
+
+    <!-- ============================ §12 ============================ -->
+    <section class="chapter" id="s12">
+      <div class="chapter-head">
+        <span class="chapter-num">§12</span>
+        <h2><span class="kicker">putting it together</span>Synthesis — the decision lens and the grand timeline</h2>
+      </div>
+
+      <p class="lead dropcap">Everything in this manual reduces to a single recurring move: <strong>each generation found a slow tier and stopped touching it.</strong> MapReduce stopped re-reading from a single machine’s disk by spreading work across a cluster — then paid for it by materializing to disk between every stage. Spark stopped touching disk by keeping working sets in RAM. Presto stopped touching disk-based batch latency by streaming through memory pipelines. The lakehouse stopped touching coupled storage so compute could scale alone. Velox stopped touching the JVM. cuDF stopped touching the CPU. UCX stopped touching host memory on the shuffle path. The arc is one long campaign to keep the working data as close to the fastest tier as possible.</p>
+
+      <h3>The decision lens — six questions that pick your engine</h3>
+      <p>Faced with a real workload, you rarely need to know all of database history. You need six answers:</p>
+      <div class="table-wrap">
+        <table class="grid">
+          <thead>
+            <tr><th>Ask</th><th>If one end…</th><th>If the other end…</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>1 · Transactions or analytics?</td><td><strong>OLTP</strong> point reads/writes → Postgres, MySQL, SQLite</td><td><strong>OLAP</strong> scans/aggregates → the column-store world</td></tr>
+            <tr><td>2 · How big is the data <em>really</em>?</td><td><strong>Fits one node</strong> (≲ a few TB) → DuckDB, ClickHouse, Polars</td><td><strong>Genuinely huge</strong> → Spark, Trino, Snowflake, BigQuery</td></tr>
+            <tr><td>3 · Latency target?</td><td><strong>Interactive</strong> (sub-sec) → Presto/Trino, ClickHouse, Druid</td><td><strong>Batch / ETL</strong> (minutes ok) → Spark, MapReduce-era jobs</td></tr>
+            <tr><td>4 · Embedded or service?</td><td><strong>In-process</strong>, no ops → DuckDB, SQLite</td><td><strong>Shared cluster/service</strong> → everything server-based</td></tr>
+            <tr><td>5 · Open formats or platform?</td><td><strong>Open lakehouse</strong> → Iceberg/Delta + Trino/Spark</td><td><strong>Integrated</strong> → Snowflake, Databricks, BigQuery</td></tr>
+            <tr><td>6 · Bandwidth-bound &amp; fits GPU?</td><td><strong>Yes</strong> → cuDF / RAPIDS, Velox+cuDF, HeavyDB</td><td><strong>No / branchy / tiny</strong> → stay on CPU engines</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Answer those and the shortlist is almost always two or three names. The rest is benchmarking on <em>your</em> data — which, as §11 argued, is the only ranking that means anything.</p>
+
+      <h3>The grand timeline</h3>
+      <p>The chronological spine of the whole story, from the first shared-nothing warehouse to the GPU-and-composable present:</p>
+      <div class="timeline">
+        <div class="tl-item"><div class="tl-year">1979</div><div class="tl-title">Teradata</div><div class="tl-body">Shared-nothing MPP warehouse — the original “divide the data across nodes” idea. (§1)</div></div>
+        <div class="tl-item"><div class="tl-year">2003–06</div><div class="tl-title">Google papers: GFS · MapReduce · Bigtable</div><div class="tl-body">The blueprint for commodity-cluster storage and compute that the open world would clone. (§2)</div></div>
+        <div class="tl-item"><div class="tl-year">2005</div><div class="tl-title">C-Store &amp; MonetDB/X100</div><div class="tl-body">The two seeds of the future: columnar storage and vectorized execution — dormant for a decade. (§1, §8)</div></div>
+        <div class="tl-item"><div class="tl-year">2006</div><div class="tl-title">Hadoop</div><div class="tl-body">Open-source HDFS + MapReduce democratizes big-data processing; the ecosystem blooms. (§2)</div></div>
+        <div class="tl-item"><div class="tl-year">2009</div><div class="tl-title">Hive</div><div class="tl-body">SQL on Hadoop by compiling to MapReduce — convenient, but inherits all the batch latency. (§2)</div></div>
+        <div class="tl-item"><div class="tl-year">2010–12</div><div class="tl-title">Spark</div><div class="tl-body">RDDs keep data in memory across stages; 10–100× over MapReduce; becomes the unified platform. (§4)</div></div>
+        <div class="tl-item"><div class="tl-year">2012</div><div class="tl-title">Impala · Redshift</div><div class="tl-body">MPP-style interactive SQL on Hadoop (Impala) and the first big cloud warehouse (Redshift). (§5, §7)</div></div>
+        <div class="tl-item"><div class="tl-year">2013</div><div class="tl-title">Presto</div><div class="tl-body">Facebook builds a distributed MPP SQL engine for interactive queries that federates any source. (§5)</div></div>
+        <div class="tl-item"><div class="tl-year">2014</div><div class="tl-title">Snowflake</div><div class="tl-body">Cleanly decoupled storage and compute as a cloud service — the elastic-warehouse template. (§7)</div></div>
+        <div class="tl-item"><div class="tl-year">2015–16</div><div class="tl-title">Apache Arrow · ClickHouse OSS · Hudi</div><div class="tl-body">A shared columnar memory standard; a blazing real-time OLAP engine; the first open table format. (§6, §7, §8)</div></div>
+        <div class="tl-item"><div class="tl-year">2017</div><div class="tl-title">Apache Iceberg</div><div class="tl-body">Netflix’s open table format brings warehouse semantics to lake files — the lakehouse takes shape. (§7)</div></div>
+        <div class="tl-item"><div class="tl-year">2019</div><div class="tl-title">DuckDB · Delta Lake</div><div class="tl-body">Embedded vectorized OLAP for one machine; Databricks’ table format and the Photon engine. (§8, §7)</div></div>
+        <div class="tl-item"><div class="tl-year">2020</div><div class="tl-title">Velox · Trino</div><div class="tl-body">Meta extracts execution into a reusable C++ library; PrestoSQL is renamed Trino after the fork. (§5, §8)</div></div>
+        <div class="tl-item"><div class="tl-year">2022–23</div><div class="tl-title">Velox VLDB paper · cudf.pandas · Composable Manifesto</div><div class="tl-body">The native engine, the GPU-accelerated pandas, and the explicit case for assembling systems from open layers. (§8, §9, §10)</div></div>
+        <div class="tl-item"><div class="tl-year">now</div><div class="tl-title">GPU × composable convergence</div><div class="tl-body">Velox + cuDF for execution, Substrait/Arrow for the seams, UCX/GPUDirect for the shuffle — the live frontier. (§9, §10)</div></div>
+      </div>
+
+      <div class="insight">
+        <p><strong>Where you stand in all this.</strong> Your work sits at the intersection of the three frontiers this timeline ends on. <em>Native vectorized execution</em> (Velox) is the present consensus for CPU performance; <em>GPU acceleration</em> (cuDF, RAPIDS) is where bandwidth-bound analytics is heading; and <em>high-performance interconnect</em> (UCX, GPUDirect RDMA) is the substrate that decides whether distributed GPU execution actually pays off, because past a single GPU the shuffle is the whole game. Building GPU-to-GPU exchange inside a Velox/Presto stack is not a niche — it’s the connective tissue of the composable, post-Hadoop architecture, and it’s exactly the layer where one improvement propagates to every system built on top.</p>
+      </div>
+
+      <div class="pills">
+        <span class="pill cu">Execution: Velox · cuDF</span>
+        <span class="pill cy">Seams: Substrait · Arrow</span>
+        <span class="pill sg">Substrate: UCX · GPUDirect RDMA · NVLink</span>
+        <span class="pill cu">Pattern: keep data on the fastest tier</span>
+      </div>
+    </section>
+    <div class="chapter-rule"></div>
+
+    <!-- ============================ COLOPHON ============================ -->
+    <div class="colophon">
+      <p><b>FIELD MANUAL</b> · The evolution of distributed OLAP &amp; SQL query engines · §0–§12.<br>
+      Tracing the line from shared-nothing MPP warehouses (1979) through the Hadoop ecosystem, Spark, Presto/Trino, the cloud lakehouse, the native-vectorized renaissance (Velox · DuckDB · ClickHouse), the GPU frontier (RAPIDS · cuDF), and the composable-systems movement — plus the specialized-database zoo that thrived alongside.</p>
+      <p><b>READING NOTES</b> · Each chapter ends where the next begins; the seeds planted in §1 (columnar + vectorized) germinate in §8, and the data-movement substrate of §9 is the layer §10 calls the foundation of the composable stack. The recurring thesis: <b>every leap was the same move — stop touching the slow tier.</b></p>
+      <p><b>SET IN</b> Source Serif 4 · Instrument Sans · JetBrains Mono. Dark default; use the toggle for light. Diagrams are inline SVG and scale with the page. No tracking, no dependencies beyond web fonts — a single file you can keep.</p>
+      <p><b>CAVEAT</b> · Dates mark widely-cited public milestones (first release, paper, or open-sourcing) and are approximate where a project’s history is gradual. Treat the timeline as a map of the terrain, not a survey to the meter.</p>
+    </div>
+
+  </main>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ---------- Theme toggle (in-memory only) ---------- */
+  var root = document.documentElement;
+  var themeBtn = document.getElementById('themeBtn');
+  var icon = document.getElementById('themeIcon');
+  var label = document.getElementById('themeLabel');
+  function paintToggle(theme) {
+    if (theme === 'dark') { icon.textContent = '◐'; label.textContent = 'Light mode'; }
+    else { icon.textContent = '◑'; label.textContent = 'Dark mode'; }
+  }
+  if (themeBtn) {
+    paintToggle(root.getAttribute('data-theme') || 'dark');
+    themeBtn.addEventListener('click', function () {
+      var next = (root.getAttribute('data-theme') === 'dark') ? 'light' : 'dark';
+      root.setAttribute('data-theme', next);
+      paintToggle(next);
+    });
+  }
+
+  /* ---------- Mobile nav (sidebar + scrim) ---------- */
+  var menuBtn = document.getElementById('menuBtn');
+  var sidebar = document.getElementById('sidebar');
+  var scrim   = document.getElementById('scrim');
+  function closeNav() { if (sidebar) sidebar.classList.remove('open'); if (scrim) scrim.classList.remove('show'); }
+  function openNav()  { if (sidebar) sidebar.classList.add('open');    if (scrim) scrim.classList.add('show'); }
+  if (menuBtn) menuBtn.addEventListener('click', function () {
+    (sidebar && sidebar.classList.contains('open')) ? closeNav() : openNav();
+  });
+  if (scrim) scrim.addEventListener('click', closeNav);
+
+  /* ---------- Scrollspy (highlight active TOC entry) ---------- */
+  var links = Array.prototype.slice.call(document.querySelectorAll('nav.toc a'));
+  var linkFor = {};
+  links.forEach(function (a) {
+    var id = (a.getAttribute('href') || '').replace('#', '');
+    if (id) linkFor[id] = a;
+    a.addEventListener('click', closeNav); // tapping a link on mobile closes the drawer
+  });
+  var sections = Array.prototype.slice.call(document.querySelectorAll('section.chapter'));
+  if ('IntersectionObserver' in window && sections.length) {
+    var obs = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) {
+          var a = linkFor[e.target.id];
+          if (a) { links.forEach(function (l) { l.classList.remove('active'); }); a.classList.add('active'); }
+        }
+      });
+    }, { rootMargin: '-18% 0px -72% 0px', threshold: 0 });
+    sections.forEach(function (s) { obs.observe(s); });
+  }
+
+  /* ---------- Copy buttons on code blocks ---------- */
+  document.querySelectorAll('.copy-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var block = btn.closest('.code');
+      var pre = block ? block.querySelector('pre') : null;
+      var text = pre ? pre.innerText : '';
+      function ok() {
+        var original = btn.textContent;
+        btn.textContent = 'Copied'; btn.classList.add('done');
+        setTimeout(function () { btn.textContent = original; btn.classList.remove('done'); }, 1600);
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(ok).catch(fallback);
+      } else { fallback(); }
+      function fallback() {
+        try {
+          var ta = document.createElement('textarea');
+          ta.value = text; ta.setAttribute('readonly', '');
+          ta.style.position = 'absolute'; ta.style.left = '-9999px';
+          document.body.appendChild(ta); ta.select();
+          document.execCommand('copy'); document.body.removeChild(ta); ok();
+        } catch (err) { /* clipboard unavailable; ignore silently */ }
+      }
+    });
+  });
+})();
+</script>
+</body>
+</html>
