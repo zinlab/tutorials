@@ -1,0 +1,1389 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Query Optimizers &amp; the Road to the GPU — A Field Manual</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;0,8..60,700;1,8..60,400;1,8..60,600&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+:root[data-theme="dark"]{
+  --bg:#15130d;
+  --bg-2:#1c1a13;
+  --panel:#1d1b14;
+  --panel-2:#232017;
+  --code-bg:#100f0a;
+  --ink:#ece5d6;
+  --ink-soft:#cdc6b6;
+  --muted:#9b9482;
+  --faint:#6e6857;
+  --rule:#36322704;
+  --rule-solid:#34302410;
+  --copper:#cc8a4f;
+  --copper-deep:#b5743b;
+  --cyan:#5cc0cb;
+  --cyan-deep:#49a7b3;
+  --sage:#a0ad84;
+  --sage-deep:#869471;
+  --rust:#c8714e;
+  --line:rgba(236,229,214,0.10);
+  --line-strong:rgba(236,229,214,0.18);
+  --shadow:rgba(0,0,0,0.45);
+}
+:root[data-theme="light"]{
+  --bg:#f3eee2;
+  --bg-2:#ebe4d4;
+  --panel:#fbf8f0;
+  --panel-2:#f4eede;
+  --code-bg:#262219;
+  --ink:#2a261d;
+  --ink-soft:#433d30;
+  --muted:#6c6553;
+  --faint:#938b76;
+  --rule:#2a261d0a;
+  --rule-solid:#2a261d12;
+  --copper:#a25d27;
+  --copper-deep:#8a4d1c;
+  --cyan:#1f7d8a;
+  --cyan-deep:#15616c;
+  --sage:#5f7048;
+  --sage-deep:#4c5b39;
+  --rust:#b0512e;
+  --line:rgba(42,38,29,0.12);
+  --line-strong:rgba(42,38,29,0.22);
+  --shadow:rgba(60,50,30,0.12);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{
+  margin:0;background:var(--bg);color:var(--ink);
+  font-family:"Source Serif 4",Georgia,serif;
+  font-size:18px;line-height:1.62;font-weight:400;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+  transition:background .35s ease,color .35s ease;
+}
+/* ---- ambient grain ---- */
+body::before{
+  content:"";position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.5;
+  background-image:radial-gradient(var(--rule-solid) 1px,transparent 1px);
+  background-size:3px 3px;mix-blend-mode:overlay;
+}
+.mono{font-family:"JetBrains Mono",ui-monospace,monospace}
+.ui{font-family:"Instrument Sans",system-ui,sans-serif}
+
+/* ===== TOP BAR ===== */
+.topbar{
+  position:sticky;top:0;z-index:50;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:.7rem clamp(1rem,4vw,2.4rem);
+  background:color-mix(in srgb,var(--bg) 86%,transparent);
+  backdrop-filter:blur(10px) saturate(1.1);
+  border-bottom:1px solid var(--line);
+}
+.topbar .brand{font-family:"Instrument Sans";font-weight:600;font-size:.82rem;letter-spacing:.02em;color:var(--ink-soft)}
+.topbar .brand b{color:var(--copper);font-weight:600}
+.topbar .right{display:flex;align-items:center;gap:1.1rem}
+.progress-wrap{width:120px;height:3px;background:var(--line);border-radius:2px;overflow:hidden;display:none}
+@media(min-width:900px){.progress-wrap{display:block}}
+.progress-bar{height:100%;width:0;background:linear-gradient(90deg,var(--copper),var(--cyan));transition:width .1s linear}
+.toggle{
+  font-family:"Instrument Sans";font-size:.74rem;font-weight:500;letter-spacing:.04em;
+  background:var(--panel);color:var(--muted);border:1px solid var(--line-strong);
+  padding:.4rem .7rem;border-radius:100px;cursor:pointer;display:flex;align-items:center;gap:.4rem;
+  transition:all .2s ease;
+}
+.toggle:hover{color:var(--ink);border-color:var(--copper)}
+.toggle svg{width:13px;height:13px}
+
+/* ===== LAYOUT ===== */
+.shell{position:relative;z-index:1;max-width:1500px;margin:0 auto;display:grid;grid-template-columns:1fr;gap:0}
+@media(min-width:1080px){.shell{grid-template-columns:266px minmax(0,1fr)}}
+nav.toc{
+  display:none;
+}
+@media(min-width:1080px){
+  nav.toc{
+    display:block;position:sticky;top:49px;align-self:start;height:calc(100vh - 49px);
+    overflow-y:auto;padding:2rem 1.1rem 4rem 1.6rem;border-right:1px solid var(--line);
+    scrollbar-width:thin;
+  }
+}
+nav.toc::-webkit-scrollbar{width:6px}
+nav.toc::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:3px}
+.toc-label{font-family:"Instrument Sans";font-size:.66rem;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:var(--faint);margin:1.4rem 0 .55rem}
+.toc-label:first-child{margin-top:0}
+nav.toc a{
+  display:block;font-family:"Instrument Sans";font-size:.82rem;line-height:1.32;
+  color:var(--muted);text-decoration:none;padding:.27rem 0 .27rem .7rem;
+  border-left:2px solid transparent;transition:all .15s ease;
+}
+nav.toc a .n{font-family:"JetBrains Mono";font-size:.7rem;color:var(--faint);margin-right:.5rem}
+nav.toc a:hover{color:var(--ink)}
+nav.toc a.active{color:var(--copper);border-left-color:var(--copper)}
+nav.toc a.active .n{color:var(--copper)}
+
+main{padding:clamp(1.4rem,4vw,3.6rem) clamp(1.1rem,4vw,3.4rem);max-width:min(900px,100%);overflow-x:hidden}
+
+/* ===== HERO ===== */
+.hero{padding:1.2rem 0 2.6rem;border-bottom:1px solid var(--line-strong);margin-bottom:2.6rem}
+.hero .kicker{font-family:"JetBrains Mono";font-size:.74rem;letter-spacing:.16em;text-transform:uppercase;color:var(--copper);margin-bottom:1.1rem;display:flex;gap:.6rem;flex-wrap:wrap}
+.hero .kicker span{color:var(--faint)}
+.hero h1{
+  font-family:"Source Serif 4";font-weight:600;font-size:clamp(2.1rem,6vw,3.7rem);
+  line-height:1.02;letter-spacing:-.018em;margin:.2rem 0 .8rem;color:var(--ink);
+}
+.hero h1 em{font-style:italic;color:var(--copper)}
+.hero .dek{font-size:clamp(1.05rem,2.4vw,1.28rem);color:var(--ink-soft);max-width:46ch;line-height:1.5}
+.hero .meta{margin-top:1.8rem;display:flex;gap:1.6rem;flex-wrap:wrap;font-family:"Instrument Sans";font-size:.8rem;color:var(--muted)}
+.hero .meta b{color:var(--ink);font-weight:600;display:block;font-size:.74rem;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);margin-bottom:.15rem}
+
+/* ===== SECTIONS ===== */
+section{margin:0 0 3.4rem;scroll-margin-top:66px}
+.sec-head{display:flex;align-items:baseline;gap:1rem;margin:0 0 1.2rem;padding-top:1.2rem;border-top:1px solid var(--line)}
+.sec-head .snum{font-family:"JetBrains Mono";font-size:.86rem;font-weight:500;color:var(--copper);flex-shrink:0;padding-top:.35rem}
+.sec-head h2{font-family:"Source Serif 4";font-weight:600;font-size:clamp(1.5rem,3.6vw,2.1rem);line-height:1.08;letter-spacing:-.012em;margin:0;color:var(--ink)}
+.part-banner{
+  font-family:"Instrument Sans";font-weight:600;font-size:.72rem;letter-spacing:.2em;text-transform:uppercase;
+  color:var(--cyan);margin:3.2rem 0 .2rem;display:flex;align-items:center;gap:.8rem;
+}
+.part-banner::before{content:"";width:24px;height:1px;background:var(--cyan);opacity:.6}
+.part-banner::after{content:"";flex:1;height:1px;background:var(--line)}
+
+h3{font-family:"Source Serif 4";font-weight:600;font-size:1.28rem;letter-spacing:-.005em;margin:2.2rem 0 .7rem;color:var(--ink)}
+h4{font-family:"Instrument Sans";font-weight:600;font-size:.96rem;letter-spacing:.01em;margin:1.7rem 0 .5rem;color:var(--copper)}
+p{margin:0 0 1.05rem}
+main a{color:var(--cyan);text-decoration:none;border-bottom:1px solid color-mix(in srgb,var(--cyan) 35%,transparent)}
+main a:hover{border-bottom-color:var(--cyan)}
+strong{font-weight:600;color:var(--ink)}
+em{font-style:italic}
+.lead{font-size:1.14rem;line-height:1.55;color:var(--ink-soft)}
+.lead::first-letter{}
+ul,ol{margin:0 0 1.1rem;padding-left:1.3rem}
+li{margin:.32rem 0;padding-left:.2rem}
+li::marker{color:var(--copper)}
+ol li::marker{color:var(--copper);font-family:"JetBrains Mono";font-size:.85em}
+.term{font-family:"JetBrains Mono";font-size:.86em;color:var(--sage);background:color-mix(in srgb,var(--sage) 10%,transparent);padding:.06em .34em;border-radius:3px;border:1px solid color-mix(in srgb,var(--sage) 18%,transparent)}
+kbd.k{font-family:"JetBrains Mono";font-size:.84em;color:var(--copper)}
+
+/* ===== CODE ===== */
+.code{
+  position:relative;background:var(--code-bg);border:1px solid var(--line-strong);
+  border-radius:9px;margin:1.2rem 0 1.4rem;overflow:hidden;
+}
+.code .bar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:.4rem .8rem .4rem .9rem;border-bottom:1px solid rgba(255,255,255,.06);
+  background:rgba(255,255,255,.018);
+}
+.code .bar .lang{font-family:"JetBrains Mono";font-size:.66rem;letter-spacing:.12em;text-transform:uppercase;color:#8a8475}
+.code .bar .cp{
+  font-family:"Instrument Sans";font-size:.68rem;color:#9b9482;background:none;border:1px solid rgba(255,255,255,.12);
+  border-radius:5px;padding:.18rem .5rem;cursor:pointer;transition:all .15s;
+}
+.code .bar .cp:hover{color:#ece5d6;border-color:var(--copper)}
+.code pre{margin:0;padding:.95rem 1.05rem;overflow-x:auto;font-family:"JetBrains Mono";font-size:.82rem;line-height:1.62;color:#d6cfbf}
+.code pre::-webkit-scrollbar{height:7px}
+.code pre::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:3px}
+.c-kw{color:#cc8a4f}
+.c-fn{color:#5cc0cb}
+.c-str{color:#a0ad84}
+.c-num{color:#d39a6a}
+.c-com{color:#6e6857;font-style:italic}
+.c-op{color:#c8714e}
+.c-ty{color:#9bb5bd}
+
+/* ===== CALLOUTS ===== */
+.box{border-radius:9px;padding:1rem 1.15rem 1.05rem;margin:1.5rem 0;border:1px solid var(--line-strong);background:var(--panel);position:relative}
+.box .tag{font-family:"Instrument Sans";font-size:.66rem;font-weight:600;letter-spacing:.13em;text-transform:uppercase;margin-bottom:.5rem;display:flex;align-items:center;gap:.45rem}
+.box .tag::before{content:"";width:7px;height:7px;border-radius:50%}
+.box p:last-child{margin-bottom:0}
+.box.mech{border-left:3px solid var(--cyan)}
+.box.mech .tag{color:var(--cyan)} .box.mech .tag::before{background:var(--cyan)}
+.box.gpu{border-left:3px solid var(--copper);background:color-mix(in srgb,var(--copper) 5%,var(--panel))}
+.box.gpu .tag{color:var(--copper)} .box.gpu .tag::before{background:var(--copper)}
+.box.warn{border-left:3px solid var(--rust)}
+.box.warn .tag{color:var(--rust)} .box.warn .tag::before{background:var(--rust)}
+.box.ex{border-left:3px solid var(--sage);background:color-mix(in srgb,var(--sage) 6%,var(--panel))}
+.box.ex .tag{color:var(--sage-deep)} .box.ex .tag::before{background:var(--sage)}
+.box.key{border:1px solid var(--copper);background:color-mix(in srgb,var(--copper) 7%,var(--panel))}
+.box.key .tag{color:var(--copper)} .box.key .tag::before{background:var(--copper);box-shadow:0 0 0 3px color-mix(in srgb,var(--copper) 25%,transparent)}
+
+/* ===== FIGURES ===== */
+figure{margin:1.8rem 0;padding:0}
+figure .frame{background:var(--panel);border:1px solid var(--line-strong);border-radius:10px;padding:1.4rem 1.2rem .9rem;overflow-x:auto}
+figure svg{display:block;margin:0 auto;max-width:100%;height:auto}
+figcaption{font-family:"Instrument Sans";font-size:.76rem;color:var(--muted);margin-top:.7rem;line-height:1.45;padding-left:.2rem}
+figcaption b{font-family:"JetBrains Mono";font-size:.92em;color:var(--copper);font-weight:500;text-transform:uppercase;letter-spacing:.06em;margin-right:.4rem}
+.svg-label{font-family:"Instrument Sans";font-size:12px;font-weight:500;fill:var(--ink-soft)}
+.svg-mono{font-family:"JetBrains Mono";font-size:11px;fill:var(--muted)}
+.svg-title{font-family:"Instrument Sans";font-size:12.5px;font-weight:600;fill:var(--ink)}
+.svg-faint{fill:var(--faint)}
+
+/* ===== TABLE ===== */
+.tbl{margin:1.5rem 0;overflow-x:auto;border:1px solid var(--line-strong);border-radius:9px}
+table{border-collapse:collapse;width:100%;font-size:.86rem}
+th{font-family:"Instrument Sans";font-weight:600;font-size:.72rem;letter-spacing:.05em;text-transform:uppercase;text-align:left;padding:.6rem .8rem;background:var(--panel-2);color:var(--copper);border-bottom:1px solid var(--line-strong)}
+td{padding:.6rem .8rem;border-bottom:1px solid var(--line);color:var(--ink-soft);vertical-align:top}
+tr:last-child td{border-bottom:none}
+td .mono,th .mono{font-size:.92em}
+td code,p code,li code{font-family:"JetBrains Mono";font-size:.84em;color:var(--cyan-deep);background:color-mix(in srgb,var(--cyan) 9%,transparent);padding:.04em .3em;border-radius:3px}
+
+/* pull divider */
+.divider{display:flex;align-items:center;gap:.8rem;margin:2.4rem 0;color:var(--faint);font-family:"JetBrains Mono";font-size:.7rem;letter-spacing:.2em}
+.divider::before,.divider::after{content:"";flex:1;height:1px;background:var(--line)}
+
+footer{border-top:1px solid var(--line-strong);margin-top:3rem;padding:2rem 0 4rem;font-family:"Instrument Sans";font-size:.82rem;color:var(--muted)}
+footer b{color:var(--ink-soft)}
+
+::selection{background:color-mix(in srgb,var(--copper) 30%,transparent);color:var(--ink)}
+:focus-visible{outline:2px solid var(--cyan);outline-offset:3px;border-radius:3px}
+
+@media(max-width:680px){
+  body{font-size:17px}
+  .hero .meta{gap:1.1rem}
+  main{padding-left:1.05rem;padding-right:1.05rem}
+}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="brand">FIELD MANUAL · <b>Query Optimization → GPU Execution</b></div>
+  <div class="right">
+    <div class="progress-wrap"><div class="progress-bar" id="prog"></div></div>
+    <button class="toggle ui" id="themeBtn" aria-label="Toggle theme">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+      <span id="themeTxt">LIGHT</span>
+    </button>
+  </div>
+</div>
+
+<div class="shell">
+<nav class="toc" id="toc">
+  <div class="toc-label">Part I · The Big Picture</div>
+  <a href="#intro"><span class="n">00</span>Orientation</a>
+  <a href="#lifecycle"><span class="n">01</span>SQL text to running code</a>
+  <a href="#algebra"><span class="n">02</span>Relational algebra &amp; logical plans</a>
+  <div class="toc-label">Part II · The Optimizer Core</div>
+  <a href="#rules"><span class="n">03</span>Rule-based transformation</a>
+  <a href="#cardinality"><span class="n">04</span>Cardinality estimation</a>
+  <a href="#cost"><span class="n">05</span>The cost model</a>
+  <a href="#enumeration"><span class="n">06</span>Plan enumeration &amp; join order</a>
+  <a href="#physical"><span class="n">07</span>Physical operator selection</a>
+  <div class="toc-label">Part III · Meeting the Hardware</div>
+  <a href="#exec-models"><span class="n">08</span>Execution models</a>
+  <a href="#columnar"><span class="n">09</span>Columnar &amp; vectorized</a>
+  <a href="#adaptive"><span class="n">10</span>Adaptive query execution</a>
+  <a href="#matters"><span class="n">11</span>Does it matter? (engines &amp; cuDF)</a>
+  <div class="toc-label">Part IV · Onto the GPU</div>
+  <a href="#cudf"><span class="n">12</span>cuDF / libcudf architecture</a>
+  <a href="#gpu-changes"><span class="n">13</span>What changes on the GPU</a>
+  <a href="#gpu-ops"><span class="n">14</span>GPU operators in depth</a>
+  <a href="#bottlenecks"><span class="n">15</span>Bottlenecks &amp; how to beat them</a>
+  <a href="#distributed"><span class="n">16</span>Distributed &amp; multi-GPU</a>
+  <div class="toc-label">Part V · Synthesis</div>
+  <a href="#systems"><span class="n">17</span>A tour of real systems</a>
+  <a href="#synthesis"><span class="n">18</span>The whole machine</a>
+</nav>
+
+<main>
+<div class="hero" id="top">
+  <div class="kicker">A FIELD MANUAL <span>/</span> DECLARATIVE QUERIES <span>/</span> COST MODELS <span>/</span> SIMT EXECUTION</div>
+  <h1>Query optimizers and the road to the <em>GPU</em></h1>
+  <p class="dek">How a string of SQL becomes a tuned physical plan — and what has to change when the plan runs on thousands of threads instead of a handful of cores.</p>
+  <div class="meta">
+    <div><b>Scope</b>Optimizer internals → execution engines → cuDF / GPU ETL</div>
+    <div><b>Depth</b>Low-level mechanisms, worked examples, code</div>
+    <div><b>Reading order</b>Linear, but sections stand alone</div>
+  </div>
+</div>
+
+<section id="intro">
+<div class="sec-head"><div class="snum">00</div><h2>Orientation: the mental model before the details</h2></div>
+<p class="lead">A SQL query says <em>what</em> you want; it says nothing about <em>how</em> to get it. Between those two facts sits one of the most consequential pieces of software in any data system — the query optimizer — and after it, the execution engine that actually moves the bytes. This manual takes you from the top of that stack down to the metal, and then off the CPU entirely.</p>
+
+<p>Here is the whole pipeline in one breath, so every later section has a place to attach. A query string is <strong>parsed</strong> into a syntax tree, <strong>bound</strong> against the catalog (names become real tables and typed columns), and lowered into a <strong>logical plan</strong> — a tree of relational-algebra operators that describes the answer set without committing to an algorithm. The <strong>optimizer</strong> then does two jobs that are worth separating in your head: it <em>rewrites</em> the logical plan into a cheaper but equivalent logical plan (rule-based), and it <em>chooses physical algorithms and an evaluation order</em> for that plan (cost-based). The result is a <strong>physical plan</strong>: a specific tree of operators — this hash join, that index scan, this order of tables — annotated with everything the engine needs. The <strong>execution engine</strong> runs it.</p>
+
+<figure>
+<div class="frame">
+<svg viewBox="0 0 860 200" role="img" aria-label="The query pipeline from SQL text to result">
+  <defs>
+    <marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L8,4.5 L0,9 z" fill="var(--copper)"/></marker>
+  </defs>
+  <!-- stages -->
+  <g class="svg-label" text-anchor="middle">
+    <rect x="8"  y="58" width="104" height="56" rx="7" fill="var(--panel-2)" stroke="var(--line-strong)"/>
+    <text x="60" y="82">SQL text</text><text x="60" y="99" class="svg-mono">"SELECT …"</text>
+    <rect x="140" y="58" width="104" height="56" rx="7" fill="var(--panel-2)" stroke="var(--line-strong)"/>
+    <text x="192" y="82">Parse +</text><text x="192" y="99">Bind</text>
+    <rect x="272" y="58" width="116" height="56" rx="7" fill="var(--panel-2)" stroke="var(--line-strong)"/>
+    <text x="330" y="82">Logical</text><text x="330" y="99">plan</text>
+    <rect x="416" y="40" width="150" height="92" rx="8" fill="color-mix(in srgb,var(--copper) 12%,var(--panel))" stroke="var(--copper)"/>
+    <text x="491" y="62" class="svg-title">OPTIMIZER</text>
+    <text x="491" y="83" class="svg-mono" fill="var(--copper)">rewrite (rules)</text>
+    <text x="491" y="100" class="svg-mono" fill="var(--copper)">enumerate + cost</text>
+    <text x="491" y="117" class="svg-mono" fill="var(--copper)">pick physical</text>
+    <rect x="594" y="58" width="116" height="56" rx="7" fill="var(--panel-2)" stroke="var(--line-strong)"/>
+    <text x="652" y="82">Physical</text><text x="652" y="99">plan</text>
+    <rect x="738" y="58" width="112" height="56" rx="7" fill="color-mix(in srgb,var(--cyan) 12%,var(--panel))" stroke="var(--cyan)"/>
+    <text x="794" y="82" fill="var(--cyan)">Execution</text><text x="794" y="99" fill="var(--cyan)">engine</text>
+  </g>
+  <g stroke="var(--copper)" stroke-width="1.6" fill="none" marker-end="url(#ar)">
+    <line x1="113" y1="86" x2="137" y2="86"/>
+    <line x1="245" y1="86" x2="269" y2="86"/>
+    <line x1="389" y1="86" x2="413" y2="86"/>
+    <line x1="567" y1="86" x2="591" y2="86"/>
+    <line x1="711" y1="86" x2="735" y2="86"/>
+  </g>
+  <!-- feedback hints -->
+  <g class="svg-mono svg-faint" text-anchor="middle">
+    <text x="330" y="150">catalog · types</text>
+    <text x="491" y="150">statistics · cost model</text>
+    <text x="794" y="150">morsels · vectors · kernels</text>
+  </g>
+  <line x1="60" y1="128" x2="60" y2="128"/>
+</svg>
+</div>
+<figcaption><b>FIG 00</b>The spine of the manual. Parts I–II live inside the optimizer box; Parts III–IV live in (and underneath) the execution box. The GPU story is what happens when the rightmost box is a stream multiprocessor instead of a CPU.</figcaption>
+</figure>
+
+<p>Three ideas are worth fixing now because they recur at every level:</p>
+<ol>
+<li><strong>The search space is enormous and the cost surface is bumpy.</strong> For a query joining a dozen tables there are billions of valid evaluation orders, each with wildly different runtimes. The optimizer is a search procedure over that space, steered by <em>estimates</em>.</li>
+<li><strong>Everything hinges on cardinality estimation.</strong> "How many rows will this operator emit?" is the question the entire cost model is built on, it is provably hard to answer well, and its errors compound multiplicatively up a join tree. Most catastrophically slow queries are cardinality-estimation failures wearing a cost-model costume.</li>
+<li><strong>The optimal plan is hardware-relative.</strong> The "best" join algorithm on a tuple-at-a-time CPU engine, a vectorized columnar engine, and a GPU are three different choices. A cost model encodes assumptions about the machine; change the machine and you must change the model. This is the hinge the whole GPU section turns on.</li>
+</ol>
+
+<div class="box key">
+<div class="tag">The thesis of this manual</div>
+<p>An optimizer is a bet placed under uncertainty about a machine. On the CPU the dominant cost is usually random memory access and per-tuple overhead. On the GPU the machine changes so completely — thousands of lanes, terabyte-per-second on-package memory, but a narrow PCIe straw to feed it — that the bets change too. The same operator (a hash join, a group-by) survives the move, but <em>which</em> implementation wins, <em>where</em> intermediates live, and <em>what</em> the optimizer should even be optimizing for are all rewritten. cuDF and the engines built on it are where you watch this happen.</p>
+</div>
+
+<p>One more orienting note on vocabulary, because the word "optimizer" is overloaded. In a full database (PostgreSQL, SQL Server, Spark) the optimizer is a distinct, heavyweight component that reorders joins and chooses algorithms by cost. In a dataframe library like cuDF, there is <em>no such component</em> by default: when you write <code>df.merge(other)</code> you have already chosen the join and its order — you are the optimizer. That distinction turns out to be one of the most important things to understand about GPU ETL, and §11 is devoted to it. Keep it in your pocket until then.</p>
+</section>
+
+<div class="part-banner">Part I — The Big Picture</div>
+
+<section id="lifecycle">
+<div class="sec-head"><div class="snum">01</div><h2>From SQL text to running code</h2></div>
+<p>Before anything can be optimized, the query has to become a data structure. Four stages turn a string into an executable plan, and each one quietly constrains what the optimizer can later do.</p>
+
+<p>We'll carry one query through the entire manual. It's deliberately mundane — a star-schema rollup that any analytics workload produces by the thousand:</p>
+<div class="code"><div class="bar"><span class="lang">SQL · the running example</span><button class="cp">copy</button></div><pre><span class="c-kw">SELECT</span> c.region, <span class="c-fn">SUM</span>(l.amount) <span class="c-kw">AS</span> revenue
+<span class="c-kw">FROM</span> orders o
+<span class="c-kw">JOIN</span> customers c  <span class="c-kw">ON</span> o.customer_id = c.id
+<span class="c-kw">JOIN</span> line_items l <span class="c-kw">ON</span> l.order_id = o.id
+<span class="c-kw">WHERE</span> o.order_date &gt;= <span class="c-kw">DATE</span> <span class="c-str">'2024-01-01'</span>
+  <span class="c-kw">AND</span> c.segment = <span class="c-str">'enterprise'</span>
+<span class="c-kw">GROUP BY</span> c.region
+<span class="c-kw">ORDER BY</span> revenue <span class="c-kw">DESC</span>;</pre></div>
+
+<h4>Stage 1 — Parsing (text → syntax tree)</h4>
+<p>A lexer tokenizes the bytes into keywords, identifiers, literals, and operators; a grammar (typically LALR, as in PostgreSQL's Bison grammar) assembles those tokens into an <strong>abstract syntax tree</strong>. At this point the tree is purely syntactic: <code>orders</code> is just an identifier token, <code>SUM</code> is a function name, and nobody has checked whether any of these things exist. Parse errors ("syntax error near GROUP") come from here. The output is a faithful structural transcription of what you typed, nothing more.</p>
+
+<h4>Stage 2 — Binding / semantic analysis (names → typed objects)</h4>
+<p>This is where the query meets reality. The <strong>binder</strong> (also called the analyzer or resolver) walks the AST and resolves every identifier against the <strong>catalog</strong> — the system tables describing schemas, tables, columns, types, functions, and constraints. Several things happen, and each can fail:</p>
+<ul>
+<li><strong>Name resolution.</strong> <code>c.region</code> becomes a reference to a specific column of a specific table with a specific type. Ambiguity ("column <code>id</code> exists in two tables") is resolved or rejected here.</li>
+<li><strong>Type checking and coercion.</strong> <code>o.order_date &gt;= DATE '2024-01-01'</code> requires both sides to be comparable; implicit casts are inserted, or an error is raised.</li>
+<li><strong>View and macro expansion.</strong> If <code>orders</code> were a view, its definition is inlined now, so the optimizer sees through it.</li>
+<li><strong>Aggregate/grouping validation.</strong> The rule that every non-aggregated <code>SELECT</code> column must appear in <code>GROUP BY</code> is enforced here.</li>
+</ul>
+<p>The product is a <strong>bound tree</strong> in which every leaf is a real, typed catalog object. The optimizer can now reason about it because it knows the shape and type of everything.</p>
+
+<h4>Stage 3 — Logical planning (bound tree → relational algebra)</h4>
+<p>The bound tree is lowered into a <strong>logical plan</strong>: a tree of relational-algebra operators (§02). This is the optimizer's working representation — an algebra precisely because algebra comes with <em>equivalence laws</em> that let you transform a plan into a cheaper equivalent. Crucially the logical plan specifies <em>operators</em>, not <em>algorithms</em>: it says "join orders and customers," not "hash-join them." That freedom is exactly what the optimizer will spend.</p>
+
+<h4>Stage 4 — Optimization → physical plan</h4>
+<p>The two-part job from the orientation: rewrite the logical plan (rules, §03), then enumerate physical alternatives and pick the cheapest by cost (§04–07). The output is a <strong>physical plan</strong> the engine can execute directly.</p>
+
+<div class="box mech">
+<div class="tag">Mechanism · why the split is load-bearing</div>
+<p>Separating <em>logical</em> (what) from <em>physical</em> (how) is the architectural decision that makes optimization tractable. Logical equivalence rules can be applied without worrying about algorithms; physical algorithm choice can be made on a fixed logical shape. Volcano/Cascades-style optimizers (§06) formalize this split into two distinct rule sets — <em>transformation rules</em> that rewrite logical→logical, and <em>implementation rules</em> that map logical→physical. Hold this two-rule-set idea; it's the backbone of every modern optimizer.</p>
+</div>
+</section>
+
+<section id="algebra">
+<div class="sec-head"><div class="snum">02</div><h2>Relational algebra &amp; the logical plan</h2></div>
+<p>Relational algebra is a small set of operators that consume relations (sets/bags of tuples) and produce relations. Because operators compose and obey algebraic laws, a query plan is literally an expression in this algebra — and optimization is expression rewriting under those laws.</p>
+
+<div class="tbl"><table>
+<thead><tr><th>Operator</th><th>Symbol</th><th>Does</th><th>In our query</th></tr></thead>
+<tbody>
+<tr><td><strong>Scan</strong></td><td class="mono">R</td><td>Produce all tuples of a base relation</td><td>read <code>orders</code>, <code>customers</code>, <code>line_items</code></td></tr>
+<tr><td><strong>Selection</strong></td><td class="mono">σ<sub>p</sub></td><td>Keep tuples satisfying predicate <em>p</em></td><td>the two <code>WHERE</code> conditions</td></tr>
+<tr><td><strong>Projection</strong></td><td class="mono">π<sub>cols</sub></td><td>Keep/derive a subset of columns</td><td>narrow to <code>region, amount, …</code></td></tr>
+<tr><td><strong>Join</strong></td><td class="mono">⋈<sub>p</sub></td><td>Combine tuples of two relations on <em>p</em></td><td>the two <code>JOIN … ON</code> clauses</td></tr>
+<tr><td><strong>Aggregate</strong></td><td class="mono">Γ<sub>g;f</sub></td><td>Group by <em>g</em>, compute aggregates <em>f</em></td><td><code>GROUP BY region, SUM(amount)</code></td></tr>
+<tr><td><strong>Sort</strong></td><td class="mono">τ</td><td>Order tuples</td><td><code>ORDER BY revenue DESC</code></td></tr>
+</tbody></table></div>
+
+<p>A direct, naïve translation of the query — following SQL's clause semantics literally (cross-product everything, then filter, then group, then sort) — gives this logical plan:</p>
+
+<figure>
+<div class="frame">
+<svg viewBox="0 0 720 340" role="img" aria-label="Naive logical plan tree for the running query">
+  <defs><marker id="ar2" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L7,4 L0,8 z" fill="var(--muted)"/></marker></defs>
+  <g text-anchor="middle">
+    <!-- sort -->
+    <rect x="300" y="14" width="120" height="34" rx="6" fill="color-mix(in srgb,var(--sage) 14%,var(--panel))" stroke="var(--sage-deep)"/>
+    <text x="360" y="35" class="svg-label">τ revenue DESC</text>
+    <!-- aggregate -->
+    <rect x="290" y="68" width="140" height="34" rx="6" fill="color-mix(in srgb,var(--cyan) 12%,var(--panel))" stroke="var(--cyan-deep)"/>
+    <text x="360" y="89" class="svg-label">Γ region; SUM(amount)</text>
+    <!-- selection -->
+    <rect x="296" y="122" width="128" height="34" rx="6" fill="color-mix(in srgb,var(--rust) 12%,var(--panel))" stroke="var(--rust)"/>
+    <text x="360" y="138" class="svg-mono" fill="var(--ink)">σ date≥… ∧</text>
+    <text x="360" y="150" class="svg-mono" fill="var(--ink)">segment='ent'</text>
+    <!-- join2 -->
+    <rect x="300" y="176" width="120" height="34" rx="6" fill="var(--panel-2)" stroke="var(--copper)"/>
+    <text x="360" y="197" class="svg-label">⋈ l.order_id=o.id</text>
+    <!-- join1 -->
+    <rect x="190" y="232" width="140" height="34" rx="6" fill="var(--panel-2)" stroke="var(--copper)"/>
+    <text x="260" y="253" class="svg-label">⋈ o.cust_id=c.id</text>
+    <!-- leaves -->
+    <rect x="150" y="290" width="80" height="32" rx="6" fill="var(--panel-2)" stroke="var(--line-strong)"/><text x="190" y="310" class="svg-mono" fill="var(--ink)">orders</text>
+    <rect x="246" y="290" width="92" height="32" rx="6" fill="var(--panel-2)" stroke="var(--line-strong)"/><text x="292" y="310" class="svg-mono" fill="var(--ink)">customers</text>
+    <rect x="398" y="290" width="92" height="32" rx="6" fill="var(--panel-2)" stroke="var(--line-strong)"/><text x="444" y="310" class="svg-mono" fill="var(--ink)">line_items</text>
+  </g>
+  <g stroke="var(--muted)" stroke-width="1.4" fill="none" marker-end="url(#ar2)">
+    <line x1="360" y1="68" x2="360" y2="50"/>
+    <line x1="360" y1="122" x2="360" y2="104"/>
+    <line x1="360" y1="176" x2="360" y2="158"/>
+    <line x1="300" y1="200" x2="270" y2="210" /><line x1="260" y1="232" x2="300" y2="200" />
+    <line x1="444" y1="290" x2="380" y2="212"/>
+    <line x1="190" y1="290" x2="225" y2="266"/>
+    <line x1="292" y1="290" x2="290" y2="266"/>
+  </g>
+</svg>
+</div>
+<figcaption><b>FIG 02</b>The unoptimized logical plan reads bottom-up: join everything, then filter, then aggregate, then sort. It is correct and catastrophically slow — the joins run on full tables before any filter shrinks them. Every rule in §03 exists to fix some version of this picture.</figcaption>
+</figure>
+
+<h4>Equivalence rules: the algebra that licenses rewriting</h4>
+<p>The reason the plan above can be improved <em>without changing its result</em> is that relational-algebra operators obey identities. A handful do most of the work:</p>
+<ul>
+<li><strong>Join commutativity:</strong> <span class="mono">R ⋈ S ≡ S ⋈ R</span>. Either side can build, either can probe.</li>
+<li><strong>Join associativity:</strong> <span class="mono">(R ⋈ S) ⋈ T ≡ R ⋈ (S ⋈ T)</span>. This is what creates the join-ordering search space (§06).</li>
+<li><strong>Selection pushdown:</strong> <span class="mono">σ<sub>p</sub>(R ⋈ S) ≡ σ<sub>p</sub>(R) ⋈ S</span> when <em>p</em> only references <em>R</em>. Filter early, join less.</li>
+<li><strong>Projection pushdown:</strong> drop columns as soon as nothing above needs them — vital for columnar and GPU engines where unused columns are pure wasted bandwidth.</li>
+<li><strong>Selection splitting:</strong> <span class="mono">σ<sub>p∧q</sub> ≡ σ<sub>p</sub>(σ<sub>q</sub>)</span>, so conjuncts can be pushed to different relations independently.</li>
+</ul>
+
+<div class="box mech">
+<div class="tag">Mechanism · plans are DAGs, not just trees</div>
+<p>When the same sub-expression appears twice (common in views, CTEs, and self-joins), a smart optimizer represents the plan as a <strong>DAG</strong> and computes the shared sub-result once — <em>common subexpression elimination</em>. This matters disproportionately on GPUs: a materialized intermediate column is expensive to recompute and expensive to keep resident, so sharing it is a real win. The Cascades "memo" (§06) is fundamentally a DAG of equivalence classes built for exactly this reason.</p>
+</div>
+<p>Relational algebra gives the optimizer a closed world: a finite operator set, a finite rule set, and a guarantee that any rule application preserves correctness. Everything from here is about <em>which</em> rewrites to apply and <em>which</em> physical algorithms to choose — and how to decide without running the query.</p>
+</section>
+
+<div class="part-banner">Part II — The Optimizer Core</div>
+
+<section id="rules">
+<div class="sec-head"><div class="snum">03</div><h2>Rule-based transformation</h2></div>
+<p>Rule-based (heuristic) optimization applies algebraic rewrites that are <em>almost always</em> beneficial, so they can be fired without consulting cost. These rewrites shrink the plan and the data flowing through it before the expensive cost-based search even begins. In a modern optimizer they're expressed as pattern→replacement rules over the plan tree (Spark's Catalyst is the canonical example — its entire optimizer is a library of such rules applied to fixed point).</p>
+
+<h4>The workhorse rewrites</h4>
+<ul>
+<li><strong>Predicate pushdown.</strong> Move <span class="mono">σ</span> as close to the scans as possible. <code>c.segment = 'enterprise'</code> belongs on the <code>customers</code> scan; <code>o.order_date &gt;= …</code> belongs on the <code>orders</code> scan. Pushed into the scan itself, it can become an index range or a skipped row group (Parquet/ORC predicate pushdown), so the filtered rows are never even read.</li>
+<li><strong>Projection pushdown / column pruning.</strong> Read only the columns some operator above actually needs. Our query never uses <code>customers.phone</code>, so a columnar engine should never touch that column file. On the GPU this is bandwidth you literally do not pay.</li>
+<li><strong>Constant folding &amp; predicate simplification.</strong> Evaluate constant sub-expressions once (<code>DATE '2024-01-01'</code> is parsed to an integer day), simplify <code>x AND TRUE</code>, fold <code>1=1</code>, normalize <code>BETWEEN</code> into two comparisons.</li>
+<li><strong>Predicate inference (transitive closure).</strong> From <code>o.customer_id = c.id</code> and <code>c.id = 42</code>, infer <code>o.customer_id = 42</code> and push it to <code>orders</code> too. Generating new, cheaper predicates from existing equalities is one of the highest-leverage rewrites in real systems.</li>
+<li><strong>Limit / TopN pushdown.</strong> <code>ORDER BY … LIMIT k</code> becomes a bounded heap (Top-<em>k</em>) rather than a full sort, and the limit can sometimes pass through joins.</li>
+<li><strong>Join elimination.</strong> If a join to a table contributes no columns and the foreign key is enforced (so every row matches exactly once), drop the join entirely.</li>
+</ul>
+
+<h4>Subquery decorrelation — the one that earns its own subsection</h4>
+<p>A correlated subquery (one that references the outer row) is, evaluated literally, a nested loop that re-runs the inner query per outer row — quadratic. <strong>Decorrelation</strong> (a.k.a. unnesting) rewrites it into a join or aggregate that the optimizer can then cost and reorder normally.</p>
+<div class="code"><div class="bar"><span class="lang">SQL · correlated → decorrelated</span><button class="cp">copy</button></div><pre><span class="c-com">-- correlated: inner query re-runs for every order (O(n·m))</span>
+<span class="c-kw">SELECT</span> * <span class="c-kw">FROM</span> orders o
+<span class="c-kw">WHERE</span> o.amount &gt; (<span class="c-kw">SELECT</span> <span class="c-fn">AVG</span>(amount) <span class="c-kw">FROM</span> orders x
+                  <span class="c-kw">WHERE</span> x.customer_id = o.customer_id);
+
+<span class="c-com">-- decorrelated: one grouped aggregate + one join (O(n))</span>
+<span class="c-kw">WITH</span> avg_per_cust <span class="c-kw">AS</span> (
+  <span class="c-kw">SELECT</span> customer_id, <span class="c-fn">AVG</span>(amount) <span class="c-kw">AS</span> a <span class="c-kw">FROM</span> orders <span class="c-kw">GROUP BY</span> customer_id)
+<span class="c-kw">SELECT</span> o.* <span class="c-kw">FROM</span> orders o
+<span class="c-kw">JOIN</span> avg_per_cust ac <span class="c-kw">ON</span> ac.customer_id = o.customer_id
+<span class="c-kw">WHERE</span> o.amount &gt; ac.a;</pre></div>
+<p>This transformation is the difference between a query that returns in milliseconds and one that never returns. It matters enormously for GPU engines: the nested-loop form has data-dependent control flow that maps terribly to SIMT lanes, while the decorrelated form is a plain group-by + hash join — both operators GPUs execute beautifully.</p>
+
+<p>Applying the always-good rules to our running query produces the plan everyone actually wants: filters sit on the scans, projections are narrow, and only the join order remains to be decided.</p>
+<figure>
+<div class="frame">
+<svg viewBox="0 0 720 300" role="img" aria-label="Logical plan after rule-based rewriting">
+  <defs><marker id="ar3" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L7,4 L0,8 z" fill="var(--muted)"/></marker></defs>
+  <g text-anchor="middle">
+    <rect x="300" y="12" width="120" height="30" rx="6" fill="color-mix(in srgb,var(--sage) 14%,var(--panel))" stroke="var(--sage-deep)"/><text x="360" y="31" class="svg-label">τ revenue DESC</text>
+    <rect x="290" y="58" width="140" height="30" rx="6" fill="color-mix(in srgb,var(--cyan) 12%,var(--panel))" stroke="var(--cyan-deep)"/><text x="360" y="77" class="svg-label">Γ region; SUM</text>
+    <rect x="300" y="104" width="120" height="30" rx="6" fill="var(--panel-2)" stroke="var(--copper)"/><text x="360" y="123" class="svg-label">⋈ join ?</text>
+    <rect x="196" y="150" width="120" height="30" rx="6" fill="var(--panel-2)" stroke="var(--copper)"/><text x="256" y="169" class="svg-label">⋈ join ?</text>
+    <!-- filtered scans -->
+    <g class="svg-mono" fill="var(--ink)">
+      <rect x="120" y="208" width="118" height="46" rx="6" fill="color-mix(in srgb,var(--rust) 10%,var(--panel))" stroke="var(--rust)"/>
+      <text x="179" y="226">σ date≥'24</text><text x="179" y="244">orders[id,cust,amt?]</text>
+      <rect x="252" y="208" width="118" height="46" rx="6" fill="color-mix(in srgb,var(--rust) 10%,var(--panel))" stroke="var(--rust)"/>
+      <text x="311" y="226">σ seg='ent'</text><text x="311" y="244">customers[id,region]</text>
+      <rect x="392" y="208" width="118" height="46" rx="6" fill="var(--panel-2)" stroke="var(--line-strong)"/>
+      <text x="451" y="226">line_items</text><text x="451" y="244">[order_id,amount]</text>
+    </g>
+  </g>
+  <g stroke="var(--muted)" stroke-width="1.4" fill="none" marker-end="url(#ar3)">
+    <line x1="360" y1="58" x2="360" y2="44"/>
+    <line x1="360" y1="104" x2="360" y2="90"/>
+    <line x1="330" y1="126" x2="290" y2="142"/><line x1="256" y1="150" x2="320" y2="126"/>
+    <line x1="451" y1="208" x2="385" y2="136"/>
+    <line x1="179" y1="208" x2="222" y2="182"/>
+    <line x1="311" y1="208" x2="290" y2="182"/>
+  </g>
+</svg>
+</div>
+<figcaption><b>FIG 03</b>After rule-based rewriting. Filters are fused into the scans, projections keep only needed columns, and the two join nodes are left as <span class="mono">join ?</span> — their <em>order</em> and <em>algorithm</em> are cost decisions, which is exactly where §04–07 take over.</figcaption>
+</figure>
+<div class="box warn">
+<div class="tag">Caveat · not every rule is unconditionally good</div>
+<p>A few "rewrites" are really trade-offs and belong in the cost-based search, not the always-fire list — e.g. pushing an aggregate below a join (<em>eager aggregation</em>) helps only if it shrinks the join input enough to pay for the extra grouping. Modern optimizers therefore blur the rule/cost boundary: Cascades expresses even heuristic rewrites as rules but lets cost decide whether to keep the result.</p>
+</div>
+</section>
+
+<section id="cardinality">
+<div class="sec-head"><div class="snum">04</div><h2>Cardinality &amp; selectivity estimation</h2></div>
+<p class="lead">If you learn one thing about optimizers, learn this section. Every cost number downstream is computed from estimated row counts, those estimates rest on statistical assumptions that are routinely violated, and the errors compound. The single most reliable predictor of a bad plan is a bad cardinality estimate.</p>
+
+<p><strong>Selectivity</strong> is the fraction of rows an operator passes: a predicate with selectivity 0.02 emits 2% of its input. <strong>Cardinality</strong> is the absolute row count out. The optimizer estimates selectivity from <em>statistics</em> collected over the data (PostgreSQL's <code>ANALYZE</code>, the catalog's <code>pg_statistic</code>), because it cannot run the query to find out.</p>
+
+<h4>What the statistics actually contain</h4>
+<p>For each column, a typical catalog stores a small fixed-size summary:</p>
+<ul>
+<li><strong>n_distinct</strong> — number of distinct values (the NDV).</li>
+<li><strong>null_fraction</strong> — fraction of NULLs.</li>
+<li><strong>Most-Common-Values (MCV) list</strong> — the top-<em>k</em> values and their exact frequencies. Handles skew: a few values that dominate.</li>
+<li><strong>Histogram</strong> — for the non-MCV remainder, an <em>equi-depth</em> (height-balanced) histogram: bucket boundaries chosen so each bucket holds roughly the same <em>number of rows</em>, not the same value range. Equi-depth adapts resolution to data density, which is why it beats equi-width for skewed data.</li>
+</ul>
+
+<figure>
+<div class="frame">
+<svg viewBox="0 0 720 220" role="img" aria-label="Equi-width versus equi-depth histogram">
+  <g class="svg-title"><text x="20" y="20">Equi-WIDTH (uniform value ranges)</text><text x="400" y="20">Equi-DEPTH (uniform row counts)</text></g>
+  <!-- equi-width: bars of varying height -->
+  <g>
+    <line x1="20" y1="170" x2="350" y2="170" stroke="var(--line-strong)"/>
+    <rect x="28"  y="150" width="46" height="20" fill="color-mix(in srgb,var(--cyan) 35%,transparent)" stroke="var(--cyan-deep)"/>
+    <rect x="80"  y="92"  width="46" height="78" fill="color-mix(in srgb,var(--cyan) 35%,transparent)" stroke="var(--cyan-deep)"/>
+    <rect x="132" y="60"  width="46" height="110" fill="color-mix(in srgb,var(--cyan) 35%,transparent)" stroke="var(--cyan-deep)"/>
+    <rect x="184" y="120" width="46" height="50" fill="color-mix(in srgb,var(--cyan) 35%,transparent)" stroke="var(--cyan-deep)"/>
+    <rect x="236" y="158" width="46" height="12" fill="color-mix(in srgb,var(--cyan) 35%,transparent)" stroke="var(--cyan-deep)"/>
+    <rect x="288" y="162" width="46" height="8" fill="color-mix(in srgb,var(--cyan) 35%,transparent)" stroke="var(--cyan-deep)"/>
+    <text x="185" y="192" text-anchor="middle" class="svg-mono">equal Δvalue, wildly unequal counts</text>
+  </g>
+  <!-- equi-depth: bars equal area, varying width -->
+  <g>
+    <line x1="400" y1="170" x2="700" y2="170" stroke="var(--line-strong)"/>
+    <rect x="404" y="110" width="78" height="60" fill="color-mix(in srgb,var(--copper) 35%,transparent)" stroke="var(--copper)"/>
+    <rect x="484" y="110" width="40" height="60" fill="color-mix(in srgb,var(--copper) 35%,transparent)" stroke="var(--copper)"/>
+    <rect x="526" y="110" width="28" height="60" fill="color-mix(in srgb,var(--copper) 35%,transparent)" stroke="var(--copper)"/>
+    <rect x="556" y="110" width="34" height="60" fill="color-mix(in srgb,var(--copper) 35%,transparent)" stroke="var(--copper)"/>
+    <rect x="592" y="110" width="48" height="60" fill="color-mix(in srgb,var(--copper) 35%,transparent)" stroke="var(--copper)"/>
+    <rect x="642" y="110" width="54" height="60" fill="color-mix(in srgb,var(--copper) 35%,transparent)" stroke="var(--copper)"/>
+    <text x="548" y="192" text-anchor="middle" class="svg-mono">equal count/bucket, boundaries follow density</text>
+  </g>
+</svg>
+</div>
+<figcaption><b>FIG 04A</b>Equi-depth histograms put bucket boundaries where the data is, so a dense region gets many narrow buckets and resolution where it matters. This is why production systems store height-balanced histograms — they give bounded error per bucket regardless of skew.</figcaption>
+</figure>
+
+<h4>From statistics to a selectivity number</h4>
+<p>The estimator combines these pieces with three standard assumptions. For an equality predicate <code>col = v</code>:</p>
+<div class="code"><div class="bar"><span class="lang">selectivity · equality predicate</span><button class="cp">copy</button></div><pre><span class="c-com"># if v is in the MCV list, we know its frequency exactly:</span>
+sel(col = v)  =  mcv_freq[v]
+
+<span class="c-com"># otherwise assume the non-MCV mass is spread uniformly</span>
+<span class="c-com"># over the non-MCV distinct values (the UNIFORMITY assumption):</span>
+sel(col = v)  =  (1 - Σ mcv_freq - null_frac) / (n_distinct - n_mcv)</pre></div>
+<p>For a range predicate <code>col &lt; v</code>, the estimator walks the histogram: buckets entirely below <em>v</em> contribute their full row fraction, and the straddling bucket is linearly interpolated. With a <em>B</em>-bucket equi-depth histogram, each fully-below bucket contributes exactly <span class="mono">1/B</span>.</p>
+
+<h4>Combining predicates — where independence bites</h4>
+<p>Our <code>WHERE</code> has two conditions on <code>customers</code>… well, one each on two tables, but consider a single table with <code>WHERE city='SF' AND state='CA'</code>. The estimator multiplies:</p>
+<p style="text-align:center" class="mono">sel(p ∧ q) = sel(p) · sel(q)   ← the INDEPENDENCE assumption</p>
+<p>This is exactly wrong when columns are correlated. <code>city='SF'</code> already <em>implies</em> <code>state='CA'</code>, so multiplying their selectivities <strong>underestimates</strong> the result by a large factor — the optimizer thinks far fewer rows survive than actually do. Underestimation is the dangerous direction: it leads the optimizer to pick a tiny build side or a nested-loop join that then explodes. The fix is <strong>multi-column / extended statistics</strong>: store joint distributions or functional-dependency hints for correlated column groups (PostgreSQL <code>CREATE STATISTICS</code>, SQL Server multi-column stats).</p>
+
+<h4>Join cardinality — the formula and its load-bearing assumption</h4>
+<p>For an equijoin <span class="mono">R ⋈<sub>R.a = S.b</sub> S</span>, the textbook estimate is:</p>
+<figure>
+<div class="frame">
+<svg viewBox="0 0 720 96" role="img" aria-label="Join cardinality formula">
+  <g text-anchor="middle">
+    <text x="360" y="46" style="font-family:'JetBrains Mono';font-size:20px;fill:var(--ink)">|R ⋈ S|  ≈  |R| · |S|  /  max( ndv(R.a), ndv(S.b) )</text>
+    <text x="360" y="76" class="svg-mono svg-faint">uniformity · containment (the smaller value-set is a subset of the larger)</text>
+  </g>
+</svg>
+</div>
+<figcaption><b>FIG 04B</b>Each distinct key on the larger side matches, on average, <span class="mono">|S|/ndv</span> rows on the other side. The estimate is only as good as the two NDVs and the containment assumption — and primary-key/foreign-key relationships (where one NDV equals the row count) are the case it handles best.</figcaption>
+</figure>
+<p>Estimating <strong>n_distinct</strong> itself is hard from a sample (distinct counts don't extrapolate linearly), so systems increasingly use <strong>HyperLogLog</strong> sketches — a probabilistic counter that estimates cardinality from the maximum count of leading zeros in hashed values, achieving ~2% error in a couple of kilobytes regardless of data size. (This is the same primitive behind <code>APPROX_COUNT_DISTINCT</code> in BigQuery/Redshift/Spark.)</p>
+
+<h4>The compounding catastrophe</h4>
+<p>Here is why all of this is fragile. Estimation errors don't add — they <em>multiply</em> up the join tree, because each join's input cardinality is the previous join's (already-wrong) output. A 3× error at each of four joins is an 80× error at the top.</p>
+<figure>
+<div class="frame">
+<svg viewBox="0 0 720 210" role="img" aria-label="Error propagation up a join tree">
+  <defs><marker id="ar4" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L7,4 L0,8 z" fill="var(--rust)"/></marker></defs>
+  <g text-anchor="middle" class="svg-label">
+    <rect x="300" y="14" width="120" height="34" rx="6" fill="color-mix(in srgb,var(--rust) 22%,var(--panel))" stroke="var(--rust)"/><text x="360" y="30">⋈₄  err ≈ 80×</text><text x="360" y="44" class="svg-mono" fill="var(--rust)">est 1k / real 80k</text>
+    <rect x="230" y="74" width="120" height="32" rx="6" fill="color-mix(in srgb,var(--rust) 14%,var(--panel))" stroke="var(--rust)"/><text x="290" y="94">⋈₃  err ≈ 27×</text>
+    <rect x="160" y="128" width="120" height="32" rx="6" fill="color-mix(in srgb,var(--rust) 9%,var(--panel))" stroke="var(--rust)"/><text x="220" y="148">⋈₂  err ≈ 9×</text>
+    <rect x="90" y="170" width="120" height="32" rx="6" fill="var(--panel-2)" stroke="var(--copper)"/><text x="150" y="190">⋈₁  err ≈ 3×</text>
+  </g>
+  <g stroke="var(--rust)" stroke-width="1.5" fill="none" marker-end="url(#ar4)" opacity="0.8">
+    <line x1="180" y1="170" x2="205" y2="160"/><line x1="250" y1="128" x2="275" y2="106"/><line x1="320" y1="74" x2="345" y2="48"/>
+  </g>
+  <g class="svg-mono svg-faint"><text x="470" y="60">each join multiplies the</text><text x="470" y="78">incoming error by its own.</text><text x="470" y="104">underestimates make the</text><text x="470" y="122">optimizer choose a build</text><text x="470" y="140">side / join algo that then</text><text x="470" y="158">blows up at runtime.</text></g>
+</svg>
+</div>
+<figcaption><b>FIG 04C</b>The compounding problem, quantified. This is the central finding of Leis et&nbsp;al.'s <em>"How Good Are Query Optimizers, Really?"</em> (VLDB 2015): on multi-join workloads, real systems' estimates were off by orders of magnitude, errors grew with join count, and good cardinality estimation mattered more than either the cost model or the plan-enumeration algorithm.</figcaption>
+</figure>
+
+<div class="box key">
+<div class="tag">Why this section is the hinge</div>
+<p>Cost is a deterministic function of cardinality, so a good cost model fed bad cardinalities still picks bad plans. This is why the frontier moved here: <strong>sampling</strong> (estimate selectivity by running the predicate on a small random sample at plan time), <strong>sketches</strong> (HLL, count-min), <strong>learned estimators</strong> (ML models trained on the data/workload to predict cardinality directly), and <strong>adaptive execution</strong> (§10 — stop guessing, measure the real cardinality mid-query and re-plan). Every one of these is a reaction to FIG&nbsp;04C. And on the GPU, where re-running a misjudged operator means re-materializing a multi-gigabyte column, the cost of a cardinality miss is even higher — so GPU engines lean hard on runtime adaptivity rather than upfront estimation.</p>
+</div>
+</section>
+
+<section id="cost">
+<div class="sec-head"><div class="snum">05</div><h2>The cost model</h2></div>
+<p>A cost model turns a candidate physical plan into a single number that proxies for runtime, so the optimizer can compare alternatives without executing them. The number is fictional currency — its absolute value is meaningless; only the <em>ordering</em> it imposes on plans matters.</p>
+
+<h4>What gets costed</h4>
+<p>Classic models sum a few resource terms, each weighted into the common currency:</p>
+<ul>
+<li><strong>I/O</strong> — page reads, split into <em>sequential</em> (cheap, prefetchable) and <em>random</em> (expensive seeks). This dominated the disk era.</li>
+<li><strong>CPU</strong> — per-tuple work: comparisons, hash computations, expression evaluation, function calls.</li>
+<li><strong>Memory</strong> — whether a hash table or sort fits in the working-memory budget; if not, a <em>spill</em> penalty (extra I/O for partitioning to disk).</li>
+<li><strong>Network</strong> — in distributed engines, bytes shuffled between nodes. Often the dominant term (§16), and the analog that takes over completely on multi-GPU.</li>
+</ul>
+<p>PostgreSQL makes the weights concrete and tunable — every cost is relative to one sequential page fetch defined as <code>1.0</code>:</p>
+<div class="tbl"><table>
+<thead><tr><th>Constant</th><th>Default</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td class="mono">seq_page_cost</td><td class="mono">1.0</td><td>read one page sequentially (the unit)</td></tr>
+<tr><td class="mono">random_page_cost</td><td class="mono">4.0</td><td>read one page via random seek — 4× a sequential read</td></tr>
+<tr><td class="mono">cpu_tuple_cost</td><td class="mono">0.01</td><td>process one row</td></tr>
+<tr><td class="mono">cpu_index_tuple_cost</td><td class="mono">0.005</td><td>process one index entry</td></tr>
+<tr><td class="mono">cpu_operator_cost</td><td class="mono">0.0025</td><td>evaluate one operator/function</td></tr>
+</tbody></table></div>
+<p>A sequential scan of a 10,000-page, 1,000,000-row table costs roughly <span class="mono">10000·1.0 + 1000000·0.01 = 20,000</span>. The <code>random_page_cost</code>/<code>seq_page_cost</code> ratio of 4:1 is precisely what makes the optimizer prefer a sequential scan over an index scan once a predicate matches more than a small fraction of rows — the index's random I/O stops paying off. (On SSDs people lower it to ~1.1; the constant <em>is</em> a hardware assumption.)</p>
+
+<div class="box mech">
+<div class="tag">Mechanism · costs compose bottom-up</div>
+<p>A plan's cost is computed recursively: <span class="mono">cost(op) = cost(children) + local_work(op)</span>, where <em>local_work</em> is a function of the operator's <em>estimated input and output cardinalities</em> (§04). This is the join between the two halves of the optimizer — the cost model is just arithmetic; cardinality estimation supplies the inputs. Optimizers also track two costs separately: <strong>start-up cost</strong> (work before the first row emerges — a sort must consume everything first) and <strong>total cost</strong>. A <code>LIMIT</code> query weights start-up cost heavily; a full scan weights total cost.</p>
+</div>
+
+<div class="box warn">
+<div class="tag">Where the classical model breaks</div>
+<p>These models were calibrated for tuple-at-a-time execution on spinning disks. Two shifts broke them: (1) <strong>memory got large and fast</strong>, so I/O often isn't the bottleneck — cache misses and per-tuple interpreter overhead are; and (2) <strong>vectorized and compiled engines</strong> (§08) cut per-tuple CPU cost by 10–50×, so a cost model that still charges <code>cpu_tuple_cost</code> per row mis-ranks plans. This is the first crack that the GPU will blow wide open: on a GPU the per-row CPU cost is effectively zero (thousands of lanes) but data <em>movement</em> costs dominate — a cost model has to be rebuilt around bandwidth and residency, not page fetches.</p>
+</div>
+</section>
+
+<section id="enumeration">
+<div class="sec-head"><div class="snum">06</div><h2>Plan enumeration &amp; join ordering</h2></div>
+<p>Join associativity and commutativity (§02) mean the same query has astronomically many valid evaluation orders, each with a different cost. Finding the cheapest is the optimizer's hardest search problem, and it is NP-hard in general. This section is about how the search is actually structured.</p>
+
+<h4>The size of the haystack</h4>
+<p>For <em>n</em> relations, the number of distinct join trees is:</p>
+<div class="tbl"><table>
+<thead><tr><th>Tree shape</th><th>Count</th><th>n=4</th><th>n=10</th></tr></thead>
+<tbody>
+<tr><td><strong>Left-deep only</strong></td><td class="mono">n!</td><td class="mono">24</td><td class="mono">3,628,800</td></tr>
+<tr><td><strong>Bushy (all shapes)</strong></td><td class="mono">(2(n−1))! / (n−1)!</td><td class="mono">120</td><td class="mono">~17.6 billion</td></tr>
+</tbody></table></div>
+<p>You cannot enumerate 17 billion plans. The art is searching this space without visiting most of it.</p>
+
+<figure>
+<div class="frame">
+<svg viewBox="0 0 720 230" role="img" aria-label="Left-deep versus bushy join trees">
+  <g text-anchor="middle">
+    <text x="160" y="20" class="svg-title">Left-deep</text>
+    <text x="540" y="20" class="svg-title">Bushy</text>
+    <!-- left deep -->
+    <g stroke="var(--copper)" stroke-width="1.4" fill="none">
+      <circle cx="160" cy="50" r="13" fill="var(--panel-2)"/><circle cx="120" cy="92" r="13" fill="var(--panel-2)"/><circle cx="100" cy="134" r="13" fill="var(--panel-2)"/>
+      <line x1="151" y1="59" x2="129" y2="83"/><line x1="171" y1="59" x2="200" y2="88"/>
+      <line x1="111" y1="101" x2="91" y2="125"/><line x1="131" y1="101" x2="162" y2="130"/>
+    </g>
+    <g class="svg-mono" fill="var(--ink)" text-anchor="middle">
+      <rect x="186" y="78" width="34" height="22" rx="4" fill="var(--panel-2)" stroke="var(--line-strong)"/><text x="203" y="93">T</text>
+      <rect x="148" y="120" width="34" height="22" rx="4" fill="var(--panel-2)" stroke="var(--line-strong)"/><text x="165" y="135">S</text>
+      <rect x="60" y="148" width="34" height="22" rx="4" fill="var(--panel-2)" stroke="var(--line-strong)"/><text x="77" y="163">R</text>
+      <rect x="84" y="148" width="0" height="0"/>
+      <rect x="80" y="148" width="0" height="0"/>
+    </g>
+    <text x="160" y="200" class="svg-mono svg-faint">one build pipeline; one side always a base table</text>
+    <!-- bushy -->
+    <g stroke="var(--cyan-deep)" stroke-width="1.4" fill="none">
+      <circle cx="540" cy="50" r="13" fill="var(--panel-2)"/>
+      <circle cx="500" cy="98" r="13" fill="var(--panel-2)"/><circle cx="580" cy="98" r="13" fill="var(--panel-2)"/>
+      <line x1="531" y1="59" x2="509" y2="89"/><line x1="549" y1="59" x2="571" y2="89"/>
+    </g>
+    <g class="svg-mono" fill="var(--ink)" text-anchor="middle">
+      <rect x="463" y="138" width="34" height="22" rx="4" fill="var(--panel-2)" stroke="var(--line-strong)"/><text x="480" y="153">R</text>
+      <rect x="503" y="138" width="34" height="22" rx="4" fill="var(--panel-2)" stroke="var(--line-strong)"/><text x="520" y="153">S</text>
+      <rect x="543" y="138" width="34" height="22" rx="4" fill="var(--panel-2)" stroke="var(--line-strong)"/><text x="560" y="153">T</text>
+      <rect x="583" y="138" width="34" height="22" rx="4" fill="var(--panel-2)" stroke="var(--line-strong)"/><text x="600" y="153">U</text>
+    </g>
+    <g stroke="var(--cyan-deep)" stroke-width="1.2" fill="none">
+      <line x1="492" y1="108" x2="480" y2="135"/><line x1="508" y1="108" x2="520" y2="135"/>
+      <line x1="572" y1="108" x2="560" y2="135"/><line x1="588" y1="108" x2="600" y2="135"/>
+    </g>
+    <text x="540" y="200" class="svg-mono svg-faint">independent subtrees → run in parallel</text>
+  </g>
+</svg>
+</div>
+<figcaption><b>FIG 06</b>Left-deep trees keep one long pipeline (historically ideal because the build side of each hash join is a base table and the probe side streams through). Bushy trees expose independent subtrees that can run concurrently — which is why <em>bushy plans matter much more on parallel and GPU engines</em>, where the goal is to saturate many execution units, not to minimize a single pipeline's depth.</figcaption>
+</figure>
+
+<h4>Strategy 1 — System R bottom-up dynamic programming</h4>
+<p>The 1979 System R optimizer's insight, still the core of most cost-based optimizers: the cheapest plan for a set of relations can be built from the cheapest plans for its subsets. Enumerate subsets of relations in increasing size; for each subset, find the best way to split it into two already-solved sub-subsets and join them; memoize the winner. The principle of optimality makes this exact.</p>
+<div class="code"><div class="bar"><span class="lang">pseudocode · DP join enumeration (System R / DPsize)</span><button class="cp">copy</button></div><pre><span class="c-kw">for</span> each single relation R: bestPlan[{R}] = best access path for R
+<span class="c-kw">for</span> size = 2 .. n:
+  <span class="c-kw">for</span> each subset S of relations with |S| = size:
+    <span class="c-kw">for</span> each split of S into non-empty (S1, S2):
+       <span class="c-com"># only if S1 and S2 are connected in the join graph (no cross products)</span>
+       p = makeJoin(bestPlan[S1], bestPlan[S2])
+       <span class="c-kw">if</span> cost(p) &lt; cost(bestPlan[S]): bestPlan[S] = p
+<span class="c-kw">return</span> bestPlan[{all relations}]</pre></div>
+<p>Two refinements make this practical:</p>
+<ul>
+<li><strong>Join-graph pruning.</strong> Only join subsets that share a predicate — skip cross products. The state-of-the-art enumerator, <strong>DPccp</strong>, enumerates exactly the <em>connected subgraph–complement pairs</em> of the join graph in the correct order, which is provably the minimal DP work. (DPsize and DPsub are simpler but visit more.)</li>
+<li><strong>Interesting orders.</strong> A plan that produces output already sorted on a useful key (because it used a merge join or an ordered index) may be more valuable than a cheaper plan that doesn't — because it saves a later sort. So the DP keeps, for each subset, the best plan <em>per relevant physical property</em> (sort order, and in distributed/GPU settings, partitioning), not just the single cheapest. This is the seed of the "physical properties" idea that §07 formalizes.</li>
+</ul>
+
+<h4>Strategy 2 — Top-down transformation (Volcano / Cascades)</h4>
+<p>The other dominant architecture — Cascades, used by SQL Server, Greenplum/Apache ORCA, CockroachDB, and Apache Calcite's Volcano planner — searches top-down using a goal-directed, memoized structure called the <strong>memo</strong>.</p>
+<ul>
+<li>The memo is a set of <strong>groups</strong>; each group is an equivalence class of expressions producing the same logical output (e.g. "the result of joining {R,S,T}"). Within a group are <strong>group expressions</strong> (concrete operators whose children are <em>other groups</em>) — so the memo is a compact DAG that shares sub-results across the whole search.</li>
+<li>Optimization runs as a stack of <strong>tasks</strong> (optimize group, explore expression, apply rule, optimize inputs). <strong>Transformation rules</strong> rewrite logical→logical (join reorder); <strong>implementation rules</strong> map logical→physical (join → hash join).</li>
+<li><strong>Branch-and-bound pruning:</strong> each group is optimized against a cost <em>upper bound</em>; any partial plan exceeding it is abandoned before its inputs are even optimized. This is what makes top-down search tractable — it never fully expands provably-losing branches.</li>
+</ul>
+<div class="box mech">
+<div class="tag">Mechanism · DP vs Cascades, in one line each</div>
+<p><strong>Bottom-up DP</strong> builds every winning sub-plan once and combines upward — exhaustive within its space, naturally exact. <strong>Top-down Cascades</strong> pursues a goal and prunes with bounds — extensible (new operators = new rules) and lazy. They explore the same space; the trade is exhaustiveness-and-simplicity vs extensibility-and-pruning. Most new systems pick Cascades because adding a rule is how you teach the optimizer about a new physical operator — including, crucially, a <em>GPU</em> operator or a <em>data-transfer</em> operator.</p>
+</div>
+
+<h4>Strategy 3 — Giving up gracefully (randomized search)</h4>
+<p>Past ~12 relations even DP gets expensive. PostgreSQL switches to <strong>GEQO</strong>, a genetic algorithm, above <code>geqo_threshold</code> (default 12) — it evolves a population of join orders rather than enumerating them, trading optimality for bounded planning time. Other systems use iterative improvement or simulated annealing. The lesson: for large joins, even the optimizer admits it's making an educated guess.</p>
+</section>
+
+<section id="physical">
+<div class="sec-head"><div class="snum">07</div><h2>Physical operator selection</h2></div>
+<p>With an order chosen, the optimizer picks a concrete algorithm for each logical operator. These algorithms are the vocabulary of the execution engine, and — this is the point the GPU sections build on — <em>the same handful reappears at every level of the stack</em>; only their relative costs change.</p>
+
+<h4>Join algorithms</h4>
+<div class="tbl"><table>
+<thead><tr><th>Algorithm</th><th>How it works</th><th>Cost shape</th><th>Wins when…</th></tr></thead>
+<tbody>
+<tr><td><strong>Nested-loop</strong></td><td>for each outer row, scan inner for matches</td><td class="mono">O(|R|·|S|)</td><td>one side tiny; or no equijoin predicate at all</td></tr>
+<tr><td><strong>Index nested-loop</strong></td><td>for each outer row, index-lookup the inner</td><td class="mono">O(|R|·log|S|)</td><td>outer small <em>and</em> inner has an index on the key</td></tr>
+<tr><td><strong>Sort-merge</strong></td><td>sort both on key, then linear merge</td><td class="mono">O(n log n)</td><td>inputs already sorted (interesting order!); output sort needed anyway</td></tr>
+<tr><td><strong>Hash join</strong></td><td>build hash table on smaller side, probe with larger</td><td class="mono">O(|R|+|S|)</td><td>equijoin, build side fits in memory — the default for big analytics joins</td></tr>
+</tbody></table></div>
+
+<p>The hash join deserves a close look because it is the operator GPUs care about most. It has two phases:</p>
+<figure>
+<div class="frame">
+<svg viewBox="0 0 720 220" role="img" aria-label="Hash join build and probe phases">
+  <defs><marker id="arh" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L7,4 L0,8 z" fill="var(--cyan-deep)"/></marker></defs>
+  <!-- build -->
+  <g>
+    <text x="150" y="22" class="svg-title">① BUILD (smaller side)</text>
+    <rect x="40" y="40" width="92" height="120" rx="6" fill="var(--panel-2)" stroke="var(--line-strong)"/>
+    <text x="86" y="58" text-anchor="middle" class="svg-mono" fill="var(--ink)">build rows</text>
+    <g class="svg-mono" fill="var(--muted)" text-anchor="middle"><text x="86" y="80">k=3 →</text><text x="86" y="100">k=7 →</text><text x="86" y="120">k=3 →</text><text x="86" y="140">k=9 →</text></g>
+    <rect x="180" y="40" width="110" height="120" rx="6" fill="color-mix(in srgb,var(--cyan) 10%,var(--panel))" stroke="var(--cyan-deep)"/>
+    <text x="235" y="58" text-anchor="middle" class="svg-mono" fill="var(--cyan-deep)">hash table</text>
+    <g class="svg-mono" fill="var(--ink)" text-anchor="middle"><text x="235" y="80">h(3): •→•</text><text x="235" y="100">h(7): •</text><text x="235" y="120">h(9): •</text></g>
+    <line x1="133" y1="100" x2="178" y2="100" stroke="var(--cyan-deep)" stroke-width="1.4" marker-end="url(#arh)"/>
+    <text x="155" y="92" class="svg-mono svg-faint" text-anchor="middle">hash</text>
+  </g>
+  <!-- probe -->
+  <g>
+    <text x="430" y="22" class="svg-title">② PROBE (larger side)</text>
+    <rect x="400" y="40" width="92" height="120" rx="6" fill="var(--panel-2)" stroke="var(--line-strong)"/>
+    <text x="446" y="58" text-anchor="middle" class="svg-mono" fill="var(--ink)">probe rows</text>
+    <g class="svg-mono" fill="var(--muted)" text-anchor="middle"><text x="446" y="80">k=3</text><text x="446" y="100">k=5</text><text x="446" y="120">k=7</text><text x="446" y="140">k=3</text></g>
+    <rect x="540" y="40" width="110" height="120" rx="6" fill="color-mix(in srgb,var(--cyan) 10%,var(--panel))" stroke="var(--cyan-deep)"/>
+    <text x="595" y="58" text-anchor="middle" class="svg-mono" fill="var(--cyan-deep)">lookup → emit</text>
+    <g class="svg-mono" fill="var(--ink)" text-anchor="middle"><text x="595" y="82">3 ✓✓</text><text x="595" y="102">5 ✗</text><text x="595" y="122">7 ✓</text><text x="595" y="142">3 ✓✓</text></g>
+    <line x1="493" y1="100" x2="538" y2="100" stroke="var(--cyan-deep)" stroke-width="1.4" marker-end="url(#arh)"/>
+  </g>
+  <text x="360" y="195" text-anchor="middle" class="svg-mono svg-faint">build is write-heavy (insertions, collisions) · probe is read-heavy and embarrassingly parallel</text>
+</svg>
+</div>
+<figcaption><b>FIG 07</b>The hash join. The <em>build</em> phase populates a hash table from the smaller input; the <em>probe</em> phase streams the larger input through it, emitting matches. Note the asymmetry — probing is read-only and trivially parallel, while building involves concurrent writes and collision handling. That asymmetry is the entire story of GPU hash joins (§14): probe is easy, build needs atomics.</figcaption>
+</figure>
+<p>When the build side doesn't fit in the memory budget, the engine falls back to a <strong>grace / partitioned hash join</strong>: hash-partition <em>both</em> inputs into buckets small enough to fit, then hash-join bucket-by-bucket (recursing if a bucket is still too big). <strong>Hybrid hash join</strong> keeps the first partition resident to avoid spilling it. Partitioning to fit a memory budget is the same technique GPUs use to fit a hash table in fast on-chip memory — remember it for §14.</p>
+
+<h4>Aggregation</h4>
+<p>Two strategies, mirroring the join choice: <strong>hash aggregation</strong> (one hash-table slot per group key, update in place — the default, order-agnostic) versus <strong>sort-based aggregation</strong> (sort by group key, then a single linear pass reduces each run — preferred when the input is already sorted, or when groups are too numerous to fit a hash table). The same hash-vs-sort dichotomy governs GPU group-by (§14), where it becomes a contention-vs-bandwidth trade.</p>
+
+<h4>Access paths</h4>
+<ul>
+<li><strong>Sequential scan</strong> — read every page; best when the predicate is unselective.</li>
+<li><strong>Index scan</strong> — descend a B-tree, fetch matching rows by pointer (random I/O); best when very selective.</li>
+<li><strong>Index-only scan</strong> — answer entirely from the index without touching the heap (when the index covers all needed columns).</li>
+<li><strong>Bitmap scan</strong> — build a bitmap of matching row locations from one or more indexes, then fetch in physical order to convert random I/O back into sequential. The optimizer's hedge between the two extremes.</li>
+</ul>
+
+<div class="box key">
+<div class="tag">Physical properties — the idea that survives all the way to the GPU</div>
+<p>The optimizer doesn't just track <em>cost</em>; it tracks the <strong>physical properties</strong> each plan delivers — chiefly <em>sort order</em> and (in parallel systems) <em>data partitioning</em>. A plan that delivers data already sorted or already partitioned on the right key can satisfy a downstream operator for free. This is why a slightly-more-expensive merge join can beat a hash join: it hands the next operator a useful sort order. Carry this forward: in distributed and multi-GPU execution (§16), <em>partitioning</em> becomes <em>the</em> dominant physical property, because matching it avoids a network shuffle — the single most expensive thing a distributed query can do.</p>
+</div>
+</section>
+
+<div class="part-banner">Part III — Where Optimization Meets the Hardware</div>
+
+<section id="exec-models">
+<div class="sec-head"><div class="snum">08</div><h2>Execution models: Volcano to compiled</h2></div>
+<p class="lead">The optimizer hands the engine a physical plan. <em>How</em> the engine walks that plan — one tuple at a time, a vector at a time, or as compiled machine code — changes per-row cost by more than an order of magnitude, which is why this is where the CPU story and the GPU story finally diverge.</p>
+
+<h4>The Volcano / iterator model — tuple-at-a-time pull</h4>
+<p>The classical model (Graefe, 1990) gives every operator the same interface: <code>open()</code>, <code>next()</code>, <code>close()</code>. Calling <code>next()</code> on the root pulls one tuple, which recursively pulls from children. A query is a tree of these iterators; data flows up one tuple per call.</p>
+<div class="code"><div class="bar"><span class="lang">the iterator interface, conceptually</span><button class="cp">copy</button></div><pre><span class="c-kw">class</span> <span class="c-ty">Filter</span>(Operator):
+  <span class="c-kw">def</span> <span class="c-fn">next</span>(self):
+    <span class="c-kw">while</span> <span class="c-kw">True</span>:
+      row = self.child.next()           <span class="c-com"># pull one row from below</span>
+      <span class="c-kw">if</span> row <span class="c-kw">is</span> <span class="c-kw">None</span>: <span class="c-kw">return</span> <span class="c-kw">None</span>     <span class="c-com"># exhausted</span>
+      <span class="c-kw">if</span> self.predicate(row): <span class="c-kw">return</span> row  <span class="c-com"># emit or loop</span></pre></div>
+<p><strong>Why it was loved:</strong> operators compose freely, memory use is tiny (one tuple in flight), and it <em>pipelines</em> — a row flows from scan to filter to join without materializing intermediate tables. <strong>Why it became a bottleneck:</strong> one virtual function call <em>per operator per tuple</em>. For a billion rows through five operators that's five billion indirect calls — branch mispredictions, no instruction-cache locality, and no chance for the compiler to vectorize. The actual useful work (a comparison) is dwarfed by interpreter overhead.</p>
+
+<h4>Vectorized execution — vector-at-a-time</h4>
+<p>MonetDB/X100 (Boncz, Zukowski, Nes — CIDR 2005) kept the iterator structure but changed the unit: each <code>next()</code> returns a <strong>vector</strong> of ~1,000–2,048 values from a single column, not one tuple. The per-call overhead is now amortized over a thousand rows; the inner loop is a tight, branch-free, cache-resident loop over a typed array that the compiler auto-vectorizes into SIMD. This is the model behind <strong>DuckDB, Velox, ClickHouse, and Vectorwise</strong> — and it is the conceptual stepping-stone to the GPU.</p>
+<div class="box mech">
+<div class="tag">Mechanism · why 1,024 is the magic number</div>
+<p>A vector is sized to fit comfortably in L1/L2 cache while being long enough to amortize call overhead and fill SIMD registers. Too small and overhead dominates (back toward Volcano); too large and the working set spills out of cache (back toward full materialization). The GPU takes this idea to its limit: the "vector" becomes the <em>entire column</em>, and the "SIMD lanes" become tens of thousands of GPU threads. cuDF is, in this lineage, a maximally-wide vectorized engine — with all the benefits and the memory-pressure costs that implies.</p>
+</div>
+
+<h4>Data-centric compilation — fuse the whole pipeline</h4>
+<p>HyPer's approach (Neumann, <em>"Efficiently Compiling Efficient Query Plans for Modern Hardware"</em>, VLDB 2011) flips pull to <strong>push</strong> and eliminates the interpreter entirely: the plan is compiled (via LLVM) to machine code in which a tuple is kept <em>in CPU registers</em> and pushed through as many operators as possible before it ever has to be written to memory. The boundaries where data <em>must</em> be materialized are called <strong>pipeline breakers</strong> — the build side of a hash join, a sort, an aggregation. Between two pipeline breakers, all operators are fused into one tight loop over the data.</p>
+<div class="box key">
+<div class="tag">The through-line to the GPU</div>
+<p>This "fuse everything between pipeline breakers" idea is <em>exactly</em> what GPU kernel fusion does, and it's the single most important concept connecting this section to Part IV. On a CPU, fusion keeps tuples in registers to avoid memory traffic. On a GPU, fusion keeps intermediate columns in registers/shared memory to avoid (a) writing multi-gigabyte intermediates to scarce HBM and (b) paying a kernel-launch tax per operator. cuDF's default operator-at-a-time model is the <em>un-fused</em> extreme — every operator materializes its full output — which is why fusion is the headline optimization for GPU query engines.</p>
+</div>
+
+<h4>Morsel-driven parallelism — how to fill many cores</h4>
+<p>Compilation makes a single pipeline fast; <strong>morsel-driven parallelism</strong> (Leis et al., SIGMOD 2014) makes it parallel. The input is sliced into small <strong>morsels</strong> (a few thousand rows). A fixed pool of worker threads pulls morsels from a queue, processes each through the compiled pipeline, and steals work when idle — all NUMA-aware, so a thread processes data on its local memory node. This dynamic, work-stealing dispatch is the CPU cousin of how a GPU schedules thousands of thread-blocks across its streaming multiprocessors: oversubscribe with small units of work and let the hardware load-balance.</p>
+
+<figure>
+<div class="frame">
+<svg viewBox="0 0 720 218" role="img" aria-label="Spectrum of execution granularity">
+  <line x1="40" y1="150" x2="680" y2="150" stroke="var(--line-strong)" stroke-width="1.5"/>
+  <g text-anchor="middle">
+    <text x="40" y="172" class="svg-mono svg-faint">1 tuple</text>
+    <text x="250" y="172" class="svg-mono svg-faint">~1024 (vector)</text>
+    <text x="470" y="172" class="svg-mono svg-faint">full column</text>
+    <text x="650" y="172" class="svg-mono svg-faint">→ width</text>
+  </g>
+  <!-- markers -->
+  <g>
+    <circle cx="40" cy="150" r="5" fill="var(--rust)"/>
+    <circle cx="250" cy="150" r="5" fill="var(--cyan-deep)"/>
+    <circle cx="470" cy="150" r="5" fill="var(--copper)"/>
+  </g>
+  <g text-anchor="middle" class="svg-label">
+    <rect x="-12" y="40" width="104" height="64" rx="6" fill="color-mix(in srgb,var(--rust) 10%,var(--panel))" stroke="var(--rust)"/>
+    <text x="40" y="60">Volcano</text><text x="40" y="78" class="svg-mono" fill="var(--muted)">tuple-at-a-</text><text x="40" y="92" class="svg-mono" fill="var(--muted)">time, pull</text>
+    <rect x="196" y="40" width="108" height="64" rx="6" fill="color-mix(in srgb,var(--cyan) 10%,var(--panel))" stroke="var(--cyan-deep)"/>
+    <text x="250" y="60">Vectorized</text><text x="250" y="78" class="svg-mono" fill="var(--muted)">DuckDB,Velox</text><text x="250" y="92" class="svg-mono" fill="var(--muted)">ClickHouse</text>
+    <rect x="416" y="40" width="108" height="64" rx="6" fill="color-mix(in srgb,var(--copper) 12%,var(--panel))" stroke="var(--copper)"/>
+    <text x="470" y="60">cuDF / GPU</text><text x="470" y="78" class="svg-mono" fill="var(--muted)">operator-at-</text><text x="470" y="92" class="svg-mono" fill="var(--muted)">a-time</text>
+  </g>
+  <!-- compiled annotation -->
+  <g>
+    <path d="M120 120 Q250 116 380 120" fill="none" stroke="var(--sage-deep)" stroke-width="1.3" stroke-dasharray="4 3"/>
+    <text x="250" y="200" text-anchor="middle" class="svg-mono" fill="var(--sage-deep)">compilation/fusion collapses adjacent stages → fewer materializations</text>
+  </g>
+</svg>
+</div>
+<figcaption><b>FIG 08</b>The granularity spectrum. Moving right amortizes overhead and exposes parallelism but materializes wider intermediates. cuDF lives at the far right — maximal width, maximal throughput, maximal memory pressure — which is precisely why <em>fusion</em> (the dashed arc, pulling stages together) is the central GPU optimization: it claws back the materialization cost that the wide model incurs.</figcaption>
+</figure>
+</section>
+
+<section id="columnar">
+<div class="sec-head"><div class="snum">09</div><h2>Columnar &amp; vectorized execution</h2></div>
+<p>Vectorized and GPU execution both assume <strong>columnar</strong> storage — values of one column laid out contiguously, rather than rows laid out field-by-field. For analytics this is the right default, and understanding why explains most of cuDF's memory layout.</p>
+
+<h4>Row vs column, and why analytics is columnar</h4>
+<ul>
+<li><strong>Scan only what you need.</strong> Our query touches <code>region, segment, amount, …</code> but not <code>phone, address</code>. Column storage reads only the referenced column files; row storage drags every field of every row through the cache. For wide tables this is a 10–100× difference in bytes moved.</li>
+<li><strong>Compression that actually helps.</strong> A column holds values of one type and often low cardinality, so it compresses far better than mixed-type rows — and the encodings double as speedups (next).</li>
+<li><strong>SIMD / SIMT friendliness.</strong> A contiguous typed array is exactly what a vector unit — or a GPU warp — wants to chew through with one instruction over many lanes.</li>
+</ul>
+
+<h4>Encodings — and computing without decompressing</h4>
+<p>The encodings matter because the best engines operate on the <em>encoded</em> form:</p>
+<ul>
+<li><strong>Dictionary encoding</strong> — replace values with small integer codes into a dictionary. Filters and joins can run on the codes; group-by can aggregate by code. Decode only at the very end.</li>
+<li><strong>Run-length encoding (RLE)</strong> — store <code>(value, count)</code> for repeated runs. A predicate can accept/reject an entire run at once.</li>
+<li><strong>Bit-packing</strong> — use only as many bits as the value range needs (a column of values 0–7 needs 3 bits, not 32).</li>
+<li><strong>Frame-of-reference</strong> — store deltas from a base value; great for sorted or clustered numeric columns.</li>
+</ul>
+
+<h4>Late materialization — touch the fewest bytes</h4>
+<p>The defining tactic of columnar engines: don't assemble rows early. Operate on columns and pass around <strong>selection vectors</strong> (lists of qualifying row positions) instead of materializing intermediate rows; reconstruct full tuples only at the output. A highly selective filter then means later operators touch tiny position lists rather than wide rows. This is doubly vital on the GPU, where every materialized intermediate consumes scarce HBM and PCIe-adjacent bandwidth — late materialization is one of the few free lunches.</p>
+
+<div class="box mech">
+<div class="tag">Mechanism · Apache Arrow is the bridge to cuDF</div>
+<p>cuDF's in-memory layout <em>is</em> the Apache Arrow columnar format: contiguous typed value buffers plus a separate <strong>validity bitmask</strong> (one bit per element marking null/not-null). Arrow's significance is that it's a <em>shared</em> layout — Spark, pandas, Polars, Velox, and cuDF can hand each other column buffers with zero serialization, and on the GPU that means data can move host→device (or GPU→GPU) as raw Arrow buffers without a transcoding step. When §12 describes a cuDF <code>column</code> as "a data buffer + a null mask + children," that is Arrow. The validity-bitmask detail returns in §14, because handling nulls correctly inside a fused GPU kernel is a real source of complexity.</p>
+</div>
+</section>
+
+<section id="adaptive">
+<div class="sec-head"><div class="snum">10</div><h2>Adaptive query execution</h2></div>
+<p>FIG 04C established that upfront cardinality estimates are often wrong by orders of magnitude. <strong>Adaptive query execution (AQE)</strong> is the pragmatic response: stop trusting the estimate, measure the <em>real</em> cardinality once part of the query has run, and re-optimize the rest with facts instead of guesses.</p>
+
+<h4>The mechanism: re-optimize at materialization boundaries</h4>
+<p>Re-planning can only happen where the engine already has exact statistics — at <strong>pipeline breakers</strong> (§08), the points where an intermediate result is fully materialized. After a shuffle or a build phase completes, the engine knows the true row count and size of that intermediate, and can revise downstream choices before continuing.</p>
+
+<p>Spark's AQE is the most widely deployed example, and its three moves map cleanly onto the problems we've built up:</p>
+<ul>
+<li><strong>Coalesce shuffle partitions.</strong> After a shuffle, merge tiny partitions so the next stage isn't drowned in scheduling overhead — fixing an over-partitioning estimate after the fact.</li>
+<li><strong>Switch join strategy.</strong> If a side estimated as large turns out (post-materialization) to be small enough to fit in memory, swap a sort-merge join for a <strong>broadcast hash join</strong> — exactly the §07 algorithm choice, but made with real sizes.</li>
+<li><strong>Skew handling.</strong> Detect partitions far larger than the median (the join/group-by skew problem) and split them across more tasks so one straggler doesn't dominate. This skew problem is <em>much</em> worse on the GPU (§14–15), where a single hot key serializes atomic updates.</li>
+</ul>
+
+<h4>Sideways information passing (runtime / dynamic filters)</h4>
+<p>A subtler adaptive technique that recurs on the GPU: while building a hash join's build side, construct a compact <strong>Bloom filter</strong> of the build keys and push it <em>down</em> to the probe-side scan. The scan then discards non-matching rows before they're ever read or transferred. On a distributed or GPU engine this can eliminate enormous amounts of data movement — you avoid shuffling or DMA-ing rows that can't possibly join. This is the same idea as predicate pushdown (§03), but the predicate is <em>discovered at runtime</em> from the other side of the join.</p>
+
+<div class="box key">
+<div class="tag">Why GPUs lean on adaptivity even harder</div>
+<p>Three forces make runtime adaptation more important on the GPU than on the CPU: (1) a cardinality miss is more expensive because re-running an operator means re-materializing a multi-GB column in scarce memory; (2) the spill/no-spill decision (does this hash table fit in GPU memory?) genuinely cannot be made well upfront — it depends on the true intermediate size; and (3) the where-to-run-it decision (this operator on GPU vs CPU) depends on data sizes only known at runtime. So GPU query engines tend to combine a lightweight optimizer with aggressive runtime measurement, rather than betting everything on a static plan. AQE isn't a nicety on the GPU — it's load-bearing.</p>
+</div>
+</section>
+
+<section id="matters">
+<div class="sec-head"><div class="snum">11</div><h2>Does the optimizer matter? Engines vs. cuDF</h2></div>
+<p class="lead">This is the question that motivated the manual, so let's answer it squarely: a cost-based optimizer matters enormously in a database <em>engine</em>, matters in a different and subtler way in a library like cuDF, and — crucially — does not <em>vanish</em> on the GPU so much as <em>move up one layer</em> and acquire new variables. The rest of Part IV is the detail behind that sentence.</p>
+
+<h4>Three different answers for three different things</h4>
+<p>"Does the optimizer matter" has no single answer because "the optimizer" lives at different layers depending on what you're running. Pull them apart:</p>
+<div class="tbl"><table>
+<thead><tr><th>Layer</th><th>Is there a cost-based optimizer?</th><th>Who decides the plan?</th></tr></thead>
+<tbody>
+<tr><td><strong>Full DBMS</strong><br><span class="mono">Postgres, Spark, DuckDB</span></td><td><strong>Yes — decisive.</strong> Join order, join algorithm, access paths all chosen by cost.</td><td>The optimizer, from a declarative SQL string. You wrote <em>what</em>, it chose <em>how</em>.</td></tr>
+<tr><td><strong>cuDF as a library</strong><br><span class="mono">df.merge(), df.groupby()</span></td><td><strong>No global optimizer.</strong> Each call is an explicit physical operator invocation.</td><td><em>You do.</em> Calling <code>df.merge(...)</code> <em>is</em> the physical-plan decision — you are the optimizer.</td></tr>
+<tr><td><strong>libcudf internals</strong><br><span class="mono">cudf::hash_join</span></td><td><strong>Local choices only.</strong> Hash vs. sort group-by, partition counts, null-handling paths.</td><td>The library author, per operator — no cross-operator planning.</td></tr>
+<tr><td><strong>SQL engine <em>on</em> cuDF</strong><br><span class="mono">Spark+RAPIDS, Theseus</span></td><td><strong>Yes — and then some.</strong> Classical planning <em>plus</em> GPU-specific rules.</td><td>The engine's optimizer, which now also decides GPU-vs-CPU and transfer strategy.</td></tr>
+</tbody></table></div>
+
+<div class="box key">
+<div class="tag">The load-bearing idea · "with cuDF, you are the optimizer"</div>
+<p>When you write pandas-style cuDF code, there is no component sitting between your call and the kernel that reconsiders your choices. <code>a.merge(b)</code> launches a hash join <em>right now</em>; if joining <code>b</code> into <code>a</code> in the other order, or filtering before the join, would have been 100× cheaper, nothing will fix that for you. Every optimization the §03–07 machinery does automatically — predicate pushdown, join reordering, build-side selection, projection pruning — becomes <em>your</em> responsibility, expressed as the order and shape of your API calls. This is liberating (full control, no estimator betting wrong) and dangerous (no estimator catching your mistakes) in equal measure. The skills in Parts I–II don't stop mattering when you move to cuDF; they stop being automatic.</p>
+</div>
+
+<h4>But libcudf is still making physical decisions for you</h4>
+<p>"No optimizer" doesn't mean "no choices." Below the API, every libcudf operator is itself a packaged physical-operator decision, frozen at library-authoring time rather than chosen per-query:</p>
+<ul>
+<li><code>cudf::groupby</code> picks between a <strong>hash-based</strong> aggregation and a <strong>sort-based</strong> one depending on the aggregations requested — the §07 hash-vs-sort dichotomy, decided inside the library.</li>
+<li><code>cudf::hash_join</code> commits to an open-addressing GPU hash table (via <strong>cuCollections</strong>), a build/probe split, and an output-sizing strategy — the §14 machinery, none of it your call.</li>
+<li>Sorts dispatch to radix sort; nulls flow through validity-mask handling on every operator. These are real algorithmic decisions; you simply don't get a knob for them.</li>
+</ul>
+<p>So the optimization that classical systems do <em>across</em> operators (which order? which algorithm for this specific join?) is absent, while the optimization <em>within</em> an operator (how do I implement a fast GPU hash join?) is present and excellent. cuDF is a library of superb physical operators with no planner on top — which is exactly why putting a planner on top is the whole business of the next layer.</p>
+
+<h4>The engines that put the optimizer back</h4>
+<p>The moment you want to feed cuDF a SQL string instead of imperative calls, the optimizer reappears — and now it has <em>more</em> to decide than a CPU optimizer, not less:</p>
+<ul>
+<li><strong>Spark RAPIDS Accelerator</strong> reuses Spark's <em>Catalyst</em> optimizer wholesale — all the logical rewrites and cost-based join planning of §03–07 still run — then adds a GPU-execution layer that, plan node by plan node, decides whether each operator runs on the GPU (as a libcudf call) or falls back to CPU, inserting host↔device transfers at the boundaries. Its planning problem is Catalyst's <em>plus</em> a placement-and-transfer problem.</li>
+<li><strong>BlazingSQL</strong> (historically) parsed SQL through Apache <em>Calcite</em> — a standalone, reusable optimizer framework — to produce a relational plan, then executed the physical operators on cuDF. The optimizer was Calcite; the executor was the GPU.</li>
+<li><strong>Dask-cuDF</strong> builds a lazy <em>task graph</em> and optimizes <em>that</em> (fusing tasks, pruning columns, pushing down filters) before any kernel runs — graph-level optimization standing in for a classical query optimizer.</li>
+<li><strong>GPU-native engines</strong> (HeavyDB, and newer GPU-first query engines such as NVIDIA's Theseus / the <em>Velox</em>-plus-GPU direction your own work sits in) build a real cost-based optimizer that is GPU-aware from the ground up — modeling PCIe, memory residency, and fusion as first-class costs rather than bolting them on.</li>
+</ul>
+
+<div class="box gpu">
+<div class="tag">The new decision variables the GPU adds</div>
+<p>When the optimizer <em>does</em> exist over a GPU engine, its cost model grows several dimensions the classical model (§05) never had. These are the through-lines of the rest of Part IV:</p>
+<ul style="margin-bottom:0">
+<li><strong>Transfer cost (PCIe).</strong> Moving a column host→device can cost more than computing on it. A "cheaper" plan that forces a transfer can lose to an "expensive" plan that keeps data resident. (§13, §15)</li>
+<li><strong>Memory capacity &amp; spill.</strong> GPU memory is 24–80&nbsp;GB, not terabytes. Whether an intermediate <em>fits</em> is now a planning question, and "spill or not" is a runtime one. (§13, §15)</li>
+<li><strong>Fusion opportunity.</strong> Because the default model materializes every operator, the biggest single win is fusing adjacent operators to skip a multi-GB write. The optimizer wants to maximize fusable runs. (§08, §15)</li>
+<li><strong>Placement (CPU vs. GPU).</strong> In a heterogeneous plan, each operator has a where-to-run decision that depends on data size, transfer cost, and what's already resident. (§16)</li>
+<li><strong>Kernel-launch overhead.</strong> Thousands of tiny operators pay a fixed per-launch tax; the optimizer (or CUDA graphs) wants to amortize it. (§13, §15)</li>
+</ul>
+</div>
+
+<p><strong>The verdict.</strong> Optimization matters as much as it ever did — arguably more, because the penalties (a needless multi-GB transfer, an out-of-memory spill) are harsher than a CPU plan simply running slow. What changes is <em>where</em> it lives: in bare cuDF it collapses onto you, the programmer; in an engine over cuDF it returns as a richer cost-based optimizer with new GPU-specific variables. The classical theory of Parts I–II is the foundation; Part IV is what you build on top of it once the target machine is a GPU.</p>
+</section>
+
+<div class="part-banner">Part IV — Moving Execution onto the GPU</div>
+
+<section id="cudf">
+<div class="sec-head"><div class="snum">12</div><h2>cuDF &amp; libcudf architecture</h2></div>
+<p>Before the GPU operators make sense, you need the shape of the thing they operate on and the memory system they allocate from. cuDF is a stack: a pandas-like Python API on top, a C++ library (<strong>libcudf</strong>) doing the real work, and a memory manager (<strong>RMM</strong>) underneath — all built on the Arrow columnar layout from §09.</p>
+
+<h4>The column model — Arrow on the device</h4>
+<p>A cuDF <strong>column</strong> is not an array of values; it is a small structure of GPU buffers, identical in spirit to Apache Arrow:</p>
+<ul>
+<li>A contiguous <strong>data buffer</strong> in device memory holding the typed values (e.g. <code>int64</code> laid end to end).</li>
+<li>An optional <strong>null mask</strong> — a packed bitmask, one bit per element, 1 = valid, 0 = null. This single detail complicates <em>every</em> GPU kernel (§14), because each thread must check its element's validity bit.</li>
+<li>For nested or variable-width types (strings, lists), one or more <strong>child columns</strong>: a strings column is an <code>int32</code> offsets child plus a <code>char</code> data child, so the values are contiguous and indexed by offset — exactly the GPU-friendly layout, and exactly Arrow.</li>
+</ul>
+<p>Because this layout <em>is</em> Arrow, a cuDF column can be handed to or from Spark, Polars, or pandas, or moved host→device or GPU→GPU, as raw buffers with no serialization step. A <strong>table</strong> is just a set of equal-length columns. There is no row object anywhere — which is the entire point.</p>
+
+<div class="box mech">
+<div class="tag">Mechanism · RMM and why <code>cudaMalloc</code> is the enemy</div>
+<p>A raw <code>cudaMalloc</code>/<code>cudaFree</code> is a <em>synchronizing</em> call: it can stall the GPU and serialize against running kernels, costing tens of microseconds each. An operator-at-a-time engine that allocated a fresh buffer for every intermediate would spend much of its life in the allocator. <strong>RMM</strong> (the RAPIDS Memory Manager) fixes this with a <strong>pool allocator</strong>: grab one big slab of device memory up front, then satisfy each operator's allocation by sub-dividing that slab — turning a kernel-synchronizing system call into a cheap pointer bump. RMM is also the seam where <em>spilling</em> and memory-limit policy (§15) are enforced, and where you'd plug in managed/UVM memory. When people say RAPIDS "manages GPU memory well," this pool is most of what they mean.</p>
+</div>
+
+<h4>The stack, top to bottom</h4>
+<ul>
+<li><strong>libcudf</strong> — the C++ core: typed columns, and the operator library (join, groupby, sort, filter, scan, string ops) implemented as CUDA kernels. This is where the algorithms of §14 live.</li>
+<li><strong>cudf (Python)</strong> — a pandas-shaped binding over libcudf. Each DataFrame method maps to one or a few libcudf calls; there is no lazy graph by default, so each call executes immediately (the "you are the optimizer" property of §11).</li>
+<li><strong>cudf.pandas</strong> — a compatibility shim that makes existing pandas code run on the GPU by intercepting pandas calls and routing them to cuDF, falling back to pandas on the CPU for anything unsupported. A drop-in accelerator, not a new API.</li>
+<li><strong>dask-cudf</strong> — partitions a logical dataframe across many GPUs/nodes, with each partition a cuDF dataframe, coordinated by a Dask task graph (which is itself optimized — §11).</li>
+<li><strong>cuCollections (cuco)</strong> — the standalone GPU data-structure library providing the concurrent hash tables that libcudf's join and hash-groupby are built on. When §14 talks about GPU hash tables, it means cuco.</li>
+</ul>
+
+<div class="box gpu">
+<div class="tag">The execution model, and the cost it implies</div>
+<p>cuDF is <strong>operator-at-a-time</strong>: each operator launches one (or a few) kernels that read whole input columns and write whole output columns to device memory, then returns — the far-right end of the §08 granularity spectrum. This is what makes it simple, composable, and bandwidth-saturating. It is <em>also</em> what makes materialization the dominant cost: a five-operator query writes and re-reads five full intermediates through HBM, and pays five kernel launches. Hold this thought — it is the single fact that motivates fusion (§15) and explains why a chain of cuDF calls can be memory-bound even when each individual kernel is fast.</p>
+</div>
+</section>
+
+<section id="gpu-changes">
+<div class="sec-head"><div class="snum">13</div><h2>What changes on the GPU</h2></div>
+<p class="lead">A GPU is not a faster CPU; it is a different shape of machine, and almost every assumption baked into the classical cost model (§05) and the Volcano execution model (§08) breaks against that shape. Three facts dominate everything else: the GPU has thousands of threads but they march in lockstep; it has staggering memory bandwidth but a tiny pipe to the rest of the system; and it loves doing the same thing to a whole column at once and hates doing one thing to one tuple. Get these three and the rest of Part IV is commentary.</p>
+
+<h4>SIMT: thousands of threads, marching in step</h4>
+<p>A CPU has a handful of fat cores, each with deep out-of-order execution, big caches, and branch prediction tuned to make <em>one</em> thread fast. A GPU has tens of thousands of thin threads grouped into <strong>warps</strong> of 32 that execute in <strong>SIMT</strong> (single-instruction, multiple-thread) fashion: all 32 threads in a warp issue the same instruction each cycle, on different data. This is why a GPU can scan a billion-row column so fast — the work is identical per element and maps perfectly onto warps — and also why two pathologies appear that have no CPU analog:</p>
+<ul>
+<li><strong>Warp divergence.</strong> If threads in a warp take different branches (<code>if (x &gt; 0) A else B</code> with mixed values), the hardware must execute <em>both</em> paths and mask off the inactive threads — serializing what looked like parallel work. A filter or join probe with data-dependent branching can lose much of its throughput to divergence. The columnar, branch-light operators of §09 exist partly to avoid this.</li>
+<li><strong>Coalescing.</strong> When the 32 threads of a warp read 32 <em>consecutive</em> addresses, the hardware fuses them into one wide memory transaction — a <strong>coalesced</strong> access at full bandwidth. When they read scattered addresses (a hash-table probe, a gather), it issues many small transactions and bandwidth collapses. Contiguous columnar layout makes scans coalesce automatically; the random access pattern of hash probing is exactly the case that does <em>not</em> (§14).</li>
+</ul>
+
+<h4>The memory hierarchy — and the straw</h4>
+<p>The second fact is the one that reshapes query planning. A GPU's on-package memory is extraordinarily fast, but everything that has to travel <em>to or from</em> the GPU goes through pipes that are one to two orders of magnitude narrower. The whole game of GPU data processing is keeping work on the fast side of this cliff:</p>
+
+<figure>
+<div class="frame">
+<svg viewBox="0 0 720 300" role="img" aria-label="Memory and interconnect bandwidth hierarchy, log scale">
+  <text x="10" y="20" class="svg-title">Bandwidth hierarchy — bar length &#8733; log&#8321;&#8320;(GB/s)</text>
+  <g class="svg-label" text-anchor="end">
+    <text x="200" y="58">L1 / shared</text>
+    <text x="200" y="91">L2 cache</text>
+    <text x="200" y="124">HBM (global)</text>
+    <text x="200" y="157">NVLink</text>
+    <text x="200" y="190">PCIe Gen5 &#215;16</text>
+    <text x="200" y="223">PCIe Gen4 &#215;16</text>
+    <text x="200" y="256">Network / node</text>
+  </g>
+  <g>
+    <rect x="210" y="44" width="428" height="20" rx="3" fill="color-mix(in srgb,var(--copper) 32%,var(--panel))" stroke="var(--copper-deep)"/>
+    <rect x="210" y="77" width="370" height="20" rx="3" fill="color-mix(in srgb,var(--copper) 26%,var(--panel))" stroke="var(--copper-deep)"/>
+    <rect x="210" y="110" width="353" height="20" rx="3" fill="color-mix(in srgb,var(--copper) 42%,var(--panel))" stroke="var(--copper)"/>
+    <rect x="210" y="143" width="295" height="20" rx="3" fill="color-mix(in srgb,var(--cyan) 28%,var(--panel))" stroke="var(--cyan-deep)"/>
+    <rect x="210" y="176" width="181" height="20" rx="3" fill="color-mix(in srgb,var(--rust) 30%,var(--panel))" stroke="var(--rust)"/>
+    <rect x="210" y="209" width="151" height="20" rx="3" fill="color-mix(in srgb,var(--rust) 30%,var(--panel))" stroke="var(--rust)"/>
+    <rect x="210" y="242" width="140" height="20" rx="3" fill="color-mix(in srgb,var(--rust) 22%,var(--panel))" stroke="var(--rust)"/>
+  </g>
+  <g class="svg-mono" fill="var(--ink)">
+    <text x="646" y="58">~19 TB/s</text>
+    <text x="588" y="91">~5 TB/s</text>
+    <text x="571" y="124">2.0&#8211;3.3 TB/s</text>
+    <text x="513" y="157">600&#8211;900 GB/s</text>
+    <text x="399" y="190">~64 GB/s</text>
+    <text x="369" y="223">~32 GB/s</text>
+    <text x="358" y="256">12&#8211;50 GB/s</text>
+  </g>
+  <line x1="210" y1="38" x2="210" y2="270" stroke="var(--line-strong)" stroke-width="1"/>
+  <text x="150" y="205" class="svg-mono" fill="var(--rust)" text-anchor="middle" transform="rotate(-90 150 205)" style="font-size:10px">the straw</text>
+</svg>
+</div>
+<figcaption><b>FIG 13</b>Where the bandwidth lives. The GPU's on-package memory (HBM, ~2&#8211;3.3&nbsp;TB/s on A100/H100) is a firehose; the PCIe link that connects it to host memory (~32&nbsp;GB/s Gen4, ~64&nbsp;GB/s Gen5) is a straw two orders of magnitude narrower. NVLink (600&#8211;900&nbsp;GB/s) is the fast GPU&#8596;GPU path that partly closes the gap (§16). Every GPU-execution decision is downstream of this picture: <em>compute is cheap, moving data across the straw is not</em>.</figcaption>
+</figure>
+
+<p>Read the figure as a planning constraint. A GPU can chew through HBM-resident data at terabytes per second, so a scan-heavy aggregate that fits in device memory is almost absurdly fast. But the moment a plan needs to pull data <em>across</em> PCIe — to load it, to spill it, to hand it to the CPU — it hits a pipe so narrow that the transfer can dominate total runtime. This single asymmetry is why the new cost-model dimensions of §11 (transfer cost, residency, fusion, placement) exist, and why §15 is mostly a catalog of techniques for not paying the straw tax.</p>
+
+<div class="box gpu">
+<div class="tag">Why Volcano dies on the GPU</div>
+<p>The iterator model of §08 calls <code>next()</code> once per tuple and threads control flow through a tree of operators. On a GPU this is doubly fatal. First, a per-tuple virtual call is meaningless when the execution unit is a 32-wide warp — there is no efficient way to run one tuple through one operator. Second, the model's whole premise is that control flow is cheap and data movement (of one tuple) is free; on a GPU control flow is expensive (divergence) and the only thing that is free-ish is streaming a contiguous column. So GPU engines abandon tuple-at-a-time entirely and run <strong>operator-at-a-time over whole columns</strong> (§12): each operator is a kernel that reads input columns coalesced, does identical work per element across thousands of threads, and writes output columns. The price — full materialization of every intermediate in HBM — is the central cost that fusion (§15) attacks.</p>
+</div>
+
+<h4>Kernel-launch overhead and occupancy</h4>
+<p>Two more GPU-specific costs round out the picture. Every kernel launch has a fixed overhead of a few microseconds — negligible for one big kernel over a billion rows, ruinous for ten thousand tiny kernels over small partitions. This is why GPU engines prefer fewer, larger operators and why <strong>CUDA graphs</strong> (capture a whole sequence of launches once, replay with one call) matter (§15). And to hide HBM latency the GPU relies on <strong>occupancy</strong>: keeping enough warps resident that while some wait on memory, others compute. A kernel that uses too many registers or too much shared memory per thread limits how many warps fit, lowers occupancy, and exposes memory latency — a constraint that directly shapes how the GPU hash table of §14 is sized.</p>
+</section>
+
+<section id="gpu-ops">
+<div class="sec-head"><div class="snum">14</div><h2>GPU operators in depth</h2></div>
+<p class="lead">Now the payoff: how the operators of §07 are actually built on a SIMT machine. Three matter most — hash join, group-by aggregation, and sort — and each runs into the SIMT and bandwidth realities of §13 in a characteristic way. The recurring themes are the build/probe asymmetry from FIG&nbsp;07, the cost of <em>not knowing the output size in advance</em>, and the contention that appears whenever many threads must write the same place.</p>
+
+<h4>GPU hash join</h4>
+<p>Recall the asymmetry (FIG 07): build is write-heavy, probe is read-only and parallel. On a GPU that asymmetry becomes the whole design:</p>
+<ul>
+<li><strong>Build.</strong> Thousands of threads insert keys into a shared hash table <em>concurrently</em>. There is no per-thread lock; instead the table is an <strong>open-addressing</strong> array (no per-bucket chains — chasing pointers would destroy coalescing) and each insertion uses an atomic compare-and-swap (<code>atomicCAS</code>) to claim an empty slot, probing linearly on collision. This is exactly what <strong>cuCollections (cuco)</strong> provides, and it is what <code>cudf::hash_join</code> builds on. Contention on hot slots and the atomics are the cost.</li>
+<li><strong>Probe.</strong> Each probe-side row independently hashes its key and walks the open-addressing slots until it finds a match or an empty slot. The work is read-only and embarrassingly parallel — but the memory access is <em>random</em>, so it does <strong>not</strong> coalesce (§13). A hash-join probe is therefore latency-bound on HBM, hidden only by high occupancy. This is the single biggest reason GPU joins are slower per byte than GPU scans.</li>
+<li><strong>The output-size problem.</strong> Before probing, you do not know how many rows the join will emit (each probe row may match zero, one, or many build rows). You cannot pre-allocate the exact output. Two strategies: <strong>(a) count-then-materialize</strong> — a first pass counts matches per row, a prefix sum (scan) turns counts into output offsets, and a second pass scatters results into the exactly-sized buffer; or <strong>(b) atomic append</strong> — each match does an <code>atomicAdd</code> on a global output counter to claim a write position, trading a sizing pass for atomic contention on the counter. Count-then-materialize is the workhorse because it makes the writes coalesced and the allocation exact.</li>
+<li><strong>Partitioning to fit fast memory.</strong> When the build table is too large for the L2/shared budget that keeps probing fast, the GPU does the same thing the grace hash join of §07 does: <strong>radix-partition</strong> both inputs by hash bits into buckets, then join bucket-by-bucket so each build sub-table fits in fast memory. The CPU technique and the GPU technique are the same idea aimed at a different level of the hierarchy.</li>
+</ul>
+
+<h4>GPU group-by — the contention story</h4>
+<p>Aggregation is where SIMT contention is most visible, and it directly concerns streaming-aggregation work. The naive approach — every thread <code>atomicAdd</code>s its value into a global hash table keyed by group — is correct but pathological under skew: if one key holds 30% of the rows, thousands of threads serialize on that one slot's atomic, and the "parallel" aggregation runs nearly sequentially for the hot key. The fixes mirror the §07 hash-vs-sort dichotomy plus a GPU-specific middle path:</p>
+
+<figure>
+<div class="frame">
+<svg viewBox="0 0 720 250" role="img" aria-label="Naive global atomics versus two-level aggregation on the GPU">
+  <defs><marker id="ag" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L7,4 L0,8 z" fill="var(--muted)"/></marker></defs>
+  <text x="20" y="22" class="svg-title">&#9312; Naive global atomics — hot key serializes</text>
+  <g class="svg-mono" fill="var(--muted)" text-anchor="middle">
+    <text x="40" y="64">t0</text><text x="80" y="64">t1</text><text x="120" y="64">t2</text><text x="160" y="64">t3</text><text x="200" y="64">t4</text>
+  </g>
+  <rect x="120" y="120" width="100" height="34" rx="5" fill="color-mix(in srgb,var(--rust) 24%,var(--panel))" stroke="var(--rust)"/>
+  <text x="170" y="141" text-anchor="middle" class="svg-mono" fill="var(--ink)">slot[K_hot]</text>
+  <g stroke="var(--rust)" stroke-width="1.3" fill="none" marker-end="url(#ag)" opacity="0.85">
+    <path d="M40,72 L150,116"/><path d="M80,72 L160,116"/><path d="M120,72 L170,116"/><path d="M160,72 L180,116"/><path d="M200,72 L190,116"/>
+  </g>
+  <text x="170" y="178" text-anchor="middle" class="svg-mono" fill="var(--rust)">5 atomics &#8594; 1 slot (serialized)</text>
+  <line x1="360" y1="36" x2="360" y2="238" stroke="var(--line-strong)" stroke-width="1" stroke-dasharray="3 3"/>
+  <text x="378" y="22" class="svg-title">&#9313; Two-level — per-block partials, then merge</text>
+  <g class="svg-mono" fill="var(--muted)" text-anchor="middle">
+    <text x="420" y="60">block A</text><text x="560" y="60">block B</text>
+  </g>
+  <rect x="386" y="74" width="120" height="30" rx="5" fill="color-mix(in srgb,var(--cyan) 16%,var(--panel))" stroke="var(--cyan-deep)"/>
+  <text x="446" y="93" text-anchor="middle" class="svg-mono" fill="var(--ink)">shared partial</text>
+  <rect x="528" y="74" width="120" height="30" rx="5" fill="color-mix(in srgb,var(--cyan) 16%,var(--panel))" stroke="var(--cyan-deep)"/>
+  <text x="588" y="93" text-anchor="middle" class="svg-mono" fill="var(--ink)">shared partial</text>
+  <rect x="455" y="170" width="124" height="34" rx="5" fill="color-mix(in srgb,var(--sage) 22%,var(--panel))" stroke="var(--sage-deep)"/>
+  <text x="517" y="191" text-anchor="middle" class="svg-mono" fill="var(--ink)">global merge</text>
+  <g stroke="var(--sage-deep)" stroke-width="1.3" fill="none" marker-end="url(#ag)">
+    <path d="M446,106 L500,166"/><path d="M588,106 L534,166"/>
+  </g>
+  <text x="517" y="226" text-anchor="middle" class="svg-mono" fill="var(--sage-deep)">few merges, low contention</text>
+</svg>
+</div>
+<figcaption><b>FIG 14</b>The aggregation contention trade. Left: all threads atomically update one global hash table, so a skewed hot key serializes thousands of atomics onto a single slot. Right: each thread block first aggregates into a small <em>shared-memory</em> hash table (fast, on-chip, contention confined to the block), then the per-block partial results are merged into the global table — far fewer global atomics, and the hot-key cost is paid once per block instead of once per row. This shared-memory-first pattern is the core trick behind fast GPU group-by and streaming aggregation.</figcaption>
+</figure>
+
+<ul>
+<li><strong>Sort-based (segmented reduction).</strong> Sort rows by group key (radix sort, below), which clusters each group into a contiguous run, then do a single linear <em>segmented reduction</em> over runs. No atomics, perfectly coalesced, skew-immune — but pays the full sort cost. The §07 sort-aggregation, GPU edition.</li>
+<li><strong>Two-level hash (shared then global).</strong> The figure's right panel: aggregate locally in per-block shared memory, then merge partials globally. This keeps almost all the atomic traffic on-chip and is the default high-performance path for moderate group counts.</li>
+<li>The optimizer-shaped decision — when groups are few, hash wins; when groups are enormous or input is pre-sorted, sort wins — is made <em>inside</em> libcudf, the "local choices only" row of the §11 table.</li>
+</ul>
+
+<h4>GPU sort — radix, not comparison</h4>
+<p>Comparison sorts (quicksort, mergesort) are branch-heavy and diverge badly on SIMT. GPUs instead use <strong>radix sort</strong>: process keys digit by digit, and at each digit do a <em>counting sort</em> built from a parallel prefix sum to compute output positions. Radix sort is all coalesced reads, histogram counting, and scatter by computed offset — no data-dependent branching, no divergence. It is the engine under <code>cudf::sort</code>, under sort-based group-by, and under sort-merge joins on the GPU. Note the recurring primitive: the <strong>prefix sum (scan)</strong> turns "how many of each / where does each go" into exact output offsets in both radix sort and the count-then-materialize join — it is the load-bearing parallel primitive of the entire GPU operator library.</p>
+
+<div class="box key">
+<div class="tag">The unifying pattern</div>
+<p>Every GPU operator here reduces to the same three concerns from §13: keep reads <strong>coalesced</strong> (contiguous columns, radix scatter), avoid <strong>divergence</strong> (branch-light, histogram-and-scan instead of compare-and-branch), and manage <strong>contention</strong> on shared writes (open-addressing + atomics for joins, shared-memory-first for aggregation). When you read that a GPU join or group-by is "memory-bound," it is one of these three biting: random probe access that won't coalesce, or atomic serialization on a hot slot. The optimization techniques of §15 are the systemic responses.</p>
+</div>
+</section>
+
+<section id="bottlenecks">
+<div class="sec-head"><div class="snum">15</div><h2>Bottlenecks &amp; how to beat them</h2></div>
+<p class="lead">If §13&#8211;14 explained why the GPU is fast at compute and slow at movement, this section is the practitioner's catalog: the handful of bottlenecks that actually limit GPU query execution, and the established technique for each. Almost every one is a consequence of two facts — the PCIe straw (FIG 13) and operator-at-a-time materialization (§12). Internalize this table and you can predict where a GPU pipeline will hurt before you profile it.</p>
+
+<div class="tbl"><table>
+<thead><tr><th>Bottleneck</th><th>Root cause</th><th>The remedy</th></tr></thead>
+<tbody>
+<tr><td><strong>Host&#8596;device transfer</strong><br><span class="mono">"the transfer tax"</span></td><td>PCIe is ~32&#8211;64 GB/s vs HBM's terabytes (FIG 13). Loading or spilling data crosses the straw.</td><td>Keep data <strong>resident</strong>; <strong>GPUDirect Storage</strong>; <strong>pinned memory</strong>; overlap transfer with compute via streams.</td></tr>
+<tr><td><strong>Limited GPU memory</strong></td><td>Device memory is 24&#8211;80 GB, not terabytes. Big intermediates or build tables don't fit.</td><td><strong>Spilling</strong> (RMM/cuDF spill manager); chunked / <strong>out-of-core streaming</strong>; partitioning to fit.</td></tr>
+<tr><td><strong>Materialized intermediates</strong></td><td>Operator-at-a-time writes every result to HBM and re-reads it (§12). A 5-op chain = 5 round trips.</td><td><strong>Kernel fusion</strong> — merge adjacent operators into one kernel that never writes the intermediate.</td></tr>
+<tr><td><strong>Kernel-launch overhead</strong></td><td>Few &#181;s fixed cost per launch; thousands of small kernels make it dominate.</td><td><strong>CUDA graphs</strong> (capture once, replay as one call); fuse; bigger batches.</td></tr>
+<tr><td><strong>Atomic contention / skew</strong></td><td>Hot keys serialize atomics in joins and group-by (§14); load imbalance starves SMs.</td><td>Shared-memory-first aggregation; radix partitioning; skew-aware splitting.</td></tr>
+<tr><td><strong>Uncoalesced access</strong></td><td>Random hash-probe / gather patterns issue many small HBM transactions (§13).</td><td>Partition to localize; sort to cluster; accept latency-hiding via occupancy.</td></tr>
+</tbody></table></div>
+
+<h4>The transfer tax, and the three ways to dodge it</h4>
+<p>This is the bottleneck that has no CPU equivalent and the one that most often makes a GPU plan lose to a CPU one. Three orthogonal techniques attack it:</p>
+<ul>
+<li><strong>GPUDirect Storage (GDS).</strong> Normally data goes NVMe &#8594; CPU bounce buffer in host RAM &#8594; GPU, crossing the bus twice and burning CPU. GDS establishes a <em>direct</em> DMA path from storage straight into GPU memory, removing the host bounce entirely. For scan-heavy analytics that stream large columns off disk, this can roughly double effective load bandwidth and free the CPU. (This is squarely the I/O-path concern; libraries like <strong>kvikIO</strong> expose GDS to cuDF.)</li>
+<li><strong>Pinned (page-locked) memory.</strong> A normal <code>cudaMemcpy</code> from pageable host memory is slower because the driver must stage through an internal pinned buffer. Allocating the host side as <em>pinned</em> lets the DMA engine read it directly, hitting full PCIe bandwidth and — crucially — enabling true asynchronous copy.</li>
+<li><strong>Overlap via streams.</strong> With pinned memory and multiple CUDA <em>streams</em>, you can copy chunk <em>N+1</em> while computing on chunk <em>N</em>, hiding transfer latency behind compute. A well-pipelined loader makes the straw's width matter less because it is never idle and never the thing you're waiting on at the end.</li>
+</ul>
+<p>The meta-rule behind all three: <strong>the cheapest transfer is the one you don't do.</strong> A GPU engine's first instinct is to keep data resident across as many operators as possible (which is also why fusion and residency-aware planning, §11, pay off twice — once in compute, once in avoided transfers).</p>
+
+<h4>Fusion — the single biggest structural win</h4>
+<p>Operator-at-a-time's defining cost is that a chain like <code>filter &#8594; project &#8594; aggregate</code> writes the filtered column to HBM, reads it back to project, writes that, reads it back to aggregate. Each intermediate is a full multi-GB round trip through the very bandwidth you're trying to conserve. <strong>Kernel fusion</strong> collapses adjacent operators into a single kernel that carries values from one stage to the next <em>in registers or shared memory</em>, never materializing the middle. This is the exact GPU analog of the compiler-based pipelining of HyPer/Neumann (§08): there, a CPU compiler fused operators within a pipeline to keep tuples in registers between pipeline breakers; here, a fused GPU kernel keeps column elements in registers between operators. The pipeline-breaker concept transfers directly — fusion runs <em>between</em> breakers (joins, sorts, aggregations that must see all input), and the breakers are where materialization is unavoidable. An engine over cuDF that wants performance is, more than anything else, a <em>fusion engine</em>.</p>
+
+<div class="box gpu">
+<div class="tag">CUDA graphs · amortizing the launch tax</div>
+<p>When a query decomposes into many small kernels (common when partitions are small or the plan is deep), the few-microsecond launch overhead per kernel adds up to real time, and the CPU issuing launches can even become the bottleneck — the GPU sits idle between launches. <strong>CUDA graphs</strong> solve this by capturing the entire sequence of kernel launches and their dependencies <em>once</em> into a graph object, then replaying the whole thing with a single launch call. The per-kernel CPU overhead is paid at capture time, not on every execution, and the GPU runs the sequence back-to-back. For iterative or repeated query shapes, this turns thousands of launches into one. PyTorch uses the same mechanism to cut launch overhead in training loops — the technique generalizes well beyond databases.</p>
+</div>
+
+<h4>Memory pressure and spilling</h4>
+<p>Because device memory is small, a real engine must answer "what if it doesn't fit?" at runtime — itself an adaptive decision (§10). cuDF's <strong>spill manager</strong> (via RMM) can evict columns from device memory to host memory (or disk) under pressure and page them back on demand, trading the straw tax for not crashing. <strong>Unified Virtual Memory (UVM)</strong> offers an automatic alternative: oversubscribe device memory and let the driver page-fault data in and out — convenient, but page-fault migration is expensive and unpredictable, so hand-managed spilling usually wins for performance-critical paths. Either way, "spill or recompute or fail" becomes a planning-and-runtime decision the classical model never had to make, because host RAM was effectively unbounded.</p>
+</section>
+
+<section id="distributed">
+<div class="sec-head"><div class="snum">16</div><h2>Distributed &amp; multi-GPU execution</h2></div>
+<p class="lead">One GPU's 24&#8211;80 GB runs out, and one node's GPUs run out, long before the data does — so production GPU analytics is distributed across many GPUs and many nodes. This changes the optimization problem in one dominant way: the most expensive thing a distributed query can do is move data <em>between</em> partitions, the <strong>shuffle</strong>, and the optimizer's central job becomes minimizing and accelerating it. This is the layer where the physical-property idea of §07 reaches its final form, and where the GPU-interconnect and communication-library work becomes the critical path.</p>
+
+<h4>Partitioning is the dominant physical property</h4>
+<p>In §07 we said the optimizer tracks <em>sort order</em> and <em>partitioning</em> as physical properties a plan delivers. In a distributed engine, partitioning dominates everything else, because the rule is brutally simple: <strong>an operator can run locally on each partition only if its inputs are partitioned on the right key.</strong> A join of <code>A</code> and <code>B</code> on key <code>k</code> can run partition-local — with no communication — if and only if both <code>A</code> and <code>B</code> are already hash-partitioned on <code>k</code> across the same set of workers. If they aren't, the engine must <em>repartition</em> (shuffle) one or both, and that shuffle is almost always the most expensive operator in the plan. So the distributed optimizer's job is largely: <em>choose a partitioning for every intermediate that satisfies downstream operators while triggering the fewest, smallest shuffles.</em></p>
+
+<h4>The shuffle / exchange operator</h4>
+<p>The <strong>exchange</strong> (or shuffle) operator is how data is repartitioned: every worker hash-partitions its local rows by the target key and sends each row to the worker that owns that key's range, so afterwards each worker holds <em>all</em> rows for its assigned keys. It is an <strong>all-to-all</strong> communication — every worker talks to every other worker — and it is the distributed analog of the join-algorithm choice from §07:</p>
+
+<figure>
+<div class="frame">
+<svg viewBox="0 0 720 280" role="img" aria-label="All-to-all shuffle exchange between GPUs">
+  <defs><marker id="sx" markerWidth="7" markerHeight="7" refX="5.5" refY="3.5" orient="auto"><path d="M0,0 L6,3.5 L0,7 z" fill="var(--muted)"/></marker></defs>
+  <text x="20" y="22" class="svg-title">All-to-all exchange — repartition by key</text>
+  <g class="svg-mono" fill="var(--muted)"><text x="40" y="48">before (mixed keys)</text></g>
+  <g>
+    <rect x="40" y="58" width="120" height="40" rx="6" fill="var(--panel-2)" stroke="var(--line-strong)"/>
+    <rect x="40" y="108" width="120" height="40" rx="6" fill="var(--panel-2)" stroke="var(--line-strong)"/>
+    <rect x="40" y="158" width="120" height="40" rx="6" fill="var(--panel-2)" stroke="var(--line-strong)"/>
+    <text x="100" y="82" text-anchor="middle" class="svg-mono" fill="var(--ink)">GPU 0 &#9638;&#9640;&#9641;</text>
+    <text x="100" y="132" text-anchor="middle" class="svg-mono" fill="var(--ink)">GPU 1 &#9638;&#9640;&#9641;</text>
+    <text x="100" y="182" text-anchor="middle" class="svg-mono" fill="var(--ink)">GPU 2 &#9638;&#9640;&#9641;</text>
+  </g>
+  <g class="svg-mono" fill="var(--muted)"><text x="560" y="48">after (key-aligned)</text></g>
+  <g>
+    <rect x="560" y="58" width="120" height="40" rx="6" fill="color-mix(in srgb,var(--copper) 16%,var(--panel))" stroke="var(--copper-deep)"/>
+    <rect x="560" y="108" width="120" height="40" rx="6" fill="color-mix(in srgb,var(--cyan) 16%,var(--panel))" stroke="var(--cyan-deep)"/>
+    <rect x="560" y="158" width="120" height="40" rx="6" fill="color-mix(in srgb,var(--sage) 18%,var(--panel))" stroke="var(--sage-deep)"/>
+    <text x="620" y="82" text-anchor="middle" class="svg-mono" fill="var(--ink)">GPU 0 &#9638;&#9638;&#9638;</text>
+    <text x="620" y="132" text-anchor="middle" class="svg-mono" fill="var(--ink)">GPU 1 &#9640;&#9640;&#9640;</text>
+    <text x="620" y="182" text-anchor="middle" class="svg-mono" fill="var(--ink)">GPU 2 &#9641;&#9641;&#9641;</text>
+  </g>
+  <g stroke="var(--muted)" stroke-width="1.1" fill="none" marker-end="url(#sx)" opacity="0.7">
+    <path d="M162,78 L558,78"/><path d="M162,80 L558,128"/><path d="M162,82 L558,178"/>
+    <path d="M162,128 L558,80"/><path d="M162,128 L558,128"/><path d="M162,128 L558,178"/>
+    <path d="M162,178 L558,80"/><path d="M162,176 L558,130"/><path d="M162,178 L558,178"/>
+  </g>
+  <text x="360" y="232" text-anchor="middle" class="svg-mono" fill="var(--ink)">every GPU &#8594; every GPU · O(N&#178;) links</text>
+  <text x="360" y="252" text-anchor="middle" class="svg-mono" fill="var(--cyan-deep)">transport: NVLink (intra-node) · GPUDirect RDMA over UCX (inter-node)</text>
+</svg>
+</div>
+<figcaption><b>FIG 16</b>The shuffle. Each GPU starts with a mix of keys (&#9638;&#9640;&#9641;); the exchange sends every row to the GPU that owns its key, so afterward each GPU holds a single key class — exactly what a partition-local join or aggregation needs. The cost is an all-to-all, O(N&#178;) in participants and bounded by interconnect bandwidth. Making that transport fast — NVLink within a node, <strong>GPUDirect RDMA</strong> GPU-to-GPU across nodes via a library like <strong>UCX</strong>, bypassing the CPU and host memory entirely — is what makes distributed GPU joins viable.</figcaption>
+</figure>
+
+<h4>Broadcast vs. hash-partitioned join — the distributed §07 decision</h4>
+<p>Just as a single-node optimizer chooses among nested-loop / sort-merge / hash join, a distributed optimizer chooses among <em>distributed</em> join strategies, and the choice turns on cardinality estimates (§04) exactly as before:</p>
+<ul>
+<li><strong>Broadcast (replicated) join.</strong> If one side is small, send a full copy of it to every worker; each worker then joins its local big-side partition against the complete small side — no shuffle of the big side at all. This is the distributed cousin of build-side selection, and it is what Spark AQE's "switch to broadcast" move (§10) does at runtime when it learns a side is small enough.</li>
+<li><strong>Hash-partitioned (shuffle) join.</strong> If both sides are large, hash-partition <em>both</em> on the join key (two shuffles) so matching keys co-locate, then join locally. Unavoidable when neither side fits for broadcast — and the case where shuffle performance is everything.</li>
+<li>Choosing wrong is catastrophic here in a way it isn't on one node: broadcasting a "small" side that cardinality estimation under-counted can OOM every worker, while shuffling a side that could have been broadcast wastes the most expensive resource in the system. The §04 hinge bites hardest at distributed scale.</li>
+</ul>
+
+<div class="box gpu">
+<div class="tag">Why the interconnect <em>is</em> the cost model · where the UCX work lands</div>
+<p>On a single GPU the bottleneck was PCIe (FIG 13). Across GPUs it becomes the <strong>network and the GPU-to-GPU path</strong>, and the same "don't cross the slow link" logic governs planning — now at cluster scale. The naive path for a cross-node shuffle is GPU &#8594; host memory &#8594; NIC &#8594; network &#8594; NIC &#8594; host memory &#8594; GPU, crossing PCIe four times and copying through CPU buffers twice. <strong>GPUDirect RDMA</strong> removes the host bounce: the NIC reads and writes GPU memory directly, so a partition moves GPU&#8594;GPU across the network without ever touching host RAM. A communication library like <strong>UCX</strong> is what abstracts this — selecting NVLink, PCIe peer-to-peer, or RDMA transports automatically, and exposing tag-matched messaging plus one-sided RMA and active messages for the irregular, data-dependent send patterns a shuffle produces (each worker sends a different, unpredictable amount to each peer). This is precisely why UCX-based GPU exchange/shuffle in an engine like Velox/Presto is on the critical path: the distributed optimizer can minimize shuffles, but the shuffles that remain are bounded entirely by how fast this layer moves bytes between GPUs. Optimizer and interconnect are two halves of the same performance story — the planner decides <em>how much</em> to move, the communication library decides <em>how fast</em> it moves.</p>
+</div>
+
+<p>Multi-GPU adds a hierarchy to even this: GPUs <em>within</em> a node talk over NVLink (600&#8211;900 GB/s), GPUs <em>across</em> nodes over the network (often 10&#215; slower), so a topology-aware engine prefers intra-node exchange and minimizes inter-node traffic — the NUMA and network-topology concerns of single-node tuning, lifted to the cluster. The dominant physical property (partitioning) and the dominant cost (moving between partitions) are the same idea from §07 and §16's opening, now the entire ballgame.</p>
+</section>
+
+<div class="part-banner">Part V — Synthesis</div>
+
+<section id="systems">
+<div class="sec-head"><div class="snum">17</div><h2>A tour of real systems</h2></div>
+<p class="lead">Every idea in this manual is a design axis, and real systems are points in that space — each one a particular set of answers to "how granular is execution, where does optimization happen, and what hardware is the target." Reading systems this way turns a zoo of product names into a small number of recurring decisions. Here is the map.</p>
+
+<div class="tbl"><table>
+<thead><tr><th>System</th><th>Execution model</th><th>Optimizer</th><th>Where it lands in this manual</th></tr></thead>
+<tbody>
+<tr><td><strong>PostgreSQL</strong></td><td>Volcano iterator, tuple-at-a-time (§08)</td><td>Cost-based; System-R DP join ordering, GEQO for many joins (§06)</td><td>The canonical textbook optimizer — every term in Parts I&#8211;II is concrete here.</td></tr>
+<tr><td><strong>Spark SQL</strong></td><td>Whole-stage codegen over partitions; distributed</td><td><em>Catalyst</em>: tree-transformation rules + cost + <strong>AQE</strong> (§10)</td><td>Rules (§03), distributed shuffle/broadcast (§16), runtime re-optimization (§10).</td></tr>
+<tr><td><strong>DuckDB</strong></td><td>Vectorized, push-based, columnar (§08&#8211;09)</td><td>Cost-based with a vectorized cost model</td><td>The modern in-process analytics design: §09 columnar + §08 vectorization done well.</td></tr>
+<tr><td><strong>HyPer / Umbra</strong></td><td>Data-centric <strong>compilation</strong> to machine code (§08)</td><td>Cost-based; pipeline-aware</td><td>Neumann's compiled model — the CPU ancestor of GPU kernel fusion (§15).</td></tr>
+<tr><td><strong>Presto / Velox</strong></td><td>Vectorized columnar execution library; distributed</td><td>Engine-level (Presto) over a reusable execution core (Velox)</td><td>The "execution engine as a library" pattern; the substrate UCX GPU exchange plugs into (§16).</td></tr>
+<tr><td><strong>HeavyDB</strong> (OmniSci)</td><td>GPU-native, LLVM-compiled kernels</td><td>Cost-based, GPU-aware</td><td>An early proof that a real cost-based optimizer can target the GPU (§11, §13).</td></tr>
+<tr><td><strong>BlazingSQL</strong></td><td>cuDF operators on the GPU</td><td>Apache <em>Calcite</em> for SQL &#8594; relational plan (§11)</td><td>SQL-on-cuDF: classical optimizer front end, GPU physical execution.</td></tr>
+<tr><td><strong>cuDF</strong> (bare)</td><td>Operator-at-a-time over Arrow columns (§12)</td><td><em>None</em> — you are the optimizer (§11)</td><td>The library at the center of Part IV; local physical choices only.</td></tr>
+<tr><td><strong>Spark RAPIDS</strong></td><td>libcudf operators per plan node; distributed</td><td>Catalyst + GPU placement/transfer layer (§11)</td><td>Classical planning <em>plus</em> the new GPU variables of §11; CPU&#8596;GPU fallback.</td></tr>
+<tr><td><strong>Theseus / GPU-native</strong></td><td>GPU-first, fusion- and residency-aware</td><td>Cost-based, GPU-native from the ground up (§11)</td><td>Where Part IV points: PCIe, memory residency, and fusion as first-class costs.</td></tr>
+</tbody></table></div>
+
+<p>Two trajectories are visible in the table. Horizontally, the <strong>execution model</strong> marches rightward along the §08 granularity spectrum — from PostgreSQL's tuple-at-a-time, through DuckDB's vectors and HyPer's compiled pipelines, to cuDF's whole-column operators — with each step trading per-tuple flexibility for raw throughput. Vertically, the <strong>optimizer</strong> migrates: decisive and automatic in the full DBMSs at the top; absent in bare cuDF; and then <em>reconstructed</em> — richer than before — in the engines that put SQL back on top of the GPU. The newest GPU-native systems close the loop, building a cost-based optimizer that is GPU-aware in its bones rather than bolted on. That arc — optimizer present, then absent, then rebuilt with new variables — is the whole story of §11 made concrete across a decade of systems.</p>
+
+<div class="box ex">
+<div class="tag">How to place any new system in ten seconds</div>
+<p>Ask three questions and you've located it. <em>(1) What's the execution granularity?</em> — tuple, vector, compiled pipeline, or whole column (§08). <em>(2) Is there a cost-based optimizer, and at what layer?</em> — engine, library, or none (§11). <em>(3) What hardware does the cost model actually model?</em> — pages and CPU cycles, or HBM bandwidth, PCIe transfers, and residency (§05 vs §13). Every system in analytics, GPU or not, is an answer to those three; the rest is engineering detail layered on top.</p>
+</div>
+</section>
+
+<section id="synthesis">
+<div class="sec-head"><div class="snum">18</div><h2>The whole machine</h2></div>
+<p class="lead">Step back from the parts and the shape of the whole becomes visible. A query optimizer is one idea wearing many costumes, and the move to the GPU does not replace that idea — it raises the stakes on it and adds new variables. Here is the manual compressed to the few sentences worth carrying out the door.</p>
+
+<h4>The optimizer is a bet under uncertainty about a machine</h4>
+<p>From the very first section: the optimizer takes a declarative query, faces a search space too large to enumerate exhaustively (§06), estimates costs from statistics that are always approximate (§04&#8211;05), and commits to a single physical plan it hopes is good. It is a wager — and like any wager, its quality depends on the odds (the cost model) being honest about the table (the hardware). Everything else in the manual is detail about how the bet is placed and what happens when the table changes.</p>
+
+<h4>Cardinality estimation is the hinge</h4>
+<p>If one idea earns disproportionate attention, it is this (§04). Every downstream decision — join order, join algorithm, broadcast-vs-shuffle, build-side selection, whether an intermediate fits in GPU memory — is only as good as the row-count estimate feeding it, and estimation error compounds multiplicatively up a join tree. This is why adaptive execution exists (§10), why the independence assumption is the classic failure mode, and why "the optimizer chose a bad plan" almost always traces back to "the estimate was wrong." On the GPU the hinge swings harder: a misjudged cardinality doesn't just make a plan slow, it can force a multi-GB transfer or an out-of-memory spill.</p>
+
+<h4>Fusion is the GPU analog of compilation</h4>
+<p>The throughline of Part IV. The CPU world learned that tuple-at-a-time iteration wastes cycles on control flow, and answered with vectorization and then compilation — fusing operators within a pipeline to keep data in registers between pipeline breakers (§08). The GPU world inherits the identical insight in a new dialect: operator-at-a-time execution wastes the GPU's scarce resource — memory bandwidth — by materializing every intermediate, and the answer is <strong>kernel fusion</strong>, keeping column elements in registers between operators across the same pipeline breakers (§15). Same problem, same solution, different hardware. Recognizing that equivalence is most of what it takes to reason about GPU query performance.</p>
+
+<h4>Partitioning and the shuffle dominate at scale</h4>
+<p>The physical-property idea of §07 — that a plan delivers sort order and partitioning, not just rows — becomes the entire game in distributed and multi-GPU execution (§16). The dominant cost is moving data between partitions; the dominant optimization is choosing partitionings that avoid doing so; and the dominant engineering problem is making the unavoidable shuffles fast, which is exactly what GPUDirect RDMA and a communication library like UCX exist to do. At cluster scale, the optimizer decides how much to move and the interconnect decides how fast — and the two are inseparable halves of one performance story.</p>
+
+<h4>Optimization moves up a layer — and gains new variables</h4>
+<p>The direct answer to the question that opened the manual (§11). A cost-based optimizer is decisive in a database engine, absent in bare cuDF (where calling an operator <em>is</em> the plan decision and you are the optimizer), and reconstructed — richer than before — in engines built over the GPU. What it gains on the way up are dimensions the classical model never had: transfer cost across the PCIe straw, memory capacity and spill, fusion opportunity, and CPU-vs-GPU placement. Optimization didn't vanish when execution moved to the GPU; it relocated and grew. The classical theory of Parts I&#8211;III is the foundation, and Part IV is what you build on it once the target machine is a firehose connected to the world by a straw.</p>
+
+<div class="box key">
+<div class="tag">The one-sentence version</div>
+<p>A query optimizer is a bet, placed under cardinality uncertainty, about how to run a plan on a specific machine; moving that machine from CPU to GPU keeps every classical idea, swaps compilation for fusion, makes the interconnect the cost model, and pushes the optimizer one layer up — above cuDF, into the engine — where it acquires a new set of variables and matters more than ever.</p>
+</div>
+</section>
+
+<footer style="line-height:1.6">
+<p style="margin:0 0 .4rem"><b style="font-weight:600">Query Optimizers &amp; the Road to the GPU</b> — a field manual.</p>
+<p style="margin:0 0 .4rem">Eighteen sections, five parts: from declarative SQL through the cost-based optimizer core to vectorized, compiled, and GPU execution, ending in distributed multi-GPU shuffle — one running star-schema query carried end to end. Built as a single self-contained file.</p>
+<p style="margin:0;color:var(--faint)">Key references threaded throughout: Selinger et&nbsp;al. (System&nbsp;R, 1979) · Graefe (Volcano &amp; Cascades) · Boncz/Zukowski/Nes (MonetDB/X100, CIDR&nbsp;2005) · Neumann (compiled plans, VLDB&nbsp;2011) · Leis et&nbsp;al. (morsel-driven, SIGMOD&nbsp;2014; <em>How Good Are Query Optimizers, Really?</em>, VLDB&nbsp;2015) · the Apache&nbsp;Arrow, RAPIDS&nbsp;cuDF, libcudf, RMM, and cuCollections stack · UCX.</p>
+</footer>
+
+</main>
+</div>
+
+<script>
+// theme toggle (persisted when storage is available; degrades silently in sandboxes)
+(function(){
+  var root=document.documentElement,btn=document.getElementById('themeBtn'),txt=document.getElementById('themeTxt');
+  var saved=null;try{saved=localStorage.getItem('qo-theme')}catch(e){}
+  if(saved){root.setAttribute('data-theme',saved)}
+  function sync(){var d=root.getAttribute('data-theme')==='dark';txt.textContent=d?'LIGHT':'DARK';}
+  sync();
+  btn.addEventListener('click',function(){
+    var next=root.getAttribute('data-theme')==='dark'?'light':'dark';
+    root.setAttribute('data-theme',next);try{localStorage.setItem('qo-theme',next)}catch(e){}sync();
+  });
+})();
+// copy buttons
+function attachCopy(){
+  document.querySelectorAll('.code .cp').forEach(function(b){
+    if(b._w)return;b._w=1;
+    b.addEventListener('click',function(){
+      var pre=b.closest('.code').querySelector('pre');
+      navigator.clipboard.writeText(pre.innerText).then(function(){
+        var o=b.textContent;b.textContent='copied';setTimeout(function(){b.textContent=o},1300);
+      }).catch(function(){});
+    });
+  });
+}
+// scroll-spy + progress
+(function(){
+  var prog=document.getElementById('prog');
+  var links=[].slice.call(document.querySelectorAll('nav.toc a'));
+  var map={};links.forEach(function(a){map[a.getAttribute('href').slice(1)]=a;});
+  function onScroll(){
+    var h=document.documentElement;
+    var p=h.scrollTop/(h.scrollHeight-h.clientHeight||1);
+    if(prog)prog.style.width=(p*100).toFixed(1)+'%';
+  }
+  var io=new IntersectionObserver(function(es){
+    es.forEach(function(e){
+      if(e.isIntersecting){
+        var id=e.target.id;
+        links.forEach(function(a){a.classList.remove('active')});
+        if(map[id])map[id].classList.add('active');
+      }
+    });
+  },{rootMargin:'-20% 0px -70% 0px'});
+  document.querySelectorAll('section[id]').forEach(function(s){io.observe(s)});
+  window.addEventListener('scroll',onScroll,{passive:true});onScroll();
+  document.addEventListener('DOMContentLoaded',attachCopy);attachCopy();
+})();
+</script>
+</body>
+</html>
