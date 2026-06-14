@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Radix Sort on the GPU — Field Manual</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#13110d; --panel:#1a1813; --panel-2:#211e17; --elev:#262219;
+  --ink:#ece4d4; --ink-dim:#a89c86; --ink-faint:#766c5b;
+  --rule:#332e24; --rule-2:#403a2d;
+  --copper:#d68a4e; --copper-2:#e9a36a; --copper-deep:#b06a30;
+  --cyan:#62b4c0; --cyan-2:#7fcad5;
+  --sage:#9fb184; --sage-2:#b4c69b;
+  --num:#cf9f6a;
+  --ff-body:"Source Serif 4",Georgia,serif;
+  --ff-ui:"Instrument Sans",system-ui,-apple-system,sans-serif;
+  --ff-mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+[data-theme="light"]{
+  --bg:#f3eee3; --panel:#fbf8f0; --panel-2:#f4efe4; --elev:#fffdf7;
+  --ink:#2a251c; --ink-dim:#6c6353; --ink-faint:#9a907d;
+  --rule:#ded6c6; --rule-2:#cbc1ad;
+  --copper:#b3622a; --copper-2:#9f561f; --copper-deep:#8f4a18;
+  --cyan:#2c8593; --cyan-2:#206b78;
+  --sage:#5f7547; --sage-2:#506439;
+  --num:#9a6a2e;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--ff-body);font-size:17px;line-height:1.62;-webkit-font-smoothing:antialiased}
+.layout{display:grid;grid-template-columns:248px minmax(0,1fr);gap:0;max-width:1320px;margin:0 auto}
+.side{position:sticky;top:0;height:100vh;border-right:1px solid var(--rule);padding:34px 26px;display:flex;flex-direction:column;gap:26px;overflow-y:auto}
+.brand{font-family:var(--ff-ui);font-weight:700;letter-spacing:.01em;font-size:15px;line-height:1.3}
+.brand .tag{display:block;font-weight:600;font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--copper);margin-bottom:8px}
+.nav{font-family:var(--ff-ui);font-size:13.5px;display:flex;flex-direction:column;gap:1px}
+.nav a{color:var(--ink-dim);text-decoration:none;padding:7px 10px;border-radius:5px;display:flex;gap:10px;align-items:baseline;transition:background .15s,color .15s}
+.nav a .n{font-family:var(--ff-mono);font-size:10.5px;color:var(--ink-faint);width:18px;flex:none}
+.nav a:hover{background:var(--panel);color:var(--ink)}
+.nav a.active{color:var(--copper-2);background:var(--panel)}
+.nav a.active .n{color:var(--copper)}
+.side-foot{margin-top:auto;font-family:var(--ff-ui);font-size:11.5px;color:var(--ink-faint);line-height:1.5}
+.tbtn{font-family:var(--ff-ui);font-size:12px;font-weight:600;color:var(--ink-dim);background:var(--panel);border:1px solid var(--rule-2);border-radius:6px;padding:7px 12px;cursor:pointer;width:fit-content;transition:.15s}
+.tbtn:hover{color:var(--ink);border-color:var(--copper-deep)}
+main{padding:0 0 120px}
+.wrap{max-width:780px;padding:0 48px}
+section{padding-top:64px;scroll-margin-top:24px}
+.mast{padding:64px 48px 0;max-width:880px}
+.eyebrow{font-family:var(--ff-ui);font-size:11px;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:var(--copper);margin:0 0 20px}
+h1{font-family:var(--ff-body);font-weight:700;font-size:clamp(38px,6vw,62px);line-height:1.02;letter-spacing:-.02em;margin:0 0 22px}
+h1 em{font-style:italic;color:var(--copper-2)}
+.lede{font-size:21px;line-height:1.5;color:var(--ink);max-width:660px;margin:0 0 26px}
+.lede .q{color:var(--cyan-2)}
+.meta{font-family:var(--ff-mono);font-size:12px;color:var(--ink-dim);display:flex;flex-wrap:wrap;gap:6px 0;border-top:1px solid var(--rule);padding-top:18px;max-width:660px}
+.meta span{padding:0 16px;border-right:1px solid var(--rule)}
+.meta span:first-child{padding-left:0}
+.meta span:last-child{border-right:0}
+.meta b{color:var(--copper-2);font-weight:600}
+h2{font-family:var(--ff-ui);font-weight:700;font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--copper);margin:0 0 22px;padding-bottom:12px;border-bottom:1px solid var(--rule);display:flex;gap:14px;align-items:baseline}
+h2 .num{font-family:var(--ff-mono);font-size:12px;color:var(--ink-faint)}
+h3{font-family:var(--ff-ui);font-weight:600;font-size:18px;letter-spacing:-.01em;color:var(--ink);margin:34px 0 10px}
+p{margin:0 0 18px}
+.wrap p,.mast .lede{max-width:680px}
+strong{color:var(--ink);font-weight:600}
+em{color:var(--ink)}
+a.inl{color:var(--cyan-2);text-decoration:none;border-bottom:1px solid var(--rule-2)}
+a.inl:hover{border-color:var(--cyan)}
+code.k{font-family:var(--ff-mono);font-size:.86em;color:var(--copper-2);background:var(--panel);padding:1px 6px;border-radius:4px;border:1px solid var(--rule)}
+.callout{border-left:2px solid var(--copper-deep);background:var(--panel);padding:16px 20px;margin:24px 0;border-radius:0 6px 6px 0;font-size:15.5px;color:var(--ink-dim)}
+.callout b{color:var(--copper-2)}
+.viz{background:var(--panel);border:1px solid var(--rule);border-radius:12px;margin:8px 0 0;overflow:hidden}
+.viz-top{padding:22px 26px 6px}
+.viz-steplab{font-family:var(--ff-ui);font-size:12.5px;font-weight:600;letter-spacing:.04em;color:var(--copper-2);text-transform:uppercase}
+.viz-array{display:flex;gap:9px;padding:26px 26px 10px;overflow-x:auto;min-height:118px;align-items:flex-end}
+.cell{flex:0 0 auto;width:50px;background:var(--panel-2);border:1px solid var(--rule-2);border-radius:6px;padding:9px 0 7px;display:flex;flex-direction:column;align-items:center;gap:5px;will-change:transform}
+.cell-v{font-family:var(--ff-mono);font-weight:700;font-size:18px;color:var(--ink)}
+.cell-bits{font-family:var(--ff-mono);font-size:9px;letter-spacing:.5px;color:var(--ink-faint);display:flex;gap:2px}
+.cell-bits .bits-hot{background:var(--copper);color:#1a1208;border-radius:2px;padding:0 1px;font-weight:700}
+[data-theme="light"] .cell-bits .bits-hot{color:#fff}
+.cell-badge{font-family:var(--ff-mono);font-weight:700;font-size:12px;width:20px;height:20px;line-height:20px;text-align:center;border-radius:5px;color:var(--cyan-2);background:color-mix(in srgb,var(--cyan) 14%,transparent);border:1px solid color-mix(in srgb,var(--cyan) 32%,transparent)}
+.cell.hot{border-color:var(--copper);box-shadow:0 0 0 1px var(--copper-deep),0 4px 14px -6px var(--copper-deep)}
+.cell.hot .cell-v{color:var(--copper-2)}
+.cell.done{border-color:color-mix(in srgb,var(--sage) 42%,var(--rule-2))}
+.cell.done .cell-v{color:var(--sage-2)}
+.cell.done .cell-badge{display:none}
+.viz-buckets{display:grid;grid-template-columns:repeat(16,1fr);gap:5px;padding:6px 26px 18px;align-items:end}
+.viz-buckets.hidden{display:none}
+.bk{display:flex;flex-direction:column;align-items:center;gap:4px;cursor:default;border-radius:5px;padding-top:4px;transition:background .15s}
+.bk-off{font-family:var(--ff-mono);font-size:11px;font-weight:700;color:var(--cyan-2);min-height:15px}
+.bk-off.ph{color:var(--ink-faint);font-weight:400}
+.bk-barwrap{height:98px;display:flex;align-items:flex-end;width:100%;justify-content:center}
+.bk-bar{width:62%;min-height:2px;border-radius:3px 3px 0 0;background:linear-gradient(180deg,var(--copper-2),var(--copper-deep));transition:height .35s cubic-bezier(.22,.61,.36,1)}
+.bk-cnt{font-family:var(--ff-mono);font-size:10px;color:var(--ink-dim)}
+.bk-lab{font-family:var(--ff-mono);font-size:11px;font-weight:600;color:var(--ink-faint)}
+.bk.hot{background:color-mix(in srgb,var(--copper) 16%,transparent)}
+.bk.hot .bk-bar{background:linear-gradient(180deg,var(--cyan-2),var(--cyan))}
+.bk.hot .bk-lab,.bk.hot .bk-cnt{color:var(--cyan-2)}
+.viz-cap{font-family:var(--ff-body);font-size:15px;line-height:1.55;color:var(--ink-dim);padding:16px 26px;border-top:1px solid var(--rule);min-height:78px}
+.viz-controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:16px 26px;border-top:1px solid var(--rule);background:var(--panel-2)}
+.vb{font-family:var(--ff-ui);font-size:13px;font-weight:600;color:var(--ink);background:var(--elev);border:1px solid var(--rule-2);border-radius:7px;padding:8px 15px;cursor:pointer;transition:.13s}
+.vb:hover:not(:disabled){border-color:var(--copper-deep);color:var(--copper-2)}
+.vb:disabled{opacity:.36;cursor:default}
+.vb.primary{background:var(--copper);color:#1a1208;border-color:var(--copper)}
+[data-theme="light"] .vb.primary{color:#fff}
+.vb.primary:hover{background:var(--copper-2)}
+.vspring{flex:1}
+.sizer{display:flex;align-items:center;gap:10px;font-family:var(--ff-ui);font-size:12.5px;color:var(--ink-dim)}
+.sizer input[type=range]{accent-color:var(--copper);width:108px}
+.sizer b{font-family:var(--ff-mono);color:var(--ink);min-width:18px;text-align:right}
+.codecard{border:1px solid var(--rule);border-radius:10px;overflow:hidden;margin:10px 0 8px;background:var(--panel)}
+.codebar{display:flex;align-items:center;justify-content:space-between;padding:11px 16px;border-bottom:1px solid var(--rule);background:var(--panel-2)}
+.codebar .fn{font-family:var(--ff-mono);font-size:12.5px;color:var(--ink-dim)}
+.codebar .fn b{color:var(--copper-2);font-weight:600}
+.cpbtn{font-family:var(--ff-ui);font-size:12px;font-weight:600;color:var(--ink-dim);background:var(--elev);border:1px solid var(--rule-2);border-radius:6px;padding:6px 13px;cursor:pointer;transition:.13s}
+.cpbtn:hover{color:var(--copper-2);border-color:var(--copper-deep)}
+.code{font-family:var(--ff-mono);font-size:12.5px;line-height:1.62;max-height:600px;overflow:auto;padding:14px 0}
+.cl{display:flex;min-height:1.62em}
+.cl .ln{flex:0 0 auto;width:48px;text-align:right;padding-right:16px;color:var(--ink-faint);opacity:.55;user-select:none}
+.cl .lc{white-space:pre;padding-right:24px}
+.t-cm{color:var(--ink-faint);font-style:italic}
+.t-kw{color:var(--copper)}
+.t-ty{color:var(--cyan)}
+.t-cu{color:var(--sage-2);font-weight:600}
+.t-str{color:var(--sage)}
+.t-num{color:var(--num)}
+.t-pp{color:var(--cyan-2)}
+.mini{font-family:var(--ff-mono);font-size:12.5px;line-height:1.6;background:var(--panel);border:1px solid var(--rule);border-radius:8px;padding:16px 18px;margin:18px 0;overflow-x:auto;white-space:pre;color:var(--ink)}
+.tbl{width:100%;border-collapse:collapse;margin:18px 0;font-size:14px;font-family:var(--ff-ui)}
+.tbl th{text-align:left;font-weight:600;color:var(--copper);font-size:11px;letter-spacing:.08em;text-transform:uppercase;padding:10px 14px;border-bottom:1px solid var(--rule-2)}
+.tbl td{padding:11px 14px;border-bottom:1px solid var(--rule);color:var(--ink-dim);vertical-align:top}
+.tbl td b{color:var(--ink);font-weight:600}
+.tbl td.mono,.tbl th.mono{font-family:var(--ff-mono);font-size:12.5px}
+.tbl tr:hover td{background:var(--panel)}
+.phases{display:flex;flex-direction:column;gap:0;margin:8px 0}
+.phase{display:grid;grid-template-columns:42px 1fr;gap:18px;padding:22px 0;border-bottom:1px solid var(--rule)}
+.phase:last-child{border-bottom:0}
+.phase .pn{font-family:var(--ff-mono);font-size:13px;font-weight:700;color:var(--copper);padding-top:2px}
+.phase h3{margin:0 0 8px}
+.phase p{margin:0;font-size:15.5px;color:var(--ink-dim)}
+@media (max-width:920px){
+  .layout{grid-template-columns:1fr}
+  .side{position:static;height:auto;border-right:0;border-bottom:1px solid var(--rule);flex-direction:row;flex-wrap:wrap;align-items:center;gap:14px 22px;padding:18px 24px}
+  .nav{flex-direction:row;flex-wrap:wrap;gap:2px}
+  .nav a .n{display:none}
+  .side-foot{display:none}
+  .mast{padding:40px 24px 0}
+  .wrap{padding:0 24px}
+  .viz-buckets{padding-left:14px;padding-right:14px;gap:3px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}html{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="side">
+    <div class="brand"><span class="tag">Field Manual</span>Data-Parallel Primitives — Radix Sort</div>
+    <nav class="nav" id="nav">
+      <a href="#demo"><span class="n">00</span>Live demonstration</a>
+      <a href="#why"><span class="n">01</span>Why radix on a GPU</a>
+      <a href="#algorithm"><span class="n">02</span>The algorithm</a>
+      <a href="#phases"><span class="n">03</span>Three GPU phases</a>
+      <a href="#stability"><span class="n">04</span>Stability</a>
+      <a href="#code"><span class="n">05</span>Complete CUDA source</a>
+      <a href="#perf"><span class="n">06</span>Performance &amp; tuning</a>
+      <a href="#variants"><span class="n">07</span>Variants &amp; extensions</a>
+    </nav>
+    <button class="tbtn" id="themeBtn">Light</button>
+    <div class="side-foot">32-bit unsigned keys · 4-bit digit · 16 buckets · 8 stable passes (LSD). Verified against <code style="font-family:var(--ff-mono)">std::sort</code>.</div>
+  </aside>
+
+  <main>
+    <header class="mast">
+      <p class="eyebrow">Non-comparative · Linear-time · Bandwidth-bound</p>
+      <h1>Radix Sort<br>on the <em>GPU</em></h1>
+      <p class="lede">No comparisons. No branches on key values. Just three primitives a GPU was built for — <span class="q">count</span>, <span class="q">scan</span>, <span class="q">scatter</span> — repeated once per digit until the array falls into order.</p>
+      <div class="meta">
+        <span><b>O(k&middot;n)</b> time</span>
+        <span><b>16</b> buckets</span>
+        <span><b>8</b> passes</span>
+        <span>stable counting sort</span>
+      </div>
+    </header>
+
+    <section id="demo">
+      <div class="wrap">
+        <h2><span class="num">00</span>Live demonstration</h2>
+        <p>Below is the exact procedure each GPU pass performs, run on a small array of 8-bit keys so you can watch every move. Two passes finish the job here (low nibble, then high nibble); a real 32-bit key needs eight passes of this identical loop. Step through it, or hover any bucket to spotlight the keys that land there.</p>
+      </div>
+      <div class="wrap">
+        <div class="viz" id="viz">
+          <div class="viz-top"><span class="viz-steplab" id="vizStepLabel">Pass 1 / 2</span></div>
+          <div class="viz-array" id="vizArray"></div>
+          <div class="viz-buckets hidden" id="vizBuckets"></div>
+          <div class="viz-cap" id="vizCaption"></div>
+          <div class="viz-controls">
+            <button class="vb" id="btnPrev">&larr; Back</button>
+            <button class="vb primary" id="btnNext">Next &rarr;</button>
+            <button class="vb" id="btnPlay">Play</button>
+            <button class="vb" id="btnReset">Restart</button>
+            <span class="vspring"></span>
+            <span class="sizer">keys
+              <input type="range" id="sizeInput" min="8" max="20" step="1" value="16">
+              <b id="sizeVal">16</b>
+            </span>
+            <button class="vb" id="btnRand">Shuffle</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="why">
+      <div class="wrap">
+        <h2><span class="num">01</span>Why radix sort fits a GPU</h2>
+        <p>Comparison sorts are bound from below by <code class="k">&Omega;(n log n)</code> comparisons, and on a GPU they pay an extra penalty: the partition and merge steps branch on data, so warps diverge and memory access turns irregular. Radix sort avoids the comparison model entirely. It is a <strong>distribution sort</strong> — it inspects keys digit by digit in a chosen base and runs in <code class="k">O(k&middot;n)</code>, where <code class="k">k</code> is the number of digit passes. For a fixed key width that is linear in <code class="k">n</code>.</p>
+        <p>What makes it a natural GPU citizen is that every phase reduces to a primitive the hardware is exceptional at: <strong>counting</strong> a histogram is embarrassingly parallel — thousands of threads tally into shared-memory bins. The <strong>prefix sum</strong> that turns counts into output offsets is the canonical <em>scan</em>, the most studied GPU primitive there is. And the final <strong>scatter</strong> is a wide stream of global writes. Crucially, control flow never depends on a key's <em>value</em> — only on its current digit, which every thread handles uniformly, so warps stay coherent.</p>
+        <div class="callout"><b>The regime matters.</b> Radix sort is memory-bandwidth bound, not compute bound — exactly where GPUs hold their largest lead over CPUs. Production implementations (NVIDIA's <code style="font-family:var(--ff-mono)">cub::DeviceRadixSort</code> and the newer <em>onesweep</em> algorithm) run at a large fraction of peak DRAM bandwidth, and <code style="font-family:var(--ff-mono)">thrust::sort</code> on integer keys dispatches straight to them.</div>
+      </div>
+    </section>
+
+    <section id="algorithm">
+      <div class="wrap">
+        <h2><span class="num">02</span>The algorithm</h2>
+        <p>Pick a <strong>radix</strong> — the base in which keys are read. With a 4-bit digit the radix is 16, so a 32-bit key is an 8-digit number in base 16. Radix sort processes those digits one at a time.</p>
+        <h3>LSD: least-significant digit first</h3>
+        <p>We start at the lowest digit and work up to the highest. Each pass performs a <strong>stable counting sort</strong> on the current digit only. The trick is that stability lets earlier (lower) digits survive: once the most-significant digit is placed, the array is fully sorted, because within any group of equal high digits the keys are still in the order the previous passes left them. (The mirror image, <em>MSD</em>, recurses high-to-low into buckets and suits variable-length keys and strings, but LSD's flat, branch-free structure is friendlier to GPU bandwidth, so it dominates for fixed-width integers.)</p>
+        <h3>One pass is a counting sort</h3>
+        <p>A single digit pass is three moves — precisely the three steps the demonstration animates. <strong>Histogram:</strong> count how many keys carry each digit value (0–F), giving 16 bucket counts. <strong>Prefix sum:</strong> take an <em>exclusive</em> scan of those counts; the result for digit <code class="k">d</code> is the number of keys with a strictly smaller digit, which is exactly the index where bucket <code class="k">d</code> begins in the output. <strong>Scatter:</strong> walk the keys in order and drop each into <code class="k">output[offset[digit]++]</code> — incrementing the offset as you go keeps equal-digit keys in their original order, and that is the stability.</p>
+        <p>Done serially that's trivial. The interesting work is doing all three in parallel across a GPU without losing stability, which is the next section.</p>
+      </div>
+    </section>
+
+    <section id="phases">
+      <div class="wrap">
+        <h2><span class="num">03</span>The three GPU phases</h2>
+        <p>The serial counting sort has a sequential dependency — that <code class="k">offset[digit]++</code> threads through every key. To parallelize, the array is cut into <strong>tiles</strong>, one per thread block, and the three moves become three kernels.</p>
+        <div class="phases">
+          <div class="phase">
+            <div class="pn">P1</div>
+            <div>
+              <h3>Histogram — per-block counting</h3>
+              <p>Each block reads its tile with <em>coalesced, striped</em> loads (thread <code class="k">t</code> touches keys <code class="k">t, t+blockDim, &hellip;</code> so consecutive threads hit consecutive addresses) and tallies digits into a 16-entry shared-memory histogram via <code class="k">atomicAdd</code>. It then writes that histogram to a global table laid out as <code class="k">blockHist[digit&middot;numBlocks + block]</code> — digit-major on purpose.</p>
+            </div>
+          </div>
+          <div class="phase">
+            <div class="pn">P2</div>
+            <div>
+              <h3>Scan — one device-wide exclusive prefix sum</h3>
+              <p>A single exclusive scan runs over that whole flat table. Because the layout is digit-major then block-minor, the scanned value at <code class="k">(d, b)</code> equals <em>(keys with a smaller digit, across the entire array)</em> plus <em>(keys with digit d in earlier blocks)</em> — i.e. the precise global slot where block <code class="k">b</code>'s run of digit-<code class="k">d</code> keys must begin. One scan computes every block's every-digit offset at once. Production code uses <code class="k">cub::DeviceScan</code>; the source here calls <code class="k">thrust::exclusive_scan</code>, which sits on the same machinery.</p>
+            </div>
+          </div>
+          <div class="phase">
+            <div class="pn">P3</div>
+            <div>
+              <h3>Scatter — stable global placement</h3>
+              <p>Each block re-reads its tile with a <em>blocked</em> layout (thread <code class="k">t</code> owns a contiguous run), so a thread sees its own keys in original order. Per-thread sub-histograms plus a block-wide column scan give every key its <strong>within-block rank</strong> among equal-digit keys. The final address is <code class="k">globalOffset[d,b] + rank</code> — and because thread order and in-thread order are both preserved, equal keys never overtake one another. That is the stability LSD demands.</p>
+            </div>
+          </div>
+        </div>
+        <div class="callout"><b>Coalescing footnote.</b> Blocked loads in the scatter aren't coalesced, and naive global writes are scattered. The fastest sorts (CUB) first sort keys <em>locally within the tile</em> so each digit's writes are contiguous, and use a shared-memory transpose to keep loads coalesced. The source here keeps blocked global loads for legibility — the algorithm is identical, only the memory choreography differs.</div>
+      </div>
+    </section>
+
+    <section id="stability">
+      <div class="wrap">
+        <h2><span class="num">04</span>Stability is not optional</h2>
+        <p>A sort is <strong>stable</strong> if equal elements keep their input order. For LSD radix sort this isn't a nicety — it is the correctness argument. Each pass sorts on one digit and trusts the previous passes to have ordered everything less significant. If a pass reorders two keys that share its current digit, it silently scrambles the lower-digit ordering those keys had already earned.</p>
+        <p>Concretely, take two keys written as two hex digits, high&ndash;low: <code class="k">A = 0x14</code> (decimal 20) and <code class="k">B = 0x12</code> (decimal 18). After the low-nibble pass, <code class="k">B</code> precedes <code class="k">A</code> because its low nibble (2) is smaller than A's (4) — correct, since 18 &lt; 20. The high-nibble pass now compares high nibbles, and both are <code class="k">1</code>: a tie. A <strong>stable</strong> pass leaves <code class="k">B</code> before <code class="k">A</code>, giving 18, 20. An <strong>unstable</strong> pass might swap them to 20, 18 — undoing the low-nibble work and producing a wrong answer. Stability is the thread that stitches the passes together.</p>
+        <p>This is why the scatter kernel goes to such lengths — per-thread histograms, a block-wide column scan, contiguous within-thread runs — purely to guarantee that two keys with the same digit land in the output in the same order they arrived.</p>
+      </div>
+    </section>
+
+    <section id="code">
+      <div class="wrap">
+        <h2><span class="num">05</span>Complete CUDA source</h2>
+        <p>The full program: the two custom kernels (<code class="k">histogramKernel</code>, <code class="k">scatterKernel</code>), a Thrust scan between them, an 8-pass host driver that ping-pongs two device buffers, and a <code class="k">main</code> that generates data, times the sort with CUDA events, and verifies the result against <code class="k">std::sort</code>. Build with <code class="k">nvcc -O3 -arch=sm_80 radix_sort.cu -o radix_sort</code> (swap the arch for your GPU) and run <code class="k">./radix_sort [n]</code>. Requires only the CUDA Toolkit — Thrust ships with it.</p>
+      </div>
+      <div class="wrap">
+        <div class="codecard">
+          <div class="codebar"><span class="fn"><b>radix_sort.cu</b> &middot; LSD radix sort, 4-bit digit</span><button class="cpbtn" id="copyBtn">Copy</button></div>
+          <div class="code" id="cuda-code"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="perf">
+      <div class="wrap">
+        <h2><span class="num">06</span>Performance &amp; tuning</h2>
+        <h3>The radix-bits knob</h3>
+        <p>Choosing <code class="k">r</code> bits per digit sets two opposing quantities: there are <code class="k">2^r</code> buckets and <code class="k">&lceil;32/r&rceil;</code> passes. More bits mean fewer passes — and since each pass reads and writes the whole array, fewer passes means less DRAM traffic — but also a larger histogram, a larger scan, more shared memory, and a wider scatter. The sweet spots in practice are 4 and 8 bits.</p>
+        <table class="tbl">
+          <thead><tr><th class="mono">r</th><th class="mono">buckets</th><th class="mono">passes</th><th>character</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">1</td><td class="mono">2</td><td class="mono">32</td><td>Pure scan-driven split (Blelloch). Tiny state, trivially stable, but maximal memory traffic. Best for teaching.</td></tr>
+            <tr><td class="mono">4</td><td class="mono">16</td><td class="mono">8</td><td>This manual. Histograms and scans stay small; the scatter's <b>BLOCK_SIZE&times;16</b> shared histogram is 16&nbsp;KB. A clean balance.</td></tr>
+            <tr><td class="mono">8</td><td class="mono">256</td><td class="mono">4</td><td>Half the passes, so roughly half the traffic — what CUB favors — at the cost of a 256-wide histogram and scan and heavier per-block state.</td></tr>
+          </tbody>
+        </table>
+        <h3>Why it is bandwidth bound</h3>
+        <p>Each pass moves every key twice — one read, one write — so total DRAM traffic is about <code class="k">2 &middot; passes &middot; 4 &middot; n</code> bytes for 32-bit keys (key-value sorting doubles it). With 8 passes that's ~64<code class="k">n</code> bytes streamed. The histogram and scan touch only <code class="k">16 &times; numBlocks</code> elements — negligible beside the key array — so wall-clock time tracks how efficiently those key reads and writes hit peak bandwidth. The whole optimization game is (1) cut passes via a larger radix, and (2) keep every key access coalesced.</p>
+        <h3>One sweep instead of three kernels</h3>
+        <p>The version here launches three kernels per pass and bounces through global memory between them. The current state of the art, <strong>onesweep</strong> (in CUB), fuses the global digit-offset computation into a single pass using <em>decoupled look-back</em> — a chained scan where each block publishes a partial result and peeks backward at its predecessors instead of waiting for a separate global scan. That collapses a pass to roughly one read and one write of the keys, close to the hardware floor.</p>
+        <div class="callout"><b>In production, call CUB.</b> <code style="font-family:var(--ff-mono)">cub::DeviceRadixSort::SortKeys</code> (and <code style="font-family:var(--ff-mono)">SortPairs</code>) handles key-value pairs, ascending or descending order, and sorting only a bit subrange via <code style="font-family:var(--ff-mono)">begin_bit</code>/<code style="font-family:var(--ff-mono)">end_bit</code> — and it is retuned per architecture. The kernels here are for understanding what CUB is doing, not for beating it.</div>
+      </div>
+    </section>
+
+    <section id="variants">
+      <div class="wrap">
+        <h2><span class="num">07</span>Variants &amp; extensions</h2>
+        <h3>The 1-bit split (Blelloch's formulation)</h3>
+        <p>Strip the radix down to a single bit and each pass becomes a stable <em>split</em>: keys with a 0 bit move to the front, keys with a 1 bit to the back, order preserved within each group. The whole thing is driven by one exclusive scan. It is the multi-bit algorithm in miniature — every bucket count is just &ldquo;how many zeros so far&rdquo; — and it is the clearest way to see why a scan is the heart of radix sort.</p>
+        <div class="mini" id="code-split"></div>
+        <h3>Signed integers</h3>
+        <p>An unsigned radix sort orders negative two's-complement integers <em>after</em> positives, because their sign bit is 1. Fix it by flipping the sign bit before sorting and again after: <code class="k">key ^ 0x80000000</code>. Now the bit patterns are monotonic in signed value.</p>
+        <h3>IEEE-754 floats</h3>
+        <p>Floats need a slightly richer transform because negative floats have <em>descending</em> bit patterns. Map each bit pattern to an order-preserving unsigned key: if the sign bit is set, flip all 32 bits; otherwise flip only the sign bit. Sort, then invert the map. This handles &plusmn;0 and orders everything correctly (NaNs sort to the ends).</p>
+        <div class="mini" id="code-float"></div>
+        <h3>Key&ndash;value pairs</h3>
+        <p>To sort records, carry a parallel <code class="k">values</code> array and scatter each value to the <em>same</em> destination its key computes — <code class="k">valuesOut[dest] = valuesIn[i]</code> inside the scatter kernel. Everything else is unchanged; you simply move twice the bytes. For large payloads, sort an index array instead and gather once at the end.</p>
+        <h3>Descending order</h3>
+        <p>Either reverse the digit-to-offset mapping (assign bucket <code class="k">15&minus;d</code>'s region to digit <code class="k">d</code>) or sort ascending and reverse the result. CUB exposes this directly as <code class="k">SortKeysDescending</code>.</p>
+        <h3>MSD for strings and variable-length keys</h3>
+        <p>When keys vary in length or you want early termination, switch to most-significant-digit first: partition into buckets by the top digit, then recurse into each bucket independently. Buckets become independent subproblems — natural parallelism — and once a bucket holds one element it needs no further work, which LSD can't exploit.</p>
+      </div>
+    </section>
+  </main>
+</div>
+<script type="text/plain" id="src-split">
+e[i]        = 1 - bit(key[i])        // 1 where the current bit is 0
+f           = exclusive_scan(e)      // count of zeros before position i
+totalFalses = e[n-1] + f[n-1]        // total number of zeros in the array
+dst[i]      = bit(key[i]) ? (i - f[i] + totalFalses)   // ones: after every zero
+                         : f[i]                         // zeros: keep scan rank
+out[dst[i]] = key[i]                 // one stable split, driven by a single scan
+</script>
+<script type="text/plain" id="src-float">
+// Map an IEEE-754 float bit pattern to an unsigned key whose integer
+// order matches float order, so a plain unsigned radix sort just works.
+__device__ uint32_t floatFlip(uint32_t u){
+    uint32_t mask = (u >> 31) ? 0xFFFFFFFFu : 0x80000000u;
+    return u ^ mask;     // negative: flip all bits; positive: flip only the sign bit
+}
+__device__ uint32_t floatUnflip(uint32_t u){
+    uint32_t mask = (u >> 31) ? 0x80000000u : 0xFFFFFFFFu;
+    return u ^ mask;     // invert the mapping once sorting is done
+}
+</script>
+<script type="text/plain" id="cuda-src">
+// =============================================================================
+//  radix_sort.cu  —  A complete, stable, parallel GPU LSD radix sort in CUDA
+// =============================================================================
+//
+//  Sorts an array of 32-bit unsigned integers on the GPU using least-significant-
+//  digit (LSD) radix sort with a 4-bit digit (16 buckets), 8 passes total.
+//
+//  Each pass is a *stable* counting sort over one 4-bit digit, decomposed into
+//  three GPU phases:
+//
+//    1. HISTOGRAM   Each block scans a tile of keys and counts how many fall in
+//                   each of the 16 digit buckets, writing a per-block histogram
+//                   laid out as blockHist[digit * numBlocks + block].
+//
+//    2. SCAN        A single device-wide exclusive prefix sum over that flat
+//                   histogram. Because the layout is digit-major / block-minor,
+//                   the scanned value at (digit d, block b) equals:
+//                       (# keys with digit < d, over the whole array)
+//                     + (# keys with digit == d, in blocks before b)
+//                   i.e. exactly the global output offset where block b's run of
+//                   digit-d keys begins. (Production code uses CUB's DeviceScan;
+//                   Thrust calls into the same machinery.)
+//
+//    3. SCATTER     Each block re-reads its tile and writes every key to its final
+//                   global position = scanned_offset[d,b] + within-block rank.
+//                   The within-block rank is computed *stably* (preserving original
+//                   order among equal-digit keys) via per-thread sub-histograms and
+//                   a block-wide column scan. Stability is mandatory: LSD radix sort
+//                   is only correct if every digit pass is stable.
+//
+//  After 8 passes (LSB digit -> MSB digit) the array is fully sorted.
+//
+//  Build:   nvcc -O3 -arch=sm_70 radix_sort.cu -o radix_sort
+//           (swap sm_70 for your GPU: sm_75 Turing, sm_80 A100, sm_86 Ampere,
+//            sm_89 Ada, sm_90 Hopper)
+//  Run:     ./radix_sort [num_elements]
+//
+//  Requires the CUDA Toolkit (Thrust ships with it). No other dependencies.
+// =============================================================================
+
+#include <cstdio>
+#include <cstdint>
+#include <cstdlib>
+#include <vector>
+#include <random>
+#include <algorithm>
+#include <string>
+
+#include <cuda_runtime.h>
+#include <thrust/scan.h>
+#include <thrust/execution_policy.h>
+
+// -----------------------------------------------------------------------------
+//  Error-checking helper
+// -----------------------------------------------------------------------------
+#define CUDA_CHECK(call)                                                        \
+    do {                                                                        \
+        cudaError_t _err = (call);                                              \
+        if (_err != cudaSuccess) {                                              \
+            fprintf(stderr, "CUDA error at %s:%d  '%s' -> %s\n",                \
+                    __FILE__, __LINE__, #call, cudaGetErrorString(_err));      \
+            std::exit(EXIT_FAILURE);                                            \
+        }                                                                       \
+    } while (0)
+
+// -----------------------------------------------------------------------------
+//  Tunable configuration (all compile-time constants)
+// -----------------------------------------------------------------------------
+constexpr int      RADIX_BITS       = 4;                       // bits per pass
+constexpr int      RADIX            = 1 << RADIX_BITS;         // 16 buckets
+constexpr uint32_t RADIX_MASK       = RADIX - 1;              // 0xF
+constexpr int      NUM_PASSES       = (sizeof(uint32_t) * 8) / RADIX_BITS; // 8
+constexpr int      BLOCK_SIZE       = 256;                     // threads / block
+constexpr int      ITEMS_PER_THREAD = 4;                       // grain size
+constexpr int      TILE_SIZE        = BLOCK_SIZE * ITEMS_PER_THREAD; // 1024 keys/block
+
+// =============================================================================
+//  PHASE 1 — Per-block digit histogram
+//
+//  Reads are *striped* (thread t touches keys t, t+BLOCK_SIZE, ...) so that
+//  consecutive threads read consecutive addresses -> fully coalesced loads.
+//  Counts accumulate in a 16-entry shared histogram via atomicAdd, then the
+//  block writes its histogram to global memory in [digit][block] layout.
+// =============================================================================
+__global__ void histogramKernel(const uint32_t* __restrict__ keys,
+                                 uint32_t* __restrict__ blockHist,
+                                 int n, int shift, int numBlocks)
+{
+    __shared__ uint32_t s_hist[RADIX];
+
+    // Zero the shared histogram.
+    for (int i = threadIdx.x; i < RADIX; i += BLOCK_SIZE)
+        s_hist[i] = 0u;
+    __syncthreads();
+
+    const int block = blockIdx.x;
+    const int base  = block * TILE_SIZE;
+
+    // Coalesced, striped accumulation.
+    #pragma unroll
+    for (int i = 0; i < ITEMS_PER_THREAD; ++i) {
+        const int idx = base + threadIdx.x + i * BLOCK_SIZE;
+        if (idx < n) {
+            const uint32_t digit = (keys[idx] >> shift) & RADIX_MASK;
+            atomicAdd(&s_hist[digit], 1u);
+        }
+    }
+    __syncthreads();
+
+    // Write the block histogram out, digit-major so the global scan is contiguous.
+    for (int d = threadIdx.x; d < RADIX; d += BLOCK_SIZE)
+        blockHist[d * numBlocks + block] = s_hist[d];
+}
+
+// =============================================================================
+//  PHASE 3 — Stable scatter
+//
+//  Layout here is *blocked* (thread t owns the contiguous run
+//  [t*ITEMS_PER_THREAD, ...)). Blocked ownership lets each thread process its
+//  items in original order, which — combined with an exclusive scan across
+//  threads — yields a stable within-block rank for every key.
+//
+//  globalOffset = scanned[digit*numBlocks + block]   (from Phase 2)
+//  finalPos     = globalOffset + (#equal-digit keys in earlier threads)
+//                              + (#equal-digit keys earlier in this thread)
+//
+//  NOTE on performance: blocked loads are not coalesced. Production sorts (CUB)
+//  load striped/coalesced into shared memory and transpose to blocked there.
+//  We keep blocked global loads for clarity; the algorithm is identical.
+// =============================================================================
+__global__ void scatterKernel(const uint32_t* __restrict__ keysIn,
+                              uint32_t* __restrict__ keysOut,
+                              const uint32_t* __restrict__ globalOffset,
+                              int n, int shift, int numBlocks)
+{
+    // s_hist[thread][digit]: each thread's private sub-histogram, then scanned.
+    __shared__ uint32_t s_hist[BLOCK_SIZE][RADIX];
+
+    const int t    = threadIdx.x;
+    const int base = blockIdx.x * TILE_SIZE;
+
+    // Keep this thread's keys and digits in registers; -1 marks out-of-range.
+    uint32_t key[ITEMS_PER_THREAD];
+    int      dig[ITEMS_PER_THREAD];
+
+    #pragma unroll
+    for (int d = 0; d < RADIX; ++d) s_hist[t][d] = 0u;
+
+    #pragma unroll
+    for (int j = 0; j < ITEMS_PER_THREAD; ++j) {
+        const int idx = base + t * ITEMS_PER_THREAD + j;
+        if (idx < n) {
+            key[j] = keysIn[idx];
+            dig[j] = (int)((key[j] >> shift) & RADIX_MASK);
+            s_hist[t][dig[j]]++;            // count my items per digit
+        } else {
+            dig[j] = -1;
+        }
+    }
+    __syncthreads();
+
+    // Exclusive prefix sum down each digit column across the BLOCK_SIZE threads.
+    // After this, s_hist[t][d] = number of digit-d keys owned by threads < t.
+    // Done by the first RADIX threads (one column each) for simplicity.
+    if (t < RADIX) {
+        const int d = t;
+        uint32_t run = 0u;
+        for (int r = 0; r < BLOCK_SIZE; ++r) {
+            const uint32_t v = s_hist[r][d];
+            s_hist[r][d] = run;
+            run += v;
+        }
+    }
+    __syncthreads();
+
+    // Assign each key its final global slot, preserving original order.
+    uint32_t local[RADIX];
+    #pragma unroll
+    for (int d = 0; d < RADIX; ++d) local[d] = 0u;
+
+    #pragma unroll
+    for (int j = 0; j < ITEMS_PER_THREAD; ++j) {
+        if (dig[j] >= 0) {
+            const int d = dig[j];
+            const uint32_t rank = s_hist[t][d] + local[d];   // stable within-block rank
+            local[d]++;
+            keysOut[globalOffset[d * numBlocks + blockIdx.x] + rank] = key[j];
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
+//  Host driver: runs all 8 passes, ping-ponging between two device buffers.
+// -----------------------------------------------------------------------------
+float radixSortGPU(uint32_t* d_keys, uint32_t* d_alt, int n)
+{
+    const int numBlocks = (n + TILE_SIZE - 1) / TILE_SIZE;
+
+    uint32_t* d_hist = nullptr;     // [RADIX * numBlocks] histogram
+    uint32_t* d_off  = nullptr;     // [RADIX * numBlocks] scanned offsets
+    CUDA_CHECK(cudaMalloc(&d_hist, sizeof(uint32_t) * RADIX * numBlocks));
+    CUDA_CHECK(cudaMalloc(&d_off,  sizeof(uint32_t) * RADIX * numBlocks));
+
+    uint32_t* in  = d_keys;
+    uint32_t* out = d_alt;
+
+    cudaEvent_t start, stop;
+    CUDA_CHECK(cudaEventCreate(&start));
+    CUDA_CHECK(cudaEventCreate(&stop));
+    CUDA_CHECK(cudaEventRecord(start));
+
+    for (int pass = 0; pass < NUM_PASSES; ++pass) {
+        const int shift = pass * RADIX_BITS;
+
+        // Phase 1: histogram
+        histogramKernel<<<numBlocks, BLOCK_SIZE>>>(in, d_hist, n, shift, numBlocks);
+        CUDA_CHECK(cudaGetLastError());
+
+        // Phase 2: device-wide exclusive scan of the histogram
+        thrust::exclusive_scan(thrust::device,
+                               d_hist, d_hist + RADIX * numBlocks, d_off);
+
+        // Phase 3: stable scatter
+        scatterKernel<<<numBlocks, BLOCK_SIZE>>>(in, out, d_off, n, shift, numBlocks);
+        CUDA_CHECK(cudaGetLastError());
+
+        std::swap(in, out);   // output of this pass is input of the next
+    }
+
+    CUDA_CHECK(cudaEventRecord(stop));
+    CUDA_CHECK(cudaEventSynchronize(stop));
+    float ms = 0.0f;
+    CUDA_CHECK(cudaEventElapsedTime(&ms, start, stop));
+
+    // After NUM_PASSES swaps the sorted data lives in `in`. If that is not the
+    // original d_keys buffer, copy it back so the caller always reads d_keys.
+    if (in != d_keys)
+        CUDA_CHECK(cudaMemcpy(d_keys, in, sizeof(uint32_t) * n,
+                              cudaMemcpyDeviceToDevice));
+
+    CUDA_CHECK(cudaEventDestroy(start));
+    CUDA_CHECK(cudaEventDestroy(stop));
+    CUDA_CHECK(cudaFree(d_hist));
+    CUDA_CHECK(cudaFree(d_off));
+    return ms;
+}
+
+// -----------------------------------------------------------------------------
+//  main
+// -----------------------------------------------------------------------------
+int main(int argc, char** argv)
+{
+    const int n = (argc > 1) ? std::atoi(argv[1]) : 1 << 22;   // default ~4.2M
+
+    int dev = 0;
+    CUDA_CHECK(cudaGetDevice(&dev));
+    cudaDeviceProp prop{};
+    CUDA_CHECK(cudaGetDeviceProperties(&prop, dev));
+    printf("Device            : %s (sm_%d%d)\n", prop.name, prop.major, prop.minor);
+    printf("Elements          : %d  (%.1f MB)\n", n, n * 4.0 / (1024 * 1024));
+    printf("Radix / passes    : %d-bit digit, %d buckets, %d passes\n",
+           RADIX_BITS, RADIX, NUM_PASSES);
+    printf("Block / tile      : %d threads, %d keys/tile, %d blocks\n",
+           BLOCK_SIZE, TILE_SIZE, (n + TILE_SIZE - 1) / TILE_SIZE);
+
+    // Host data
+    std::vector<uint32_t> h_keys(n);
+    std::mt19937 rng(2025);
+    std::uniform_int_distribution<uint32_t> dist(0, 0xFFFFFFFFu);
+    for (auto& k : h_keys) k = dist(rng);
+
+    std::vector<uint32_t> h_ref = h_keys;          // CPU reference
+
+    // Device buffers
+    uint32_t *d_keys = nullptr, *d_alt = nullptr;
+    CUDA_CHECK(cudaMalloc(&d_keys, sizeof(uint32_t) * n));
+    CUDA_CHECK(cudaMalloc(&d_alt,  sizeof(uint32_t) * n));
+    CUDA_CHECK(cudaMemcpy(d_keys, h_keys.data(), sizeof(uint32_t) * n,
+                          cudaMemcpyHostToDevice));
+
+    // Sort on GPU
+    const float ms = radixSortGPU(d_keys, d_alt, n);
+
+    // Copy result back
+    CUDA_CHECK(cudaMemcpy(h_keys.data(), d_keys, sizeof(uint32_t) * n,
+                          cudaMemcpyDeviceToHost));
+
+    // Verify against std::sort
+    std::sort(h_ref.begin(), h_ref.end());
+    const bool ok = (h_keys == h_ref);
+
+    const double keysPerSec = (n > 0 && ms > 0.0) ? (double)n / (ms / 1e3) : 0.0;
+    printf("\nGPU sort time     : %.3f ms\n", ms);
+    printf("Throughput        : %.1f M keys/s\n", keysPerSec / 1e6);
+    printf("Verification      : %s\n", ok ? "PASSED  (matches std::sort)"
+                                          : "FAILED");
+
+    CUDA_CHECK(cudaFree(d_keys));
+    CUDA_CHECK(cudaFree(d_alt));
+    return ok ? EXIT_SUCCESS : EXIT_FAILURE;
+}
+</script>
+<script>
+(function(){
+  "use strict";
+  var root=document.documentElement, themeBtn=document.getElementById("themeBtn");
+  function setTheme(t){root.setAttribute("data-theme",t);themeBtn.textContent=(t==="dark")?"Light":"Dark";}
+  setTheme("dark");
+  themeBtn.addEventListener("click",function(){setTheme(root.getAttribute("data-theme")==="dark"?"light":"dark");});
+
+  // ---------- syntax highlight (per physical line; source has no multi-line tokens) ----------
+  var KW=new Set("for while do if else return const constexpr void static inline struct class sizeof using namespace template typename auto new delete this switch case break continue default enum public private operator nullptr true false".split(" "));
+  var TY=new Set("int unsigned float double char bool long short signed uint32_t uint8_t uint16_t uint64_t int32_t size_t cudaError_t cudaEvent_t cudaDeviceProp dim3 std vector string mt19937 uniform_int_distribution".split(" "));
+  var CU=new Set("__global__ __shared__ __restrict__ __device__ __host__ __syncthreads atomicAdd threadIdx blockIdx blockDim gridDim cudaMalloc cudaFree cudaMemcpy cudaMemcpyHostToDevice cudaMemcpyDeviceToHost cudaMemcpyDeviceToDevice cudaEventCreate cudaEventRecord cudaEventSynchronize cudaEventElapsedTime cudaEventDestroy cudaGetDevice cudaGetDeviceProperties cudaGetLastError cudaDeviceSynchronize cudaSuccess cudaGetErrorString thrust exclusive_scan device floatFlip floatUnflip".split(" "));
+  function esc(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+  function hlLine(line){
+    var lead=(line.match(/^\s*/)||[""])[0];
+    if(line.charAt(lead.length)==="#"){return esc(lead)+'<span class="t-pp">'+esc(line.slice(lead.length))+'</span>';}
+    var out="",i=0,n=line.length;
+    while(i<n){
+      var c=line.charAt(i),c2=line.charAt(i+1);
+      if(c==="/"&&c2==="/"){out+='<span class="t-cm">'+esc(line.slice(i))+'</span>';break;}
+      if(c==='"'||c==="'"){var q=c,j=i+1;while(j<n){if(line.charAt(j)==="\\"){j+=2;continue;}if(line.charAt(j)===q){j++;break;}j++;}out+='<span class="t-str">'+esc(line.slice(i,j))+'</span>';i=j;continue;}
+      if(/[0-9]/.test(c)||(c==="."&&/[0-9]/.test(c2))){var m=line.slice(i).match(/^(0[xX][0-9a-fA-F]+|[0-9]+\.?[0-9]*([eE][-+]?[0-9]+)?)[uUlLfF]*/);var tok=m?m[0]:c;out+='<span class="t-num">'+esc(tok)+'</span>';i+=tok.length;continue;}
+      if(/[A-Za-z_]/.test(c)){var mm=line.slice(i).match(/^[A-Za-z_]\w*/);var t2=mm[0];var cls=CU.has(t2)?"t-cu":(TY.has(t2)?"t-ty":(KW.has(t2)?"t-kw":""));out+=cls?'<span class="'+cls+'">'+esc(t2)+'</span>':esc(t2);i+=t2.length;continue;}
+      out+=esc(c);i++;
+    }
+    return out;
+  }
+  function trim(s){return s.replace(/^\n+/,"").replace(/\s+$/,"");}
+  function withLines(src){var ls=trim(src).replace(/\t/g,"    ").split("\n");return ls.map(function(ln,k){return '<span class="cl"><span class="ln">'+(k+1)+'</span><span class="lc">'+hlLine(ln)+'</span></span>';}).join("");}
+  function noLines(src){return trim(src).replace(/\t/g,"  ").split("\n").map(hlLine).join("\n");}
+
+  var cudaSrc=trim(document.getElementById("cuda-src").textContent);
+  document.getElementById("cuda-code").innerHTML=withLines(cudaSrc);
+  var sf=document.getElementById("src-float");if(sf)document.getElementById("code-float").innerHTML=noLines(sf.textContent);
+  var ss=document.getElementById("src-split");if(ss)document.getElementById("code-split").innerHTML=noLines(ss.textContent);
+  document.getElementById("copyBtn").addEventListener("click",function(){var b=this;navigator.clipboard.writeText(cudaSrc).then(function(){var o=b.textContent;b.textContent="Copied";setTimeout(function(){b.textContent=o;},1400);}).catch(function(){});});
+
+  // ---------- scrollspy ----------
+  var links={};document.querySelectorAll(".nav a").forEach(function(a){links[a.getAttribute("href").slice(1)]=a;});
+  var spy=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){for(var k in links)links[k].classList.remove("active");var l=links[e.target.id];if(l)l.classList.add("active");}});},{rootMargin:"-18% 0px -72% 0px"});
+  document.querySelectorAll("main section").forEach(function(s){spy.observe(s);});
+
+  // ================= VISUALIZER =================
+  var PASSES=2,RBITS=4,R=16;
+  var elArr=document.getElementById("vizArray"),elBk=document.getElementById("vizBuckets"),
+      elCap=document.getElementById("vizCaption"),elStep=document.getElementById("vizStepLabel"),
+      sizeInput=document.getElementById("sizeInput"),sizeVal=document.getElementById("sizeVal");
+  var data=[],passArrays=[],passData=[],stepIndex=0,playing=false,timer=null;
+  var cellMap=new Map(), TOTAL=PASSES*4+1;
+  var PHN=["Extract digit","Build histogram","Prefix-sum offsets","Scatter (stable)"];
+
+  function digitOf(v,p){return (v>>>(p*RBITS))&(R-1);}
+  function computeAll(){
+    passArrays=[data.slice()];passData=[];
+    for(var p=0;p<PASSES;p++){
+      var order=passArrays[p],hist=new Array(R).fill(0),d;
+      for(var i=0;i<order.length;i++)hist[digitOf(order[i].v,p)]++;
+      var off=new Array(R).fill(0);for(d=1;d<R;d++)off[d]=off[d-1]+hist[d-1];
+      var pos=off.slice(),out=new Array(order.length);
+      for(var j=0;j<order.length;j++){var dd=digitOf(order[j].v,p);out[pos[dd]++]=order[j];}
+      passData.push({hist:hist,offsets:off});passArrays.push(out);
+    }
+  }
+  function stepInfo(k){if(k>=PASSES*4)return {p:PASSES,ph:0,term:true};return {p:Math.floor(k/4),ph:k%4,term:false};}
+
+  function makeCell(c){
+    var d=document.createElement("div");d.className="cell";d.setAttribute("data-id",c.id);
+    d.innerHTML='<div class="cell-v"></div><div class="cell-bits"></div><div class="cell-badge"></div>';
+    d.addEventListener("mouseenter",function(){var dg=d.getAttribute("data-digit");if(dg!==null)hi(+dg,true);});
+    d.addEventListener("mouseleave",function(){hi(-1,false);});
+    return d;
+  }
+  function ensureCells(){
+    var ids=new Set(data.map(function(c){return c.id;}));
+    cellMap.forEach(function(node,id){if(!ids.has(id)){node.remove();cellMap.delete(id);}});
+    for(var i=0;i<data.length;i++){var c=data[i];if(!cellMap.has(c.id)){var node=makeCell(c);cellMap.set(c.id,node);elArr.appendChild(node);}}
+  }
+  function paint(c,p,term){
+    var node=cellMap.get(c.id);
+    node.querySelector(".cell-v").textContent=c.v;
+    var bin=c.v.toString(2);while(bin.length<8)bin="0"+bin;
+    var hiN=bin.slice(0,4),loN=bin.slice(4);
+    if(term){node.querySelector(".cell-bits").innerHTML="<span>"+hiN+"</span><span>"+loN+"</span>";node.querySelector(".cell-badge").textContent="";node.removeAttribute("data-digit");node.classList.add("done");return;}
+    node.classList.remove("done");
+    if(p===0)node.querySelector(".cell-bits").innerHTML="<span>"+hiN+'</span><span class="bits-hot">'+loN+"</span>";
+    else node.querySelector(".cell-bits").innerHTML='<span class="bits-hot">'+hiN+"</span><span>"+loN+"</span>";
+    var dg=digitOf(c.v,p);
+    node.querySelector(".cell-badge").textContent=dg.toString(16).toUpperCase();
+    node.setAttribute("data-digit",dg);
+  }
+  function orderDOM(order){for(var i=0;i<order.length;i++)elArr.appendChild(cellMap.get(order[i].id));}
+  function hi(dg,on){
+    cellMap.forEach(function(node){node.classList.toggle("hot",on&&(+node.getAttribute("data-digit")===dg));});
+    for(var i=0;i<elBk.children.length;i++){var bk=elBk.children[i];bk.classList.toggle("hot",on&&(+bk.getAttribute("data-digit")===dg));}
+  }
+  function buckets(p,ph){
+    elBk.innerHTML="";
+    if(ph<1){elBk.classList.add("hidden");return;}
+    elBk.classList.remove("hidden");
+    var hd=passData[p],maxc=1,d;for(d=0;d<R;d++)maxc=Math.max(maxc,hd.hist[d]);
+    for(d=0;d<R;d++){
+      var bk=document.createElement("div");bk.className="bk";bk.setAttribute("data-digit",d);
+      var off=(ph>=2)?'<div class="bk-off">'+hd.offsets[d]+'</div>':'<div class="bk-off ph">&middot;</div>';
+      var h=Math.round(hd.hist[d]/maxc*96);
+      bk.innerHTML=off+'<div class="bk-barwrap"><div class="bk-bar" style="height:'+h+'px"></div></div><div class="bk-cnt">'+hd.hist[d]+'</div><div class="bk-lab">'+d.toString(16).toUpperCase()+'</div>';
+      (function(dd){bk.addEventListener("mouseenter",function(){hi(dd,true);});bk.addEventListener("mouseleave",function(){hi(-1,false);});})(d);
+      elBk.appendChild(bk);
+    }
+  }
+  function caption(p,ph,term){
+    var lab,cap;
+    if(term){lab="Sorted";cap="All "+PASSES+" digit passes are complete. Because every pass was stable, the array is now fully ordered — a 32-bit key would repeat this exact loop eight times.";}
+    else{
+      lab="Pass "+(p+1)+" / "+PASSES+" \u00B7 "+(p===0?"low nibble":"high nibble")+" \u00B7 "+PHN[ph];
+      if(ph===0)cap="Read the active 4-bit digit (highlighted) from every key. This pass sorts on the "+(p===0?"low":"high")+" nibble; each key's digit value 0\u2013F is shown beneath it.";
+      else if(ph===1)cap="Count how many keys land in each of the 16 buckets. On the GPU every block tallies its own tile into a shared-memory histogram with atomicAdd, then writes it to a global [digit][block] table.";
+      else if(ph===2)cap="Exclusive prefix-sum the counts: offset[d] is the number of keys with a smaller digit — exactly where bucket d's run begins in the output. One device-wide scan does this for every block at once.";
+      else cap="Place each key at output[ offset[digit] + rank ], where rank preserves original order among equal-digit keys. Watch equal-digit keys keep their relative order — that stability is why LSD radix sort is correct.";
+    }
+    elStep.textContent=lab;elCap.textContent=cap;
+  }
+  function render(animate){
+    var s=stepInfo(stepIndex);ensureCells();
+    var order=s.term?passArrays[PASSES]:(s.ph===3?passArrays[s.p+1]:passArrays[s.p]);
+    var paintPass=s.term?(PASSES-1):s.p, first=null, i;
+    if(animate){first=new Map();cellMap.forEach(function(node,id){first.set(id,node.getBoundingClientRect());});}
+    for(i=0;i<data.length;i++)paint(data[i],paintPass,s.term);
+    orderDOM(order);
+    buckets(s.term?0:s.p,s.term?0:s.ph);
+    caption(s.p,s.ph,s.term);
+    if(animate&&first){
+      cellMap.forEach(function(node,id){var f=first.get(id);if(!f)return;var l=node.getBoundingClientRect();var dx=f.left-l.left,dy=f.top-l.top;if(dx||dy){node.style.transition="none";node.style.transform="translate("+dx+"px,"+dy+"px)";}});
+      void elArr.offsetWidth;
+      cellMap.forEach(function(node){node.style.transition="transform .6s cubic-bezier(.22,.61,.36,1)";node.style.transform="";});
+    }else{cellMap.forEach(function(node){node.style.transition="none";node.style.transform="";});}
+    document.getElementById("btnPrev").disabled=(stepIndex===0);
+    document.getElementById("btnNext").disabled=(stepIndex===TOTAL-1);
+  }
+  function go(k,animate){stepIndex=Math.max(0,Math.min(TOTAL-1,k));render(animate);}
+  function next(){if(stepIndex<TOTAL-1){var tgt=stepIndex+1,si=stepInfo(tgt);go(tgt,si.ph===3&&!si.term);}}
+  function prev(){if(stepIndex>0)go(stepIndex-1,false);}
+  function stop(){playing=false;if(timer){clearInterval(timer);timer=null;}document.getElementById("btnPlay").textContent="Play";}
+  function play(){
+    if(playing){stop();return;}
+    if(stepIndex===TOTAL-1)go(0,false);
+    playing=true;document.getElementById("btnPlay").textContent="Pause";
+    timer=setInterval(function(){if(stepIndex>=TOTAL-1){stop();return;}next();},1300);
+  }
+  function rand(){
+    stop();var size=+sizeInput.value;data=[];for(var i=0;i<size;i++)data.push({id:i,v:Math.floor(Math.random()*256)});
+    elArr.innerHTML="";cellMap.clear();computeAll();go(0,false);
+  }
+  document.getElementById("btnPrev").addEventListener("click",function(){stop();prev();});
+  document.getElementById("btnNext").addEventListener("click",function(){stop();next();});
+  document.getElementById("btnPlay").addEventListener("click",play);
+  document.getElementById("btnReset").addEventListener("click",function(){stop();go(0,false);});
+  document.getElementById("btnRand").addEventListener("click",rand);
+  sizeInput.addEventListener("input",function(){sizeVal.textContent=sizeInput.value;rand();});
+  rand();
+})();
+</script>
+</body>
+</html>
