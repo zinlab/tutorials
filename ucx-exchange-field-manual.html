@@ -1,0 +1,1238 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Velox UCX Exchange — Field Manual</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,300..700;1,8..60,400..600&family=Instrument+Sans:ital,wght@0,400..700;1,400..600&family=JetBrains+Mono:ital,wght@0,400..700;1,400..600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#14110c; --bg-2:#1a1611; --panel:#1f1a14; --panel-2:#251f17;
+    --rule:#3a3026; --rule-soft:#2c241b; --ink:#ece5d6; --ink-soft:#c4bba9;
+    --muted:#8d8270; --faint:#6a6151; --copper:#cf8a52; --copper-dim:#a96a39;
+    --cyan:#66b8c4; --cyan-dim:#3f8c98; --sage:#9aa978; --sage-dim:#6f7e52;
+    --rose:#c9707a; --code-bg:#15110b; --sel:rgba(207,138,82,0.26);
+    --shadow:0 1px 0 rgba(0,0,0,0.4), 0 18px 50px -28px rgba(0,0,0,0.85);
+  }
+  [data-theme="light"] {
+    --bg:#f3efe5; --bg-2:#ede7d8; --panel:#f8f4ea; --panel-2:#efe8d8;
+    --rule:#d6cdb8; --rule-soft:#e2dac8; --ink:#241d14; --ink-soft:#4a4133;
+    --muted:#7a6f5b; --faint:#9b9181; --copper:#a85f29; --copper-dim:#8a4d1f;
+    --cyan:#277380; --cyan-dim:#1d5a65; --sage:#5d6e3c; --sage-dim:#495730;
+    --rose:#a8454f; --code-bg:#ece5d4; --sel:rgba(168,95,41,0.20);
+    --shadow:0 1px 0 rgba(255,255,255,0.5), 0 18px 50px -30px rgba(60,45,20,0.4);
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  ::selection { background: var(--sel); }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:"Source Serif 4",Georgia,serif;
+    font-size:18px; line-height:1.66; font-weight:380; -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility; transition:background .35s ease, color .35s ease; }
+  .shell { display:grid; grid-template-columns:286px minmax(0,1fr); max-width:1320px; margin:0 auto; }
+  .rail { position:sticky; top:0; align-self:start; height:100vh; overflow-y:auto; padding:30px 22px 60px 30px;
+    border-right:1px solid var(--rule-soft); font-family:"Instrument Sans",system-ui,sans-serif; }
+  .rail::-webkit-scrollbar { width:8px; } .rail::-webkit-scrollbar-thumb { background:var(--rule); border-radius:4px; }
+  main { padding:64px clamp(22px,5vw,76px) 140px; min-width:0; }
+  .badge { font-family:"JetBrains Mono",monospace; font-size:10.5px; letter-spacing:.18em; text-transform:uppercase; color:var(--copper); font-weight:600; }
+  .rail h1 { font-family:"Instrument Sans",sans-serif; font-size:18px; font-weight:600; letter-spacing:-.01em; margin:10px 0 3px; line-height:1.25; }
+  .rail .sub { font-size:12px; color:var(--muted); margin-bottom:22px; font-weight:400; }
+  nav.toc { font-size:13.5px; }
+  nav.toc a { display:flex; gap:9px; align-items:baseline; text-decoration:none; color:var(--ink-soft);
+    padding:5px 9px; border-radius:6px; line-height:1.32; margin:1px 0; border-left:2px solid transparent;
+    transition:background .15s, color .15s, border-color .15s; }
+  nav.toc a .n { font-family:"JetBrains Mono",monospace; font-size:10.5px; color:var(--faint); min-width:18px; padding-top:1px; }
+  nav.toc a:hover { background:var(--panel); color:var(--ink); }
+  nav.toc a.active { color:var(--copper); border-left-color:var(--copper); background:var(--panel); }
+  nav.toc a.active .n { color:var(--copper-dim); }
+  .rail-foot { margin-top:26px; padding-top:16px; border-top:1px solid var(--rule-soft); font-size:11px; color:var(--faint); font-weight:400; }
+  .rail-foot code { font-family:"JetBrains Mono",monospace; font-size:10.5px; color:var(--muted); }
+  .toggle { position:fixed; top:18px; right:20px; z-index:50; font-family:"Instrument Sans",sans-serif;
+    font-size:11.5px; letter-spacing:.04em; background:var(--panel); color:var(--ink-soft); border:1px solid var(--rule);
+    padding:7px 13px; border-radius:20px; cursor:pointer; display:flex; align-items:center; gap:7px; box-shadow:var(--shadow); transition:all .2s; }
+  .toggle:hover { color:var(--copper); border-color:var(--copper-dim); }
+  .toggle .dot { width:8px; height:8px; border-radius:50%; background:var(--copper); }
+  .hero { margin-bottom:60px; }
+  .eyebrow { font-family:"JetBrains Mono",monospace; font-size:11.5px; letter-spacing:.2em; text-transform:uppercase; color:var(--copper); font-weight:600; }
+  .hero h1.title { font-family:"Instrument Sans",sans-serif; font-weight:600; letter-spacing:-.025em;
+    font-size:clamp(2.4rem,5.6vw,3.9rem); line-height:1.02; margin:18px 0 0; }
+  .hero h1.title em { font-family:"Source Serif 4",serif; font-style:italic; font-weight:400; color:var(--copper); }
+  .hero .thesis { font-size:clamp(1.12rem,2.1vw,1.42rem); line-height:1.5; color:var(--ink-soft); max-width:50ch; margin:26px 0 0; font-weight:380; }
+  .meta-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); margin-top:42px; border-top:1px solid var(--rule); border-left:1px solid var(--rule); }
+  .meta-grid .cell { border-right:1px solid var(--rule); border-bottom:1px solid var(--rule); padding:14px 16px; }
+  .meta-grid .k { font-family:"JetBrains Mono",monospace; font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); }
+  .meta-grid .v { font-family:"Instrument Sans",sans-serif; font-size:14.5px; color:var(--ink); margin-top:5px; font-weight:500; }
+  .meta-grid .v.mono { font-family:"JetBrains Mono",monospace; font-size:12.5px; }
+  section { margin-bottom:76px; scroll-margin-top:28px; }
+  .sec-head { display:flex; align-items:baseline; gap:16px; margin-bottom:8px; border-bottom:1px solid var(--rule); padding-bottom:14px; }
+  .sec-head .num { font-family:"JetBrains Mono",monospace; font-size:13px; color:var(--copper); font-weight:600; letter-spacing:.05em; padding-top:6px; }
+  h2 { font-family:"Instrument Sans",sans-serif; font-weight:600; letter-spacing:-.02em; font-size:clamp(1.6rem,3.2vw,2.15rem); line-height:1.08; margin:0; }
+  h3 { font-family:"Instrument Sans",sans-serif; font-weight:600; letter-spacing:-.01em; font-size:1.28rem; margin:40px 0 12px; color:var(--ink); }
+  h3 .tag { font-family:"JetBrains Mono",monospace; font-size:11px; color:var(--cyan); font-weight:500; letter-spacing:0; margin-left:10px; vertical-align:middle; }
+  h4 { font-family:"Instrument Sans",sans-serif; font-weight:600; font-size:1.04rem; margin:28px 0 8px; color:var(--copper); letter-spacing:-.005em; }
+  p { margin:14px 0; max-width:74ch; }
+  .lede { font-size:1.12rem; color:var(--ink-soft); max-width:70ch; }
+  a.inline { color:var(--cyan); text-decoration:none; border-bottom:1px solid var(--cyan-dim); }
+  a.inline:hover { color:var(--copper); border-color:var(--copper-dim); }
+  strong { font-weight:600; color:var(--ink); }
+  em.term { font-style:normal; font-family:"JetBrains Mono",monospace; font-size:.86em; color:var(--cyan); background:var(--panel); padding:1px 5px; border-radius:4px; border:1px solid var(--rule-soft); }
+  ul, ol { max-width:74ch; padding-left:22px; } li { margin:7px 0; } li::marker { color:var(--copper-dim); }
+  ul.tight li { margin:4px 0; }
+  figure.code { margin:22px 0; border:1px solid var(--rule); border-radius:9px; overflow:hidden; background:var(--code-bg); box-shadow:var(--shadow); }
+  figure.code figcaption { font-family:"JetBrains Mono",monospace; font-size:11px; color:var(--muted); padding:9px 15px;
+    border-bottom:1px solid var(--rule-soft); background:var(--panel); display:flex; justify-content:space-between; align-items:center; letter-spacing:.02em; }
+  figure.code figcaption .file { color:var(--copper); }
+  figure.code figcaption .role { color:var(--faint); font-size:10px; text-transform:uppercase; letter-spacing:.12em; }
+  pre { margin:0; padding:16px 18px; overflow-x:auto; font-family:"JetBrains Mono",monospace; font-size:12.6px; line-height:1.62; color:var(--ink-soft); }
+  pre::-webkit-scrollbar { height:9px; } pre::-webkit-scrollbar-thumb { background:var(--rule); border-radius:4px; }
+  code { font-family:"JetBrains Mono",monospace; }
+  .c-cm { color:var(--faint); font-style:italic; } .c-kw { color:var(--copper); } .c-fn { color:var(--cyan); }
+  .c-st { color:var(--sage); } .c-nm { color:var(--rose); }
+  p code, li code, td code { background:var(--panel); border:1px solid var(--rule-soft); padding:1px 5px; border-radius:4px; font-size:.84em; color:var(--copper); }
+  .note { border-left:3px solid var(--rule); background:var(--panel); padding:14px 18px; border-radius:0 8px 8px 0; margin:22px 0; font-size:.96rem; }
+  .note .lbl { font-family:"JetBrains Mono",monospace; font-size:10px; letter-spacing:.15em; text-transform:uppercase; font-weight:600; display:block; margin-bottom:5px; }
+  .note.copper { border-left-color:var(--copper); } .note.copper .lbl { color:var(--copper); }
+  .note.cyan { border-left-color:var(--cyan); } .note.cyan .lbl { color:var(--cyan); }
+  .note.sage { border-left-color:var(--sage); } .note.sage .lbl { color:var(--sage); }
+  .note.rose { border-left-color:var(--rose); } .note.rose .lbl { color:var(--rose); }
+  .note p { margin:6px 0; max-width:none; }
+  .tbl-wrap { overflow-x:auto; margin:24px 0; border:1px solid var(--rule); border-radius:9px; }
+  table { border-collapse:collapse; width:100%; font-size:13.5px; min-width:540px; }
+  thead th { font-family:"Instrument Sans",sans-serif; font-weight:600; text-align:left; font-size:11.5px; letter-spacing:.04em;
+    text-transform:uppercase; color:var(--copper); padding:11px 15px; border-bottom:1px solid var(--rule); background:var(--panel); white-space:nowrap; }
+  tbody td { padding:11px 15px; border-bottom:1px solid var(--rule-soft); vertical-align:top; color:var(--ink-soft); line-height:1.5; }
+  tbody tr:last-child td { border-bottom:none; } tbody tr:hover td { background:var(--bg-2); }
+  table .y { color:var(--sage); font-weight:600; } table .n { color:var(--rose); font-weight:600; }
+  table .hd { font-family:"Instrument Sans",sans-serif; font-weight:600; color:var(--ink); } table code { font-size:11.5px; }
+  .diagram { margin:28px 0; padding:26px; border:1px solid var(--rule); border-radius:11px; background:var(--bg-2); overflow-x:auto; }
+  .diagram .cap { font-family:"JetBrains Mono",monospace; font-size:10.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); margin-bottom:20px; text-align:center; }
+  svg { display:block; margin:0 auto; max-width:100%; height:auto; font-family:"Instrument Sans",sans-serif; }
+  svg text { fill:var(--ink); }
+  .lanes { display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; align-items:stretch; }
+  .lane { border:1px solid var(--rule); border-radius:10px; padding:14px 12px; background:var(--panel); display:flex; flex-direction:column; gap:9px; }
+  .lane .lane-h { font-family:"JetBrains Mono",monospace; font-size:10px; letter-spacing:.14em; text-transform:uppercase; text-align:center; padding-bottom:8px; border-bottom:1px solid var(--rule-soft); margin-bottom:2px; }
+  .lane.prod .lane-h { color:var(--copper); } .lane.trans .lane-h { color:var(--cyan); } .lane.cons .lane-h { color:var(--sage); }
+  .box { border:1px solid var(--rule); border-radius:7px; padding:9px 11px; background:var(--bg-2); font-family:"Instrument Sans",sans-serif; transition:border-color .15s; }
+  .box:hover { border-color:var(--copper-dim); }
+  .box .bx-n { font-weight:600; font-size:13px; color:var(--ink); }
+  .box .bx-f { font-family:"JetBrains Mono",monospace; font-size:10px; color:var(--faint); margin-top:2px; }
+  .box .bx-d { font-size:11.5px; color:var(--muted); margin-top:5px; line-height:1.45; font-family:"Source Serif 4",serif; }
+  .box.accent-c { border-left:3px solid var(--copper); } .box.accent-y { border-left:3px solid var(--cyan); } .box.accent-s { border-left:3px solid var(--sage); }
+  .lane-flow { text-align:center; color:var(--faint); font-size:16px; line-height:1; margin:-2px 0; }
+  .tagbar { display:flex; border:1px solid var(--rule); border-radius:8px; overflow:hidden; font-family:"JetBrains Mono",monospace; margin:8px 0 4px; }
+  .tagbar .seg { padding:12px 10px; text-align:center; border-right:1px solid var(--rule); }
+  .tagbar .seg:last-child { border-right:none; }
+  .tagbar .seg .bits { font-size:9.5px; letter-spacing:.1em; color:var(--faint); text-transform:uppercase; }
+  .tagbar .seg .nm { font-size:13px; font-weight:600; margin:5px 0 3px; }
+  .tagbar .seg .dsc { font-size:10px; color:var(--muted); font-family:"Source Serif 4",serif; }
+  .tagbar .seg.a { background:rgba(207,138,82,0.10); flex:4; } .tagbar .seg.a .nm { color:var(--copper); }
+  .tagbar .seg.b { background:rgba(102,184,196,0.10); flex:1; } .tagbar .seg.b .nm { color:var(--cyan); }
+  .tagbar .seg.c { background:rgba(154,169,120,0.10); flex:3; } .tagbar .seg.c .nm { color:var(--sage); }
+  .seq { display:flex; flex-direction:column; counter-reset:step; }
+  .seq .row { display:grid; grid-template-columns:34px 1fr; gap:14px; padding:13px 0; border-bottom:1px solid var(--rule-soft); }
+  .seq .row:last-child { border-bottom:none; }
+  .seq .row .sn { counter-increment:step; font-family:"JetBrains Mono",monospace; font-size:11px; color:var(--bg); background:var(--copper); width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; }
+  .seq .row .sn::before { content:counter(step,decimal-leading-zero); }
+  .seq .row.intra .sn { background:var(--cyan); }
+  .seq .row .body .who { font-family:"JetBrains Mono",monospace; font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+  .seq .row .body .who .arr { color:var(--copper); }
+  .seq .row .body .what { font-size:14.5px; margin-top:3px; color:var(--ink-soft); }
+  .seq .row .body .what code { font-size:12px; }
+  .paa { border:1px solid var(--rule); border-radius:11px; margin:26px 0; overflow:hidden; }
+  .paa .paa-h { background:var(--panel); padding:14px 18px; border-bottom:1px solid var(--rule); font-family:"Instrument Sans",sans-serif; font-weight:600; font-size:1.06rem; display:flex; align-items:center; gap:10px; }
+  .paa .paa-h .ix { font-family:"JetBrains Mono",monospace; font-size:11px; color:var(--bg); background:var(--copper); padding:2px 8px; border-radius:5px; font-weight:700; }
+  .paa .paa-grid { display:grid; grid-template-columns:repeat(2,1fr); }
+  .paa .pcell { padding:14px 18px; border-bottom:1px solid var(--rule-soft); border-right:1px solid var(--rule-soft); }
+  .paa .pcell:nth-child(2n) { border-right:none; }
+  .paa .pcell:nth-last-child(-n+2) { border-bottom:none; }
+  .paa .pcell .pk { font-family:"JetBrains Mono",monospace; font-size:9.5px; letter-spacing:.14em; text-transform:uppercase; margin-bottom:6px; font-weight:600; }
+  .paa .pcell.prob .pk { color:var(--rose); } .paa .pcell.appr .pk { color:var(--cyan); }
+  .paa .pcell.ben .pk { color:var(--sage); } .paa .pcell.lim .pk { color:var(--copper); }
+  .paa .pcell p { font-size:13.5px; margin:0; max-width:none; line-height:1.52; color:var(--ink-soft); }
+  .paa .pcell code { font-size:11.5px; } .paa .pcell ul { margin:4px 0 0; padding-left:16px; font-size:13px; } .paa .pcell li { margin:3px 0; }
+  hr.soft { border:none; border-top:1px solid var(--rule-soft); margin:34px 0; }
+  .kicker { font-family:"JetBrains Mono",monospace; font-size:10.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--cyan); font-weight:600; margin:0 0 4px; }
+  .footer { border-top:1px solid var(--rule); margin-top:90px; padding-top:26px; font-family:"Instrument Sans",sans-serif; font-size:12.5px; color:var(--muted); }
+  .footer code { font-family:"JetBrains Mono",monospace; color:var(--faint); font-size:11.5px; }
+  @media (max-width:880px) {
+    .shell { grid-template-columns:1fr; }
+    .rail { position:static; height:auto; border-right:none; border-bottom:1px solid var(--rule); padding:26px 22px; }
+    .rail nav.toc { columns:2; column-gap:14px; }
+    main { padding:40px 22px 100px; }
+    .lanes { grid-template-columns:1fr; } .paa .paa-grid { grid-template-columns:1fr; } .paa .pcell { border-right:none; }
+    body { font-size:17px; }
+  }
+</style>
+</head>
+<body>
+<button class="toggle" id="themeToggle" aria-label="Toggle colour theme"><span class="dot"></span><span id="themeLabel">Light</span></button>
+<div class="shell">
+  <aside class="rail">
+    <div class="badge">Field Manual · GPU Shuffle</div>
+    <h1>Velox UCX Exchange</h1>
+    <div class="sub"><code>velox/experimental/ucx-exchange</code></div>
+    <nav class="toc" id="toc">
+      <a href="#orient"><span class="n">00</span><span>Orientation &amp; intent</span></a>
+      <a href="#concepts"><span class="n">01</span><span>Conceptual primer</span></a>
+      <a href="#arch"><span class="n">02</span><span>Architecture map</span></a>
+      <a href="#transport"><span class="n">03</span><span>Transport core</span></a>
+      <a href="#protocol"><span class="n">04</span><span>Wire protocol</span></a>
+      <a href="#producer"><span class="n">05</span><span>Producer path</span></a>
+      <a href="#server"><span class="n">06</span><span>Server FSM (sender)</span></a>
+      <a href="#consumer"><span class="n">07</span><span>Consumer path</span></a>
+      <a href="#source"><span class="n">08</span><span>Source FSM (receiver)</span></a>
+      <a href="#intra"><span class="n">09</span><span>Intra-node fast path</span></a>
+      <a href="#together"><span class="n">10</span><span>End-to-end trace</span></a>
+      <a href="#paa"><span class="n">11</span><span>Problems &amp; approaches</span></a>
+      <a href="#nccl"><span class="n">12</span><span>Why not NCCL</span></a>
+      <a href="#errors"><span class="n">13</span><span>Error patterns</span></a>
+      <a href="#eval"><span class="n">14</span><span>Evaluation &amp; gaps</span></a>
+    </nav>
+    <div class="rail-foot">
+      Source read at <code>main</code> · 6.8k LOC core, 4.3k LOC tests.<br>
+      Deps: <code>ucxx · ucp · ucs · cudf · rmm · folly · velox_core</code>.<br>
+      Status: <span style="color:var(--copper)">experimental</span>.
+    </div>
+  </aside>
+  <main>
+    <header class="hero">
+      <div class="eyebrow">RAPIDS × Velox · GPU-to-GPU shuffle</div>
+      <h1 class="title">A shuffle that never<br>leaves the <em>GPU</em>.</h1>
+      <p class="thesis">The UCX Exchange replaces Velox's inter-worker exchange with a UCXX-based transport that copies
+        <code>cudf::packed_columns</code> straight from one GPU's memory into another's — no row serialization,
+        no page segmentation, no host bounce. This manual walks every component, the protocol that binds them,
+        and why NCCL is the wrong instrument for this particular job.</p>
+      <div class="meta-grid">
+        <div class="cell"><div class="k">Replaces</div><div class="v">PartitionedOutput → Exchange</div></div>
+        <div class="cell"><div class="k">Unit of transfer</div><div class="v mono">packed_columns</div></div>
+        <div class="cell"><div class="k">Transport</div><div class="v">UCXX (UCP tag + AM)</div></div>
+        <div class="cell"><div class="k">Data plane</div><div class="v">GPUDirect, zero-copy</div></div>
+        <div class="cell"><div class="k">Progress model</div><div class="v">Single worker thread</div></div>
+        <div class="cell"><div class="k">Co-located peers</div><div class="v">In-proc registry</div></div>
+      </div>
+    </header>
+
+    <section id="orient">
+      <div class="sec-head"><span class="num">00</span><h2>Orientation &amp; intent</h2></div>
+      <p class="lede">In a massively-parallel query engine, a <strong>shuffle</strong> is the moment a query stage repartitions its
+        output so the next stage can consume it: every producing task scatters its rows across <em>N</em> partitions,
+        and every consuming task gathers the slice destined for it. It is the most network-intensive primitive in
+        distributed SQL, and on CPUs Velox already has machinery for it.</p>
+      <p>The catch the README states up front: in Velox this exchange is only <strong>partially</strong> implemented.
+        The framework defines the <em>shape</em> — a task ending in a <em class="term">PartitionedOutput</em> operator
+        feeding a task whose source is an <em class="term">Exchange</em> operator — but the actual exchange server and
+        the exchange-source object are deliberately left out of Velox core, to be supplied by the embedding system
+        (Prestissimo supplies an HTTP one). This module supplies a <strong>different</strong> implementation, purpose-built
+        for cuDF.</p>
+      <h3>The problem with reusing the CPU path<span class="tag">why this exists</span></h3>
+      <p>The stock exchange is built for row-oriented CPU vectors: it <strong>serializes</strong> rows into a wire
+        format, <strong>segments</strong> them into pages, ships them over HTTP, then <strong>reassembles and
+        deserializes</strong> on the far side. Run that against GPU-resident columnar data and every chunk pays a
+        device→host copy, a serialize, a network hop, a host→device copy, and a deserialize. The compute is on the GPU;
+        the data tax is paid on the CPU and the PCIe bus.</p>
+      <p>The UCX Exchange collapses that. As the README puts it, no serialization or deserialization is needed — only
+        <em>packing</em> — and the data is never segmented and reassembled. A partition is laid out once as a single
+        contiguous device buffer and that buffer's bytes are RDMA'd, GPU to GPU. The intent is bandwidth: keep columnar
+        data in its native GPU layout from the producing kernel to the consuming kernel.</p>
+      <div class="note copper">
+        <span class="lbl">The thesis in one line</span>
+        <p>Treat a shuffle chunk as <em>one opaque GPU blob plus a small host-side layout descriptor</em>. Move the
+        descriptor on the control plane, RDMA the blob on the data plane, and reconstruct a <code>table_view</code> over
+        the received bytes with zero further copies.</p>
+      </div>
+    </section>
+
+    <section id="concepts">
+      <div class="sec-head"><span class="num">01</span><h2>Conceptual primer</h2></div>
+      <p class="lede">Four vocabularies meet in this directory. You need a working model of each before the code reads cleanly.</p>
+      <h3>cuDF packing &amp; contiguous split<span class="tag">what is moved</span></h3>
+      <p>A cuDF table is a set of columns, each with its own device allocations (data, validity bitmask, and for nested
+        types, children and offsets). That scatter of allocations is great for compute but terrible for transport.
+        <em class="term">cudf::contiguous_split</em> solves it: given a table and a set of row offsets, it produces, for
+        each partition, a <em class="term">packed_columns</em> — a pair of <em>(host metadata, single device buffer)</em>.
+        The metadata is a compact CPU-side description of where every column lives <em>within</em> that one buffer; the
+        device buffer is all the column bytes concatenated contiguously. <em class="term">cudf::pack</em> is the
+        one-partition case; <em class="term">cudf::unpack</em> reverses it, rebuilding a <code>table_view</code> that
+        points <em>into</em> the buffer without copying.</p>
+      <div class="note cyan">
+        <span class="lbl">Key property</span>
+        <p>After <code>contiguous_split</code>, a whole partition is exactly <strong>one</strong> <code>rmm::device_buffer</code>
+        plus a few hundred bytes of host metadata. That single base pointer and single length is the entire reason a GPU
+        shuffle can be zero-copy.</p>
+      </div>
+      <h3>UCX, UCXX, and the UCP/UCS split<span class="tag">how it moves</span></h3>
+      <p><strong>UCX</strong> (Unified Communication X) is a transport abstraction that picks the best available path
+        between two endpoints — shared memory, CUDA IPC, NVLink, PCIe, InfiniBand, RoCE, plain TCP — behind one API.
+        <em class="term">UCP</em> is the high-level protocol layer (tag matching, active messages, RMA, streams);
+        <em class="term">UCS</em> is the services layer (status codes, memory types, config). <strong>UCXX</strong> is the
+        modern C++ object wrapper RAPIDS uses: <code>Context</code> → <code>Worker</code> → <code>Endpoint</code>, with
+        requests returned as <code>shared_ptr&lt;ucxx::Request&gt;</code> carrying completion callbacks. This module is
+        written against UCXX, dropping to raw UCP handles only where it must (the active-message acceptor).</p>
+      <ul class="tight">
+        <li><strong>Tag matching</strong> — <code>tagSend(buf,len,tag)</code> rendezvouses with
+        <code>tagRecv(buf,len,tag,mask)</code>; UCX matches them by a 64-bit <em>tag</em>. Two peers can have many
+        independent transfers in flight, demultiplexed purely by tag. The whole data path is built on this.</li>
+        <li><strong>Active messages (AM)</strong> — a sender pushes a small message that triggers a registered
+        <em>callback</em> on the receiver with no pre-posted receive. Used here exactly once per connection: the handshake.</li>
+        <li><strong>Rendezvous</strong> — for large transfers UCX negotiates, then does a single zero-copy DMA. The sender's
+        <code>tagSend</code> does not complete until a matching <code>tagRecv</code> is posted — a property this design
+        quietly weaponizes for backpressure.</li>
+      </ul>
+      <h3>RMM, streams, and the sync boundary<span class="tag">when it's safe</span></h3>
+      <p>cuDF allocates through <strong>RMM</strong> and runs kernels on CUDA <em class="term">streams</em>. A stream is
+        an ordered queue of async GPU work; results are only guaranteed materialized after
+        <code>stream.synchronize()</code>. This matters at the network edge: <strong>UCX is not stream-aware.</strong> Hand
+        UCX a device pointer whose producing kernels are still queued and it may DMA stale bytes. Every send site
+        synchronizes the stream before the buffer leaves; every receive site syncs after allocating. The stream is even
+        carried alongside the data (<code>PackedTableWithStream</code>) so downstream cuDF ops reuse it.</p>
+      <h3>The Velox operator contract<span class="tag">where it plugs in</span></h3>
+      <p>Velox runs a pipeline of <em class="term">Operator</em>s driven by <em class="term">Driver</em> threads. Each
+        implements <code>addInput</code>, <code>getOutput</code>, <code>isBlocked</code>, <code>isFinished</code>;
+        backpressure is a returned <em class="term">BlockingReason</em> plus a <code>ContinueFuture</code> the scheduler
+        waits on. This module provides two operators — <code>UcxPartitionedOutput</code> (sink) and <code>UcxExchange</code>
+        (source) — honoring that contract exactly, so the existing scheduler, split machinery and stats plumbing keep
+        working unchanged.</p>
+    </section>
+
+    <section id="arch">
+      <div class="sec-head"><span class="num">02</span><h2>Architecture map</h2></div>
+      <p class="lede">The 30 source files cluster into three lanes: a <span style="color:var(--copper)">producer side</span>
+        that partitions and queues, a <span style="color:var(--cyan)">shared transport core</span> that owns the single
+        UCXX worker, and a <span style="color:var(--sage)">consumer side</span> that reconstructs tables. Two state machines
+        — the server (sender) and the source (receiver) — are the active agents; everything else is queues, registries and glue.</p>
+      <div class="diagram">
+        <div class="cap">Component map · data flows left → right, control mediated by the transport core</div>
+        <div class="lanes">
+          <div class="lane prod">
+            <div class="lane-h">Producer side</div>
+            <div class="box accent-c"><div class="bx-n">UcxPartitionedOutput</div><div class="bx-f">Operator · sink</div><div class="bx-d">Accumulate → concat → hash/equal partition → contiguous_split → pack.</div></div>
+            <div class="lane-flow">↓ enqueue</div>
+            <div class="box accent-c"><div class="bx-n">UcxOutputQueueManager</div><div class="bx-f">singleton</div><div class="bx-d">taskId → output queue. Task lifecycle, placeholder queues.</div></div>
+            <div class="lane-flow">↓</div>
+            <div class="box accent-c"><div class="bx-n">UcxOutputQueue</div><div class="bx-f">per task</div><div class="bx-d">Vector of destination queues, driver counting, broadcast backfill, water-mark backpressure.</div></div>
+            <div class="lane-flow">↓</div>
+            <div class="box accent-c"><div class="bx-n">UcxDestinationQueue</div><div class="bx-f">per partition</div><div class="bx-d">FIFO of packed_columns + deferred notify callback.</div></div>
+          </div>
+          <div class="lane trans">
+            <div class="lane-h">Transport core</div>
+            <div class="box accent-y"><div class="bx-n">Communicator</div><div class="bx-f">singleton · the thread</div><div class="bx-d">Owns Context/Worker/Listener. Drains a WorkQueue, progresses UCX, defers callback-unsafe cleanup.</div></div>
+            <div class="lane-flow">↕</div>
+            <div class="box accent-y"><div class="bx-n">Acceptor</div><div class="bx-f">AM callback</div><div class="bx-d">Handshake → spawns a server on demand.</div></div>
+            <div class="box accent-y"><div class="bx-n">EndpointRef</div><div class="bx-f">conn lifetime</div><div class="bx-d">Shared endpoint, close fan-out to its comm elements.</div></div>
+            <div class="box accent-y"><div class="bx-n">IntraNodeTransferRegistry</div><div class="bx-f">singleton</div><div class="bx-d">In-proc publish/poll handoff for co-located peers.</div></div>
+            <div class="box accent-y"><div class="bx-n">UcxExchangeProtocol</div><div class="bx-f">wire format</div><div class="bx-d">Tag scheme, handshake, metadata serialization.</div></div>
+          </div>
+          <div class="lane cons">
+            <div class="lane-h">Consumer side</div>
+            <div class="box accent-s"><div class="bx-n">UcxExchange</div><div class="bx-f">Operator · source</div><div class="bx-d">Pulls packed tables, wraps as CudfVector, drives split fetching.</div></div>
+            <div class="lane-flow">↑ next()</div>
+            <div class="box accent-s"><div class="bx-n">UcxExchangeClient</div><div class="bx-f">per exchange</div><div class="bx-d">Fan-in of N sources → one queue, flow-control accounting.</div></div>
+            <div class="lane-flow">↑</div>
+            <div class="box accent-s"><div class="bx-n">UcxExchangeQueue</div><div class="bx-f">shared</div><div class="bx-d">Consumer FIFO + per-driver promises, source completion tracking.</div></div>
+            <div class="lane-flow">↑ enqueue</div>
+            <div class="box accent-s"><div class="bx-n">UcxExchangeSource</div><div class="bx-f">per remote task</div><div class="bx-d">The receiver FSM. One per producing task; the client's data engine.</div></div>
+          </div>
+        </div>
+      </div>
+      <p>The two FSMs are the only objects the Communicator actually <em>runs</em>. Both derive from a tiny base,
+        <code>CommElement</code>, with two virtuals: <code>process()</code> (advance my protocol) and <code>close()</code>.
+        A server lives on the producing worker, a source on the consuming worker, and they speak across the wire.</p>
+      <figure class="code">
+        <figcaption><span class="file">CommElement.h</span><span class="role">the universal agent interface</span></figcaption>
+<pre><span class="c-kw">class</span> <span class="c-fn">CommElement</span> {
+ <span class="c-kw">public</span>:
+  <span class="c-cm">/// Advance the communication by executing this element's specific</span>
+  <span class="c-cm">/// communication pattern. Called on the Communicator thread.</span>
+  <span class="c-kw">virtual void</span> <span class="c-fn">process</span>() = <span class="c-nm">0</span>;
+  <span class="c-cm">// Called when the underlying endpoint was closed or the communicator finishes.</span>
+  <span class="c-kw">virtual void</span> <span class="c-fn">close</span>() = <span class="c-nm">0</span>;
+ <span class="c-kw">protected</span>:
+  <span class="c-kw">const</span> std::shared_ptr&lt;Communicator&gt; communicator_;
+  std::shared_ptr&lt;EndpointRef&gt; endpointRef_;
+};</pre>
+      </figure>
+    </section>
+
+    <section id="transport">
+      <div class="sec-head"><span class="num">03</span><h2>Transport core</h2></div>
+      <p class="lede">One <code>Communicator</code> singleton per process owns one UCXX worker, and <em>all</em> UCX calls
+        happen on its single <code>run()</code> thread. Everything else — dozens of Velox driver threads — touches UCX only
+        indirectly, by pushing work onto a thread-safe queue. This is the most consequential design decision in the module.</p>
+
+      <h3>The single-threaded progress loop<span class="tag">Communicator::run</span></h3>
+      <p>UCX workers are cheapest and least error-prone when progressed by exactly one thread (the alternative,
+        <code>UCS_THREAD_MODE_MULTI</code>, adds internal locking and a long list of foot-guns). This module commits fully
+        to that model. The loop does four things in order, forever: drain deferred endpoint cleanups, drain the work queue
+        (calling <code>process()</code> on each element and progressing UCX <em>after each one</em>), reap completed deferred
+        requests, then block until a network event or an explicit wake-up.</p>
+      <figure class="code">
+        <figcaption><span class="file">Communicator.cpp</span><span class="role">run() · the heart of the module</span></figcaption>
+<pre><span class="c-kw">while</span> (running_) {
+  <span class="c-cm">// 1. Cleanups that callbacks could not do themselves (see below).</span>
+  <span class="c-kw">while</span> (<span class="c-kw">auto</span> ep = deferredEndpointCleanup_.pop()) {
+    ep-&gt;closeAndDrainCommunicators();
+    removeEndpointRef(ep);
+  }
+  <span class="c-cm">// 2. Drain the work queue. Progress AFTER each item, or we deadlock:</span>
+  <span class="c-cm">//    a process() may post a send/recv that only completes via progress().</span>
+  <span class="c-kw">while</span> (<span class="c-kw">auto</span> comms = workQueue_.pop()) {
+    comms-&gt;process();
+    worker_-&gt;progress();          <span class="c-cm">// non-blocking: drain promptly</span>
+  }
+  <span class="c-cm">// 3. Free cancelled requests whose GPU buffers UCX has finished with.</span>
+  <span class="c-cm">// 4. All queues drained — block for the next network event or signal().</span>
+  <span class="c-kw">if</span> (blockingMode) worker_-&gt;progressWorkerEvent(<span class="c-nm">0</span>);
+  <span class="c-kw">else</span>             worker_-&gt;progress();
+}</pre>
+      </figure>
+      <div class="note copper">
+        <span class="lbl">The deadlock the comment guards</span>
+        <p>If you drained the whole work queue and only <em>then</em> progressed, an element that posted a <code>tagRecv</code>
+        inside <code>process()</code> would never see its completion callback fire, so it would never re-enqueue itself, so
+        the queue would empty and the loop would block forever waiting for a network event that the un-progressed receive
+        was supposed to trigger. Progressing after every item breaks the cycle.</p>
+      </div>
+
+      <h3>Decoupling many driver threads from one worker<span class="tag">WorkQueue</span></h3>
+      <p>The bridge between Velox's thread pool and the single UCX thread is a deliberately boring structure: a
+        mutex-guarded <code>std::list</code> with non-blocking <code>push</code>/<code>pop</code>. Any thread may push a
+        <code>CommElement</code>; only the Communicator thread pops and runs it. When a driver enqueues work in blocking
+        mode it also calls <code>worker_-&gt;signal()</code> to wake the loop out of <code>progressWorkerEvent</code>.</p>
+      <figure class="code">
+        <figcaption><span class="file">WorkQueue.h / Communicator.cpp</span><span class="role">cross-thread handoff</span></figcaption>
+<pre><span class="c-cm">// push always succeeds; never blocks. pop never blocks; nullptr if empty.</span>
+<span class="c-kw">void</span> <span class="c-fn">push</span>(std::shared_ptr&lt;T&gt; item) {
+  std::lock_guard&lt;std::mutex&gt; lock(mutex_);
+  queue_.emplace_back(std::move(item));
+}
+<span class="c-cm">// A driver thread re-arms an element AND wakes the worker:</span>
+<span class="c-kw">void</span> Communicator::<span class="c-fn">addToWorkQueue</span>(std::shared_ptr&lt;CommElement&gt; comms) {
+  workQueue_.push(comms);
+  signalWorker();   <span class="c-cm">// worker_-&gt;signal() in blocking mode; no-op otherwise</span>
+}</pre>
+      </figure>
+      <p>This is why both FSMs are written as <em>re-entrant step functions</em>: each <code>process()</code> call advances
+        the state by one move and then either re-enqueues itself (more work to do now) or goes dormant (waiting on a callback
+        or backpressure). The Communicator thread is never blocked inside an element; it round-robins them.</p>
+
+      <h3>Why callbacks must defer their own cleanup<span class="tag">re-entrancy hazard</span></h3>
+      <p>A UCX completion callback runs <em>inside</em> <code>worker_-&gt;progress()</code>. From there you may not call
+        anything that itself progresses the worker — and <code>endpoint-&gt;closeBlocking()</code> does exactly that
+        internally. So when an endpoint's close-callback fires, it cannot tear itself down; it pushes the work onto a
+        deferred queue that the main loop drains at the top of its next iteration.</p>
+      <figure class="code">
+        <figcaption><span class="file">EndpointRef.cpp + Communicator.cpp</span><span class="role">callback → deferred main-loop work</span></figcaption>
+<pre><span class="c-cm">/* static */ void EndpointRef::onClose(ucs_status_t, std::shared_ptr&lt;void&gt; arg) {
+  <span class="c-cm">// Runs in the UCX progress thread. MUST NOT progress or block here.</span>
+  <span class="c-kw">auto</span> ep = std::static_pointer_cast&lt;EndpointRef&gt;(arg);
+  Communicator::getInstance()-&gt;deferEndpointCleanup(ep);   <span class="c-cm">// just enqueue</span>
+}</pre>
+      </figure>
+      <p>The same logic governs <em>cancelled</em> requests. A request whose GPU buffer is referenced by UCX internals is
+        moved to <code>deferredRequests_</code> and held alive until <code>isCompleted()</code> — otherwise UCX could DMA into
+        a buffer the application already freed. The <code>endpointsMutex_</code> is even a <code>recursive_mutex</code>,
+        because <code>removeEndpointRef()</code> holds it while calling <code>closeBlocking()</code>, which can re-enter the
+        listener callback that re-locks the same mutex.</p>
+
+      <h3>Connection on demand &amp; endpoint sharing<span class="tag">Acceptor · listenerCallback</span></h3>
+      <p>There is no static topology. A consumer's source connects to a producer's listener when it has data to fetch; the
+        producer's server object <em>does not exist</em> until the handshake arrives. The <code>Acceptor</code>'s
+        active-message callback is what conjures it:</p>
+      <figure class="code">
+        <figcaption><span class="file">Acceptor.cpp</span><span class="role">handshake → server, spawned on demand</span></figcaption>
+<pre><span class="c-cm">/* static */ void Acceptor::cStyleAMCallback(
+    std::shared_ptr&lt;ucxx::Request&gt; request, ucp_ep_h ep) {
+  <span class="c-kw">auto</span> buffer = std::dynamic_pointer_cast&lt;ucxx::Buffer&gt;(request-&gt;getRecvBuffer());
+  VELOX_CHECK_GE(buffer-&gt;getSize(), <span class="c-kw">sizeof</span>(HandshakeMsg));   <span class="c-cm">// validate before cast</span>
+  HandshakeMsg* h = <span class="c-kw">reinterpret_cast</span>&lt;HandshakeMsg*&gt;(buffer-&gt;data());
+
+  <span class="c-kw">auto</span> communicator = Communicator::getInstance();
+  <span class="c-kw">auto</span> epRef = communicator-&gt;findEndpointRefByHandle(ep);
+  <span class="c-kw">const</span> PartitionKey key = {h-&gt;taskId, h-&gt;destination};
+
+  <span class="c-cm">// Same process? Compare the source's random workerId with ours.</span>
+  <span class="c-kw">bool</span> isIntraNode = CudfConfig::getInstance().intraNodeExchange &amp;&amp;
+                     (h-&gt;workerId == communicator-&gt;getWorkerId());
+
+  <span class="c-kw">auto</span> server = UcxExchangeServer::create(communicator, epRef, key, isIntraNode);
+  communicator-&gt;registerCommElement(server);     <span class="c-cm">// now it's in the work queue</span>
+  <span class="c-cm">// ... reply with a HandshakeResponse carrying isIntraNode ...</span>
+}</pre>
+      </figure>
+      <p>Endpoints are pooled by remote <code>host:port</code>: outgoing endpoints to the same peer are shared, incoming
+        ones are not, so between any two nodes there are at most two endpoints (one per direction). An
+        <code>EndpointRef</code> wraps each, tracking the set of comm elements using it via <code>weak_ptr</code>; when the
+        endpoint closes, it fans the close out to all of them. The peer's real IP is captured from the connection request,
+        not trusted from the handshake — a lesson learned the hard way (see §13).</p>
+    </section>
+
+    <section id="protocol">
+      <div class="sec-head"><span class="num">04</span><h2>Wire protocol</h2></div>
+      <p class="lede">The protocol is deliberately thin: a per-connection handshake over active messages, then, for each
+        chunk, a two-message tag-matched exchange — small metadata first, opaque GPU blob second. A 64-bit tag scheme keeps
+        every concurrent transfer distinct.</p>
+
+      <h3>The 64-bit tag<span class="tag">UcxExchangeProtocol.h</span></h3>
+      <p>Every send/recv carries a tag that encodes <em>who</em>, <em>what</em>, and <em>which chunk</em>. The top half
+        identifies the producing task (so two tasks never collide), the next byte is the operation, and the low 24 bits are
+        the chunk sequence number.</p>
+      <div class="tagbar">
+        <div class="seg a"><div class="bits">bits 63 … 32</div><div class="nm">taskHash</div><div class="dsc">FNV-1a 32-bit of producing taskId</div></div>
+        <div class="seg b"><div class="bits">bits 31 … 24</div><div class="nm">op</div><div class="dsc">META · DATA · HS-RESP</div></div>
+        <div class="seg c"><div class="bits">bits 23 … 0</div><div class="nm">sequence</div><div class="dsc">chunk number, per task pair</div></div>
+      </div>
+      <figure class="code">
+        <figcaption><span class="file">UcxExchangeProtocol.h</span><span class="role">tag construction</span></figcaption>
+<pre><span class="c-kw">constexpr</span> uint64_t METADATA_TAG           = <span class="c-nm">0x02000000</span>;
+<span class="c-kw">constexpr</span> uint64_t DATA_TAG               = <span class="c-nm">0x03000000</span>;
+<span class="c-kw">constexpr</span> uint64_t HANDSHAKE_RESPONSE_TAG = <span class="c-nm">0x04000000</span>;
+
+<span class="c-kw">inline</span> uint64_t <span class="c-fn">getMetadataTag</span>(uint64_t taskHash, uint64_t seq) {
+  <span class="c-kw">return</span> (taskHash &lt;&lt; <span class="c-nm">32</span>) | METADATA_TAG | seq;
+}
+<span class="c-kw">inline</span> uint64_t <span class="c-fn">getDataTag</span>(uint64_t taskHash, uint64_t seq) {
+  <span class="c-kw">return</span> (taskHash &lt;&lt; <span class="c-nm">32</span>) | DATA_TAG | seq;
+}</pre>
+      </figure>
+      <p>Receivers post <code>tagRecv</code> with <code>TagMaskFull</code> (exact match), so UCX delivers precisely the
+        chunk and operation expected. This is what lets one endpoint carry many in-flight transfers without a multiplexing
+        layer of the module's own.</p>
+
+      <h3>The handshake<span class="tag">HandshakeMsg / HandshakeResponse</span></h3>
+      <p>The first thing a source does after connecting is send a <code>HandshakeMsg</code> as an active message. It names
+        the partition the source wants (<code>taskId</code> + <code>destination</code>) and carries the source's random
+        <code>workerId</code>. The server replies with a <code>HandshakeResponse</code> whose single meaningful bit tells
+        the source whether the two are in the same process — if so, the source abandons UCX entirely for the in-process
+        fast path (§9).</p>
+      <figure class="code">
+        <figcaption><span class="file">UcxExchangeProtocol.h</span><span class="role">control-plane structs</span></figcaption>
+<pre><span class="c-kw">struct</span> <span class="c-fn">HandshakeMsg</span> {
+  <span class="c-kw">char</span>     taskId[<span class="c-nm">256</span>];
+  uint32_t destination;
+  uint64_t workerId{<span class="c-nm">0</span>};   <span class="c-cm">// random per-Communicator; match ⇒ same process</span>
+};
+<span class="c-kw">struct</span> <span class="c-fn">HandshakeResponse</span> {
+  <span class="c-kw">bool</span>    isIntraNodeTransfer{<span class="c-kw">false</span>};
+  uint8_t padding[<span class="c-nm">7</span>]{};      <span class="c-cm">// keep it 8-byte aligned</span>
+};</pre>
+      </figure>
+
+      <h3>The metadata record<span class="tag">MetadataMsg</span></h3>
+      <p>Because the receiver cannot know a chunk's size in advance, each chunk begins with a metadata message that carries
+        the cuDF layout descriptor, the exact <code>dataSizeBytes</code> to expect, and an <code>atEnd</code> flag that
+        doubles as the stream terminator. The receiver reads it, allocates exactly that many device bytes, then posts the
+        data receive. Serialization is hand-rolled <code>memcpy</code> in host byte order behind a magic number and a
+        length-prefixed layout — with an explicit, documented assumption that both peers are little-endian.</p>
+      <figure class="code">
+        <figcaption><span class="file">UcxExchangeProtocol.cpp</span><span class="role">serialize() · wire layout</span></figcaption>
+<pre><span class="c-cm">// [magic][totalSize][cudfMetaLen][cudfMeta…][dataSizeBytes]</span>
+<span class="c-cm">//        [numRemaining][remaining…][atEnd:1B]</span>
+std::memcpy(ptr, &amp;kMagicNumber, <span class="c-kw">sizeof</span>(kMagicNumber)); ptr += <span class="c-nm">4</span>;
+std::memcpy(ptr, &amp;totalSize,    <span class="c-kw">sizeof</span>(totalSize));    ptr += <span class="c-nm">4</span>;
+WireLengthType cudfSize = cudfMetadata ? cudfMetadata-&gt;size() : <span class="c-nm">0</span>;
+std::memcpy(ptr, &amp;cudfSize, <span class="c-kw">sizeof</span>(cudfSize)); ptr += <span class="c-kw">sizeof</span>(cudfSize);
+<span class="c-kw">if</span> (cudfSize) { std::memcpy(ptr, cudfMetadata-&gt;data(), cudfSize); ptr += cudfSize; }
+std::memcpy(ptr, &amp;dataSizeBytes, <span class="c-kw">sizeof</span>(dataSizeBytes)); ptr += <span class="c-kw">sizeof</span>(dataSizeBytes);
+<span class="c-cm">// … remainingBytes vector, then the atEnd byte …</span></pre>
+      </figure>
+      <div class="note cyan">
+        <span class="lbl">Receiver pre-allocation</span>
+        <p>Metadata is received into a fixed <code>kMaxMetaBufSize = 1 MB</code> buffer (≈10,000+ columns); the sender writes
+        only the exact bytes. A <code>VELOX_CHECK</code> on the serialized size turns "table too wide" into a clean error
+        rather than a buffer overrun. The deserializer bounds-checks every field against <code>totalSize</code>.</p>
+      </div>
+    </section>
+
+    <section id="producer">
+      <div class="sec-head"><span class="num">05</span><h2>Producer path</h2></div>
+      <p class="lede">On the producing worker, the <code>UcxPartitionedOutput</code> operator turns a stream of GPU
+        <code>CudfVector</code>s into per-partition <code>packed_columns</code> and drops them into queues. A server reads
+        from those queues and ships them. The operator's job is partition, pack, enqueue, and apply backpressure.</p>
+
+      <h3>Accumulate, then partition<span class="tag">addInput / flushPending</span></h3>
+      <p>Rather than partition every tiny input batch (expensive: each <code>contiguous_split</code> launches kernels and
+        produces metadata), the operator buffers <code>CudfVector</code>s until it has roughly a target row count — 10,000
+        by default, matching the HTTP path's chunking — then concatenates and partitions the merged table once. The single-input
+        case is a fast path that skips the concat allocation entirely.</p>
+      <figure class="code">
+        <figcaption><span class="file">UcxPartitionedOutput.cpp</span><span class="role">batch to ~10k rows before flushing</span></figcaption>
+<pre><span class="c-kw">void</span> UcxPartitionedOutput::<span class="c-fn">addInput</span>(RowVectorPtr input) {
+  <span class="c-kw">auto</span> cudfVector = std::dynamic_pointer_cast&lt;CudfVector&gt;(input);
+  VELOX_CHECK_NOT_NULL(cudfVector, <span class="c-st">"Input must be a CudfVector"</span>);
+  pendingRows_ += cudfVector-&gt;getTableView().num_rows();
+  pendingInputs_.push_back(std::move(cudfVector));
+  <span class="c-kw">if</span> (targetRowsPerChunk_ &lt;= <span class="c-nm">0</span> || pendingRows_ &gt;= targetRowsPerChunk_) {
+    flushPending();   <span class="c-cm">// concat → partition → split → enqueue</span>
+  }
+}</pre>
+      </figure>
+
+      <h3>Three partition strategies<span class="tag">hashPartition / equalPartition / pack</span></h3>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Spec</th><th>Strategy</th><th>cuDF call</th><th>Why</th></tr></thead>
+        <tbody>
+          <tr><td><code>HASH(k1,k2,…)</code></td><td class="hd">Hash partition</td><td><code>cudf::hash_partition</code> (MURMUR3)</td><td>Co-locate rows sharing a key on the same downstream partition.</td></tr>
+          <tr><td>RoundRobin / default</td><td class="hd">Equal split</td><td>offsets at <code>size·i/N</code> → <code>contiguous_split</code></td><td>Row-by-row round robin is meaningless for a bulk GPU transfer; equal slices spread load.</td></tr>
+          <tr><td>single partition</td><td class="hd">Pack whole</td><td><code>cudf::pack</code></td><td>No partitioning needed; one buffer for one destination.</td></tr>
+        </tbody>
+      </table></div>
+      <p>The key-index extraction is a frank hack the code calls out: the partition-function spec exposes no accessor for
+        its key indices, so the operator <em>string-parses</em> <code>"HASH(col_a, col_b)"</code> and looks the names up in
+        the output row type. It works, but it is brittle (see §14).</p>
+      <figure class="code">
+        <figcaption><span class="file">UcxPartitionedOutput.cpp</span><span class="role">split + sync + enqueue per partition</span></figcaption>
+<pre><span class="c-kw">auto</span> contiguousTables = cudf::contiguous_split(tableView, offsets, stream);
+<span class="c-cm">// UCX is not stream-aware: sync so kernels finish before bytes leave.</span>
+stream.synchronize();
+<span class="c-kw">for</span> (<span class="c-kw">int</span> i = <span class="c-nm">0</span>; i &lt; numPartitions_; ++i) {
+  <span class="c-kw">if</span> (contiguousTables[i].table.num_rows() == <span class="c-nm">0</span>) <span class="c-kw">continue</span>;   <span class="c-cm">// skip empties</span>
+  <span class="c-kw">auto</span> packed = std::make_unique&lt;cudf::packed_columns&gt;(
+      std::move(contiguousTables[i].data.metadata),
+      std::move(contiguousTables[i].data.gpu_data));
+  queueManager-&gt;enqueue(taskId(), i, std::move(packed),
+                        contiguousTables[i].table.num_rows());
+}</pre>
+      </figure>
+      <div class="note sage">
+        <span class="lbl">Peak-memory discipline</span>
+        <p>When merging multiple inputs, the operator frees the input GPU buffers <em>before</em> partitioning, holding peak
+        device memory near 1× the data rather than 2×. On <code>rmm::bad_alloc</code> it drops every queued partition for the
+        task and rethrows — shedding GPU memory rather than wedging.</p>
+      </div>
+
+      <h3>The producer-side queues<span class="tag">OutputQueueManager → OutputQueue → DestinationQueue</span></h3>
+      <p>These mirror Velox's own buffer hierarchy so closely that the stats even masquerade as
+        <code>OutputBuffer::Stats</code> to reach the Presto layer unchanged. The manager maps <code>taskId</code> → one
+        <code>UcxOutputQueue</code>; that queue holds a vector of <code>UcxDestinationQueue</code>s, one per partition; each
+        destination queue is a FIFO of <code>packed_columns</code> with a single pending <em>notify</em> callback. The
+        server registers that callback; when data arrives it fires, handing the chunk to the server.</p>
+      <figure class="code">
+        <figcaption><span class="file">UcxQueues.cpp</span><span class="role">getData() · immediate hand-off or deferred notify</span></figcaption>
+<pre>UcxDestinationQueue::Data UcxDestinationQueue::<span class="c-fn">getData</span>(
+    UcxDataAvailableCallback notify) {
+  <span class="c-kw">if</span> (queue_.empty()) {
+    notify_ = std::move(notify);   <span class="c-cm">// no data yet — install and wait</span>
+    <span class="c-kw">return</span> {};
+  }
+  <span class="c-kw">auto</span> data = std::move(queue_.front());
+  queue_.pop_front();
+  <span class="c-cm">// also report sizes of what's still queued, for telemetry/flow.</span>
+  <span class="c-kw">return</span> {std::move(data), remainingBytes, <span class="c-kw">true</span>};
+}</pre>
+      </figure>
+      <p>Backpressure on this side is a classic water-mark: once <code>queuedBytes_ &gt; maxSize_</code>, the operator's
+        <code>checkBlocked</code> hands the scheduler a <code>kWaitForConsumer</code> future, and producers resume only when
+        the queue drains back below 90% (<code>kContinuePct</code>). A subtle lifecycle wrinkle: if a server asks for data
+        before the producing task has even initialized (a sink connecting first), the manager creates an <em>uninitialized
+        placeholder</em> queue just to hold the callback, and a <code>removedTasks_</code> set stops it from resurrecting
+        placeholders for tasks that are already dead.</p>
+    </section>
+
+    <section id="server">
+      <div class="sec-head"><span class="num">06</span><h2>Server FSM · the sender</h2></div>
+      <p class="lede">A <code>UcxExchangeServer</code> is spawned per connecting source. It is a small state machine that loops:
+        pull one chunk from the destination queue, send its metadata, send its data, repeat — until the queue signals end,
+        at which point it sends an <code>atEnd</code> marker and finishes.</p>
+
+      <div class="diagram">
+        <div class="cap">UcxExchangeServer · ServerState transitions (remote path solid, intra-node dashed)</div>
+        <svg viewBox="0 0 760 300" role="img" aria-label="Server state machine">
+          <defs>
+            <marker id="ah" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--copper)"/></marker>
+            <marker id="ahc" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--cyan)"/></marker>
+          </defs>
+          <style>
+            .st{fill:var(--panel);stroke:var(--rule);stroke-width:1.5;rx:9;}
+            .stc{fill:var(--panel);stroke:var(--copper);stroke-width:1.5;}
+            .sl{font-family:'Instrument Sans',sans-serif;font-size:12px;font-weight:600;fill:var(--ink);}
+            .ed{fill:none;stroke:var(--copper);stroke-width:1.5;}
+            .edc{fill:none;stroke:var(--cyan);stroke-width:1.4;stroke-dasharray:4 3;}
+            .elb{font-family:'JetBrains Mono',monospace;font-size:9px;fill:var(--muted);}
+          </style>
+          <rect class="st" x="20" y="20" width="120" height="40" rx="9"/><text class="sl" x="80" y="44" text-anchor="middle">Created</text>
+          <rect class="st" x="190" y="20" width="150" height="40" rx="9"/><text class="sl" x="265" y="44" text-anchor="middle">ReadyToTransfer</text>
+          <rect class="st" x="400" y="20" width="200" height="40" rx="9"/><text class="sl" x="500" y="44" text-anchor="middle">WaitingForDataFromQueue</text>
+          <rect class="st" x="430" y="120" width="140" height="40" rx="9"/><text class="sl" x="500" y="144" text-anchor="middle">DataReady</text>
+          <rect class="st" x="200" y="120" width="190" height="40" rx="9"/><text class="sl" x="295" y="144" text-anchor="middle">WaitingForSendComplete</text>
+          <rect class="stc" x="200" y="210" width="240" height="40" rx="9"/><text class="sl" x="320" y="234" text-anchor="middle">WaitingForIntraNodeRetrieve</text>
+          <rect class="st" x="40" y="120" width="100" height="40" rx="9"/><text class="sl" x="90" y="144" text-anchor="middle">Done</text>
+          <line class="ed" x1="140" y1="40" x2="186" y2="40" marker-end="url(#ah)"/>
+          <line class="ed" x1="340" y1="40" x2="396" y2="40" marker-end="url(#ah)"/>
+          <text class="elb" x="362" y="32">getData</text>
+          <path class="ed" d="M500,60 L500,116" marker-end="url(#ah)"/><text class="elb" x="506" y="92">queue cb</text>
+          <path class="ed" d="M430,140 L394,140" marker-end="url(#ah)"/><text class="elb" x="396" y="132">sendData</text>
+          <path class="ed" d="M200,130 L142,72 " marker-end="url(#ah)"/>
+          <path class="ed" d="M295,120 C300,90 290,70 270,62" marker-end="url(#ah)"/><text class="elb" x="305" y="100">sendComplete → loop</text>
+          <path class="edc" d="M470,160 L380,206" marker-end="url(#ahc)"/><text class="elb" x="430" y="190" fill="var(--cyan)">intra: publish</text>
+          <path class="edc" d="M250,210 C180,180 150,120 130,72" marker-end="url(#ahc)"/>
+          <path class="ed" d="M90,120 L90,64" stroke-dasharray="2 2"/>
+        </svg>
+      </div>
+
+      <h3>Pulling one chunk, then sending two messages<span class="tag">sendData</span></h3>
+      <p>In <code>ReadyToTransfer</code> the server registers a callback with the destination queue and goes to
+        <code>WaitingForDataFromQueue</code>. When the callback delivers a chunk, the state advances to
+        <code>DataReady</code> and <code>process()</code> calls <code>sendData()</code>, which serializes and
+        <code>tagSend</code>s the metadata, then <code>tagSend</code>s the GPU buffer's raw device pointer. A null chunk means
+        "queue is finished" → send a metadata-only <code>atEnd</code> and go <code>Done</code>.</p>
+      <figure class="code">
+        <figcaption><span class="file">UcxExchangeServer.cpp</span><span class="role">sendData() · remote path, the data send</span></figcaption>
+<pre>setState(ServerState::WaitingForSendComplete);
+uint64_t dataTag = getDataTag(partitionKeyHash_, sequenceNumber_);
+<span class="c-kw">auto</span> dataCtx = std::make_shared&lt;DataSendContext&gt;();
+dataCtx-&gt;data = dataPtr_;                 <span class="c-cm">// keep the GPU buffer alive across the send</span>
+
+dataRequest_ = endpointRef_-&gt;endpoint_-&gt;<span class="c-fn">tagSend</span>(
+    dataCtx-&gt;data-&gt;gpu_data-&gt;data(),      <span class="c-cm">// ← raw DEVICE pointer; UCX DMAs it directly</span>
+    dataCtx-&gt;data-&gt;gpu_data-&gt;size(),
+    ucxx::Tag{dataTag}, <span class="c-kw">false</span>,
+    [weakData](ucs_status_t status, std::shared_ptr&lt;void&gt; arg) {
+      <span class="c-kw">auto</span> ctx = std::static_pointer_cast&lt;DataSendContext&gt;(arg);
+      <span class="c-kw">auto</span> hold = std::move(ctx-&gt;data);   <span class="c-cm">// release GPU buffer after DMA done</span>
+      <span class="c-kw">if</span> (<span class="c-kw">auto</span> self = weakData.lock()) self-&gt;sendComplete(status, arg);
+    },
+    dataCtx);</pre>
+      </figure>
+      <p>On <code>sendComplete</code> with <code>UCS_OK</code>, the server logs throughput, increments the sequence number,
+        releases the buffer, and returns to <code>ReadyToTransfer</code> for the next chunk — a tight pull-send loop driven
+        entirely by queue callbacks and UCX completions.</p>
+
+      <div class="note copper">
+        <span class="lbl">The context-shell trick</span>
+        <p>Why wrap the buffer in a <code>DataSendContext</code> instead of passing it directly? Two lifetimes that must be
+        decoupled. The <code>ucxx::Request</code> must outlive UCP's wireup-replay machinery (which can re-fire callbacks on
+        completed requests), but the multi-megabyte GPU buffer should be freed the instant the DMA finishes. The callback
+        moves the buffer <em>out</em> of the context — freeing device memory — while the now-empty context shell stays alive
+        with the Request, costing nothing.</p>
+      </div>
+    </section>
+
+    <section id="consumer">
+      <div class="sec-head"><span class="num">07</span><h2>Consumer path</h2></div>
+      <p class="lede">On the consuming worker, the <code>UcxExchange</code> operator pulls reconstructed tables from a
+        <code>UcxExchangeClient</code>, which fans in many <code>UcxExchangeSource</code>s — one per producing task — into a
+        single shared queue. The operator's job is split discovery, dequeue, and wrapping bytes back into a
+        <code>CudfVector</code> without copying.</p>
+
+      <h3>Splits become sources<span class="tag">getSplits / addRemoteTaskIds</span></h3>
+      <p>Velox feeds the exchange its upstream task list as <em>splits</em>. Driver 0 pulls them, and each new remote task
+        id becomes a <code>UcxExchangeSource</code>. The ids are shuffled first so that, across a cluster, many consumers
+        don't all stampede the same producer at once.</p>
+      <figure class="code">
+        <figcaption><span class="file">UcxExchange.cpp + UcxExchangeClient.cpp</span><span class="role">split → source, deduplicated</span></figcaption>
+<pre><span class="c-kw">void</span> UcxExchange::<span class="c-fn">addRemoteTaskIds</span>(std::vector&lt;std::string&gt;&amp; ids) {
+  std::shuffle(ids.begin(), ids.end(), rng_);    <span class="c-cm">// avoid herd on one producer</span>
+  <span class="c-kw">for</span> (<span class="c-kw">const auto</span>&amp; id : ids) exchangeClient_-&gt;addRemoteTaskId(id);
+}
+
+<span class="c-kw">void</span> UcxExchangeClient::<span class="c-fn">addRemoteTaskId</span>(std::string_view id) {
+  <span class="c-cm">// Presto may add duplicate sources, with no ordering guarantee.</span>
+  <span class="c-kw">if</span> (!remoteTaskIds_.insert(std::string{id}).second) <span class="c-kw">return</span>;
+  <span class="c-kw">auto</span> source = UcxExchangeSource::create(taskId_, id, queue_);
+  sources_.push_back(source);
+  queue_-&gt;addSourceLocked();
+  source-&gt;setRegistered();   <span class="c-cm">// now eligible to deliver an end-marker</span>
+}</pre>
+      </figure>
+
+      <h3>Fan-in and completion accounting<span class="tag">UcxExchangeQueue</span></h3>
+      <p>All sources write into one <code>UcxExchangeQueue</code>. It tracks <code>numSources_</code> and
+        <code>numCompleted_</code>; the exchange is at end only once <code>noMoreSources_</code> is set and every source has
+        delivered its terminating <code>nullptr</code>. Consumer drivers that find the queue empty register a promise keyed by
+        their driver id; an enqueue wakes exactly as many as there are newly-available tables.</p>
+      <figure class="code">
+        <figcaption><span class="file">UcxExchangeQueue.cpp</span><span class="role">enqueueLocked() · null = a source finished</span></figcaption>
+<pre><span class="c-kw">void</span> UcxExchangeQueue::<span class="c-fn">enqueueLocked</span>(
+    PackedTableWithStreamPtr&amp;&amp; data, std::vector&lt;ContinuePromise&gt;&amp; promises) {
+  <span class="c-kw">if</span> (data == <span class="c-kw">nullptr</span>) {                       <span class="c-cm">// end-of-stream from one source</span>
+    ++numCompleted_;
+    <span class="c-kw">auto</span> done = checkCompleteLocked();              <span class="c-cm">// all sources done? → atEnd</span>
+    <span class="c-kw">for</span> (<span class="c-kw">auto</span>&amp; p : done) promises.push_back(std::move(p));
+    <span class="c-kw">return</span>;
+  }
+  queue_.push_back(std::move(data));
+  <span class="c-cm">// Wake one waiting driver per unassigned table.</span>
+  <span class="c-kw">while</span> (!promises_.empty() &amp;&amp;
+         (int64_t)queue_.size() - (numberOfConsumers_ - promises_.size()) &gt; <span class="c-nm">0</span>) {
+    <span class="c-kw">auto</span> it = promises_.begin();
+    promises.push_back(std::move(it-&gt;second));
+    promises_.erase(it);
+  }
+}</pre>
+      </figure>
+
+      <h3>Bytes back to a CudfVector, no copy<span class="tag">getOutputFromPackedTable</span></h3>
+      <p>The operator's output step is the mirror image of packing: the received <code>packed_table</code> already
+        <em>is</em> a table view over a device buffer, so the operator simply wraps it in a <code>CudfVector</code>, reusing
+        the very stream the source allocated on. No deserialization, no copy.</p>
+      <figure class="code">
+        <figcaption><span class="file">UcxExchange.cpp</span><span class="role">wrap received bytes as a Velox vector</span></figcaption>
+<pre>PackedTableWithStream&amp; d = *currentData_;
+<span class="c-kw">auto</span> result = std::make_shared&lt;cudf_velox::CudfVector&gt;(
+    pool(), outputType_, d.packedTable-&gt;table.num_rows(),
+    std::move(d.packedTable), d.stream);    <span class="c-cm">// reuse source's stream; zero-copy</span>
+currentData_.reset();
+<span class="c-kw">return</span> result;</pre>
+      </figure>
+      <p>The operator's <code>isBlocked</code> combines two futures — "more splits available" and "more data available" —
+        with <code>folly::collectAny</code>, so a driver parks until <em>either</em> a new upstream task appears or a chunk
+        lands, then re-checks. This is the standard Velox exchange dance, faithfully reproduced.</p>
+    </section>
+
+    <section id="source">
+      <div class="sec-head"><span class="num">08</span><h2>Source FSM · the receiver</h2></div>
+      <p class="lede">The <code>UcxExchangeSource</code> is the largest single file in the module and the protocol's center of
+        gravity. It drives one producing task's connection: connect, handshake, receive the response, then loop
+        metadata → allocate → data → unpack → enqueue until <code>atEnd</code>. A whole second branch handles the in-process
+        fast path.</p>
+
+      <div class="diagram">
+        <div class="cap">UcxExchangeSource · ReceiverState transitions (remote path solid, intra-node dashed)</div>
+        <svg viewBox="0 0 760 320" role="img" aria-label="Source state machine">
+          <defs>
+            <marker id="ah2" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--sage)"/></marker>
+            <marker id="ah2c" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--cyan)"/></marker>
+          </defs>
+          <style>
+            .ss{fill:var(--panel);stroke:var(--rule);stroke-width:1.5;}
+            .ssl{font-family:'Instrument Sans',sans-serif;font-size:11.5px;font-weight:600;fill:var(--ink);}
+            .se{fill:none;stroke:var(--sage);stroke-width:1.5;}
+            .sec2{fill:none;stroke:var(--cyan);stroke-width:1.4;stroke-dasharray:4 3;}
+            .selb{font-family:'JetBrains Mono',monospace;font-size:8.5px;fill:var(--muted);}
+          </style>
+          <rect class="ss" x="20" y="18" width="96" height="36" rx="9"/><text class="ssl" x="68" y="40" text-anchor="middle">Created</text>
+          <rect class="ss" x="160" y="18" width="210" height="36" rx="9"/><text class="ssl" x="265" y="40" text-anchor="middle">WaitingForHandshakeComplete</text>
+          <rect class="ss" x="420" y="18" width="210" height="36" rx="9"/><text class="ssl" x="525" y="40" text-anchor="middle">WaitingForHandshakeResponse</text>
+          <rect class="ss" x="470" y="110" width="160" height="36" rx="9"/><text class="ssl" x="550" y="132" text-anchor="middle">ReadyToReceive</text>
+          <rect class="ss" x="470" y="180" width="160" height="36" rx="9"/><text class="ssl" x="550" y="202" text-anchor="middle">WaitingForMetadata</text>
+          <rect class="ss" x="250" y="180" width="150" height="36" rx="9"/><text class="ssl" x="325" y="202" text-anchor="middle">WaitingForData</text>
+          <rect class="ss" x="230" y="262" width="220" height="36" rx="9" stroke="var(--cyan)"/><text class="ssl" x="340" y="284" text-anchor="middle">WaitingForIntraNodeData</text>
+          <rect class="ss" x="40" y="180" width="90" height="36" rx="9"/><text class="ssl" x="85" y="202" text-anchor="middle">Done</text>
+          <line class="se" x1="116" y1="36" x2="156" y2="36" marker-end="url(#ah2)"/>
+          <line class="se" x1="370" y1="36" x2="416" y2="36" marker-end="url(#ah2)"/><text class="selb" x="378" y="28">onHandshake</text>
+          <path class="se" d="M560,54 C600,72 600,92 555,106" marker-end="url(#ah2)"/><text class="selb" x="600" y="86">onResponse</text>
+          <path class="se" d="M550,146 L550,176" marker-end="url(#ah2)"/><text class="selb" x="556" y="166">getMetadata</text>
+          <path class="se" d="M470,198 L402,198" marker-end="url(#ah2)"/><text class="selb" x="405" y="190">onMetadata→tagRecv</text>
+          <path class="se" d="M325,180 C340,150 420,140 468,134" marker-end="url(#ah2)"/><text class="selb" x="360" y="150">onData → loop</text>
+          <path class="se" d="M250,198 L132,198" marker-end="url(#ah2)" stroke-dasharray="2 2"/><text class="selb" x="150" y="190">atEnd</text>
+          <path class="sec2" d="M510,146 L400,260" marker-end="url(#ah2c)"/><text class="selb" x="470" y="220" fill="var(--cyan)">intra: poll</text>
+          <path class="sec2" d="M340,262 C200,230 150,210 130,200" marker-end="url(#ah2c)"/>
+        </svg>
+      </div>
+
+      <h3>Handshake, then the response<span class="tag">sendHandshake / onHandshakeResponse</span></h3>
+      <p>From <code>Created</code>, the source associates (or opens) an endpoint, fires the handshake as an active message,
+        and waits. Notice the <code>weak_from_this()</code> capture — the universal defense against the object being
+        destroyed while a callback is in flight.</p>
+      <figure class="code">
+        <figcaption><span class="file">UcxExchangeSource.cpp</span><span class="role">handshake send · weak-ptr callback</span></figcaption>
+<pre>std::weak_ptr&lt;UcxExchangeSource&gt; weak = weak_from_this();
+request_ = endpointRef_-&gt;endpoint_-&gt;<span class="c-fn">amSend</span>(
+    handshakeReq.get(), <span class="c-kw">sizeof</span>(*handshakeReq), UCS_MEMORY_TYPE_HOST,
+    info, <span class="c-kw">false</span>,
+    [weak](ucs_status_t status, std::shared_ptr&lt;void&gt; arg) {
+      <span class="c-kw">if</span> (<span class="c-kw">auto</span> self = weak.lock()) self-&gt;onHandshake(status, arg);
+    },
+    handshakeReq);   <span class="c-cm">// arg keeps the send buffer alive until amSend completes</span></pre>
+      </figure>
+      <p>When the <code>HandshakeResponse</code> arrives, its single bit decides the source's whole future: if
+        <code>isIntraNodeTransfer</code> is set, every subsequent chunk comes from the in-process registry; otherwise it's the
+        UCX metadata/data loop.</p>
+
+      <h3>Metadata → allocate exactly → receive data<span class="tag">onMetadata / onData</span></h3>
+      <p>This is the crux of the two-message protocol. The source receives metadata, reads <code>dataSizeBytes</code>,
+        allocates precisely that many device bytes through RMM, <em>synchronizes</em>, then posts the data
+        <code>tagRecv</code> straight into that device buffer. The <code>atEnd</code> flag short-circuits to
+        <code>Done</code>.</p>
+      <figure class="code">
+        <figcaption><span class="file">UcxExchangeSource.cpp</span><span class="role">onMetadata() · allocate device buffer, post data recv</span></figcaption>
+<pre><span class="c-kw">if</span> (ptr-&gt;metadata.atEnd) { atEnd_ = <span class="c-kw">true</span>; deliverEndMarker();
+  setStateIf(WaitingForMetadata, Done); ... <span class="c-kw">return</span>; }
+
+<span class="c-kw">auto</span> stream = cudfGlobalStreamPool().get_stream();
+ptr-&gt;dataBuf = std::make_unique&lt;rmm::device_buffer&gt;(ptr-&gt;metadata.dataSizeBytes, stream);
+stream.synchronize();                          <span class="c-cm">// alloc visible before the DMA targets it</span>
+
+uint64_t dataTag = getDataTag(partitionKeyHash_, sequenceNumber_);
+setStateIf(WaitingForMetadata, WaitingForData);
+request_ = endpointRef_-&gt;endpoint_-&gt;<span class="c-fn">tagRecv</span>(
+    ptr-&gt;dataBuf-&gt;data(),                       <span class="c-cm">// ← receive straight into DEVICE memory</span>
+    ptr-&gt;metadata.dataSizeBytes, ucxx::Tag{dataTag}, ucxx::TagMaskFull, <span class="c-kw">false</span>,
+    [weak](ucs_status_t s, std::shared_ptr&lt;void&gt; a){ <span class="c-kw">if</span>(<span class="c-kw">auto</span> self=weak.lock()) self-&gt;onData(s,a); },
+    ptr);</pre>
+      </figure>
+      <p>In <code>onData</code>, the received buffer and the metadata become a <code>packed_columns</code>;
+        <code>cudf::unpack</code> rebuilds the <code>table_view</code>; the result is bundled with its stream and enqueued.
+        Then back to <code>ReadyToReceive</code>.</p>
+
+      <h3>Backpressure as dormancy<span class="tag">ReadyToReceive · resumeFromBackpressure</span></h3>
+      <p>This is the cleverest mechanism in the file. When the consumer queue is overloaded, the source does <em>not</em>
+        post the next receive and does <em>not</em> re-enqueue itself — it simply goes dormant. Because no <code>tagRecv</code>
+        is posted, the server's next <code>tagSend</code> blocks at rendezvous: UCX itself becomes the backpressure valve. The
+        consumer thread re-arms the source via a CAS-guarded wake-up once the queue drains.</p>
+      <figure class="code">
+        <figcaption><span class="file">UcxExchangeSource.cpp</span><span class="role">go dormant under backpressure; wake on drain</span></figcaption>
+<pre><span class="c-kw">case</span> ReceiverState::ReadyToReceive: {
+  <span class="c-kw">if</span> (queue_-&gt;size() &gt; kBackpressureHighWaterMark) {        <span class="c-cm">// 32</span>
+    backpressureActive_.exchange(<span class="c-kw">true</span>);
+    <span class="c-kw">break</span>;   <span class="c-cm">// dormant: do NOT re-enqueue. Server's tagSend will block.</span>
+  }
+  isIntraNodeTransfer_ ? waitForIntraNodeData() : getMetadata();
+}
+
+<span class="c-kw">void</span> UcxExchangeSource::<span class="c-fn">resumeFromBackpressure</span>() {      <span class="c-cm">// called by client::next()</span>
+  <span class="c-kw">bool</span> expected = <span class="c-kw">true</span>;
+  <span class="c-kw">if</span> (backpressureActive_.compare_exchange_strong(expected, <span class="c-kw">false</span>))
+    communicator_-&gt;addToWorkQueue(getSelfPtr());           <span class="c-cm">// exactly one wake-up</span>
+}</pre>
+      </figure>
+      <div class="note rose">
+        <span class="lbl">A trap in the client's other "flow control"</span>
+        <p>The client keeps a second, <code>maxQueuedColumns_</code>-based notion of flow control — and its own comment admits
+        it is a <strong>no-op</strong>: the protocol is push-based, so there is no "don't request" lever. The real backpressure
+        is the dormancy above. The dead path is a maintenance hazard flagged in §14.</p>
+      </div>
+    </section>
+
+    <section id="intra">
+      <div class="sec-head"><span class="num">09</span><h2>Intra-node fast path</h2></div>
+      <p class="lede">When a source and a server live in the <em>same process</em> — common when many tasks share a node and
+        GPU — going through UCX at all is wasteful: the data already sits in the same address space. The
+        <code>IntraNodeTransferRegistry</code> hands the <code>packed_columns</code> over by shared pointer, bypassing the
+        network stack entirely.</p>
+
+      <h3>Detecting same-process via workerId<span class="tag">why not IP</span></h3>
+      <p>Each <code>Communicator</code> mints a random 64-bit <code>workerId</code> at startup. The source sends it in the
+        handshake; the server compares it to its own. A match means the same singleton, hence the same process. The code
+        comments record exactly why this replaced an earlier IP-based check: <em>multiple Docker containers can share the host
+        IP</em>, which made IP comparison wrongly conclude "same node" for peers that were actually isolated. A random id has
+        negligible collision probability and no such confusion.</p>
+
+      <h3>publish / poll handoff<span class="tag">IntraNodeTransferRegistry</span></h3>
+      <p>The mechanism is a keyed map plus a promise/future pair. The server <code>publish()</code>es the
+        <code>packed_columns</code> under a <code>(taskId, destination, seq)</code> key and gets back a future that resolves
+        when the source has taken the data; the source <code>poll()</code>s the same key, moves the data out, and fulfils the
+        promise. Ownership passes by pointer — <strong>no copy, no UCX, no DMA</strong>.</p>
+      <figure class="code">
+        <figcaption><span class="file">IntraNodeTransferRegistry.cpp</span><span class="role">poll() · take data, signal the publisher</span></figcaption>
+<pre>std::optional&lt;IntraNodeTransferResult&gt; IntraNodeTransferRegistry::<span class="c-fn">poll</span>(
+    <span class="c-kw">const</span> IntraNodeTransferKey&amp; key) {
+  <span class="c-cm">// cancelledTasks_ ⇒ producer gone: synthesise an atEnd so the source ends.</span>
+  <span class="c-kw">auto</span> it = registry_.find(key);
+  <span class="c-kw">if</span> (it == registry_.end()) <span class="c-kw">return</span> std::nullopt;          <span class="c-cm">// not published yet</span>
+  <span class="c-kw">auto</span> entry = it-&gt;second;
+  {
+    std::lock_guard&lt;std::mutex&gt; lk(entry-&gt;entryMutex);
+    <span class="c-kw">if</span> (!entry-&gt;ready) <span class="c-kw">return</span> std::nullopt;
+    result.data  = std::move(entry-&gt;data);            <span class="c-cm">// hand off by pointer</span>
+    result.atEnd = entry-&gt;atEnd;
+    entry-&gt;retrievedPromise.set_value();              <span class="c-cm">// unblock the server</span>
+  }
+  registry_.erase(key);
+  <span class="c-kw">return</span> result;
+}</pre>
+      </figure>
+      <p>On the server side this collapses the FSM: from <code>DataReady</code> it <code>publish()</code>es and parks in
+        <code>WaitingForIntraNodeRetrieve</code>, polling its future with a zero timeout each time the work queue revisits it;
+        when the source has taken the chunk, it loops. The source mirrors this from
+        <code>WaitingForIntraNodeData</code>, re-polling the registry until the entry appears.</p>
+
+      <div class="note rose">
+        <span class="lbl">Two guardrails — and why they exist</span>
+        <p><strong>Broadcast is excluded.</strong> In broadcast mode the same <code>packed_columns</code> is shared across every
+        destination server; the intra-node source's destructive <em>move</em> would yank the buffer out from under the others,
+        corrupting their sends. <code>canUseIntraNode()</code> disables the fast path for broadcast and for not-yet-initialized
+        (placeholder) tasks.</p>
+        <p><strong>It busy-polls.</strong> Both sides re-enqueue themselves and poll rather than block on the promise via the
+        worker's wake-up. It is correct but burns Communicator-thread cycles — the single clearest efficiency target in the
+        module (§14).</p>
+      </div>
+    </section>
+
+    <section id="together">
+      <div class="sec-head"><span class="num">10</span><h2>End-to-end trace</h2></div>
+      <p class="lede">Follow one chunk from a producing kernel to a consuming operator. The remote path crosses the wire;
+        the intra-node path skips it. Both are driven by the same two FSMs stepping on their respective Communicator threads.</p>
+
+      <h4>Remote path — one chunk, GPU → wire → GPU</h4>
+      <div class="diagram">
+        <div class="cap">Producer worker (left agents) · consumer worker (right agents) · numbers are causal order</div>
+        <div class="seq">
+          <div class="row"><div class="sn"></div><div class="body"><div class="who">UcxExchange <span class="arr">→</span> Client → Source</div><div class="what">Consumer driver 0 turns an upstream split into a <code>UcxExchangeSource</code>; it opens an endpoint to the producer's listener (HTTP port <code>+3</code>) and <code>amSend</code>s a <code>HandshakeMsg</code>.</div></div></div>
+          <div class="row"><div class="sn"></div><div class="body"><div class="who">Acceptor (producer)</div><div class="what">The handshake fires the worker-wide AM callback, which spawns a <code>UcxExchangeServer</code> for that partition key and replies with a <code>HandshakeResponse</code> (<code>isIntraNode=false</code>).</div></div></div>
+          <div class="row"><div class="sn"></div><div class="body"><div class="who">UcxPartitionedOutput</div><div class="what">Meanwhile the producer operator concatenates ~10k rows, <code>hash_partition</code>s, <code>contiguous_split</code>s, <code>stream.synchronize()</code>s, and <code>enqueue</code>s one <code>packed_columns</code> per destination.</div></div></div>
+          <div class="row"><div class="sn"></div><div class="body"><div class="who">Server FSM</div><div class="what">In <code>ReadyToTransfer</code> the server registered a queue callback. The enqueue fires it → <code>DataReady</code> → <code>sendData()</code>: <code>tagSend</code> metadata (size + cuDF layout + <code>atEnd=false</code>), then <code>tagSend</code> the GPU buffer's raw device pointer.</div></div></div>
+          <div class="row"><div class="sn"></div><div class="body"><div class="who">Source FSM</div><div class="what"><code>onMetadata</code> reads <code>dataSizeBytes</code>, allocates exactly that device buffer, syncs, and posts a <code>tagRecv</code> into device memory. UCX rendezvous matches the server's pending send and DMAs GPU→GPU.</div></div></div>
+          <div class="row"><div class="sn"></div><div class="body"><div class="who">Source FSM → Queue</div><div class="what"><code>onData</code> builds <code>packed_columns</code>, <code>cudf::unpack</code>s a <code>table_view</code>, bundles it with its stream, and enqueues into the shared <code>UcxExchangeQueue</code>, waking a parked consumer driver.</div></div></div>
+          <div class="row"><div class="sn"></div><div class="body"><div class="who">Server / Source</div><div class="what">Server <code>sendComplete</code> → <code>seq++</code> → <code>ReadyToTransfer</code>. Source → <code>ReadyToReceive</code>. The loop repeats per chunk until the queue is drained.</div></div></div>
+          <div class="row"><div class="sn"></div><div class="body"><div class="who">UcxExchange (consumer)</div><div class="what"><code>getOutput</code> wraps the <code>packed_table</code> as a <code>CudfVector</code> — zero copy, reusing the source's stream — and hands it to the next operator.</div></div></div>
+          <div class="row"><div class="sn"></div><div class="body"><div class="who">termination</div><div class="what">When the producer signals no-more-data, the server sends a metadata-only <code>atEnd</code>; the source delivers a <code>nullptr</code> end-marker (CAS-guarded, at-most-once). When all sources complete, the queue flips to <code>atEnd</code> and the exchange finishes.</div></div></div>
+        </div>
+      </div>
+
+      <h4>Intra-node path — same chunk, no wire</h4>
+      <div class="diagram">
+        <div class="cap">Both agents in one process · the registry replaces steps 4–6 above</div>
+        <div class="seq">
+          <div class="row intra"><div class="sn"></div><div class="body"><div class="who">Handshake</div><div class="what">Identical to remote, except the server sees <code>workerId == own</code> and the <code>HandshakeResponse</code> carries <code>isIntraNode=true</code>. Both FSMs switch to their intra-node branch.</div></div></div>
+          <div class="row intra"><div class="sn"></div><div class="body"><div class="who">Server FSM → Registry</div><div class="what"><code>publish((taskId,dest,seq), packed_columns, atEnd=false)</code> stores the shared pointer and returns a retrieval future; server parks in <code>WaitingForIntraNodeRetrieve</code>.</div></div></div>
+          <div class="row intra"><div class="sn"></div><div class="body"><div class="who">Source FSM ← Registry</div><div class="what"><code>poll((taskId,dest,seq))</code> moves the <code>packed_columns</code> out by pointer and fulfils the promise. No copy, no UCX. The source <code>unpack</code>s and enqueues exactly as in the remote path.</div></div></div>
+          <div class="row intra"><div class="sn"></div><div class="body"><div class="who">Loop &amp; end</div><div class="what">Server's future resolves → <code>seq++</code> → loop. End-of-stream is a <code>publish(nullptr, atEnd=true)</code>; <code>cancelTask</code> synthesises an <code>atEnd</code> if the producer disappears so the source never hangs.</div></div></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="paa">
+      <div class="sec-head"><span class="num">11</span><h2>Problems &amp; approaches</h2></div>
+      <p class="lede">Seven design challenges define this module. Each card states the problem, the approach taken, what it buys,
+        and where it still bites.</p>
+
+      <div class="paa">
+        <div class="paa-h"><span class="ix">P1</span>Moving columnar GPU data without a host bounce</div>
+        <div class="paa-grid">
+          <div class="pcell prob"><div class="pk">Problem</div><p>A cuDF table is a scatter of independent device allocations. Shipping it the CPU way means D2H copy → serialize → network → H2D → deserialize, paying the PCIe tax on data that started and ended on the GPU.</p></div>
+          <div class="pcell appr"><div class="pk">Approach</div><p><code>contiguous_split</code> lays a partition out as one device buffer + small host metadata. The server <code>tagSend</code>s the raw device pointer; the receiver <code>tagRecv</code>s into a device buffer; <code>unpack</code> rebuilds a view. UCX's CUDA support does the GPUDirect DMA.</p></div>
+          <div class="pcell ben"><div class="pk">Benefit</div><p>Genuinely zero-copy on the data plane. No serialization, no segmentation, no reassembly. Bandwidth is bounded by the link (NVLink / IB / RoCE), not by CPU marshalling.</p></div>
+          <div class="pcell lim"><div class="pk">Limitation</div><p>One <code>contiguous_split</code> per chunk still costs a kernel + a transient peak allocation. No on-wire compression, so bandwidth-bound links carry raw bytes.</p></div>
+        </div>
+      </div>
+
+      <div class="paa">
+        <div class="paa-h"><span class="ix">P2</span>Unknown chunk size &amp; dynamic, late-bound membership</div>
+        <div class="paa-grid">
+          <div class="pcell prob"><div class="pk">Problem</div><p>The receiver can't know a chunk's byte size until the producer has partitioned, and the set of producer/consumer pairs is decided at plan time but materialises dynamically as tasks launch, retry, and tear down.</p></div>
+          <div class="pcell appr"><div class="pk">Approach</div><p>Connection-on-demand: a source connects when it has work, and an active-message handshake spawns the server. A two-message protocol sends metadata (with exact size) first, then the data — so the receiver allocates precisely and demultiplexes by 64-bit tag.</p></div>
+          <div class="pcell ben"><div class="pk">Benefit</div><p>No global barrier, no fixed world size, no pre-wired topology. Tasks come and go freely; each transfer is independent and self-describing.</p></div>
+          <div class="pcell lim"><div class="pk">Limitation</div><p>A metadata round-trip per chunk adds latency, and the full cuDF layout is re-sent every chunk even when the schema is unchanged. The <code>taskHash</code> is only 32-bit FNV-1a — a latent collision risk in long-lived clusters.</p></div>
+        </div>
+      </div>
+
+      <div class="paa">
+        <div class="paa-h"><span class="ix">P3</span>The CUDA-stream / network ordering boundary</div>
+        <div class="paa-grid">
+          <div class="pcell prob"><div class="pk">Problem</div><p>UCX is not stream-aware. Hand it a device pointer whose producing kernels are still queued on a stream and it may DMA stale or partial bytes — a silent data-corruption bug.</p></div>
+          <div class="pcell appr"><div class="pk">Approach</div><p><code>stream.synchronize()</code> at every boundary: after <code>contiguous_split</code> before enqueue, after device allocation before posting a receive, before an intra-node <code>publish</code>. The stream travels with the data (<code>PackedTableWithStream</code>) so downstream ops reuse it.</p></div>
+          <div class="pcell ben"><div class="pk">Benefit</div><p>Correctness at the edge with a single, well-placed sync. Downstream cuDF work inherits the right stream, avoiding spurious default-stream serialization.</p></div>
+          <div class="pcell lim"><div class="pk">Limitation</div><p>A hard <code>synchronize()</code> is a coarse hammer — it stalls the stream rather than enqueuing an event-based dependency. Under high concurrency this serializes more than strictly necessary.</p></div>
+        </div>
+      </div>
+
+      <div class="paa">
+        <div class="paa-h"><span class="ix">P4</span>Lifetime safety across async UCX callbacks</div>
+        <div class="paa-grid">
+          <div class="pcell prob"><div class="pk">Problem</div><p>A task can abort mid-transfer, freeing the source/server while a completion callback is still pending. Worse, UCP's wireup-replay can fire callbacks on <em>already-completed</em> requests, and a freed <code>Request</code> means the callback lambda lives in freed memory.</p></div>
+          <div class="pcell appr"><div class="pk">Approach</div><p>A three-part discipline: every callback captures <code>weak_from_this()</code> and no-ops if the object is gone; every callback guards on expected state to ignore replays; completed requests are retained in a <code>completedRequests_</code> vector so their lambdas stay valid for the object's lifetime.</p></div>
+          <div class="pcell ben"><div class="pk">Benefit</div><p>No use-after-free under cancellation or replay. The pattern is textbook-correct for UCXX and applied uniformly across handshake, metadata, and data sends/recvs.</p></div>
+          <div class="pcell lim"><div class="pk">Limitation</div><p>Retained requests accumulate for the object's lifetime (bounded, but non-zero memory). The discipline is manual and easy to get subtly wrong in any future code path that forgets the weak-ptr or the state guard.</p></div>
+        </div>
+      </div>
+
+      <div class="paa">
+        <div class="paa-h"><span class="ix">P5</span>Many driver threads, one UCX worker</div>
+        <div class="paa-grid">
+          <div class="pcell prob"><div class="pk">Problem</div><p>UCX workers are happiest progressed by one thread; Velox runs many driver threads. Letting them all touch the worker means <code>UCS_THREAD_MODE_MULTI</code> locking and a long tail of concurrency hazards.</p></div>
+          <div class="pcell appr"><div class="pk">Approach</div><p>A singleton <code>Communicator</code> owns the only worker and runs the only progress loop. Driver threads interact solely through a mutex-guarded <code>WorkQueue</code> of <code>CommElement</code>s, signalling the worker to wake. Both FSMs are re-entrant step functions.</p></div>
+          <div class="pcell ben"><div class="pk">Benefit</div><p>No worker-level lock contention and none of the multi-thread UCX foot-guns. A clean, debuggable single-threaded core; callbacks always run in one known context.</p></div>
+          <div class="pcell lim"><div class="pk">Limitation</div><p>That one thread does <em>all</em> progress and <em>all</em> <code>process()</code> calls — a throughput ceiling at high message rates or many concurrent endpoints. Scaling means sharded workers, reintroducing the complexity this avoids.</p></div>
+        </div>
+      </div>
+
+      <div class="paa">
+        <div class="paa-h"><span class="ix">P6</span>Backpressure without a pull protocol</div>
+        <div class="paa-grid">
+          <div class="pcell prob"><div class="pk">Problem</div><p>The data path is push-based: the server sends unconditionally. With no "please pause" message, a slow consumer would let the queue grow without bound and OOM the GPU.</p></div>
+          <div class="pcell appr"><div class="pk">Approach</div><p>Use rendezvous as the valve. When the consumer queue exceeds the high-water mark, the source goes dormant and stops posting receives; the server's next <code>tagSend</code> then blocks at rendezvous. A CAS-guarded wake re-arms the source once the queue drains to the low-water mark. The producer side adds an independent byte-water-mark block.</p></div>
+          <div class="pcell ben"><div class="pk">Benefit</div><p>End-to-end flow control with no extra protocol messages — UCX's own rendezvous semantics do the throttling. Bounded queue depth, bounded GPU memory.</p></div>
+          <div class="pcell lim"><div class="pk">Limitation</div><p>Thresholds are counts of tables (32/16), not bytes, so a few huge chunks can still spike memory. A vestigial second "flow control" in the client is a documented no-op and pure confusion.</p></div>
+        </div>
+      </div>
+
+      <div class="paa">
+        <div class="paa-h"><span class="ix">P7</span>Co-located peers paying the network tax</div>
+        <div class="paa-grid">
+          <div class="pcell prob"><div class="pk">Problem</div><p>When producer and consumer tasks share a process (common with many tasks per node/GPU), routing data through UCX is pure overhead — the bytes are already in the same address space.</p></div>
+          <div class="pcell appr"><div class="pk">Approach</div><p>A random per-process <code>workerId</code> in the handshake detects same-process peers. The <code>IntraNodeTransferRegistry</code> then hands the <code>packed_columns</code> over by shared pointer via a keyed publish/poll with a promise/future, bypassing UCX entirely.</p></div>
+          <div class="pcell ben"><div class="pk">Benefit</div><p>Near-free intra-process transfer — a pointer move, no DMA, no serialization. Robust to shared host IPs (the workerId fix) that broke the earlier IP-based detection.</p></div>
+          <div class="pcell lim"><div class="pk">Limitation</div><p>Busy-polling on both sides burns Communicator-thread cycles. Disabled for broadcast (shared buffer + destructive move would corrupt other destinations) and for not-yet-initialized tasks.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="nccl">
+      <div class="sec-head"><span class="num">12</span><h2>Why not NCCL</h2></div>
+      <p class="lede">NCCL is the obvious GPU-comms library, so the absence of it here is a design statement. The short version:
+        <strong>NCCL optimises the wrong axis for this problem.</strong> It is a collective library for dense, symmetric,
+        fixed-membership communication; a shuffle is sparse, irregular, dynamically-membered point-to-point with a control
+        plane. UCX is a transport toolkit; the shuffle needs a transport toolkit.</p>
+
+      <h3>The model mismatch, point by point</h3>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Dimension</th><th>What a query shuffle needs</th><th>What NCCL provides</th></tr></thead>
+        <tbody>
+          <tr><td class="hd">Membership</td><td>Dynamic &amp; late-bound: tasks launch, retry, and tear down; the producer/consumer set materialises at runtime.</td><td>A communicator is built over a <em>static</em> mapping of ranks to devices; each communicator object is bound to a fixed rank. <span class="n">✗ mismatch</span></td></tr>
+          <tr><td class="hd">Setup cost</td><td>Cheap, per-pair, on demand — one handshake when a source first needs data.</td><td><code>ncclCommInitRank</code> implicitly synchronises across all ranks: communicator creation is itself a global barrier. <span class="n">✗ mismatch</span></td></tr>
+          <tr><td class="hd">Communication shape</td><td>Sparse, irregular all-to-all: each producer sends a differently-sized slice to each consumer; many pairs exchange nothing.</td><td>Collectives assume dense, uniform, symmetric participation (all-reduce, all-gather). No native variable all-to-all. <span class="n">✗ mismatch</span></td></tr>
+          <tr><td class="hd">Message sizing</td><td>Sizes are data-dependent and unknown until partitioning completes — hence the metadata-first protocol.</td><td><code>ncclSend</code>/<code>ncclRecv</code> require both sides to agree on the element count up front; no in-band size negotiation. <span class="n">✗ mismatch</span></td></tr>
+          <tr><td class="hd">Ordering</td><td>Drivers pull opportunistically and asynchronously; there is no global lockstep.</td><td>Operations must be submitted in the same order across ranks, and blocking kernels plus any CUDA sync can deadlock. <span class="n">✗ mismatch</span></td></tr>
+          <tr><td class="hd">Fault model</td><td>A failed/cancelled task must propagate an error and let the rest of the query continue.</td><td>A failed rank generally means <code>ncclCommAbort</code> and rebuilding the whole communicator. <span class="n">✗ mismatch</span></td></tr>
+          <tr><td class="hd">Concurrency</td><td>One worker serves dozens of partitions to dozens of consumers with independent lifetimes.</td><td>Using multiple communicators "requires careful synchronization, or can lead to deadlocks." <span class="n">✗ mismatch</span></td></tr>
+          <tr><td class="hd">Control plane</td><td>Handshake, metadata, end-markers — host-memory messages alongside the GPU data plane.</td><td>GPU data-plane only; the unique-id bootstrap still needs an out-of-band socket/MPI channel. <span class="n">✗ partial</span></td></tr>
+          <tr><td class="hd">Transports</td><td>Span NVLink, PCIe, IB, RoCE, TCP, shared memory <em>and</em> CUDA IPC, transparently, for both planes.</td><td>Excellent GPU-interconnect coverage, but the framework is built around collective data movement, not a general transport. <span class="y">~ overlaps</span></td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Why UCX is the right shape instead</h3>
+      <p>Everything the shuffle needs falls out of UCX naturally. <strong>Connection-on-demand</strong> maps to UCX endpoint
+        creation per peer. <strong>Sparse, independent transfers</strong> map to tag matching — many in-flight sends/recvs on
+        one endpoint, demultiplexed by tag, with no collective barrier. <strong>The control plane</strong> (handshake,
+        metadata) rides the very same worker as the data plane, using active messages and host-memory tags. <strong>Late
+        sizing</strong> is solved by the module's own two-message protocol layered on tags. And UCX still gives full
+        GPUDirect coverage of the interconnect, so the data plane is no slower than NCCL's point-to-point would be for these
+        irregular, one-shot transfers.</p>
+
+      <div class="note copper">
+        <span class="lbl">Where NCCL would, in fact, win</span>
+        <p>This is not "NCCL is bad." For <em>dense, repeated, symmetric collectives on a fixed topology</em> — gradient
+        all-reduce in data-parallel training, embedding all-to-all in recsys with a fixed world size, tensor-parallel
+        all-gather — NCCL's topology-aware ring/tree algorithms, NVLink/NVSwitch exploitation, and in-network reduction
+        (SHARP) decisively beat a hand-rolled point-to-point library. The Velox shuffle is simply not that workload: it is
+        irregular, dynamically-membered, and one-shot per chunk. Using a collective library for it would mean rebuilding
+        communicators constantly, emulating variable all-to-all with grouped Send/Recv whose sizes you don't yet know, and
+        fighting NCCL's lockstep ordering — paying setup and synchronization costs to get a data plane no faster than what
+        UCX already provides here.</p>
+      </div>
+
+      <p>One nuance worth flagging for the design's own future: the module currently uses only tag send/recv and active
+        messages (its destructor comment notes <code>flush()</code> was removed because there is no RMA). For the most
+        irregular shuffles, UCX <strong>one-sided RMA</strong> (receiver exposes a buffer, sender <code>put</code>s once it
+        knows the remote address) or a rendezvous-style active-message data path could amortise away the per-chunk metadata
+        round-trip. That is a UCX-internal optimisation — and precisely the kind of thing NCCL's model can't express at all.</p>
+    </section>
+
+    <section id="errors">
+      <div class="sec-head"><span class="num">13</span><h2>Common error patterns</h2></div>
+      <p class="lede">The defensive code is a map of the failure modes this kind of system actually hits. Read the guards
+        backwards and you get a catalogue of GPU-shuffle bugs — most of them subtle, async, and lethal.</p>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Failure mode</th><th>Symptom if unguarded</th><th>Defense in the code</th></tr></thead>
+        <tbody>
+          <tr><td class="hd">UCP wireup replay</td><td>Callback fires on a completed/freed request → lambda in freed memory → crash.</td><td>Retain finished requests in <code>completedRequests_</code>; every callback guards on expected state and ignores replays.</td></tr>
+          <tr><td class="hd">Callback calls progress</td><td><code>closeBlocking()</code> inside a callback re-enters <code>progress()</code> → undefined behaviour / re-entrant deadlock.</td><td>Callbacks only <em>enqueue</em>; the main loop does the blocking work via <code>deferEndpointCleanup</code> / <code>deferredRequests_</code>.</td></tr>
+          <tr><td class="hd">Use-after-free on abort</td><td>Task cancelled mid-transfer; callback dereferences a dead source/server.</td><td><code>weak_from_this()</code> capture; <code>if (auto self = weak.lock())</code> no-ops cleanly.</td></tr>
+          <tr><td class="hd">Send before kernels finish</td><td>UCX DMAs stale/partial device bytes (UCX is not stream-aware).</td><td><code>stream.synchronize()</code> before every enqueue / publish / send.</td></tr>
+          <tr><td class="hd">Free buffer before DMA done</td><td>Cancelled request's GPU buffer freed while UCX still reads it → corruption.</td><td>Context-shell pattern frees the buffer only in the completion callback; <code>deferRequestCleanup</code> holds cancelled buffers until <code>isCompleted()</code>.</td></tr>
+          <tr><td class="hd">Cross-endianness</td><td>Multi-byte fields misread on a big-endian peer.</td><td>Documented assumption: host-order <code>memcpy</code>, little-endian peers only. Cross-endian unsupported.</td></tr>
+          <tr><td class="hd">Over-wide table</td><td>Metadata exceeds the receive buffer → overrun.</td><td>1 MB cap with a <code>VELOX_CHECK</code>; deserializer bounds-checks every field against <code>totalSize</code>.</td></tr>
+          <tr><td class="hd">Oversized taskId</td><td>taskId &gt; 256 chars overruns the handshake buffer.</td><td><code>strncpy</code> with explicit null-termination at <code>sizeof-1</code>.</td></tr>
+          <tr><td class="hd">Shared host IP (Docker)</td><td>IP-based intra-node detection wrongly fuses isolated containers → cross-container corruption.</td><td>Replaced IP comparison with a random per-process <code>workerId</code> match.</td></tr>
+          <tr><td class="hd">Broadcast + intra-node</td><td>Destructive move of a shared <code>packed_columns</code> corrupts other destinations' sends.</td><td><code>canUseIntraNode()</code> disables the fast path for broadcast.</td></tr>
+          <tr><td class="hd">Sink connects before source init</td><td><code>getData</code> arrives before the task exists; later <code>deleteResults</code> indexes a too-small placeholder.</td><td>Uninitialised placeholder queues; <code>removedTasks_</code> stops resurrecting dead tasks.</td></tr>
+          <tr><td class="hd">Duplicate / reordered splits</td><td>Presto adds a source twice → double counting, double connections.</td><td>Dedup in <code>addRemoteTaskId</code> via a <code>remoteTaskIds_</code> set.</td></tr>
+          <tr><td class="hd">Double end-marker</td><td>Two paths enqueue <code>nullptr</code> → <code>numCompleted_</code> over-counts → premature/again completion.</td><td>CAS on <code>endMarkerDelivered_</code> plus a <code>registered_</code> guard ⇒ at-most-once.</td></tr>
+          <tr><td class="hd">Inline fast completion under lock</td><td>Small messages complete inline, firing <code>sendComplete</code> on the same thread that still holds the data lock → self-deadlock.</td><td><code>dataMutex_</code> is a <code>recursive_mutex</code>.</td></tr>
+          <tr><td class="hd">Connect failure</td><td>Dead producer ⇒ source hangs forever waiting for data.</td><td>Failed connect / handshake / recv ⇒ <code>queue_-&gt;setError</code> + end-marker + <code>Done</code>, surfacing a clean error to the operator.</td></tr>
+        </tbody>
+      </table></div>
+      <div class="note cyan">
+        <span class="lbl">Diagnosing in the field</span>
+        <p>Every state transition logs at <code>VLOG(2)</code> tagged <code>[REMOTE]</code>/<code>[INTRA]</code> with the
+        partition key and sequence; the Communicator emits a 5-second <code>[COMM-HEARTBEAT]</code> with work-queue depth,
+        live server/source counts, endpoint count, deferred-cleanup backlog and GPU memory. When a shuffle stalls, the
+        heartbeat plus the per-FSM transition log usually localises it to a stuck state or a leaked endpoint immediately.</p>
+      </div>
+    </section>
+
+    <section id="eval">
+      <div class="sec-head"><span class="num">14</span><h2>Evaluation &amp; space for improvement</h2></div>
+      <p class="lede">An experimental module with a clear, correct core and a frank set of rough edges. The strengths are
+        structural; the gaps are mostly latency, scale, and polish — several already flagged in the code's own comments.</p>
+
+      <h3>What's strong</h3>
+      <ul>
+        <li><strong>Genuinely zero-copy data plane.</strong> The <code>contiguous_split → tagSend(device ptr) → tagRecv(device buf) → unpack</code> path keeps columnar data in GPU layout end to end. This is the whole point and it lands.</li>
+        <li><strong>Clean control/data plane split.</strong> Small host-side metadata and handshakes on one plane; opaque device blobs on the other. The 64-bit tag scheme demultiplexes concurrent transfers without a bespoke mux layer.</li>
+        <li><strong>Correct async lifetime discipline.</strong> The <code>weak_ptr</code> + state-guard + request-retention triad is exactly right for UCXX and applied uniformly. The deferred-cleanup design respects UCX's "no progress inside callbacks" rule.</li>
+        <li><strong>Single-threaded progress is the right default.</strong> It sidesteps the multi-thread UCX hazards and keeps the system debuggable; callbacks always run in one known context.</li>
+        <li><strong>Faithful Velox integration.</strong> Operators, queues, backpressure, and stats mirror their CPU counterparts so closely that the existing scheduler and Presto-layer plumbing work unchanged — even the stats masquerade as <code>OutputBuffer::Stats</code>.</li>
+        <li><strong>Two elegant tricks.</strong> Rendezvous-as-backpressure (no extra protocol messages) and the in-process registry (pointer-handoff for co-located peers) are both genuinely clever.</li>
+      </ul>
+
+      <h3>What to improve</h3>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>#</th><th>Gap</th><th>Direction</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td class="hd">Busy-polling on the intra-node path (and the source re-enqueue loop) spins the Communicator thread.</td><td>The registry already holds a <code>promise</code>; block on the future via the worker's event/eventfd wake instead of re-polling. Biggest CPU win available.</td></tr>
+          <tr><td>2</td><td class="hd">The client's <code>maxQueuedColumns_</code> "flow control" is a self-admitted no-op.</td><td>Delete it. The real backpressure is the dormancy mechanism; dead code that looks like throttling is a maintenance trap.</td></tr>
+          <tr><td>3</td><td class="hd">One worker / one progress thread is a throughput ceiling.</td><td>Shard into a small pool of workers keyed by endpoint/partition, each with its own progress thread — at the cost of reintroducing some multi-thread complexity.</td></tr>
+          <tr><td>4</td><td class="hd">32-bit FNV-1a <code>taskHash</code> in the tag's top half.</td><td>Birthday-bound collisions become non-negligible in long-lived clusters and would alias tags → silent mis-delivery. Use a 64-bit hash or a coordinator-assigned dense task id.</td></tr>
+          <tr><td>5</td><td class="hd">Per-chunk metadata re-sends the full cuDF layout even when the schema is fixed.</td><td>Cache the layout after chunk 0 and send only sizes/offsets thereafter, shrinking the control-plane round-trip.</td></tr>
+          <tr><td>6</td><td class="hd">A metadata round-trip precedes every data transfer.</td><td>Explore UCX one-sided RMA (receiver-exposed buffer, sender <code>put</code>) or a rendezvous-AM data path to amortise the handshake — directly relevant to irregular shuffle patterns.</td></tr>
+          <tr><td>7</td><td class="hd">Backpressure thresholds count tables, not bytes (32/16).</td><td>Track queued bytes (the queue already does) so a few huge chunks can't spike GPU memory past the intended bound.</td></tr>
+          <tr><td>8</td><td class="hd">Error recovery is terminate-and-propagate; no per-source retry.</td><td>The sequence numbers + at-most-once end-marker are most of what's needed for reconnect-and-resume on flaky links.</td></tr>
+          <tr><td>9</td><td class="hd">Partition-key extraction string-parses <code>"HASH(...)"</code>.</td><td>Brittle to spec-format changes and quoted/escaped column names with commas. Expose key indices from the partition spec via a public API.</td></tr>
+          <tr><td>10</td><td class="hd">The <code>+3</code> port hack collides with Prestissimo "for the time being."</td><td>Take an explicit, coordinated UCX listener port from config instead of deriving it from the HTTP port.</td></tr>
+          <tr><td>11</td><td class="hd">No on-wire compression or encryption.</td><td>nvCOMP-compress data on bandwidth-bound links (CPU/GPU cost trade-off); enable UCX TLS for cross-rack or untrusted networks.</td></tr>
+          <tr><td>12</td><td class="hd">Fixed partition count; <code>enqueue</code> rejects out-of-range destinations.</td><td>Dynamically grow destination queues as <code>OutputQueue</code> already does, to support elastic consumer scaling (TODO in-code).</td></tr>
+          <tr><td>13</td><td class="hd">Metrics are VLOG-only; <code>stats()</code> is unreachable / a TODO stub.</td><td>Wire queue depths, backpressure events, intra-node hit rate, and RTT histograms to a real metrics sink for production tuning.</td></tr>
+          <tr><td>14</td><td class="hd">Coarse <code>stream.synchronize()</code> at every boundary.</td><td>Where possible, enqueue CUDA-event dependencies rather than full stream syncs to reduce serialization under concurrency.</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="note copper">
+        <span class="lbl">Verdict</span>
+        <p>The architecture is sound and the hard part — zero-copy GPU transfer with correct async lifetimes over a
+        dynamically-membered topology — is done well. The remaining work is overwhelmingly about <em>efficiency and
+        production hardening</em> (kill the busy-polls, widen the task hash, byte-based backpressure, RMA to drop the metadata
+        round-trip, real metrics) rather than any structural rethink. For an <code>experimental/</code> module, that is a
+        healthy place to be.</p>
+      </div>
+    </section>
+
+    <div class="footer">
+      <p><strong style="color:var(--ink);font-family:'Instrument Sans',sans-serif;">Velox UCX Exchange — Field Manual.</strong>
+      Built from a direct read of <code>velox/experimental/ucx-exchange</code> at <code>main</code> (≈6.8k LOC across 30 source files
+      plus ≈4.3k LOC of tests). All code excerpts are condensed from the repository for analysis; comparison facts on NCCL are
+      from NVIDIA's NCCL documentation. Module status: experimental.</p>
+      <p style="margin-top:10px;color:var(--faint);">Design system · Source Serif 4 · Instrument Sans · JetBrains Mono · copper / cyan / sage · dark default.</p>
+    </div>
+  </main>
+</div>
+
+<script>
+(function(){
+  var root = document.documentElement;
+  var label = document.getElementById('themeLabel');
+  var KEY = 'ucxfm-theme';
+  function apply(t){ root.setAttribute('data-theme', t); if(label) label.textContent = (t==='dark'?'Light':'Dark'); }
+  var saved = null;
+  try { saved = localStorage.getItem(KEY); } catch(e){}
+  if(saved){ apply(saved); }
+  document.getElementById('themeToggle').addEventListener('click', function(){
+    var next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    apply(next);
+    try { localStorage.setItem(KEY, next); } catch(e){}
+  });
+
+  // Scroll-spy for the TOC.
+  var links = Array.prototype.slice.call(document.querySelectorAll('nav.toc a'));
+  var map = {};
+  links.forEach(function(a){ var id = a.getAttribute('href').slice(1); map[id] = a; });
+  var sections = Array.prototype.slice.call(document.querySelectorAll('section[id]'));
+  if('IntersectionObserver' in window){
+    var spy = new IntersectionObserver(function(entries){
+      entries.forEach(function(en){
+        if(en.isIntersecting){
+          links.forEach(function(l){ l.classList.remove('active'); });
+          var a = map[en.target.id];
+          if(a){ a.classList.add('active'); }
+        }
+      });
+    }, { rootMargin: '-12% 0px -78% 0px', threshold: 0 });
+    sections.forEach(function(s){ spy.observe(s); });
+  }
+})();
+</script>
+</body>
+</html>
