@@ -1,0 +1,1624 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Anatomy of a GPU-Native Distributed Shuffle: Presto · Velox · UCX · cuDF — A Field Manual</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,300..700;1,8..60,400..600&family=Instrument+Sans:ital,wght@0,400..700;1,400..600&family=JetBrains+Mono:ital,wght@0,400..700;1,400..600&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   DESIGN TOKENS
+   ============================================================ */
+:root {
+  --bg:        #15120e;
+  --bg-raised: #1d1915;
+  --bg-inset:  #100d0a;
+  --ink:       #e9e0d2;
+  --ink-soft:  #b6aa98;
+  --ink-faint: #837868;
+  --rule:      #322b23;
+  --rule-soft: #241e18;
+  --copper:    #c98b56;
+  --copper-bright: #dd9b62;
+  --cyan:      #5fb0c2;
+  --sage:      #94a878;
+  --copper-wash: rgba(201,139,86,0.10);
+  --cyan-wash:   rgba(95,176,194,0.10);
+  --sage-wash:   rgba(148,168,120,0.10);
+  --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.25);
+  --measure: 50rem;
+}
+[data-theme="light"] {
+  --bg:        #f4eee2;
+  --bg-raised: #fbf7ee;
+  --bg-inset:  #ece3d2;
+  --ink:       #2b251f;
+  --ink-soft:  #5d5345;
+  --ink-faint: #8a7e6c;
+  --rule:      #dcd0bc;
+  --rule-soft: #e7ddca;
+  --copper:    #a8612e;
+  --copper-bright: #8f5022;
+  --cyan:      #3a8294;
+  --sage:      #5f7a44;
+  --copper-wash: rgba(168,97,46,0.09);
+  --cyan-wash:   rgba(58,130,148,0.09);
+  --sage-wash:   rgba(95,122,68,0.09);
+  --shadow: 0 1px 2px rgba(80,60,30,0.06), 0 8px 22px rgba(80,60,30,0.07);
+}
+
+/* ============================================================
+   RESET & BASE
+   ============================================================ */
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+  font-size: 18px;
+  line-height: 1.66;
+  font-optical-sizing: auto;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  transition: background-color 0.4s ease, color 0.4s ease;
+}
+::selection { background: var(--copper); color: var(--bg); }
+
+/* ============================================================
+   LAYOUT SHELL
+   ============================================================ */
+.shell { display: flex; align-items: flex-start; max-width: 84rem; margin: 0 auto; }
+
+.sidebar {
+  position: sticky;
+  top: 0;
+  width: 290px;
+  flex: 0 0 290px;
+  height: 100vh;
+  overflow-y: auto;
+  padding: 2.2rem 1.6rem 3rem 2rem;
+  border-right: 1px solid var(--rule);
+  background: linear-gradient(180deg, var(--bg) 0%, var(--bg) 60%, var(--bg-raised) 140%);
+  font-family: 'Instrument Sans', system-ui, sans-serif;
+}
+.sidebar::-webkit-scrollbar { width: 8px; }
+.sidebar::-webkit-scrollbar-thumb { background: var(--rule); border-radius: 4px; }
+
+.brandmark {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--copper);
+  margin-bottom: 0.5rem;
+}
+.brandtitle {
+  font-family: 'Source Serif 4', serif;
+  font-weight: 600;
+  font-size: 1.18rem;
+  line-height: 1.18;
+  letter-spacing: -0.01em;
+  margin-bottom: 1.6rem;
+  color: var(--ink);
+}
+
+.toc-label {
+  font-size: 0.6rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 1.5rem 0 0.7rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--rule-soft);
+}
+nav.toc ol { list-style: none; margin: 0; padding: 0; counter-reset: toc; }
+nav.toc li { margin: 0; }
+nav.toc a {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  text-decoration: none;
+  color: var(--ink-soft);
+  font-size: 0.83rem;
+  line-height: 1.3;
+  padding: 0.36rem 0.5rem 0.36rem 0.55rem;
+  border-radius: 5px;
+  border-left: 2px solid transparent;
+  transition: color 0.18s, background 0.18s, border-color 0.18s;
+}
+nav.toc a .num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.68rem;
+  color: var(--ink-faint);
+  flex: 0 0 auto;
+  min-width: 1.6em;
+}
+nav.toc a:hover { color: var(--ink); background: var(--copper-wash); }
+nav.toc a.active {
+  color: var(--copper-bright);
+  border-left-color: var(--copper);
+  background: var(--copper-wash);
+}
+nav.toc a.active .num { color: var(--copper); }
+
+.theme-toggle {
+  margin-top: 2rem;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: transparent;
+  border: 1px solid var(--rule);
+  color: var(--ink-soft);
+  font-family: 'Instrument Sans', sans-serif;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.6rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.theme-toggle:hover { border-color: var(--copper); color: var(--copper); }
+
+/* ============================================================
+   MAIN COLUMN
+   ============================================================ */
+main {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0 clamp(1.5rem, 5vw, 5rem) 8rem;
+  max-width: calc(var(--measure) + 10rem);
+  margin: 0;
+}
+
+/* MASTHEAD */
+.masthead {
+  padding: 5rem 0 2.5rem;
+  border-bottom: 2px solid var(--ink);
+  margin-bottom: 3.5rem;
+}
+.masthead .eyebrow {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--copper);
+  margin-bottom: 1.6rem;
+}
+.masthead h1 {
+  font-family: 'Source Serif 4', serif;
+  font-weight: 600;
+  font-size: clamp(2.3rem, 5.5vw, 3.7rem);
+  line-height: 1.04;
+  letter-spacing: -0.025em;
+  margin: 0 0 1.3rem;
+}
+.masthead h1 em { font-style: italic; color: var(--copper); }
+.masthead .standfirst {
+  font-size: 1.22rem;
+  line-height: 1.55;
+  color: var(--ink-soft);
+  max-width: 38rem;
+  font-weight: 300;
+}
+.masthead .meta {
+  margin-top: 2.2rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  color: var(--ink-faint);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.6rem;
+  letter-spacing: 0.02em;
+}
+.masthead .meta span { white-space: nowrap; }
+.masthead .meta b { color: var(--cyan); font-weight: 400; }
+
+/* SECTIONS */
+section.chapter { padding: 2rem 0 1rem; scroll-margin-top: 1.5rem; }
+.chapter-head { margin-bottom: 1.8rem; }
+.chapter-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.95rem;
+  color: var(--copper);
+  letter-spacing: 0.05em;
+  display: block;
+  margin-bottom: 0.4rem;
+}
+.chapter h2 {
+  font-family: 'Source Serif 4', serif;
+  font-weight: 600;
+  font-size: clamp(1.7rem, 3.6vw, 2.4rem);
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  margin: 0 0 0.4rem;
+}
+.chapter h2 .kicker {
+  display:block;
+  font-family: 'Instrument Sans', sans-serif;
+  font-weight: 500;
+  font-size: 0.78rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-bottom: 0.7rem;
+}
+.chapter-rule {
+  height: 1px;
+  background: var(--rule);
+  margin: 4.5rem 0 0;
+}
+
+h3 {
+  font-family: 'Source Serif 4', serif;
+  font-weight: 600;
+  font-size: 1.32rem;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  margin: 2.6rem 0 0.7rem;
+  color: var(--ink);
+}
+h4 {
+  font-family: 'Instrument Sans', sans-serif;
+  font-weight: 600;
+  font-size: 0.96rem;
+  letter-spacing: 0.01em;
+  margin: 1.8rem 0 0.5rem;
+  color: var(--copper-bright);
+}
+
+p { margin: 0 0 1.15rem; max-width: var(--measure); }
+.chapter > p, .chapter > h3, .chapter > h4, .chapter > ul, .chapter > ol { }
+
+a.ref { color: var(--cyan); text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--cyan) 35%, transparent); }
+a.ref:hover { border-bottom-color: var(--cyan); }
+
+strong { font-weight: 600; color: var(--ink); }
+em { font-style: italic; }
+code, .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+p code, li code, td code {
+  font-size: 0.84em;
+  background: var(--bg-inset);
+  padding: 0.12em 0.4em;
+  border-radius: 4px;
+  color: var(--copper-bright);
+  border: 1px solid var(--rule-soft);
+}
+
+ul, ol { max-width: var(--measure); padding-left: 1.3rem; margin: 0 0 1.3rem; }
+li { margin-bottom: 0.5rem; }
+ul.tight li, ol.tight li { margin-bottom: 0.2rem; }
+li::marker { color: var(--copper); }
+
+/* LEAD PARAGRAPH */
+.lead {
+  font-size: 1.16rem;
+  line-height: 1.6;
+  color: var(--ink-soft);
+}
+.lead strong { color: var(--ink); }
+
+/* DROP-CAP for chapter openers */
+.dropcap::first-letter {
+  font-family: 'Source Serif 4', serif;
+  font-weight: 600;
+  font-size: 3.4em;
+  line-height: 0.8;
+  float: left;
+  margin: 0.06em 0.12em 0 0;
+  color: var(--copper);
+}
+
+/* ============================================================
+   CALLOUTS
+   ============================================================ */
+.callout {
+  background: var(--bg-raised);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--copper);
+  border-radius: 0 8px 8px 0;
+  padding: 1.2rem 1.4rem;
+  margin: 1.8rem 0;
+  max-width: var(--measure);
+}
+.callout .tag {
+  font-family: 'Instrument Sans', sans-serif;
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--copper);
+  display: block;
+  margin-bottom: 0.5rem;
+}
+.callout p:last-child { margin-bottom: 0; }
+.callout p { font-size: 0.98rem; line-height: 1.58; }
+.callout.cyan { border-left-color: var(--cyan); }
+.callout.cyan .tag { color: var(--cyan); }
+.callout.sage { border-left-color: var(--sage); }
+.callout.sage .tag { color: var(--sage); }
+
+.insight {
+  border: none;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  border-radius: 0;
+  background: transparent;
+  padding: 1.5rem 0;
+  margin: 2.2rem 0;
+  font-family: 'Source Serif 4', serif;
+  font-size: 1.28rem;
+  line-height: 1.5;
+  font-style: italic;
+  color: var(--ink);
+  max-width: var(--measure);
+}
+.insight b { font-style: normal; color: var(--copper); font-weight: 600; }
+
+/* TWO-COLUMN TRADEOFF */
+.tradeoff {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  margin: 1.8rem 0;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  overflow: hidden;
+  max-width: var(--measure);
+}
+.tradeoff > div { padding: 1.1rem 1.3rem; }
+.tradeoff > div:first-child { border-right: 1px solid var(--rule); }
+.tradeoff h5 {
+  font-family: 'Instrument Sans', sans-serif;
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin: 0 0 0.7rem;
+}
+.tradeoff .win h5 { color: var(--sage); }
+.tradeoff .cost h5 { color: var(--copper); }
+.tradeoff ul { padding-left: 1.1rem; margin: 0; }
+.tradeoff li { font-size: 0.9rem; line-height: 1.45; margin-bottom: 0.4rem; }
+@media (max-width: 620px) {
+  .tradeoff { grid-template-columns: 1fr; }
+  .tradeoff > div:first-child { border-right: none; border-bottom: 1px solid var(--rule); }
+}
+
+/* ============================================================
+   CODE BLOCKS
+   ============================================================ */
+.code {
+  position: relative;
+  background: var(--bg-inset);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  margin: 1.5rem 0;
+  max-width: var(--measure);
+  overflow: hidden;
+}
+.code-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.9rem;
+  border-bottom: 1px solid var(--rule);
+  background: color-mix(in srgb, var(--bg-raised) 60%, transparent);
+}
+.code-lang {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.copy-btn {
+  font-family: 'Instrument Sans', sans-serif;
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: transparent;
+  border: 1px solid var(--rule);
+  color: var(--ink-faint);
+  padding: 0.22rem 0.55rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.18s;
+}
+.copy-btn:hover { color: var(--copper); border-color: var(--copper); }
+.copy-btn.done { color: var(--sage); border-color: var(--sage); }
+.code pre {
+  margin: 0;
+  padding: 1rem 1.1rem;
+  overflow-x: auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  color: var(--ink);
+}
+.code pre::-webkit-scrollbar { height: 8px; }
+.code pre::-webkit-scrollbar-thumb { background: var(--rule); border-radius: 4px; }
+.tok-c { color: var(--ink-faint); font-style: italic; }   /* comment */
+.tok-k { color: var(--copper-bright); }                    /* keyword */
+.tok-s { color: var(--sage); }                             /* string */
+.tok-f { color: var(--cyan); }                             /* function/type */
+.tok-n { color: var(--ink); }
+
+/* ============================================================
+   FIGURES / DIAGRAMS
+   ============================================================ */
+figure {
+  margin: 2.2rem 0;
+  max-width: var(--measure);
+}
+figure.wide { max-width: none; }
+.fig-frame {
+  background: var(--bg-raised);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  padding: 1.6rem 1.3rem 1.2rem;
+  overflow-x: auto;
+}
+figure svg { display: block; width: 100%; height: auto; }
+figcaption {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.68rem;
+  color: var(--ink-faint);
+  margin-top: 0.9rem;
+  line-height: 1.5;
+  letter-spacing: 0.01em;
+}
+figcaption b { color: var(--copper); font-weight: 400; }
+
+/* SVG text defaults */
+svg text { font-family: 'Instrument Sans', sans-serif; }
+.svg-mono { font-family: 'JetBrains Mono', monospace !important; }
+
+/* ============================================================
+   TABLES
+   ============================================================ */
+.table-wrap { overflow-x: auto; margin: 1.8rem 0; max-width: var(--measure); }
+table.grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.86rem;
+  min-width: 540px;
+}
+table.grid th {
+  font-family: 'Instrument Sans', sans-serif;
+  font-weight: 600;
+  font-size: 0.66rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-align: left;
+  color: var(--copper);
+  padding: 0.7rem 0.85rem;
+  border-bottom: 2px solid var(--rule);
+  vertical-align: bottom;
+}
+table.grid td {
+  padding: 0.7rem 0.85rem;
+  border-bottom: 1px solid var(--rule-soft);
+  vertical-align: top;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+table.grid td:first-child { color: var(--ink); font-weight: 600; }
+table.grid tr:hover td { background: var(--copper-wash); }
+table.grid .yr { font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; color: var(--cyan); white-space: nowrap; }
+
+/* ============================================================
+   TIMELINE
+   ============================================================ */
+.timeline { margin: 2rem 0; max-width: var(--measure); position: relative; padding-left: 1.4rem; }
+.timeline::before {
+  content: ""; position: absolute; left: 4px; top: 6px; bottom: 6px;
+  width: 2px; background: linear-gradient(var(--copper), var(--cyan), var(--sage));
+}
+.tl-item { position: relative; padding: 0 0 1.5rem 1.2rem; }
+.tl-item::before {
+  content: ""; position: absolute; left: -1.4rem; top: 6px;
+  width: 11px; height: 11px; border-radius: 50%;
+  background: var(--bg); border: 2px solid var(--copper);
+}
+.tl-item .tl-year {
+  font-family: 'JetBrains Mono', monospace; font-size: 0.74rem;
+  color: var(--cyan); letter-spacing: 0.04em; margin-bottom: 0.15rem;
+}
+.tl-item .tl-title { font-weight: 600; font-size: 1.02rem; margin-bottom: 0.1rem; }
+.tl-item .tl-body { font-size: 0.92rem; color: var(--ink-soft); line-height: 1.5; }
+
+/* PILLS */
+.pills { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.8rem 0 1.4rem; max-width: var(--measure); }
+.pill {
+  font-family: 'JetBrains Mono', monospace; font-size: 0.68rem;
+  padding: 0.25rem 0.6rem; border-radius: 20px;
+  border: 1px solid var(--rule); color: var(--ink-soft);
+  background: var(--bg-raised);
+}
+.pill.cu { border-color: color-mix(in srgb, var(--copper) 50%, transparent); color: var(--copper-bright); }
+.pill.cy { border-color: color-mix(in srgb, var(--cyan) 50%, transparent); color: var(--cyan); }
+.pill.sg { border-color: color-mix(in srgb, var(--sage) 50%, transparent); color: var(--sage); }
+
+/* FOOTER */
+.colophon {
+  margin-top: 5rem; padding-top: 2rem; border-top: 1px solid var(--rule);
+  font-family: 'JetBrains Mono', monospace; font-size: 0.72rem;
+  color: var(--ink-faint); line-height: 1.7;
+}
+.colophon b { color: var(--copper); font-weight: 400; }
+
+/* MOBILE NAV */
+.mobile-bar { display: none; }
+@media (max-width: 940px) {
+  .shell { display: block; }
+  .sidebar {
+    position: fixed; left: 0; top: 0; bottom: 0; z-index: 50;
+    transform: translateX(-100%); transition: transform 0.3s ease;
+    width: 84vw; max-width: 320px; flex-basis: auto;
+    box-shadow: var(--shadow);
+  }
+  .sidebar.open { transform: translateX(0); }
+  .mobile-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0; z-index: 40;
+    padding: 0.8rem 1.1rem; background: var(--bg);
+    border-bottom: 1px solid var(--rule);
+    font-family: 'Instrument Sans', sans-serif;
+  }
+  .mobile-bar .mb-title { font-family:'Source Serif 4',serif; font-weight:600; font-size:0.95rem; }
+  .mobile-bar button {
+    background: transparent; border: 1px solid var(--rule); color: var(--ink);
+    border-radius: 6px; padding: 0.4rem 0.7rem; cursor: pointer;
+    font-family:'Instrument Sans',sans-serif; font-size: 0.8rem;
+  }
+  .scrim { display:none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 45; }
+  .scrim.show { display: block; }
+  main { padding-top: 1rem; }
+}
+@media (max-width: 480px) {
+  body { font-size: 17px; }
+  .masthead { padding-top: 2.5rem; }
+}
+</style>
+</head>
+<body>
+
+<div class="mobile-bar">
+  <span class="mb-title">The Distributed Shuffle Stack</span>
+  <button id="menuBtn" aria-label="Open table of contents">☰ Contents</button>
+</div>
+<div class="scrim" id="scrim"></div>
+
+<div class="shell">
+
+  <!-- ===================== SIDEBAR ===================== -->
+  <aside class="sidebar" id="sidebar">
+    <div class="brandmark">Field Manual · No. 15</div>
+    <div class="brandtitle">Anatomy of a GPU-Native Distributed Shuffle</div>
+
+    <div class="toc-label">Contents</div>
+    <nav class="toc">
+      <ol>
+        <li><a href="#s0"><span class="num">§0</span><span>Orientation — three planes, one shuffle</span></a></li>
+        <li><a href="#s1"><span class="num">§1</span><span>The position map — who sits where</span></a></li>
+        <li><a href="#s2"><span class="num">§2</span><span>The control plane — Presto coordinator</span></a></li>
+        <li><a href="#s3"><span class="num">§3</span><span>The bridge — Prestissimo &amp; plan translation</span></a></li>
+        <li><a href="#s4"><span class="num">§4</span><span>The engine — Velox execution model</span></a></li>
+        <li><a href="#s5"><span class="num">§5</span><span>The shuffle, abstractly — all-to-all exchange</span></a></li>
+        <li><a href="#s6"><span class="num">§6</span><span>ucx-exchange — the UCXX transport adapter</span></a></li>
+        <li><a href="#s7"><span class="num">§7</span><span>UCX &amp; UCXX — the transport library</span></a></li>
+        <li><a href="#s8"><span class="num">§8</span><span>cuDF &amp; the GPU data path</span></a></li>
+        <li><a href="#s9"><span class="num">§9</span><span>The full lifecycle — end to end</span></a></li>
+        <li><a href="#s10"><span class="num">§10</span><span>The MPI comparison</span></a></li>
+      </ol>
+    </nav>
+
+    <button class="theme-toggle" id="themeBtn">
+      <span id="themeIcon">◐</span> <span id="themeLabel">Light mode</span>
+    </button>
+  </aside>
+
+  <!-- ===================== MAIN ===================== -->
+  <main>
+
+    <header class="masthead">
+      <div class="eyebrow">Systems Field Manual · Distributed Execution · Rev. 2026</div>
+      <h1>Who plans it, who moves it, who <em>computes</em> it</h1>
+      <p class="standfirst">A systematic walk through one distributed analytical query — from the SQL string to the all-to-all shuffle and back — across the exact stack you work in: a Presto coordinator on top, Velox executing underneath it, cuDF doing the GPU compute, and an experimental UCX exchange moving partition buffers GPU-to-GPU between workers. Who provides the node list, who hands out the work, who pulls which portion, how each layer calls the one below and serves the one above — and where all of this rhymes with, or departs from, MPI.</p>
+      <div class="meta">
+        <span>SCOPE · <b>distributed shuffle internals</b></span>
+        <span>STACK · <b>Presto · Velox · ucx-exchange · UCX · cuDF</b></span>
+        <span>FOIL · <b>MPI / HPC collectives</b></span>
+      </div>
+    </header>
+
+    <!-- ============================ §0 ============================ -->
+    <section class="chapter" id="s0">
+      <div class="chapter-head">
+        <span class="chapter-num">§0</span>
+        <h2><span class="kicker">Orientation</span>Three planes, one shuffle</h2>
+      </div>
+
+      <p class="lead dropcap">The hardest moment in a distributed analytical query is not the scan or the join — it is the <em>shuffle</em>: the all-to-all redistribution of data between stages, where every producer must hand a slice of its output to every consumer so that all rows sharing a key end up on the same machine. Everything in this manual exists to answer one question precisely — <strong>when a query reaches that moment, who does what?</strong> To keep the answer straight, hold onto a single organizing idea: the stack is split into <strong>three planes</strong>, and almost every component belongs cleanly to one of them.</p>
+
+      <p>The <strong>control plane</strong> decides <em>who, what, and where</em>. It knows the list of live machines, turns SQL into a plan, cuts the plan into stages, and tells each worker which fragment to run, over which input, and where to send its output. In this stack the control plane is a single actor: the <strong>Presto coordinator</strong>. The <strong>data plane</strong> moves <em>the bytes</em> — it is the machinery that physically carries partitioned data from producers to consumers. Here it is a layered substack: Velox's exchange operators on top, the experimental <strong>ucx-exchange</strong> adapter beneath them, and <strong>UCX/UCXX</strong> at the bottom driving the NIC and the GPU. The <strong>compute plane</strong> <em>transforms</em> the bytes — the actual filters, joins, and group-bys — and in a GPU build that is <strong>cuDF / libcudf</strong>, running CUDA kernels over columnar data resident in GPU memory.</p>
+
+      <div class="insight">The single most useful fact in this whole manual: <b>the control plane is unchanged by any of the GPU and RDMA work.</b> Swapping the shuffle transport from HTTP to UCX, and the compute from CPU to cuDF, touches only the data and compute planes. The coordinator still hands out the same node list, the same tasks, the same partition scheme. That clean seam is why a research transport like ucx-exchange can drop into a production engine at all.</p>
+
+      <h3>The cast</h3>
+      <p>Every component you will meet, which plane it serves, and — the part most diagrams omit — what it <em>depends on</em> below it and what it <em>serves</em> above it:</p>
+      <div class="table-wrap">
+        <table class="grid">
+          <thead>
+            <tr><th>Component</th><th>Plane</th><th>Role at the shuffle</th><th>Calls ↓ / serves ↑</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Presto coordinator <span class="yr">(Java)</span></td><td>Control</td><td>Membership, planning, task &amp; split assignment, partition scheme, lifecycle</td><td>Serves the SQL client; drives every worker over HTTP</td></tr>
+            <tr><td>Prestissimo worker <span class="yr">(C++)</span></td><td>Control→Data bridge</td><td>Hosts execution; converts Presto tasks into Velox plans</td><td>Answers the coordinator; drives a Velox <span class="svg-mono">Task</span></td></tr>
+            <tr><td>Velox</td><td>Data (orchestration)</td><td>Runs the physical plan; owns the producer &amp; consumer exchange operators</td><td>Answers Prestissimo; calls cuDF (compute) and ucx-exchange (movement)</td></tr>
+            <tr><td>PartitionedOutput · Exchange</td><td>Data</td><td>The two ends of the shuffle: partition-and-emit vs pull-and-merge</td><td>Velox operators; call the transport layer</td></tr>
+            <tr><td>ucx-exchange</td><td>Data (transport)</td><td>Moves cuDF partition buffers GPU→GPU between workers</td><td>Implements Velox's <span class="svg-mono">ExchangeSource</span>; calls UCXX</td></tr>
+            <tr><td>UCXX / UCX</td><td>Data (transport)</td><td>Tag-matched / RMA / active-message transfer over RDMA &amp; NVLink</td><td>Answers ucx-exchange; drives the NIC and GPU</td></tr>
+            <tr><td>cuDF / libcudf</td><td>Compute</td><td>The actual joins, group-bys, filters — as CUDA kernels</td><td>Answers Velox operators; allocates from RMM</td></tr>
+            <tr><td>RMM</td><td>Compute (memory)</td><td>GPU memory pool for cuDF tables and received partitions</td><td>Answers cuDF and ucx-exchange</td></tr>
+            <tr><td>NIC · NVLink · GPU HBM</td><td>Physical</td><td>Carries the bytes; the GPUDirect path skips host memory</td><td>The floor the whole stack stands on</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>A few supporting actors join later where they matter: the coordinator's <strong>discovery service</strong> (the actual source of the node list, §2); <strong>GPUDirect RDMA</strong> and <strong>NVLink/NVSwitch</strong> (the hardware that lets a GPU buffer reach the wire without a host bounce, §7); and, in the MPI comparison, the HPC collective libraries <strong>UCC</strong> and <strong>NCCL</strong> (§10), which solve the same all-to-all problem with a very different control model.</p>
+
+      <div class="callout cyan">
+        <h4>The questions this manual answers, in order</h4>
+        <p>Who provides the <em>node list</em>? Who fixes the <em>partition count</em> and the hash scheme? How does a downstream task learn <em>which upstream tasks</em> to pull from, and <em>which portion</em> of their output is its share? How does each layer <em>call</em> the one below it and <em>serve</em> the one above it? When data actually moves, who <em>initiates</em> — the sender or the receiver? And at each step, how does the answer compare to how MPI would do it? Sections build strictly upward: control plane first (§2–§3), then the engine (§4), then the shuffle in the abstract (§5), then the real UCX implementation (§6–§8), then the whole thing end-to-end (§9), then MPI (§10).</p>
+      </div>
+    </section>
+    <div class="chapter-rule"></div>
+
+    <!-- ============================ §1 ============================ -->
+    <section class="chapter" id="s1">
+      <div class="chapter-head">
+        <span class="chapter-num">§1</span>
+        <h2><span class="kicker">The map</span>Who sits where — the position diagram</h2>
+      </div>
+
+      <p class="lead dropcap">Before any procedure, fix the geography. The diagram below is a single worker, sliced top to bottom along the path a row of data travels: it enters at the execution engine, gets partitioned, is handed to the transport adapter, and leaves through the NIC or NVLink. Two things are layered on top of that spine — the <strong>control plane</strong> reaching in from above (dashed), and the <strong>compute plane</strong> (cuDF) hanging off the side of the engine.</p>
+
+      <figure>
+        <div class="fig-frame">
+          <svg viewBox="0 0 720 478" role="img" aria-label="Single-worker position diagram showing control, data, and compute planes">
+            <defs>
+              <style>
+                .pm-t{font-weight:600;font-size:12.5px}
+                .pm-s{font-size:9.5px;letter-spacing:.01em}
+                .pm-x{font-size:9px;letter-spacing:.02em}
+                .pm-lbl{font-size:9px;letter-spacing:.16em;font-weight:600}
+              </style>
+              <marker id="ah" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--ink-faint)"/></marker>
+            </defs>
+
+            <!-- plane labels -->
+            <text x="40" y="13" class="pm-lbl" fill="var(--copper)">CONTROL PLANE</text>
+
+            <!-- coordinator -->
+            <rect x="40" y="20" width="640" height="44" rx="6" fill="var(--copper-wash)" stroke="var(--copper)"/>
+            <text x="56" y="40" class="pm-t" fill="var(--copper-bright)">Presto coordinator <tspan class="pm-x" fill="var(--ink-faint)">(Java)</tspan></text>
+            <text x="56" y="56" class="pm-s" fill="var(--ink-soft)">membership · parse / optimize · cut plan into stages · assign tasks &amp; splits · fix partition scheme</text>
+
+            <!-- control arrow -->
+            <line x1="360" y1="64" x2="360" y2="92" stroke="var(--ink-faint)" stroke-width="1.5" stroke-dasharray="3 3" marker-end="url(#ah)"/>
+            <text x="372" y="82" class="pm-x" fill="var(--ink-faint)">HTTP / REST  —  node list · plan fragment · splits · partition map · start / abort / finish</text>
+
+            <!-- worker container -->
+            <rect x="40" y="98" width="640" height="312" rx="9" fill="none" stroke="var(--rule)" stroke-width="1.5"/>
+            <text x="56" y="116" class="pm-x" fill="var(--ink-faint)" font-style="italic">Prestissimo worker process (one per node / GPU)</text>
+            <text x="664" y="116" text-anchor="end" class="pm-lbl" fill="var(--cyan)">DATA PLANE ↓</text>
+
+            <!-- velox + cudf -->
+            <rect x="56" y="126" width="486" height="58" rx="6" fill="var(--cyan-wash)" stroke="var(--cyan)"/>
+            <text x="72" y="148" class="pm-t" fill="var(--cyan)">Velox — execution engine</text>
+            <text x="72" y="164" class="pm-s" fill="var(--ink-soft)">Task · Driver (thread) · Pipeline · Operator</text>
+            <text x="72" y="177" class="pm-x svg-mono" fill="var(--ink-faint)">streams RowVectors — Arrow-compatible columnar batches</text>
+
+            <rect x="552" y="126" width="112" height="58" rx="6" fill="var(--sage-wash)" stroke="var(--sage)"/>
+            <text x="608" y="146" text-anchor="middle" class="pm-s" fill="var(--sage)" font-weight="700">cuDF</text>
+            <text x="608" y="160" text-anchor="middle" class="pm-x" fill="var(--ink-soft)">libcudf kernels</text>
+            <text x="608" y="172" text-anchor="middle" class="pm-x" fill="var(--ink-soft)">+ RMM pool</text>
+            <line x1="542" y1="150" x2="552" y2="150" stroke="var(--sage)" stroke-width="1.4" stroke-dasharray="3 2"/>
+            <text x="547" y="143" text-anchor="middle" class="pm-x" fill="var(--sage)">compute delegated →</text>
+
+            <line x1="299" y1="184" x2="299" y2="202" stroke="var(--ink-faint)" stroke-width="1.5" marker-end="url(#ah)"/>
+            <text x="311" y="196" class="pm-x" fill="var(--ink-faint)">rows that must cross the stage boundary</text>
+
+            <!-- exchange boundary -->
+            <rect x="56" y="208" width="608" height="46" rx="6" fill="var(--copper-wash)" stroke="var(--copper)" stroke-width="2"/>
+            <text x="72" y="227" class="pm-t" fill="var(--copper-bright)">Shuffle boundary — the exchange operators</text>
+            <text x="72" y="244" class="pm-s" fill="var(--ink-soft)">PartitionedOutput  (hash rows → P buffers, produce)        Exchange  (pull P-th share, consume)</text>
+
+            <line x1="360" y1="254" x2="360" y2="272" stroke="var(--ink-faint)" stroke-width="1.5" marker-end="url(#ah)"/>
+            <text x="372" y="266" class="pm-x" fill="var(--ink-faint)">contiguous GPU partition chunks (cuDF packed_columns)</text>
+
+            <!-- ucx-exchange -->
+            <rect x="56" y="278" width="608" height="52" rx="6" fill="var(--copper-wash)" stroke="var(--copper)"/>
+            <text x="72" y="298" class="pm-t" fill="var(--copper-bright)">ucx-exchange — UCXX transport adapter</text>
+            <text x="72" y="315" class="pm-x svg-mono" fill="var(--ink-soft)">UcxExchangeServer / UcxExchangeSource · Communicator (progress engine) · IntraNodeTransferRegistry</text>
+
+            <line x1="360" y1="330" x2="360" y2="346" stroke="var(--ink-faint)" stroke-width="1.5" marker-end="url(#ah)"/>
+
+            <!-- ucx -->
+            <rect x="56" y="352" width="608" height="50" rx="6" fill="var(--cyan-wash)" stroke="var(--cyan)"/>
+            <text x="72" y="372" class="pm-t" fill="var(--cyan)">UCX / UCXX — transport library</text>
+            <text x="72" y="389" class="pm-x svg-mono" fill="var(--ink-soft)">UCP · UCT · UCS    ·    tag-match · one-sided RMA · active messages    ·    GPUDirect / CUDA</text>
+
+            <!-- hardware -->
+            <rect x="40" y="422" width="640" height="44" rx="6" fill="var(--bg-inset)" stroke="var(--rule)"/>
+            <text x="56" y="442" class="pm-t" fill="var(--ink)">Hardware</text>
+            <text x="56" y="458" class="pm-s" fill="var(--ink-soft)">NIC — RDMA · InfiniBand / RoCE      ·      NVLink / NVSwitch (intra-node)      ·      GPU HBM, 1–3 TB/s</text>
+            <line x1="360" y1="402" x2="360" y2="420" stroke="var(--ink-faint)" stroke-width="1.5" marker-end="url(#ah)"/>
+            <text x="690" y="446" class="pm-x" fill="var(--ink-faint)" transform="rotate(90 690 446)">to peer worker ⇄</text>
+          </svg>
+        </div>
+        <figcaption><b>FIG. 1.1</b> — One worker, sliced along the data path. <b>Dashed</b> edges are control (the coordinator reaching in over HTTP; cuDF being invoked for compute); <b>solid</b> edges are data flowing down toward the wire. The same stack runs on every worker; the shuffle is what happens when the bottom of one worker's stack connects across the network to the bottom of another's. Note the two distinct networks: the coordinator talks to workers over <b>HTTP</b>, while workers talk to <em>each other</em> over <b>UCX</b>.</figcaption>
+      </figure>
+
+      <h3>Reading the diagram: calls down, serves up</h3>
+      <p>The vertical axis is a literal call stack. Within a worker, each layer <strong>depends on</strong> (calls) the layer beneath it, and <strong>serves</strong> (returns results to) the layer above it. Top to bottom: the SQL client calls the coordinator; the coordinator calls each Prestissimo worker; Prestissimo builds and calls a Velox <code>Task</code>; the Task's drivers call operators; an operator that needs to <em>compute</em> calls into cuDF kernels; an operator that needs to <em>move</em> data (PartitionedOutput, or Exchange) calls the ucx-exchange adapter, which calls UCXX, which drives the NIC. Results flow back up the same chain in reverse — the NIC's bytes become a cuDF table, which an operator consumes, which a driver pulls, which the Task reports, which Prestissimo returns to the coordinator, which streams to the client.</p>
+
+      <p>There is one important place where the simple &ldquo;calls down&rdquo; picture inverts, and it is the crux of the whole shuffle. <strong>Between two workers, the data plane is consumer-initiated.</strong> The producer does not push its partitions outward; the downstream <code>Exchange</code> operator <em>pulls</em> — it opens a connection to each upstream worker and requests its share. So while control flows top-down from the coordinator, the cross-worker data edge is a <em>demand-driven pull</em> from the bottom of the consumer's stack to the bottom of the producer's. Holding those two directions apart — control pushes down from the coordinator, data is pulled sideways by consumers — is most of what it takes to understand the sections that follow.</p>
+
+      <div class="tradeoff">
+        <div class="win"><h4>Why split the planes this cleanly</h4><p>Because each plane can then evolve independently. The coordinator's scheduling logic, Velox's operator set, the transport, and the compute kernels are four separate engineering surfaces with stable interfaces between them. ucx-exchange is the proof: it reimplements <em>only</em> the transport, leaving planning and operators untouched.</p></div>
+        <div class="cost"><h4>What it costs</h4><p>Two networks and two membership notions to keep coherent — the HTTP control mesh and the UCX data mesh — plus a translation boundary (Presto plan → Velox plan) that must be kept in lock-step as both systems evolve. MPI, by contrast, collapses all of this into one static communicator (§10), trading flexibility for simplicity.</p></div>
+      </div>
+    </section>
+    <div class="chapter-rule"></div>
+
+    <!-- ============================ §2 ============================ -->
+    <section class="chapter" id="s2">
+      <div class="chapter-head">
+        <span class="chapter-num">§2</span>
+        <h2><span class="kicker">Control plane</span>The Presto coordinator — the only actor that decides</h2>
+      </div>
+
+      <p class="lead dropcap">Nothing below the coordinator decides anything about <em>who</em> or <em>where</em>. Workers run the fragment they are handed, over the input they are handed, and emit to the destinations they are handed. So every &ldquo;who provides X&rdquo; question in this manual has, at bottom, the same answer for the structural decisions: the coordinator. What follows is the precise order in which it makes those decisions for one query, and exactly what it hands to each side of a shuffle.</p>
+
+      <h3>1 · Membership — where the node list comes from</h3>
+      <p>The node list is not configured statically; it is <strong>discovered</strong>. Each worker, on startup and then on a heartbeat, <em>announces</em> itself to the coordinator's discovery service. The coordinator's node manager maintains the live set, adding workers that check in and evicting ones that go silent. When the scheduler needs &ldquo;the workers,&rdquo; it reads this set. That is the entire source of truth for membership — dynamic, heartbeat-maintained, and elastic: a worker can join mid-cluster-life and be scheduled on the next query, or drop out and be removed. (Hold this thought for §10: MPI's membership is the polar opposite — a fixed set of ranks frozen at launch.)</p>
+
+      <h3>2 · From SQL to a fragmented plan</h3>
+      <p>The coordinator parses the SQL, analyzes it against the catalog (resolving tables, columns, and types), builds a logical plan, and runs the cost-based optimizer (join ordering, predicate pushdown, partition pruning). The optimizer then decides <em>where data must be repartitioned</em> — at each such point it inserts an <strong>exchange boundary</strong>, and the plan is cut there into <strong>plan fragments</strong>, one per <strong>stage</strong>. A fragment that <em>consumes</em> a shuffle has a remote-source (exchange) node at its leaves; a fragment that <em>produces</em> one ends in a partitioned-output node. Crucially, for each adjacent pair of stages the coordinator fixes the <strong>partition scheme</strong>: the partition function (hash on the shuffle keys) and the partition count <em>P</em>.</p>
+
+      <h3>3 · Tasks, splits, and the exchange wiring</h3>
+      <p>For each stage the coordinator chooses a set of workers from the node list and creates one <strong>task</strong> per worker. It then feeds tasks their <strong>splits</strong> — the granular units of input work. For a leaf scan, a split is a file or byte-range; the coordinator's split source doles them out and hands more to a task as it drains its queue, which is how load naturally balances across uneven workers. For a shuffle-consuming stage, the &ldquo;splits&rdquo; are something subtler and central to this whole story: each is a <strong>remote split</strong> — the location (URI) of one upstream producer task. The diagram shows what the coordinator tells each side.</p>
+
+      <figure>
+        <div class="fig-frame">
+          <svg viewBox="0 0 720 372" role="img" aria-label="Control-plane fan-out from coordinator to producer and consumer stages">
+            <defs>
+              <style>
+                .cp-t{font-weight:600;font-size:11px}
+                .cp-s{font-size:8.5px}
+                .cp-x{font-size:8.5px;letter-spacing:.02em}
+                .cp-lbl{font-size:8.5px;letter-spacing:.14em;font-weight:600}
+              </style>
+              <marker id="ah2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--copper)"/></marker>
+              <marker id="ah2g" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--ink-faint)"/></marker>
+            </defs>
+
+            <!-- heartbeat / membership -->
+            <text x="12" y="30" class="cp-x" fill="var(--sage)" transform="rotate(-90 12 30)">heartbeats →</text>
+            <rect x="28" y="14" width="120" height="40" rx="5" fill="var(--sage-wash)" stroke="var(--sage)"/>
+            <text x="88" y="31" text-anchor="middle" class="cp-t" fill="var(--sage)">Discovery</text>
+            <text x="88" y="45" text-anchor="middle" class="cp-x" fill="var(--ink-soft)">live node list</text>
+            <line x1="148" y1="34" x2="248" y2="34" stroke="var(--ink-faint)" stroke-width="1.3" marker-end="url(#ah2g)"/>
+
+            <!-- coordinator -->
+            <rect x="250" y="12" width="220" height="46" rx="6" fill="var(--copper-wash)" stroke="var(--copper)" stroke-width="2"/>
+            <text x="360" y="32" text-anchor="middle" class="cp-t" fill="var(--copper-bright)" font-size="12">Presto coordinator</text>
+            <text x="360" y="48" text-anchor="middle" class="cp-x" fill="var(--ink-soft)">plan · fragment · schedule · partition scheme P</text>
+
+            <!-- producer stage -->
+            <text x="40" y="118" class="cp-lbl" fill="var(--ink-faint)">STAGE S — PRODUCERS</text>
+            <g>
+              <rect x="40" y="126" width="180" height="50" rx="5" fill="var(--bg-raised)" stroke="var(--copper)"/>
+              <rect x="232" y="126" width="180" height="50" rx="5" fill="var(--bg-raised)" stroke="var(--copper)"/>
+              <rect x="424" y="126" width="180" height="50" rx="5" fill="var(--bg-raised)" stroke="var(--copper)"/>
+              <text x="130" y="145" text-anchor="middle" class="cp-t" fill="var(--ink)">Task S.0</text>
+              <text x="322" y="145" text-anchor="middle" class="cp-t" fill="var(--ink)">Task S.1</text>
+              <text x="514" y="145" text-anchor="middle" class="cp-t" fill="var(--ink)">Task S.2</text>
+              <text x="130" y="161" text-anchor="middle" class="cp-x svg-mono" fill="var(--copper-bright)">PartitionedOutput</text>
+              <text x="322" y="161" text-anchor="middle" class="cp-x svg-mono" fill="var(--copper-bright)">PartitionedOutput</text>
+              <text x="514" y="161" text-anchor="middle" class="cp-x svg-mono" fill="var(--copper-bright)">PartitionedOutput</text>
+              <text x="130" y="171" text-anchor="middle" class="cp-x" fill="var(--ink-faint)">→ emit P=3 partitions</text>
+              <text x="322" y="171" text-anchor="middle" class="cp-x" fill="var(--ink-faint)">→ emit P=3 partitions</text>
+              <text x="514" y="171" text-anchor="middle" class="cp-x" fill="var(--ink-faint)">→ emit P=3 partitions</text>
+            </g>
+            <line x1="300" y1="58" x2="150" y2="124" stroke="var(--copper)" stroke-width="1.2" stroke-dasharray="3 2" marker-end="url(#ah2)"/>
+            <line x1="345" y1="58" x2="330" y2="124" stroke="var(--copper)" stroke-width="1.2" stroke-dasharray="3 2" marker-end="url(#ah2)"/>
+            <line x1="390" y1="58" x2="512" y2="124" stroke="var(--copper)" stroke-width="1.2" stroke-dasharray="3 2" marker-end="url(#ah2)"/>
+            <text x="210" y="92" class="cp-x" fill="var(--copper)">create task · fragment · input splits (files) · &ldquo;emit P partitions&rdquo;</text>
+
+            <!-- partition map note -->
+            <rect x="120" y="196" width="480" height="26" rx="4" fill="var(--copper-wash)" stroke="var(--copper)" stroke-dasharray="3 2"/>
+            <text x="360" y="213" text-anchor="middle" class="cp-x" fill="var(--copper-bright)">partition map — which consumer owns which partition, and every producer's URI — lives in the coordinator</text>
+
+            <!-- consumer stage -->
+            <text x="40" y="262" class="cp-lbl" fill="var(--ink-faint)">STAGE S+1 — CONSUMERS</text>
+            <g>
+              <rect x="40" y="270" width="180" height="56" rx="5" fill="var(--bg-raised)" stroke="var(--cyan)"/>
+              <rect x="232" y="270" width="180" height="56" rx="5" fill="var(--bg-raised)" stroke="var(--cyan)"/>
+              <rect x="424" y="270" width="180" height="56" rx="5" fill="var(--bg-raised)" stroke="var(--cyan)"/>
+              <text x="130" y="289" text-anchor="middle" class="cp-t" fill="var(--ink)">Task T.0 — partition 0</text>
+              <text x="322" y="289" text-anchor="middle" class="cp-t" fill="var(--ink)">Task T.1 — partition 1</text>
+              <text x="514" y="289" text-anchor="middle" class="cp-t" fill="var(--ink)">Task T.2 — partition 2</text>
+              <text x="130" y="305" text-anchor="middle" class="cp-x svg-mono" fill="var(--cyan)">Exchange</text>
+              <text x="322" y="305" text-anchor="middle" class="cp-x svg-mono" fill="var(--cyan)">Exchange</text>
+              <text x="514" y="305" text-anchor="middle" class="cp-x svg-mono" fill="var(--cyan)">Exchange</text>
+              <text x="130" y="318" text-anchor="middle" class="cp-x" fill="var(--ink-faint)">pull part 0 from S.{0,1,2}</text>
+              <text x="322" y="318" text-anchor="middle" class="cp-x" fill="var(--ink-faint)">pull part 1 from S.{0,1,2}</text>
+              <text x="514" y="318" text-anchor="middle" class="cp-x" fill="var(--ink-faint)">pull part 2 from S.{0,1,2}</text>
+            </g>
+            <line x1="320" y1="222" x2="150" y2="268" stroke="var(--cyan)" stroke-width="1.2" stroke-dasharray="3 2" marker-end="url(#ah2g)"/>
+            <line x1="350" y1="222" x2="330" y2="268" stroke="var(--cyan)" stroke-width="1.2" stroke-dasharray="3 2" marker-end="url(#ah2g)"/>
+            <line x1="400" y1="222" x2="512" y2="268" stroke="var(--cyan)" stroke-width="1.2" stroke-dasharray="3 2" marker-end="url(#ah2g)"/>
+            <text x="150" y="244" class="cp-x" fill="var(--cyan)">remote splits = producer URIs · &ldquo;you are partition i&rdquo;</text>
+          </svg>
+        </div>
+        <figcaption><b>FIG. 2.1</b> — What the coordinator hands each side of a shuffle. <b>Producers</b> are told their fragment, their input splits, and how many partitions to emit. <b>Consumers</b> are told their fragment and given <em>remote splits</em> — the URIs of all upstream producers — plus their identity (&ldquo;you are partition <em>i</em>&rdquo;). The coordinator owns the partition map; it never carries the data itself. The producer→consumer <em>data</em> arrows are deliberately absent here — that is the data plane, and it is the subject of §5.</figcaption>
+      </figure>
+
+      <p>So the answer to &ldquo;how does a downstream task know which portion of the work is its share&rdquo; is fully a control-plane answer: the coordinator assigns each consumer a partition id <em>i</em> and the list of every producer's location. The consumer's share is <em>partition i, gathered from every producer</em>. The producers were independently told to bucket their output into <em>P</em> partitions by the agreed hash. Neither side negotiates this; both are configured by the coordinator.</p>
+
+      <h3>4 · TaskUpdate, lifecycle, and results</h3>
+      <p>All of the above is delivered as an HTTP <strong>TaskUpdate</strong> to each worker: the serialized plan fragment, the current batch of splits, the output-buffer layout (how many partitions, drained by whom), and session properties. Over the query's life the coordinator sends more splits, then a &ldquo;no more splits&rdquo; marker, then a finish signal; it polls each task's status over HTTP and collects the final stage's output to stream back to the client. Failure handling rides this same channel — and in classic Presto a lost task fails the query, since there is no mid-query checkpoint (Velox/Presto's recoverable-exchange work softens this, but the default model is restart-the-query). Every byte of this is HTTP/REST and entirely separate from the UCX data mesh below.</p>
+
+      <div class="insight">The coordinator is a <b>choreographer, not a courier.</b> It computes the node list, the fragments, the splits, and the partition map, and ships those <em>instructions</em> over HTTP — but the actual partitioned data never passes through it. That separation is exactly what lets the data plane be re-implemented on RDMA without the control plane noticing.</div>
+    </section>
+    <div class="chapter-rule"></div>
+
+    <!-- ============================ §3 ============================ -->
+    <section class="chapter" id="s3">
+      <div class="chapter-head">
+        <span class="chapter-num">§3</span>
+        <h2><span class="kicker">The bridge</span>Prestissimo — turning a Presto task into a Velox dataflow</h2>
+      </div>
+
+      <p class="lead dropcap">The coordinator speaks &ldquo;Presto.&rdquo; The engine that actually runs speaks &ldquo;Velox.&rdquo; <strong>Prestissimo</strong> is the membrane between them — the C++ Presto worker (the &ldquo;native worker&rdquo;) that accepts the coordinator's HTTP TaskUpdates unchanged, and translates each Presto plan fragment into a Velox plan it can execute. Because Prestissimo honours the exact same REST protocol the old Java worker did, the coordinator is none the wiser that C++, Velox, and a GPU are now underneath.</p>
+
+      <p>When a TaskUpdate arrives, Prestissimo's task manager creates a task and runs the plan converter, walking the Presto node tree and emitting the corresponding Velox <code>PlanNode</code> tree. The mapping is mostly one-to-one, and two rows of it are the ones that matter for the shuffle:</p>
+
+      <div class="table-wrap">
+        <table class="grid">
+          <thead><tr><th>Presto plan node</th><th>Velox plan node</th><th>Becomes the operator…</th></tr></thead>
+          <tbody>
+            <tr><td>TableScanNode</td><td>TableScanNode</td><td>TableScan (+ a connector; cuDF scan in a GPU build)</td></tr>
+            <tr><td>FilterNode · ProjectNode</td><td>FilterNode · ProjectNode</td><td>FilterProject</td></tr>
+            <tr><td>AggregationNode</td><td>AggregationNode</td><td>HashAggregation (partial / final)</td></tr>
+            <tr><td>JoinNode</td><td>HashJoinNode</td><td>HashBuild + HashProbe</td></tr>
+            <tr><td><strong>PartitionedOutputNode</strong></td><td><strong>PartitionedOutputNode</strong></td><td>PartitionedOutput — the <em>producer</em> end of the shuffle</td></tr>
+            <tr><td><strong>RemoteSourceNode</strong> (exchange)</td><td><strong>ExchangeNode</strong></td><td>Exchange — the <em>consumer</em> end of the shuffle</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>The split flow is the other half of the bridge. Splits arrive over HTTP and Prestissimo adds them to the Velox task. For a scan, they are file splits. For an exchange, each remote split carries an upstream producer URI — and these become Velox <strong>remote splits</strong> fed to the <code>Exchange</code> operator. <em>This is the concrete mechanism by which a consumer learns its sources:</em> the coordinator's &ldquo;here are the producer URIs&rdquo; (§2) is delivered through Prestissimo as splits, and the Exchange operator spins up one connection per split. Prestissimo then constructs the Velox <code>Task</code>, sets up its output buffers, and launches the driver threads that run the operators.</p>
+
+      <div class="callout sage">
+        <h4>Where the GPU and UCX swap-ins are registered</h4>
+        <p>A native worker built for this stack registers its extensions at startup — the cuDF-backed operators (so <code>TableScan</code>, <code>HashAggregation</code>, joins run as libcudf kernels) and the ucx-exchange transport (the UCX <code>ExchangeSource</code> factory and the UCX partitioned-output path). The plan converter is unchanged; it still emits a generic <code>ExchangeNode</code> and <code>PartitionedOutputNode</code>. What differs is <em>which implementation</em> those nodes resolve to at run time — the registered UCX and cuDF ones. The README's test binaries make this concrete: <code>1brc_server</code> and <code>1brc_client</code> launch with <span class="svg-mono">-velox_cudf_enabled=true</span> and the UCX exchange compiled in, which is exactly this registration happening in a standalone harness rather than inside Prestissimo.</p>
+      </div>
+
+      <p>Net effect: Prestissimo converts <em>control</em> (an HTTP description of a fragment, splits, and destinations) into a live <em>dataflow</em> (a Velox task of driver threads running operators). From here down, the coordinator is out of the picture until results are reported — the next three sections live entirely inside the worker and on the wire between workers.</p>
+    </section>
+    <div class="chapter-rule"></div>
+
+    <!-- ============================ §4 ============================ -->
+    <section class="chapter" id="s4">
+      <div class="chapter-head">
+        <span class="chapter-num">§4</span>
+        <h2><span class="kicker">The engine</span>Velox — how one task runs, and where the shuffle attaches</h2>
+      </div>
+
+      <p class="lead dropcap">Inside the worker, a stage is a Velox <strong>Task</strong>: a tree of <strong>Operators</strong>, run by a pool of <strong>Driver</strong> threads, grouped into <strong>Pipelines</strong>. Data moves between operators as <strong>RowVectors</strong> — columnar, Arrow-compatible batches of order a thousand rows, which is the vectorized-execution heritage that makes a per-row virtual call into a per-<em>batch</em> one. Understanding the shuffle means understanding the two operators that sit at a task's boundary: the one that <em>emits</em> a stage's output, and the one that <em>sources</em> the next stage's input.</p>
+
+      <p>A Driver runs a chain of operators in a tight loop — pull a RowVector from below, push it through <code>addInput</code> / <code>getOutput</code>, repeat — with back-pressure expressed as a future an operator returns when it must wait. Parallelism within the worker is just the driver count: <em>k</em> drivers run the same pipeline over different slices of the input. The plan's leaves are <strong>source</strong> operators (a TableScan, or an Exchange); its root is a <strong>terminal</strong> operator (a PartitionedOutput, or the final result collector).</p>
+
+      <div class="code">
+        <div class="code-head"><span class="code-lang">The two shuffle operators, in essence</span><button class="copy-btn">Copy</button></div>
+<pre><span class="tok-c">// PRODUCER end — terminal operator of stage S.</span>
+<span class="tok-k">class</span> <span class="tok-f">PartitionedOutput</span> {
+  <span class="tok-k">void</span> <span class="tok-f">addInput</span>(RowVector batch) {
+    <span class="tok-k">for</span> (row : batch) {
+      <span class="tok-k">auto</span> p = hash(row[keys]) % P;        <span class="tok-c">// P = partition count, fixed by coordinator</span>
+      partitionBuffer[p].append(row);        <span class="tok-c">// route row into its bucket</span>
+    }
+    <span class="tok-k">for</span> (p : <span class="tok-n">0</span>..P) outputManager.enqueue(p, serialize(partitionBuffer[p]));
+  }                                          <span class="tok-c">// serialize = SerializedPage (HTTP) OR cuDF packed_columns (UCX)</span>
+};
+
+<span class="tok-c">// CONSUMER end — source operator of stage S+1, this task owns partition i.</span>
+<span class="tok-k">class</span> <span class="tok-f">Exchange</span> {
+  RowVector <span class="tok-f">getOutput</span>() {
+    page = exchangeClient.next();             <span class="tok-c">// pull next page from ANY ready source</span>
+    <span class="tok-k">return</span> deserialize(page);                 <span class="tok-c">// back into a RowVector / cuDF table</span>
+  }                                          <span class="tok-c">// exchangeClient holds one ExchangeSource per upstream producer</span>
+};</pre>
+      </div>
+
+      <p>The <code>OutputBufferManager</code> on the producer side holds the per-partition buffers and serves them; the <code>ExchangeClient</code> on the consumer side holds one <code>ExchangeSource</code> per upstream producer and pulls pages as its downstream is ready. Two properties of this loop matter enormously for the comparison to come. First, it is <strong>demand-driven</strong>: the consumer pulls; the producer fills buffers up to a memory budget and then blocks (back-pressure), so a slow consumer throttles a fast producer rather than overrunning it. Second, it is <strong>pipelined</strong>: a consumer can begin draining a producer's early output while that producer is still computing later batches — there is no global barrier between the stages. (Both properties are precisely where the MPI collective model diverges, §10.)</p>
+
+      <div class="callout">
+        <h4>Memory, the GPU, and spilling</h4>
+        <p>Every operator runs under a memory budget. When a working set exceeds it, Velox <strong>spills</strong> — and in a cuDF build, where the &ldquo;fast tier&rdquo; is finite GPU HBM allocated from an <strong>RMM</strong> pool, the pressure point is real: a build-side hash table or a pile of in-flight partition buffers can exceed device memory, forcing a spill to <em>host</em> memory. That host-spilling path — keeping the shuffle correct when the working set outgrows the GPU — is one of the genuinely hard parts of making this stack production-grade, and it lives right here at the boundary between the operators and the exchange buffers.</p>
+      </div>
+    </section>
+    <div class="chapter-rule"></div>
+
+    <!-- ============================ §5 ============================ -->
+    <section class="chapter" id="s5">
+      <div class="chapter-head">
+        <span class="chapter-num">§5</span>
+        <h2><span class="kicker">The shuffle</span>All-to-all, abstractly — and the seam the transport plugs into</h2>
+      </div>
+
+      <p class="lead dropcap">Zoom out from one task to the whole stage boundary and the shuffle's shape appears. A producer stage has <em>N</em> tasks; a consumer stage has <em>P</em>. Every producer buckets its rows into <em>P</em> partitions; every consumer must gather its one partition from <em>all N</em> producers. That is an <strong>all-to-all</strong>: up to <em>N×P</em> independent transfers, and it is the single most expensive, most network-bound moment in the query.</p>
+
+      <figure>
+        <div class="fig-frame">
+          <svg viewBox="0 0 720 356" role="img" aria-label="All-to-all shuffle between three producers and three consumers">
+            <defs>
+              <style>
+                .sh-t{font-weight:600;font-size:10.5px}
+                .sh-x{font-size:8.5px;letter-spacing:.02em}
+                .sh-lbl{font-size:8.5px;letter-spacing:.14em;font-weight:600}
+              </style>
+              <marker id="mk0" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L5,3 L0,6 Z" fill="var(--copper)"/></marker>
+              <marker id="mk1" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L5,3 L0,6 Z" fill="var(--cyan)"/></marker>
+              <marker id="mk2" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L5,3 L0,6 Z" fill="var(--sage)"/></marker>
+            </defs>
+
+            <text x="40" y="20" class="sh-lbl" fill="var(--ink-faint)">N PRODUCERS — hash(key) % P</text>
+            <text x="680" y="20" text-anchor="end" class="sh-lbl" fill="var(--ink-faint)">P CONSUMERS — gather one partition</text>
+
+            <!-- producers -->
+            <g>
+              <rect x="40" y="40" width="150" height="64" rx="5" fill="var(--bg-raised)" stroke="var(--rule)"/>
+              <rect x="40" y="140" width="150" height="64" rx="5" fill="var(--bg-raised)" stroke="var(--rule)"/>
+              <rect x="40" y="240" width="150" height="64" rx="5" fill="var(--bg-raised)" stroke="var(--rule)"/>
+              <text x="52" y="58" class="sh-t" fill="var(--ink)">Producer S.0</text>
+              <text x="52" y="158" class="sh-t" fill="var(--ink)">Producer S.1</text>
+              <text x="52" y="258" class="sh-t" fill="var(--ink)">Producer S.2</text>
+            </g>
+            <!-- partition chips -->
+            <g class="sh-x">
+              <rect x="52" y="68" width="38" height="13" rx="2" fill="var(--copper-wash)" stroke="var(--copper)"/><text x="71" y="78" text-anchor="middle" fill="var(--copper-bright)">p0</text>
+              <rect x="96" y="68" width="38" height="13" rx="2" fill="var(--cyan-wash)" stroke="var(--cyan)"/><text x="115" y="78" text-anchor="middle" fill="var(--cyan)">p1</text>
+              <rect x="140" y="68" width="38" height="13" rx="2" fill="var(--sage-wash)" stroke="var(--sage)"/><text x="159" y="78" text-anchor="middle" fill="var(--sage)">p2</text>
+              <rect x="52" y="168" width="38" height="13" rx="2" fill="var(--copper-wash)" stroke="var(--copper)"/><text x="71" y="178" text-anchor="middle" fill="var(--copper-bright)">p0</text>
+              <rect x="96" y="168" width="38" height="13" rx="2" fill="var(--cyan-wash)" stroke="var(--cyan)"/><text x="115" y="178" text-anchor="middle" fill="var(--cyan)">p1</text>
+              <rect x="140" y="168" width="38" height="13" rx="2" fill="var(--sage-wash)" stroke="var(--sage)"/><text x="159" y="178" text-anchor="middle" fill="var(--sage)">p2</text>
+              <rect x="52" y="268" width="38" height="13" rx="2" fill="var(--copper-wash)" stroke="var(--copper)"/><text x="71" y="278" text-anchor="middle" fill="var(--copper-bright)">p0</text>
+              <rect x="96" y="268" width="38" height="13" rx="2" fill="var(--cyan-wash)" stroke="var(--cyan)"/><text x="115" y="278" text-anchor="middle" fill="var(--cyan)">p1</text>
+              <rect x="140" y="268" width="38" height="13" rx="2" fill="var(--sage-wash)" stroke="var(--sage)"/><text x="159" y="278" text-anchor="middle" fill="var(--sage)">p2</text>
+            </g>
+
+            <!-- consumers -->
+            <g>
+              <rect x="530" y="40" width="150" height="64" rx="5" fill="var(--copper-wash)" stroke="var(--copper)"/>
+              <rect x="530" y="140" width="150" height="64" rx="5" fill="var(--cyan-wash)" stroke="var(--cyan)"/>
+              <rect x="530" y="240" width="150" height="64" rx="5" fill="var(--sage-wash)" stroke="var(--sage)"/>
+              <text x="542" y="58" class="sh-t" fill="var(--copper-bright)">Consumer T.0</text>
+              <text x="542" y="158" class="sh-t" fill="var(--cyan)">Consumer T.1</text>
+              <text x="542" y="258" class="sh-t" fill="var(--sage)">Consumer T.2</text>
+              <text x="542" y="74" class="sh-x" fill="var(--ink-soft)">owns partition 0</text>
+              <text x="542" y="174" class="sh-x" fill="var(--ink-soft)">owns partition 1</text>
+              <text x="542" y="274" class="sh-x" fill="var(--ink-soft)">owns partition 2</text>
+              <text x="542" y="90" class="sh-x" fill="var(--ink-faint)">= p0 from S.0,S.1,S.2</text>
+              <text x="542" y="190" class="sh-x" fill="var(--ink-faint)">= p1 from S.0,S.1,S.2</text>
+              <text x="542" y="290" class="sh-x" fill="var(--ink-faint)">= p2 from S.0,S.1,S.2</text>
+            </g>
+
+            <!-- all-to-all lines, colored by destination partition -->
+            <g stroke-width="1.3" fill="none" opacity="0.85">
+              <line x1="190" y1="56"  x2="530" y2="64"  stroke="var(--copper)" marker-end="url(#mk0)"/>
+              <line x1="190" y1="156" x2="530" y2="72"  stroke="var(--copper)" marker-end="url(#mk0)"/>
+              <line x1="190" y1="256" x2="530" y2="80"  stroke="var(--copper)" marker-end="url(#mk0)"/>
+              <line x1="190" y1="72"  x2="530" y2="164" stroke="var(--cyan)" marker-end="url(#mk1)"/>
+              <line x1="190" y1="172" x2="530" y2="172" stroke="var(--cyan)" marker-end="url(#mk1)"/>
+              <line x1="190" y1="272" x2="530" y2="180" stroke="var(--cyan)" marker-end="url(#mk1)"/>
+              <line x1="190" y1="88"  x2="530" y2="264" stroke="var(--sage)" marker-end="url(#mk2)"/>
+              <line x1="190" y1="188" x2="530" y2="272" stroke="var(--sage)" marker-end="url(#mk2)"/>
+              <line x1="190" y1="288" x2="530" y2="280" stroke="var(--sage)" marker-end="url(#mk2)"/>
+            </g>
+            <text x="360" y="330" text-anchor="middle" class="sh-x" fill="var(--ink-faint)">up to N×P independent transfers — every producer's p<tspan baseline-shift="sub" font-size="7">i</tspan> slice flows to consumer i</text>
+          </svg>
+        </div>
+        <figcaption><b>FIG. 5.1</b> — The all-to-all. Each producer hash-partitions its rows into <em>P</em> coloured buckets; each consumer gathers its single colour from <em>every</em> producer. A consumer's &ldquo;portion of the work&rdquo; is one <em>column</em> of this matrix. Because the same hash is applied everywhere, all rows sharing a key land in the same partition — hence the same consumer — which is what makes the downstream join or group-by correct. When the hash distributes unevenly (hot keys), one column is fatter than the others and that consumer becomes a straggler: the database analogue of load imbalance in an <span class="svg-mono">MPI_Alltoallv</span>.</figcaption>
+      </figure>
+
+      <h3>The seam: a pluggable transport behind a fixed operator</h3>
+      <p>Here is the design decision that makes everything in §6–§8 possible. Velox provides the <code>Exchange</code> operator and an <code>ExchangeClient</code>, but it deliberately does <em>not</em> hard-code how bytes cross the network. Instead it defines an abstract <code>ExchangeSource</code> and a factory registry; the operator asks the registry to build a source for each remote split's URI. The default registered implementation pulls serialized pages over <strong>HTTP</strong>. Swap the registered factory, and the very same operator now moves data over something else entirely — which is exactly what ucx-exchange does.</p>
+
+      <div class="code">
+        <div class="code-head"><span class="code-lang">Velox's transport seam — the extension point ucx-exchange targets</span><button class="copy-btn">Copy</button></div>
+<pre><span class="tok-c">// Velox core — the abstraction the Exchange operator pulls through.</span>
+<span class="tok-k">class</span> <span class="tok-f">ExchangeSource</span> {
+  <span class="tok-k">virtual</span> <span class="tok-k">void</span> <span class="tok-f">request</span>(...) = <span class="tok-n">0</span>;       <span class="tok-c">// ask one upstream producer for the next chunk</span>
+  <span class="tok-k">virtual</span> <span class="tok-k">void</span> <span class="tok-f">close</span>() = <span class="tok-n">0</span>;
+  <span class="tok-c">// a factory turns a remote-split URL into a concrete source:</span>
+  <span class="tok-k">static</span> <span class="tok-k">void</span> <span class="tok-f">registerFactory</span>(Factory);
+};
+
+<span class="tok-c">// Default build: HTTP. Each source GETs pages from the producer's endpoint.</span>
+<span class="tok-c">// UCX build: ucx-exchange registers its own factory, so the SAME Exchange</span>
+<span class="tok-c">// operator now creates UcxExchangeSource objects that move GPU buffers over UCX.</span>
+ExchangeSource::registerFactory(ucxExchangeSourceFactory);</pre>
+      </div>
+
+      <p>The README for the module states this division exactly: in Velox the inter-worker exchange is only <em>partially</em> implemented — the operator and the abstraction are there, but the exchange <em>server</em> and the concrete <em>source</em> object are left out of Velox proper, to be supplied by a transport. ucx-exchange supplies both. Everything the coordinator decided (§2) and Prestissimo wired (§3) is unchanged; only the thing on the other side of this <code>ExchangeSource</code> interface is different. The next section is what lives there.</p>
+
+      <div class="insight">The whole GPU-RDMA effort threads through a single virtual interface. <b>The Exchange operator never learns it is using RDMA</b> — it just calls <code>request()</code> on an <code>ExchangeSource</code> and receives chunks. That is the payoff of the plane separation from §0: the data-plane transport is a swappable implementation detail behind a stable seam.</p>
+    </section>
+    <div class="chapter-rule"></div>
+
+    <!-- ============================ §6 ============================ -->
+    <section class="chapter" id="s6">
+      <div class="chapter-head">
+        <span class="chapter-num">§6</span>
+        <h2><span class="kicker">The crux</span>ucx-exchange — what actually lives behind the ExchangeSource</h2>
+      </div>
+
+      <p class="lead dropcap">This is the module you pointed at, and the reason the rest of the manual is scaffolding. <strong>ucx-exchange</strong> is the concrete transport that fills the seam from §5: it supplies both halves Velox leaves out — the producer-side <em>server</em> and the consumer-side <em>source</em> — and it moves cuDF partition buffers <strong>directly from GPU memory to GPU memory</strong>, built on <strong>UCXX</strong> (the RAPIDS C++ wrapper over UCX that cuDF and dask-cudf also use). Its own README states the division precisely: in Velox the inter-worker exchange is only partially implemented, and the server and source objects are out of scope for Velox proper — so this module implements all of it.</p>
+
+      <h3>The two chains, and the engine they share</h3>
+      <p>The module factors into a <strong>producer chain</strong>, a <strong>consumer chain</strong>, and shared connection machinery:</p>
+      <div class="table-wrap">
+        <table class="grid">
+          <thead><tr><th>Side</th><th>Pipeline of objects</th><th>Job</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Producer</strong></td><td><span class="svg-mono">UcxPartitionedOutput → UcxOutputQueueManager → UcxExchangeServer</span> (+ <span class="svg-mono">Acceptor</span>)</td><td>Partition rows into per-destination queues of packed cuDF columns; serve each partition to whichever consumer connects for it.</td></tr>
+            <tr><td><strong>Consumer</strong></td><td><span class="svg-mono">UcxExchange → UcxExchangeClient → UcxExchangeSource</span></td><td>One <span class="svg-mono">UcxExchangeSource</span> per remote producer task; each pulls this consumer's partition from that producer.</td></tr>
+            <tr><td><strong>Shared</strong></td><td><span class="svg-mono">Communicator</span> · <span class="svg-mono">EndpointRef</span> · <span class="svg-mono">UcxExchangeProtocol</span> · <span class="svg-mono">IntraNodeTransferRegistry</span></td><td>One UCXX progress engine per process; one connection per peer; the wire format; and a same-process bypass.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>The <code>UcxPartitionedOutput</code> operator is the UCX-flavoured replacement for Velox's <code>PartitionedOutput</code> (§4): instead of serializing rows into HTTP pages, it packs each partition into a contiguous cuDF buffer and enqueues it in the <code>UcxOutputQueueManager</code>, keyed by destination partition. On the other side, the consumer's <code>Exchange</code> resolves — through the registered factory — to a <code>UcxExchangeClient</code> holding one <code>UcxExchangeSource</code> for every upstream producer. The module's own comment is blunt about the cardinality: the source <em>&ldquo;is the client that communicates with the remote <code>UcxExchangeServer</code>; there is a distinct instance for every remote task.&rdquo;</em> That is the <em>N</em>-producers fan-in of §5 made literal — a consumer owning partition <em>i</em> instantiates <em>N</em> sources, one aimed at each producer.</p>
+
+      <p>Both sources and servers are <strong>CommElements</strong> registered with a single per-process <code>Communicator</code> — a singleton that wraps one UCXX worker, runs the progress loop, and calls <code>process()</code> on each element in its work queue. The <code>Acceptor</code> inside it listens on a port for incoming connections; an <code>EndpointRef</code> represents one established peer link. Notably, the <code>Communicator</code> also registers a UCXX <strong>active-message</strong> receiver callback (owner <span class="svg-mono">"velox"</span>, id <span class="svg-mono">123</span>) — so the module uses <em>two</em> UCX primitives in concert: active messages for connection-time control, and tag-matched send/recv for the metadata and data streams.</p>
+
+      <h3>The wire protocol — tag matching, MPI-style</h3>
+      <p>Every metadata and data message rides a UCXX <strong>tag-matched</strong> transfer, and the 64-bit tag is hand-packed into three fields. This is a direct re-creation of MPI's tag-matching, with the &ldquo;tag&rdquo; carrying producer identity, message kind, and sequence:</p>
+      <div class="table-wrap">
+        <table class="grid">
+          <thead><tr><th>Bits</th><th>Width</th><th>Field</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td class="yr">63..32</td><td>4 bytes</td><td>FNV-1a-32 hash of the producing <span class="svg-mono">taskId</span></td><td>identifies the producer task (unique in the cluster)</td></tr>
+            <tr><td class="yr">31..24</td><td>1 byte</td><td>op-type — <span class="svg-mono">0x02</span> metadata · <span class="svg-mono">0x03</span> data · <span class="svg-mono">0x04</span> handshake-response</td><td>which kind of message this is</td></tr>
+            <tr><td class="yr">23..0</td><td>3 bytes</td><td>chunk sequence number</td><td>orders the chunks streamed between this task-pair</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>There is no serialization framework: multi-byte fields are written with raw <code>memcpy</code> and matching endianness is assumed between peers (little-endian on x86/ARM; cross-endian transfers are explicitly unsupported). Each cuDF vector crosses as <strong>two</strong> tag-matched messages — first the <strong>metadata</strong> (the <code>packed_columns</code> layout/header), then the <strong>data</strong> (the contiguous GPU bytes) — which is a transfer in the same spirit as a rendezvous: describe, then move. The receiving source allocates the landing buffer from an <strong>RMM</strong> pool and streams the data into it on a CUDA stream.</p>
+
+      <div class="code">
+        <div class="code-head"><span class="code-lang">Tag construction + handshake structs (from UcxExchangeProtocol.h)</span><button class="copy-btn">Copy</button></div>
+<pre><span class="tok-c">// 64-bit tag = [ FNV1a-32(taskId) | op-type | sequence ]</span>
+<span class="tok-k">inline</span> uint64_t <span class="tok-f">getMetadataTag</span>(uint64_t taskHash, uint64_t seq) {
+  <span class="tok-k">return</span> (taskHash &lt;&lt; <span class="tok-n">32</span>) | <span class="tok-n">0x02000000</span> | seq;     <span class="tok-c">// METADATA_TAG</span>
+}
+<span class="tok-k">inline</span> uint64_t <span class="tok-f">getDataTag</span>(uint64_t taskHash, uint64_t seq) {
+  <span class="tok-k">return</span> (taskHash &lt;&lt; <span class="tok-n">32</span>) | <span class="tok-n">0x03000000</span> | seq;     <span class="tok-c">// DATA_TAG</span>
+}
+
+<span class="tok-c">// Sent by the source (consumer) to the server (producer) right after connect.</span>
+<span class="tok-k">struct</span> <span class="tok-f">HandshakeMsg</span> {
+  <span class="tok-k">char</span>     taskId[<span class="tok-n">256</span>];   <span class="tok-c">// which producer task this source wants</span>
+  uint32_t destination;    <span class="tok-c">// the partition this consumer owns (its "i")</span>
+  uint64_t workerId;       <span class="tok-c">// random per-Communicator id => detects same process</span>
+};
+<span class="tok-k">struct</span> <span class="tok-f">HandshakeResponse</span> {
+  <span class="tok-k">bool</span> isIntraNodeTransfer;  <span class="tok-c">// true => bypass UCXX, use IntraNodeTransferRegistry</span>
+};</pre>
+      </div>
+
+      <h3>The same-process fast path</h3>
+      <p>Because a single Prestissimo worker runs <em>many</em> tasks, a producer and a consumer frequently live in the <em>same process</em>. The handshake detects this: each <code>Communicator</code> mints a random <code>workerId</code> at startup; if the server's <code>workerId</code> equals the source's, the two are co-resident and the response sets <code>isIntraNodeTransfer = true</code>. From then on the pair skips UCXX entirely and uses the <strong>IntraNodeTransferRegistry</strong> — a singleton where the server <code>publish()</code>es a <code>std::shared_ptr&lt;cudf::packed_columns&gt;</code> keyed by <span class="svg-mono">(taskId, destination, sequenceNumber)</span> and the source <code>poll()</code>s for it, synchronised by promises/futures. No network, no copy: just a pointer hand-off of a GPU buffer. The one hard requirement is correctness of GPU ordering — the producer must <em>synchronise its CUDA stream before publishing</em>, so the device data is actually ready when the consumer reads it. (Across <em>different</em> processes on the same node, UCXX still handles it, choosing CUDA-IPC/NVLink transports; only the same-<em>process</em> case uses the registry.)</p>
+
+      <h3>One transfer, start to finish</h3>
+      <figure>
+        <div class="fig-frame">
+          <svg viewBox="0 0 720 470" role="img" aria-label="Sequence of one cuDF vector transfer from server to source">
+            <defs>
+              <style>
+                .sq-t{font-weight:600;font-size:10px}
+                .sq-x{font-size:8.5px;letter-spacing:.01em}
+                .sq-m{font-size:8px}
+                .sq-lbl{font-size:8px;letter-spacing:.12em;font-weight:600}
+              </style>
+              <marker id="sa" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--cyan)"/></marker>
+              <marker id="sb" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--copper)"/></marker>
+            </defs>
+
+            <!-- lifelines -->
+            <rect x="56" y="14" width="220" height="40" rx="5" fill="var(--cyan-wash)" stroke="var(--cyan)"/>
+            <text x="166" y="31" text-anchor="middle" class="sq-t" fill="var(--cyan)">UcxExchangeSource</text>
+            <text x="166" y="46" text-anchor="middle" class="sq-x" fill="var(--ink-soft)">consumer · owns partition i</text>
+            <rect x="444" y="14" width="220" height="40" rx="5" fill="var(--copper-wash)" stroke="var(--copper)"/>
+            <text x="554" y="31" text-anchor="middle" class="sq-t" fill="var(--copper-bright)">UcxExchangeServer</text>
+            <text x="554" y="46" text-anchor="middle" class="sq-x" fill="var(--ink-soft)">producer · one per (peer, partition)</text>
+            <line x1="166" y1="54" x2="166" y2="448" stroke="var(--rule)" stroke-width="1.2" stroke-dasharray="2 3"/>
+            <line x1="554" y1="54" x2="554" y2="448" stroke="var(--rule)" stroke-width="1.2" stroke-dasharray="2 3"/>
+
+            <!-- 1 connect -->
+            <text x="40" y="78" class="sq-lbl" fill="var(--ink-faint)">CONNECT</text>
+            <line x1="166" y1="86" x2="552" y2="86" stroke="var(--cyan)" stroke-width="1.3" marker-end="url(#sa)"/>
+            <text x="170" y="82" class="sq-x" fill="var(--ink-soft)">open endpoint → Acceptor (listening on port)</text>
+
+            <!-- 2 handshake -->
+            <text x="40" y="110" class="sq-lbl" fill="var(--ink-faint)">HANDSHAKE</text>
+            <line x1="166" y1="118" x2="552" y2="118" stroke="var(--cyan)" stroke-width="1.3" marker-end="url(#sa)"/>
+            <text x="170" y="114" class="sq-x" fill="var(--ink-soft)">HandshakeMsg {taskId, destination=i, workerId}  —  active message</text>
+            <line x1="554" y1="142" x2="168" y2="142" stroke="var(--copper)" stroke-width="1.3" marker-end="url(#sb)"/>
+            <text x="170" y="138" class="sq-x" fill="var(--ink-soft)">HandshakeResponse {isIntraNodeTransfer}</text>
+
+            <!-- branch note -->
+            <rect x="120" y="152" width="480" height="24" rx="4" fill="var(--sage-wash)" stroke="var(--sage)" stroke-dasharray="3 2"/>
+            <text x="360" y="168" text-anchor="middle" class="sq-x" fill="var(--sage)">if workerId matches (same process) → IntraNodeTransferRegistry: publish()/poll() a packed_columns ptr, skip everything below</text>
+
+            <!-- loop frame -->
+            <rect x="100" y="190" width="540" height="208" rx="6" fill="none" stroke="var(--copper)" stroke-width="1.2" stroke-dasharray="4 3"/>
+            <rect x="100" y="190" width="180" height="18" rx="0" fill="var(--copper)"/>
+            <text x="110" y="203" class="sq-m" fill="var(--bg)" font-weight="700">loop  ·  per chunk seq = 0,1,2,…</text>
+
+            <!-- request -->
+            <line x1="166" y1="230" x2="166" y2="230" stroke="none"/>
+            <rect x="128" y="222" width="76" height="16" rx="3" fill="var(--cyan-wash)" stroke="var(--cyan)"/>
+            <text x="166" y="234" text-anchor="middle" class="sq-m" fill="var(--cyan)">request()</text>
+            <text x="212" y="234" class="sq-x" fill="var(--ink-faint)">higher layer (Exchange operator) demands the next cuDF vector</text>
+
+            <!-- metadata -->
+            <line x1="554" y1="266" x2="168" y2="266" stroke="var(--copper)" stroke-width="1.4" marker-end="url(#sb)"/>
+            <text x="180" y="262" class="sq-x" fill="var(--ink-soft)">① metadata  —  tag = [ hash(taskId) | 0x02 | seq ]</text>
+            <text x="180" y="278" class="sq-m svg-mono" fill="var(--ink-faint)">packed_columns layout / header</text>
+
+            <!-- data -->
+            <line x1="554" y1="312" x2="168" y2="312" stroke="var(--copper)" stroke-width="2" marker-end="url(#sb)"/>
+            <text x="180" y="308" class="sq-x" fill="var(--ink-soft)">② data  —  tag = [ hash(taskId) | 0x03 | seq ]</text>
+            <text x="180" y="324" class="sq-m svg-mono" fill="var(--copper-bright)">raw contiguous GPU bytes — GPU→GPU, no host bounce</text>
+
+            <!-- receive -->
+            <rect x="128" y="342" width="300" height="18" rx="3" fill="var(--cyan-wash)" stroke="var(--cyan)"/>
+            <text x="278" y="355" text-anchor="middle" class="sq-m" fill="var(--cyan)">land in RMM pool buffer on a CUDA stream → unpack → RowVector / cudf::table</text>
+
+            <text x="360" y="384" text-anchor="middle" class="sq-x" fill="var(--ink-faint)">repeat until end-of-stream marker → state Done</text>
+          </svg>
+        </div>
+        <figcaption><b>FIG. 6.1</b> — One cuDF-vector transfer. After a single connect + handshake, the pair streams chunks: for each, a <em>metadata</em> message then a <em>data</em> message, both tag-matched, the data being the raw contiguous GPU buffer copied straight into the consumer's RMM pool. The green branch is the same-process bypass — when producer and consumer share a <code>Communicator</code>, the whole UCXX path collapses to a synchronised pointer hand-off through the <code>IntraNodeTransferRegistry</code>. The transfer is <em>consumer-pull</em>: nothing leaves the server until a <code>request()</code> demands it.</figcaption>
+      </figure>
+
+      <p>Both endpoints are driven as explicit state machines on the <code>Communicator</code>'s work queue, which is what lets a single progress thread multiplex many concurrent transfers without blocking:</p>
+      <div class="code">
+        <div class="code-head"><span class="code-lang">The two state machines (from the source &amp; server headers)</span><button class="copy-btn">Copy</button></div>
+<pre><span class="tok-c">// consumer — UcxExchangeSource::ReceiverState</span>
+Created → WaitingForHandshakeComplete → WaitingForHandshakeResponse
+       → ReadyToReceive → WaitingForMetadata → WaitingForData
+       → (WaitingForIntraNodeData) → Done
+
+<span class="tok-c">// producer — UcxExchangeServer::ServerState</span>
+Created → ReadyToTransfer → WaitingForDataFromQueue → DataReady
+       → WaitingForSendComplete → (WaitingForIntraNodeRetrieve) → Done</pre>
+      </div>
+
+      <p>The server is created per <span class="svg-mono">(endpoint, partition key)</span>, pulls cuDF vectors for its partition out of the <code>UcxOutputQueueManager</code>, and sends the metadata+data pair; it independently detects same-node peers by checking whether the peer IP is in the local-IP set. It depends on Velox's <code>Task</code> (it is serving that task's output). And the whole module is gated by a gflag, <span class="svg-mono">velox_ucx_exchange</span> — flip it off and the stack falls back to the default HTTP exchange, the cleanest possible demonstration that this is a drop-in transport behind the §5 seam.</p>
+
+      <div class="callout sage">
+        <h4>How it plugs in — and what it replaces</h4>
+        <p>Two registrations make it live, both at worker startup. <strong>(1)</strong> the consumer side registers a <code>UcxExchangeSource</code> factory via Velox's <code>ExchangeSource::registerFactory</code>, so the unchanged <code>Exchange</code> operator builds UCX sources for its remote splits. <strong>(2)</strong> the producer side substitutes <code>UcxPartitionedOutput</code> + <code>UcxOutputQueueManager</code> + <code>UcxExchangeServer</code> for the stock <code>PartitionedOutput</code> + <code>OutputBufferManager</code> + HTTP page server. The coordinator's plan, the partition map, the remote-split URIs — all identical to the HTTP path. What changed is only what happens after <code>request()</code> is called: raw GPU buffers over UCXX instead of serialized pages over HTTP.</p>
+      </div>
+
+      <p>One real invocation, straight from the module's test harness, shows the assembled system: <code>1brc_server</code> and <code>1brc_client</code> (the One-Billion-Row Challenge, on a GPFS cluster) launched with <span class="svg-mono">-velox_cudf_enabled=true -velox_cudf_table_scan=true -velox_cudf_memory_resource=pool</span> and <span class="svg-mono">UCX_TLS=^ib</span> selecting transports — cuDF doing the scan and aggregation, ucx-exchange moving the partitions, UCX choosing the wire. The next two sections open the two boxes this one leaned on: UCX itself, and cuDF.</p>
+    </section>
+    <div class="chapter-rule"></div>
+
+    <!-- ============================ §7 ============================ -->
+    <section class="chapter" id="s7">
+      <div class="chapter-head">
+        <span class="chapter-num">§7</span>
+        <h2><span class="kicker">The transport</span>UCX &amp; UCXX — the substrate that moves the bytes</h2>
+      </div>
+
+      <p class="lead dropcap">Under ucx-exchange sits <strong>UCX</strong> — Unified Communication X, the HPC networking framework that has spent a decade moving data for supercomputers, and which MPI implementations themselves run on. ucx-exchange does not call UCX's C API directly; it uses <strong>UCXX</strong>, the RAPIDS C++ object wrapper (Context · Worker · Endpoint · Request) that also underpins cuDF's own distributed shuffle in dask. Knowing what UCX offers explains <em>why</em> the module is shaped the way it is.</p>
+
+      <h3>Three layers</h3>
+      <p>UCX is stratified much like the database stack above it. <strong>UCP</strong>, the protocol layer, is the high-level API: tag-matched send/recv, one-sided RMA, active messages, streams, atomics — and the logic that selects transports, chooses eager-vs-rendezvous, fragments, and stripes across rails. <strong>UCT</strong>, the transport layer, is a thin shim over each hardware path: RC/UD/DC verbs over InfiniBand, RoCE, plain TCP, shared-memory transports (CMA, xpmem, knem), and the CUDA transports (<span class="svg-mono">cuda_copy</span>, <span class="svg-mono">cuda_ipc</span>, GPUDirect <span class="svg-mono">gdr</span>). <strong>UCS</strong>, the services layer, is the plumbing — most importantly the <strong>memory-registration cache</strong> that makes repeated zero-copy transfers cheap.</p>
+
+      <h3>The three primitives — and which shuffle need each serves</h3>
+      <div class="table-wrap">
+        <table class="grid">
+          <thead><tr><th>UCP primitive</th><th>Semantics</th><th>Where the shuffle uses it</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Tag-matched send/recv</strong></td><td>Two-sided; receiver matches an incoming message by a 64-bit tag (the MPI model)</td><td>ucx-exchange's metadata + data streams — chunk <em>seq</em> of partition <em>i</em> from a given producer (§6)</td></tr>
+            <tr><td><strong>One-sided RMA</strong> (put/get)</td><td>Initiator reads/writes remote memory with no remote-CPU involvement, after a one-time rkey exchange</td><td>The natural fit for a <em>pull</em>: a consumer could RMA-<span class="svg-mono">get</span> a producer's registered buffer; also the data phase of any rendezvous</td></tr>
+            <tr><td><strong>Active messages</strong></td><td>A message triggers a registered handler on the receiver — no pre-posted recv needed</td><td>ucx-exchange's connection-time control (the AM callback, id 123); the right tool for <em>irregular</em> patterns where the receiver can't predict what's coming</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>That last row is the interesting one for your line of work. A database shuffle is <em>irregular</em> — a consumer does not know in advance how many bytes each producer owes it — which is precisely the regime where active messages and one-sided RMA shine over a rigid pre-posted two-sided exchange. ucx-exchange currently leans on tag-matching for the bulk streams, but the AM hook and UCP's RMA surface are the levers for pushing irregular shuffle/exchange patterns further.</p>
+
+      <h3>Rendezvous, pinning, and why RMM pools matter</h3>
+      <p>UCP transfers split by size. Small messages go <strong>eager</strong> — copied inline. Large ones go <strong>rendezvous</strong>: the sender advertises the buffer's address and remote key, the receiver pulls it with an RMA <span class="svg-mono">get</span> straight into the destination, then a completion fires — no intermediate copies. For RDMA to touch a buffer at all, that memory must be <strong>registered (pinned)</strong> with the NIC, which is expensive; so UCS keeps a <strong>registration cache</strong>. This is the concrete reason the stack allocates received partitions from an <strong>RMM pool</strong>: register the pool's memory once, and every subsequent GPU buffer carved from it is already pinned and ready to RDMA — the per-transfer registration cost vanishes.</p>
+
+      <h3>GPUDirect — the reason &ldquo;GPU→GPU&rdquo; is literal</h3>
+      <p>The phrase from the ucx-exchange README — raw vector data copied <em>from GPU memory to GPU memory</em> — rests entirely on <strong>GPUDirect RDMA</strong>: a kernel capability (via <span class="svg-mono">nvidia-peermem</span> / dmabuf) that lets the NIC DMA directly to and from GPU HBM over PCIe peer-to-peer. With it, a partition buffer travels GPU → NIC → fabric → NIC → GPU and never touches host memory. Without it, every transfer pays a round trip through a host bounce buffer (device-to-host copy, send, host-to-device copy) — the exact tax that makes a naive HTTP shuffle of GPU data so slow. The transport UCX actually selects depends on where the two endpoints are:</p>
+
+      <figure>
+        <div class="fig-frame">
+          <svg viewBox="0 0 720 388" role="img" aria-label="UCX transport selection tiers by locality, fastest at top">
+            <defs>
+              <style>
+                .tt-c{font-size:9px;letter-spacing:.01em}
+                .tt-b{font-weight:600;font-size:10.5px}
+                .tt-p{font-size:8.5px}
+              </style>
+              <marker id="fast" markerWidth="8" markerHeight="8" refX="3" refY="6" orient="auto"><path d="M3,0 L6,6 L0,6 Z" fill="var(--ink-faint)"/></marker>
+            </defs>
+
+            <line x1="20" y1="330" x2="20" y2="56" stroke="var(--ink-faint)" stroke-width="1.4" marker-end="url(#fast)"/>
+            <text x="14" y="200" class="tt-p" fill="var(--ink-faint)" transform="rotate(-90 14 200)">faster · less host involvement →</text>
+
+            <!-- tier 1 -->
+            <text x="196" y="72" text-anchor="end" class="tt-c" fill="var(--ink-soft)">same process</text>
+            <rect x="206" y="50" width="372" height="44" rx="5" fill="var(--sage-wash)" stroke="var(--sage)"/>
+            <text x="220" y="69" class="tt-b" fill="var(--sage)">IntraNodeTransferRegistry — shared_ptr hand-off</text>
+            <text x="220" y="84" class="tt-c svg-mono" fill="var(--ink-soft)">no UCX at all; CUDA-stream sync for ordering</text>
+            <text x="590" y="76" class="tt-p" fill="var(--ink-faint)">zero copy</text>
+
+            <!-- tier 2 -->
+            <text x="196" y="138" text-anchor="end" class="tt-c" fill="var(--ink-soft)">same node, diff process</text>
+            <rect x="206" y="116" width="372" height="44" rx="5" fill="var(--copper-wash)" stroke="var(--copper)"/>
+            <text x="220" y="135" class="tt-b" fill="var(--copper-bright)">UCXX · CUDA-IPC over NVLink / NVSwitch</text>
+            <text x="220" y="150" class="tt-c svg-mono" fill="var(--ink-soft)">GPU↔GPU, no host bounce</text>
+            <text x="590" y="142" class="tt-p" fill="var(--ink-faint)">~100s GB/s</text>
+
+            <!-- tier 3 -->
+            <text x="196" y="204" text-anchor="end" class="tt-c" fill="var(--ink-soft)">diff node + GPUDirect</text>
+            <rect x="206" y="182" width="372" height="44" rx="5" fill="var(--cyan-wash)" stroke="var(--cyan)"/>
+            <text x="220" y="201" class="tt-b" fill="var(--cyan)">GPUDirect RDMA — NIC DMAs HBM directly</text>
+            <text x="220" y="216" class="tt-c svg-mono" fill="var(--ink-soft)">GPU → NIC → IB/RoCE → NIC → GPU</text>
+            <text x="590" y="208" class="tt-p" fill="var(--ink-faint)">~µs latency</text>
+
+            <!-- tier 4 -->
+            <text x="196" y="270" text-anchor="end" class="tt-c" fill="var(--ink-soft)">diff node, no GDR</text>
+            <rect x="206" y="248" width="372" height="44" rx="5" fill="var(--bg-inset)" stroke="var(--rule)"/>
+            <text x="220" y="267" class="tt-b" fill="var(--ink)">stage via host: D2H → RC/RoCE → H2D</text>
+            <text x="220" y="282" class="tt-c svg-mono" fill="var(--ink-soft)">extra host copies — the tax GPUDirect removes</text>
+            <text x="590" y="274" class="tt-p" fill="var(--ink-faint)">+ copies</text>
+
+            <!-- tier 5 -->
+            <text x="196" y="336" text-anchor="end" class="tt-c" fill="var(--ink-faint)">no RDMA fabric</text>
+            <rect x="206" y="314" width="372" height="44" rx="5" fill="none" stroke="var(--rule-soft)" stroke-dasharray="3 3"/>
+            <text x="220" y="333" class="tt-b" fill="var(--ink-faint)">TCP  (UCX_TLS = tcp)</text>
+            <text x="220" y="348" class="tt-c svg-mono" fill="var(--ink-faint)">kernel TCP stack — the slow universal fallback</text>
+            <text x="590" y="340" class="tt-p" fill="var(--ink-faint)">slowest</text>
+          </svg>
+        </div>
+        <figcaption><b>FIG. 7.1</b> — How a transfer is carried, by locality. The same logical operation — &ldquo;move partition <em>i</em> from this producer to that consumer&rdquo; — resolves to a different mechanism depending on where the two ends sit, and ucx-exchange/UCX pick automatically (steered by <span class="svg-mono">UCX_TLS</span>). The top tier is the §6 registry bypass; the middle tiers are why co-locating tasks on NVLink-connected GPUs, or on GPUDirect-capable nodes, matters so much; the bottom is what you get with nothing special, and what the whole stack exists to avoid.</figcaption>
+      </figure>
+
+      <div class="insight">UCXX is not a database technology that happens to use the GPU — it is the <em>same</em> RAPIDS transport that dask-cudf shuffles on, and UCX beneath it is the <em>same</em> substrate OpenMPI moves messages over. ucx-exchange is the point where a database engine reaches down and grabs the HPC community's transport stack wholesale. That shared substrate is what makes the MPI comparison in §10 more than an analogy.</div>
+    </section>
+    <div class="chapter-rule"></div>
+
+    <!-- ============================ §8 ============================ -->
+    <section class="chapter" id="s8">
+      <div class="chapter-head">
+        <span class="chapter-num">§8</span>
+        <h2><span class="kicker">The compute</span>cuDF — what the operators delegate to, and the buffer that gets shipped</h2>
+      </div>
+
+      <p class="lead dropcap">The third plane is compute, and in a GPU build it is <strong>cuDF / libcudf</strong>: the joins, group-bys, filters, and sorts run as CUDA kernels over columnar data resident in GPU HBM, with <strong>RMM</strong> managing device memory. The relationship to Velox is clean — <strong>Velox orchestrates; cuDF computes.</strong> Velox owns the task, the driver threads, the operator tree, the exchange, the memory budgets and spilling; each operator that has real work to do hands it to a libcudf kernel. A Velox <code>HashAggregation</code> becomes a libcudf group-by; a <code>TableScan</code> decodes Parquet into a <code>cudf::table</code>; the operator tree is the same, the kernels underneath are GPU.</p>
+
+      <p>What makes this matter for the shuffle is that <em>the data being shuffled is cuDF's GPU columnar data</em>, and cuDF supplies exactly the primitive needed to make a partition shippable in one shot: <strong><code>cudf::contiguous_split</code> / <code>cudf::pack</code></strong>. A <code>cudf::table</code> is normally a collection of separately allocated buffers — each column's values, its null mask, its offsets. That is awkward to send. <code>pack</code> (and <code>contiguous_split</code>, which partitions <em>and</em> packs in one pass) collapses a table into a <strong><code>packed_columns</code></strong>: a single contiguous device buffer with every column's bytes laid end-to-end, accompanied by a small host-side metadata header describing the layout.</p>
+
+      <p>That structure maps perfectly onto the two-message transfer of §6. The <strong>metadata</strong> message is the <code>packed_columns</code> header (types, sizes, offsets, null-mask positions); the <strong>data</strong> message is the one contiguous device buffer. One partition equals one <code>packed_columns</code> equals one (metadata, data) pair equals one tag-matched UCX transfer — no per-column transfers, and no CPU-side serialization, because the &ldquo;serialization&rdquo; is just a GPU contiguous repack. On the far side, the bytes land in an RMM-pool buffer and <code>cudf::unpack</code> reconstructs a <code>cudf::table_view</code> over them as a zero-copy view, ready for the next kernel.</p>
+
+      <div class="code">
+        <div class="code-head"><span class="code-lang">The GPU shuffle payload — pack → ship → unpack (cuDF)</span><button class="copy-btn">Copy</button></div>
+<pre><span class="tok-c">// PRODUCER — turn one partition's rows into a single shippable GPU blob.</span>
+cudf::table_view part = /* rows that hashed to partition i */;
+cudf::packed_columns packed = cudf::pack(part);     <span class="tok-c">// one contiguous device buffer + layout header</span>
+<span class="tok-c">// contiguous_split() does this for ALL partitions at once:</span>
+<span class="tok-c">//   auto parts = cudf::contiguous_split(table, splitOffsets);  // vector&lt;packed_columns&gt;</span>
+
+send_metadata(packed.metadata);   <span class="tok-c">// → UCX tag [hash | 0x02 | seq] : the layout</span>
+send_data(packed.gpu_data);       <span class="tok-c">// → UCX tag [hash | 0x03 | seq] : raw bytes, GPUDirect, no host bounce</span>
+
+<span class="tok-c">// CONSUMER — receive into RMM pool, rebuild a zero-copy table_view.</span>
+rmm::device_buffer buf = recv_data_into_pool(seq);  <span class="tok-c">// already-pinned pool memory (§7)</span>
+cudf::table_view tbl = cudf::unpack(metadata, buf); <span class="tok-c">// no copy; just a view over received bytes</span>
+<span class="tok-c">// → hand tbl to the next libcudf kernel (final aggregation, join probe, …)</span></pre>
+      </div>
+
+      <p>RMM is the quiet enabler of all of this. A <code>pool_memory_resource</code> pre-grabs a large device slab and sub-allocates from it in microseconds, dodging a <code>cudaMalloc</code> per buffer; a <code>cuda_stream_pool</code> lets transfers and kernels overlap. And, as §7 noted, the pool is registered with UCX once, so every partition buffer carved from it is already pinned for RDMA. The columnar formats line up too — cuDF columns and Velox RowVectors are both Arrow-shaped — so the handoff between Velox's orchestration and cuDF's kernels is a columnar pass, not a re-encode.</p>
+
+      <div class="tradeoff">
+        <div class="win"><h4>What the GPU-native path buys</h4><p>The CPU never touches the row data across a shuffle. Compute stays on the GPU (cuDF), the repack stays on the GPU (<code>contiguous_split</code>), and the move stays on the GPU (GPUDirect). The classic row-serialize-to-host-buffer-then-HTTP tax — the dominant cost when shuffling GPU data the naive way — is gone.</p></div>
+        <div class="cost"><h4>What it demands</h4><p>Finite HBM. A pile of in-flight <code>packed_columns</code> plus build-side hash tables can exceed device memory, which forces the host-spilling path from §4. Keeping the GPU shuffle correct and fast <em>under memory pressure</em> — overlapping transfer, compute, and spill without thrashing — is the genuinely hard engineering, and it is squarely where this stack's frontier sits.</p></div>
+      </div>
+    </section>
+    <div class="chapter-rule"></div>
+
+    <!-- ============================ §9 ============================ -->
+    <section class="chapter" id="s9">
+      <div class="chapter-head">
+        <span class="chapter-num">§9</span>
+        <h2><span class="kicker">End to end</span>One query, the whole way down and back</h2>
+      </div>
+
+      <p class="lead dropcap">Now assemble it. Below is a single query with one shuffle, traced from the SQL string to the result rows, each step naming <em>who provides what</em>, <em>who calls whom</em>, and <em>who initiates</em>. Read it alongside the diagram: control flows down from the coordinator over HTTP; data is pulled sideways between workers over UCX.</p>
+
+      <figure>
+        <div class="fig-frame">
+          <svg viewBox="0 0 720 470" role="img" aria-label="End-to-end sequence across client, coordinator, producer worker, consumer worker">
+            <defs>
+              <style>
+                .lc-h{font-weight:600;font-size:9.5px}
+                .lc-x{font-size:8px;letter-spacing:.01em}
+                .lc-s{font-size:7.5px}
+                .lc-p{font-size:7.5px;letter-spacing:.12em;font-weight:600}
+              </style>
+              <marker id="mg" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--ink-faint)"/></marker>
+              <marker id="mc" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--copper)"/></marker>
+              <marker id="my" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--cyan)"/></marker>
+            </defs>
+
+            <!-- headers -->
+            <rect x="30" y="12" width="100" height="34" rx="5" fill="var(--bg-inset)" stroke="var(--rule)"/><text x="80" y="33" text-anchor="middle" class="lc-h" fill="var(--ink)">SQL client</text>
+            <rect x="200" y="12" width="130" height="34" rx="5" fill="var(--copper-wash)" stroke="var(--copper)"/><text x="265" y="29" text-anchor="middle" class="lc-h" fill="var(--copper-bright)">Coordinator</text><text x="265" y="40" text-anchor="middle" class="lc-s" fill="var(--ink-soft)">control plane</text>
+            <rect x="410" y="12" width="130" height="34" rx="5" fill="var(--bg-raised)" stroke="var(--copper)"/><text x="475" y="29" text-anchor="middle" class="lc-h" fill="var(--ink)">Worker A</text><text x="475" y="40" text-anchor="middle" class="lc-s" fill="var(--ink-soft)">producer</text>
+            <rect x="585" y="12" width="130" height="34" rx="5" fill="var(--bg-raised)" stroke="var(--cyan)"/><text x="650" y="29" text-anchor="middle" class="lc-h" fill="var(--ink)">Worker B</text><text x="650" y="40" text-anchor="middle" class="lc-s" fill="var(--ink-soft)">consumer · partition i</text>
+
+            <!-- lifelines -->
+            <line x1="80" y1="46" x2="80" y2="452" stroke="var(--rule)" stroke-dasharray="2 3"/>
+            <line x1="265" y1="46" x2="265" y2="452" stroke="var(--rule)" stroke-dasharray="2 3"/>
+            <line x1="475" y1="46" x2="475" y2="452" stroke="var(--rule)" stroke-dasharray="2 3"/>
+            <line x1="650" y1="46" x2="650" y2="452" stroke="var(--rule)" stroke-dasharray="2 3"/>
+
+            <!-- 1 SQL -->
+            <line x1="80" y1="72" x2="263" y2="72" stroke="var(--ink-faint)" stroke-width="1.2" marker-end="url(#mg)"/>
+            <text x="88" y="68" class="lc-x" fill="var(--ink-soft)">1 · SQL query</text>
+
+            <!-- coord self -->
+            <rect x="198" y="84" width="134" height="34" rx="4" fill="var(--copper-wash)" stroke="var(--copper)"/>
+            <text x="265" y="98" text-anchor="middle" class="lc-s" fill="var(--copper-bright)">2 · node list (discovery)</text>
+            <text x="265" y="111" text-anchor="middle" class="lc-s" fill="var(--copper-bright)">3 · plan · fragment · partition P</text>
+
+            <text x="30" y="140" class="lc-p" fill="var(--ink-faint)">CONTROL · HTTP</text>
+            <!-- 4 to A -->
+            <line x1="265" y1="152" x2="473" y2="152" stroke="var(--copper)" stroke-width="1.2" stroke-dasharray="3 2" marker-end="url(#mc)"/>
+            <text x="273" y="148" class="lc-x" fill="var(--copper)">4 · producer fragment · scan splits · &ldquo;emit P&rdquo;</text>
+            <!-- 4 to B -->
+            <line x1="265" y1="178" x2="648" y2="178" stroke="var(--cyan)" stroke-width="1.2" stroke-dasharray="3 2" marker-end="url(#my)"/>
+            <text x="273" y="174" class="lc-x" fill="var(--cyan)">4 · consumer fragment · remote splits = A&rsquo;s URI · &ldquo;you = partition i&rdquo;</text>
+
+            <!-- A self -->
+            <rect x="408" y="192" width="134" height="34" rx="4" fill="var(--bg-raised)" stroke="var(--copper)"/>
+            <text x="475" y="206" text-anchor="middle" class="lc-s" fill="var(--ink)">5 · scan + agg (cuDF)</text>
+            <text x="475" y="219" text-anchor="middle" class="lc-s" fill="var(--ink-soft)">hash%P → packed_columns queued</text>
+            <!-- B self -->
+            <rect x="583" y="192" width="134" height="34" rx="4" fill="var(--bg-raised)" stroke="var(--cyan)"/>
+            <text x="650" y="206" text-anchor="middle" class="lc-s" fill="var(--ink)">6 · Exchange builds</text>
+            <text x="650" y="219" text-anchor="middle" class="lc-s" fill="var(--ink-soft)">one source per producer URI</text>
+
+            <text x="30" y="250" class="lc-p" fill="var(--ink-faint)">DATA · UCX (B pulls)</text>
+            <!-- 7 B->A -->
+            <line x1="650" y1="262" x2="477" y2="262" stroke="var(--cyan)" stroke-width="1.3" marker-end="url(#my)"/>
+            <text x="486" y="258" class="lc-x" fill="var(--cyan)">7 · connect · handshake · request()</text>
+            <!-- 8 metadata -->
+            <line x1="475" y1="290" x2="648" y2="290" stroke="var(--copper)" stroke-width="1.3" marker-end="url(#mc)"/>
+            <text x="483" y="286" class="lc-x" fill="var(--copper)">8 · metadata  [hash|0x02|seq]</text>
+            <!-- 9 data -->
+            <line x1="475" y1="312" x2="648" y2="312" stroke="var(--copper)" stroke-width="2.2" marker-end="url(#mc)"/>
+            <text x="483" y="308" class="lc-x" fill="var(--copper-bright)">9 · data — packed_columns, GPU→GPU GPUDirect</text>
+
+            <!-- B self 2 -->
+            <rect x="583" y="326" width="134" height="32" rx="4" fill="var(--cyan-wash)" stroke="var(--cyan)"/>
+            <text x="650" y="340" text-anchor="middle" class="lc-s" fill="var(--cyan)">10 · land in RMM → unpack</text>
+            <text x="650" y="352" text-anchor="middle" class="lc-s" fill="var(--ink-soft)">→ final aggregation (cuDF)</text>
+
+            <text x="30" y="384" class="lc-p" fill="var(--ink-faint)">RESULTS · HTTP</text>
+            <!-- 11 B->coord -->
+            <line x1="650" y1="396" x2="267" y2="396" stroke="var(--ink-faint)" stroke-width="1.2" stroke-dasharray="3 2" marker-end="url(#mg)"/>
+            <text x="300" y="392" class="lc-x" fill="var(--ink-soft)">11 · task status / output</text>
+            <!-- 12 coord->client -->
+            <line x1="265" y1="424" x2="82" y2="424" stroke="var(--ink-faint)" stroke-width="1.2" marker-end="url(#mg)"/>
+            <text x="92" y="420" class="lc-x" fill="var(--ink-soft)">12 · result rows</text>
+          </svg>
+        </div>
+        <figcaption><b>FIG. 9.1</b> — The full lifecycle across four actors. Steps 1–6 are control (HTTP, dashed) — the coordinator computing membership and the plan, then pushing fragments, splits, and partition identity down to the workers. Steps 7–10 are data (UCX, solid) — note step 7 originates at the <em>consumer</em>: B opens the connection and calls <code>request()</code>; A only sends in response (8, 9). Steps 11–12 carry status and results back up the control channel. The producer→consumer data edge is the only part that touches the high-speed fabric; everything else is HTTP.</figcaption>
+      </figure>
+
+      <h3>The same twelve steps, in words</h3>
+      <ol>
+        <li><strong>SQL → coordinator.</strong> The client submits SQL over HTTP. The control plane owns everything from here until results.</li>
+        <li><strong>Node list.</strong> The coordinator reads the live worker set from its discovery service — the sole source of membership.</li>
+        <li><strong>Plan &amp; partition scheme.</strong> Parse, optimize, fragment into stages at exchange boundaries, and fix the hash partition function and count <em>P</em> between the producing and consuming stages.</li>
+        <li><strong>Schedule &amp; wire.</strong> Pick workers from the node list; create a task per worker; hand producers their scan splits and &ldquo;emit <em>P</em>&rdquo;; hand consumers their <em>remote splits</em> (every producer's URI) and their identity (&ldquo;you are partition <em>i</em>&rdquo;). The coordinator provides all conditions, inputs, and parameters; nothing below it decides placement.</li>
+        <li><strong>Translate &amp; launch (producer).</strong> Prestissimo converts the Presto fragment to a Velox plan, builds the <code>Task</code>, and starts drivers; the cuDF and ucx-exchange extensions were registered at startup. The producer scans and pre-aggregates with cuDF kernels, hashes rows mod <em>P</em>, packs each partition with <code>contiguous_split</code>, and enqueues the <code>packed_columns</code> in the <code>UcxOutputQueueManager</code>; its <code>UcxExchangeServer</code> + <code>Acceptor</code> wait.</li>
+        <li><strong>Wire sources (consumer).</strong> The consumer's <code>Exchange</code> operator, via the registered factory, builds one <code>UcxExchangeSource</code> per producer URI — the §5 fan-in made concrete.</li>
+        <li><strong>Connect &amp; demand.</strong> Each source connects to a producer's <code>Acceptor</code>, sends the handshake (<code>taskId</code>, <code>destination = i</code>, <code>workerId</code>), learns whether the same-process bypass applies, and calls <code>request()</code> for the first chunk. <em>The consumer initiates; this is a pull.</em></li>
+        <li><strong>Metadata.</strong> The server pulls partition <em>i</em>'s next <code>packed_columns</code> from its queue and sends the layout header on a metadata-tagged message.</li>
+        <li><strong>Data.</strong> It sends the contiguous GPU buffer on a data-tagged message — GPU→GPU over GPUDirect, no host bounce (or a pointer hand-off via the registry if co-resident).</li>
+        <li><strong>Compute.</strong> The source lands the bytes in an RMM-pool buffer, <code>unpack</code>s a <code>cudf::table</code>, and the consumer runs its final aggregation or join probe with cuDF kernels on the now-gathered partition.</li>
+        <li><strong>Report.</strong> The consumer's output becomes the next stage's input (another shuffle) or, at the final stage, is reported to the coordinator over HTTP.</li>
+        <li><strong>Return.</strong> The coordinator streams the result rows to the client.</li>
+      </ol>
+
+      <div class="table-wrap">
+        <table class="grid">
+          <thead><tr><th>Question</th><th>Answer</th><th>Provided by</th></tr></thead>
+          <tbody>
+            <tr><td>Who provides the node list?</td><td>The live worker set</td><td>Coordinator (discovery service)</td></tr>
+            <tr><td>Who fixes the partition count &amp; hash?</td><td>Scheme <em>P</em> + hash keys</td><td>Coordinator (optimizer)</td></tr>
+            <tr><td>Who provides each task's inputs/parameters?</td><td>Fragment + splits + session</td><td>Coordinator → Prestissimo → Velox <code>Task</code></td></tr>
+            <tr><td>How does a consumer learn its sources?</td><td>Remote splits = producer URIs</td><td>Coordinator → <code>Exchange</code> operator</td></tr>
+            <tr><td>What portion is a consumer's share?</td><td>Partition <em>i</em>, gathered from all producers</td><td>Coordinator assigns <em>i</em>; hash defines the rows</td></tr>
+            <tr><td>Who initiates the data movement?</td><td>The consumer — a demand-driven pull</td><td><code>UcxExchangeSource.request()</code></td></tr>
+            <tr><td>Who carries the bytes?</td><td><code>packed_columns</code>, GPU→GPU</td><td>ucx-exchange → UCXX → UCX → NIC/NVLink</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <div class="chapter-rule"></div>
+
+    <!-- ============================ §10 ============================ -->
+    <section class="chapter" id="s10">
+      <div class="chapter-head">
+        <span class="chapter-num">§10</span>
+        <h2><span class="kicker">The foil</span>What MPI would do — and what this stack borrowed from it</h2>
+      </div>
+
+      <p class="lead dropcap">An all-to-all redistribution of partitioned data is the canonical HPC operation: <span class="svg-mono">MPI_Alltoallv</span>. So the sharpest way to understand this stack is to ask how MPI would run the same shuffle — and the answer splits cleanly in two. At the <strong>transport</strong> layer, the two are nearly the same system; at the <strong>control</strong> layer, they are opposites. ucx-exchange is best read as <em>HPC's transport wearing the database's control model.</em></p>
+
+      <div class="table-wrap">
+        <table class="grid">
+          <thead><tr><th>Dimension</th><th>MPI (the HPC way)</th><th>Presto · Velox · ucx-exchange</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Membership</strong></td><td>Static communicator; ranks 0…N−1 fixed at <span class="svg-mono">mpirun</span> launch; no join/leave</td><td>Dynamic; coordinator + discovery; workers join/leave; elastic across queries</td></tr>
+            <tr><td><strong>Program model</strong></td><td>SPMD — every rank runs the same code, symmetric</td><td>Coordinator-orchestrated, asymmetric; producer vs consumer roles assigned</td></tr>
+            <tr><td><strong>The shuffle op</strong></td><td>One collective call — <span class="svg-mono">MPI_Alltoallv</span>, entered by all ranks together</td><td>Many independent point-to-point pulls; no single call, no global entry</td></tr>
+            <tr><td><strong>Synchronization</strong></td><td>Collective acts as a barrier — all in, all out</td><td>No barrier; consumers pull when ready; overlaps compute; back-pressured</td></tr>
+            <tr><td><strong>Knowing the sizes</strong></td><td>Counts known <em>before</em> the call (usually a prior <span class="svg-mono">MPI_Alltoall</span> of counts)</td><td>Sizes unknown up front; stream until an end-of-stream marker; flow-controlled</td></tr>
+            <tr><td><strong>Who initiates</strong></td><td>Symmetric — everyone calls in unison</td><td>Asymmetric — the <em>consumer</em> pulls; the producer serves on demand</td></tr>
+            <tr><td><strong>Transport</strong></td><td>Rides UCX — OpenMPI's <span class="svg-mono">pml_ucx</span> maps Send/Recv onto UCP tag-matching</td><td>Rides UCX/UCXX via ucx-exchange — <em>the same substrate</em></td></tr>
+            <tr><td><strong>Matching key</strong></td><td><span class="svg-mono">(communicator, source rank, tag)</span></td><td><span class="svg-mono">(hash(taskId), op-type, sequence)</span> — tag-matching, re-created</td></tr>
+            <tr><td><strong>Primitives used</strong></td><td>Two-sided dominant; one-sided RMA &amp; neighborhood collectives exist (MPI-3)</td><td>Tag-matching + active messages; one-sided RMA available — AM is a UCX idea, not classic MPI</td></tr>
+            <tr><td><strong>Collective libs</strong></td><td>MPI itself; UCC / NCCL may sit underneath</td><td>Could use UCC <span class="svg-mono">alltoallv</span> (≈ <span class="svg-mono">MPI_Alltoallv</span>); chooses point-to-point instead</td></tr>
+            <tr><td><strong>Intra-node GPU</strong></td><td>CUDA-aware MPI: shared memory / CUDA-IPC / NVLink</td><td>IntraNodeTransferRegistry (same process) + UCXX CUDA-IPC/NVLink (same node)</td></tr>
+            <tr><td><strong>Off-node GPU</strong></td><td>CUDA-aware MPI + GPUDirect RDMA</td><td>Same — GPUDirect RDMA through UCX</td></tr>
+            <tr><td><strong>Fault model</strong></td><td>Fail-stop; a rank death typically aborts the job (ULFM experimental)</td><td>Built for churn; classic Presto restarts the query; recoverable-exchange softens it</td></tr>
+            <tr><td><strong>Scheduling grain</strong></td><td>Ranks long-lived for the whole job</td><td>Ephemeral per-query tasks; fine-grained splits; driver threads; load balances</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Where they are the same system</h3>
+      <p>Almost everything in §6–§7 is HPC plumbing. The <strong>substrate is literally shared</strong>: OpenMPI moves its messages over UCX, and ucx-exchange moves partitions over UCX — both bottom out in UCP tag-matching, the same rendezvous protocol, the same memory-registration cache, the same GPUDirect RDMA, the same CUDA-IPC/NVLink intra-node paths. ucx-exchange's hand-packed 64-bit tag is <strong>MPI's matching mechanism reinvented</strong> — where MPI matches on <span class="svg-mono">(communicator, rank, tag)</span>, ucx-exchange matches on <span class="svg-mono">(taskHash, op-type, sequence)</span>. If you have written CUDA-aware MPI over InfiniBand, you have already used four-fifths of what this module touches.</p>
+
+      <h3>Where they are opposites</h3>
+      <p>The divergence is entirely in the <strong>control model</strong>, and it is fundamental. MPI's shuffle is <em>bulk-synchronous</em>: a static set of ranks all call one collective, having already exchanged the counts, and the call behaves like a barrier. Velox's shuffle is <em>asynchronous and demand-driven</em>: there is no global call and no barrier; each consumer independently connects to each producer and pulls its share when its own pipeline is ready, with sizes discovered on the fly and back-pressure throttling the producers. A central, asymmetric <strong>coordinator</strong> replaces MPI's symmetric collective plus static communicator — it, not a group consensus, is the source of membership, partitioning, and placement.</p>
+
+      <p>The database chose this for reasons MPI's scientific heritage never forced on it: query data sizes are <em>data-dependent and skewed</em> (you cannot pre-exchange exact counts cheaply), clusters are <em>elastic and multi-tenant</em> (membership shifts), commodity nodes <em>fail routinely</em> (a barrier-style abort is unacceptable), and latency must be <em>hidden by pipelining</em> (a consumer draining early output while producers still compute). MPI's model is superb for static, regular, tightly-coupled simulations; the database's for dynamic, irregular, loosely-coupled analytics. ucx-exchange is the deliberate synthesis of the two.</p>
+
+      <div class="callout cyan">
+        <h4>Why not just call a collective? (UCC and NCCL)</h4>
+        <p>If a collective were wanted, <strong>UCC</strong> — the UCX collectives library, built on the very same UCP — offers an <span class="svg-mono">alltoallv</span> that is the near-exact analogue of <span class="svg-mono">MPI_Alltoallv</span>, and it would slot onto this transport. <strong>NCCL</strong> is the other GPU collective library, but it is tuned for the <em>regular, dense</em> collectives of ML training — ring/tree <span class="svg-mono">allreduce</span> over equal-sized tensors — and fits the <em>ragged, size-unknown</em> alltoallv of a database shuffle poorly. That mismatch is precisely why a bespoke point-to-point exchange wins here: the shuffle is irregular, pipelined, and back-pressured in ways a synchronous collective cannot express. It is also the opening for your own thread of interest — <strong>active messages and one-sided RMA</strong> are strongest exactly where MPI's two-sided collective is weakest, on irregular exchange.</p>
+      </div>
+
+      <div class="insight">The lasting lesson of this whole stack: <b>transport and control model are orthogonal.</b> You can take HPC's transport — RDMA, tag-matching, GPUDirect, NVLink — <em>without</em> taking HPC's bulk-synchronous, static-membership control. ucx-exchange is the existence proof: the fastest plumbing the supercomputing world has, driven by the elastic, demand-driven, fault-tolerant brain of a distributed database.</div>
+    </section>
+
+    <!-- ============================ COLOPHON ============================ -->
+    <div class="colophon">
+      <p><b>COLOPHON.</b> Field Manual No. 15 — <b>Anatomy of a GPU-Native Distributed Shuffle</b>. Grounded in the <b>ucx-exchange</b> module of Velox (<span class="svg-mono">velox/experimental/ucx-exchange</span>): its README, CMake target, and the <span class="svg-mono">UcxExchangeProtocol</span> / <span class="svg-mono">UcxExchangeSource</span> / <span class="svg-mono">UcxExchangeServer</span> / <span class="svg-mono">Communicator</span> / <span class="svg-mono">IntraNodeTransferRegistry</span> headers. Surrounding architecture (Presto coordinator, Prestissimo, Velox operators, UCX/UCXX, cuDF, MPI) reflects each project's stable design.</p>
+      <p>SET IN <b>Source Serif 4</b> (text), <b>Instrument Sans</b> (interface), and <b>JetBrains Mono</b> (code). Dark by default; use the <b>Light mode</b> toggle in the sidebar. Self-contained — no external assets beyond fonts, no tracking, no stored state.</p>
+      <p class="pills"><span class="pill cu">control plane = coordinator</span> <span class="pill cy">data plane = Velox · ucx-exchange · UCX</span> <span class="pill sg">compute = cuDF</span> <span class="pill cu">shuffle = consumer-pull</span> <span class="pill cy">transport = shared with MPI</span></p>
+    </div>
+
+  </main>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ---------- Theme toggle (in-memory only) ---------- */
+  var root = document.documentElement;
+  var themeBtn = document.getElementById('themeBtn');
+  var icon = document.getElementById('themeIcon');
+  var label = document.getElementById('themeLabel');
+  function paintToggle(theme) {
+    if (theme === 'dark') { icon.textContent = '◐'; label.textContent = 'Light mode'; }
+    else { icon.textContent = '◑'; label.textContent = 'Dark mode'; }
+  }
+  if (themeBtn) {
+    paintToggle(root.getAttribute('data-theme') || 'dark');
+    themeBtn.addEventListener('click', function () {
+      var next = (root.getAttribute('data-theme') === 'dark') ? 'light' : 'dark';
+      root.setAttribute('data-theme', next);
+      paintToggle(next);
+    });
+  }
+
+  /* ---------- Mobile nav (sidebar + scrim) ---------- */
+  var menuBtn = document.getElementById('menuBtn');
+  var sidebar = document.getElementById('sidebar');
+  var scrim   = document.getElementById('scrim');
+  function closeNav() { if (sidebar) sidebar.classList.remove('open'); if (scrim) scrim.classList.remove('show'); }
+  function openNav()  { if (sidebar) sidebar.classList.add('open');    if (scrim) scrim.classList.add('show'); }
+  if (menuBtn) menuBtn.addEventListener('click', function () {
+    (sidebar && sidebar.classList.contains('open')) ? closeNav() : openNav();
+  });
+  if (scrim) scrim.addEventListener('click', closeNav);
+
+  /* ---------- Scrollspy (highlight active TOC entry) ---------- */
+  var links = Array.prototype.slice.call(document.querySelectorAll('nav.toc a'));
+  var linkFor = {};
+  links.forEach(function (a) {
+    var id = (a.getAttribute('href') || '').replace('#', '');
+    if (id) linkFor[id] = a;
+    a.addEventListener('click', closeNav); // tapping a link on mobile closes the drawer
+  });
+  var sections = Array.prototype.slice.call(document.querySelectorAll('section.chapter'));
+  if ('IntersectionObserver' in window && sections.length) {
+    var obs = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) {
+          var a = linkFor[e.target.id];
+          if (a) { links.forEach(function (l) { l.classList.remove('active'); }); a.classList.add('active'); }
+        }
+      });
+    }, { rootMargin: '-18% 0px -72% 0px', threshold: 0 });
+    sections.forEach(function (s) { obs.observe(s); });
+  }
+
+  /* ---------- Copy buttons on code blocks ---------- */
+  document.querySelectorAll('.copy-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var block = btn.closest('.code');
+      var pre = block ? block.querySelector('pre') : null;
+      var text = pre ? pre.innerText : '';
+      function ok() {
+        var original = btn.textContent;
+        btn.textContent = 'Copied'; btn.classList.add('done');
+        setTimeout(function () { btn.textContent = original; btn.classList.remove('done'); }, 1600);
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(ok).catch(fallback);
+      } else { fallback(); }
+      function fallback() {
+        try {
+          var ta = document.createElement('textarea');
+          ta.value = text; ta.setAttribute('readonly', '');
+          ta.style.position = 'absolute'; ta.style.left = '-9999px';
+          document.body.appendChild(ta); ta.select();
+          document.execCommand('copy'); document.body.removeChild(ta); ok();
+        } catch (err) { /* clipboard unavailable; ignore silently */ }
+      }
+    });
+  });
+})();
+</script>
+</body>
+</html>
