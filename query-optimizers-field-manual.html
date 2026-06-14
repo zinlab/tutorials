@@ -285,6 +285,11 @@ footer b{color:var(--ink-soft)}
   <div class="toc-label">Part V · Synthesis</div>
   <a href="#systems"><span class="n">17</span>A tour of real systems</a>
   <a href="#synthesis"><span class="n">18</span>The whole machine</a>
+  <div class="toc-label">Appendix · Operator Atlas</div>
+  <a href="#atlas-scans"><span class="n">A1</span>Access methods (scans)</a>
+  <a href="#atlas-joins"><span class="n">A2</span>Join algorithms</a>
+  <a href="#atlas-joinshape"><span class="n">A3</span>Join shape &amp; distribution</a>
+  <a href="#atlas-agg"><span class="n">A4</span>Aggregation</a>
 </nav>
 
 <main>
@@ -1327,6 +1332,662 @@ sel(col = v)  =  (1 - Σ mcv_freq - null_frac) / (n_distinct - n_mcv)</pre></div
 </div>
 </section>
 
+<div class="part-banner">Appendix — The Operator Atlas</div>
+
+<section id="atlas-scans">
+<div class="sec-head"><div class="snum">A1</div><h2>Access methods — how a table is read</h2></div>
+<p class="lead">Everything in Parts I&#8211;V assumed the plan was built from a small vocabulary of physical operators. This appendix draws each one. We start at the leaves of every plan: the <strong>access methods</strong> — the ways an engine turns "I need rows from this table" into actual page reads. The choice among them is pure selectivity arithmetic (§04): how many rows qualify, and how scattered are they.</p>
+
+<div class="box mech">
+<div class="tag">How to read these figures</div>
+<p>Neutral boxes are <strong>heap pages</strong> (the table's actual storage). Cyan structures are <strong>indexes / hash tables</strong>. Sage marks <strong>rows that survive</strong> and reach the output; rust marks <strong>work discarded</strong>. Copper arrows are the operator's <strong>hot path</strong>. Each figure ends with the rule the optimizer uses to choose it.</p>
+</div>
+
+<h3>Sequential scan</h3>
+<p>Read every page of the heap in physical order and apply the predicate to each tuple. No index, no random I/O — just one long streaming sweep. Its cost is <span class="mono">N_pages</span> sequential reads <em>regardless of how many rows actually qualify</em>, which is exactly why it wins when the predicate is unselective (most rows pass) or the table is small enough that index bookkeeping isn't worth it. On a columnar/GPU engine this is the native, friendliest pattern: a coalesced linear read of a column (§13).</p>
+
+<figure>
+<div class="frame">
+<svg viewBox="0 0 720 196" role="img" aria-label="Sequential scan reading all heap pages in order">
+  <defs><marker id="xa1" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L7,4 L0,8 z" fill="var(--muted)"/></marker>
+  <marker id="xa1s" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L7,4 L0,8 z" fill="var(--sage-deep)"/></marker></defs>
+  <text x="30" y="22" class="svg-title">heap file — read in physical order, page by page</text>
+  <g>
+    <rect x="30" y="40" width="72" height="74" rx="5" fill="var(--panel-2)" stroke="var(--line-strong)"/>
+    <rect x="110" y="40" width="72" height="74" rx="5" fill="var(--panel-2)" stroke="var(--line-strong)"/>
+    <rect x="190" y="40" width="72" height="74" rx="5" fill="var(--panel-2)" stroke="var(--line-strong)"/>
+    <rect x="270" y="40" width="72" height="74" rx="5" fill="var(--panel-2)" stroke="var(--line-strong)"/>
+    <rect x="350" y="40" width="72" height="74" rx="5" fill="var(--panel-2)" stroke="var(--line-strong)"/>
+    <rect x="430" y="40" width="72" height="74" rx="5" fill="var(--panel-2)" stroke="var(--line-strong)"/>
+  </g>
+  <g class="svg-mono svg-faint" text-anchor="middle">
+    <text x="66" y="56">P0</text><text x="146" y="56">P1</text><text x="226" y="56">P2</text><text x="306" y="56">P3</text><text x="386" y="56">P4</text><text x="466" y="56">P5</text>
+  </g>
+  <g stroke="var(--line)" stroke-width="1">
+    <line x1="40" y1="72" x2="92" y2="72"/><line x1="40" y1="90" x2="92" y2="90"/>
+    <line x1="120" y1="72" x2="172" y2="72"/><line x1="120" y1="90" x2="172" y2="90"/>
+    <line x1="200" y1="72" x2="252" y2="72"/><line x1="200" y1="90" x2="252" y2="90"/>
+    <line x1="280" y1="72" x2="332" y2="72"/><line x1="280" y1="90" x2="332" y2="90"/>
+    <line x1="360" y1="72" x2="412" y2="72"/><line x1="360" y1="90" x2="412" y2="90"/>
+    <line x1="440" y1="72" x2="492" y2="72"/><line x1="440" y1="90" x2="492" y2="90"/>
+  </g>
+  <line x1="30" y1="134" x2="498" y2="134" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="2 3" marker-end="url(#xa1)"/>
+  <text x="264" y="152" text-anchor="middle" class="svg-mono svg-faint">scan ▸ touch every page · cost ≈ N_pages sequential I/O</text>
+  <line x1="500" y1="77" x2="556" y2="77" stroke="var(--sage-deep)" stroke-width="1.4" marker-end="url(#xa1s)"/>
+  <text x="528" y="69" text-anchor="middle" class="svg-mono svg-faint">σ</text>
+  <rect x="560" y="44" width="132" height="66" rx="6" fill="color-mix(in srgb,var(--sage) 12%,var(--panel))" stroke="var(--sage-deep)"/>
+  <text x="626" y="62" text-anchor="middle" class="svg-mono" fill="var(--sage-deep)">rows passing σ</text>
+  <g stroke="var(--sage-deep)" stroke-width="1"><line x1="572" y1="80" x2="680" y2="80"/><line x1="572" y1="96" x2="680" y2="96"/></g>
+</svg>
+</div>
+<figcaption><b>FIG A1</b>Sequential scan. The whole heap streams through the predicate <span class="mono">σ</span> in storage order; survivors flow to the output. Cost is fixed by table size, not by selectivity — so the optimizer picks it precisely when a large fraction of rows qualify (an index would just add random I/O on top of reading most of the table anyway) or when the table is too small to bother indexing.</figcaption>
+</figure>
+
+<h3>Index scan</h3>
+<p>Descend a B-tree on the predicate column to the qualifying key(s), then — for each match — follow the index entry's pointer to do <em>one random heap fetch</em> to retrieve the full row. The cost is the tree height (a few I/Os) plus one random read per matching row. That random-per-match term is the whole story: at low selectivity (a handful of rows) it crushes the sequential scan; as matches grow, random I/O piles up until, somewhere around a few percent of the table, a sequential scan that reads everything once becomes cheaper. This crossover is the optimizer's single most common scan decision.</p>
+
+<figure>
+<div class="frame">
+<svg viewBox="0 0 720 234" role="img" aria-label="Index scan: B-tree descent then random heap fetches">
+  <defs><marker id="xa2" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L7,4 L0,8 z" fill="var(--copper)"/></marker>
+  <marker id="xa2c" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto"><path d="M0,0 L6,3.5 L0,7 z" fill="var(--cyan-deep)"/></marker></defs>
+  <text x="30" y="20" class="svg-title">B-tree index</text>
+  <text x="470" y="20" class="svg-title">heap (scattered)</text>
+  <!-- tree -->
+  <rect x="92" y="32" width="84" height="24" rx="4" fill="color-mix(in srgb,var(--cyan) 12%,var(--panel))" stroke="var(--cyan-deep)"/>
+  <text x="134" y="48" text-anchor="middle" class="svg-mono" fill="var(--cyan-deep)">root</text>
+  <rect x="34" y="86" width="78" height="24" rx="4" fill="color-mix(in srgb,var(--cyan) 8%,var(--panel))" stroke="var(--cyan-deep)"/>
+  <rect x="158" y="86" width="78" height="24" rx="4" fill="color-mix(in srgb,var(--cyan) 8%,var(--panel))" stroke="var(--cyan-deep)"/>
+  <text x="73" y="102" text-anchor="middle" class="svg-mono svg-faint">≤ m</text>
+  <text x="197" y="102" text-anchor="middle" class="svg-mono svg-faint">&gt; m</text>
+  <line x1="120" y1="56" x2="73" y2="86" stroke="var(--cyan-deep)" stroke-width="1"/>
+  <line x1="148" y1="56" x2="197" y2="86" stroke="var(--cyan-deep)" stroke-width="1"/>
+  <g>
+    <rect x="22" y="140" width="58" height="40" rx="4" fill="var(--panel-2)" stroke="var(--cyan-deep)"/>
+    <rect x="88" y="140" width="58" height="40" rx="4" fill="var(--panel-2)" stroke="var(--cyan-deep)"/>
+    <rect x="158" y="140" width="58" height="40" rx="4" fill="var(--panel-2)" stroke="var(--cyan-deep)"/>
+  </g>
+  <text x="120" y="132" text-anchor="middle" class="svg-mono svg-faint">leaves: key → ptr</text>
+  <g class="svg-mono" fill="var(--ink)" text-anchor="middle" font-size="10"><text x="51" y="164">k7•</text><text x="117" y="164">k9•</text><text x="187" y="164">k4•</text></g>
+  <line x1="73" y1="110" x2="51" y2="140" stroke="var(--cyan-deep)" stroke-width="1"/>
+  <line x1="197" y1="110" x2="117" y2="140" stroke="var(--cyan-deep)" stroke-width="1"/>
+  <line x1="197" y1="110" x2="187" y2="140" stroke="var(--cyan-deep)" stroke-width="1"/>
+  <text x="134" y="206" text-anchor="middle" class="svg-mono svg-faint">descend h levels → qualifying keys</text>
+  <!-- heap scattered -->
+  <g>
+    <rect x="470" y="34" width="70" height="44" rx="5" fill="var(--panel-2)" stroke="var(--line-strong)"/>
+    <rect x="612" y="34" width="70" height="44" rx="5" fill="var(--panel-2)" stroke="var(--line-strong)"/>
+    <rect x="540" y="96" width="70" height="44" rx="5" fill="var(--panel-2)" stroke="var(--line-strong)"/>
+    <rect x="470" y="158" width="70" height="44" rx="5" fill="var(--panel-2)" stroke="var(--line-strong)"/>
+    <rect x="612" y="158" width="70" height="44" rx="5" fill="var(--panel-2)" stroke="var(--line-strong)"/>
+  </g>
+  <g class="svg-mono svg-faint" text-anchor="middle" font-size="10"><text x="505" y="50">P22</text><text x="647" y="50">P3</text><text x="575" y="112">P14</text><text x="505" y="174">P9</text><text x="647" y="174">P31</text></g>
+  <!-- random fetch arrows -->
+  <path d="M80,160 C 300,150 380,60 468,56" fill="none" stroke="var(--copper)" stroke-width="1.3" marker-end="url(#xa2)"/>
+  <path d="M146,160 C 320,170 430,118 538,118" fill="none" stroke="var(--copper)" stroke-width="1.3" marker-end="url(#xa2)"/>
+  <path d="M216,168 C 340,210 400,182 468,180" fill="none" stroke="var(--copper)" stroke-width="1.3" marker-end="url(#xa2)"/>
+  <text x="360" y="226" text-anchor="middle" class="svg-mono" fill="var(--copper)">1 random heap I/O per matching row</text>
+</svg>
+</div>
+<figcaption><b>FIG A2</b>Index scan. The tree narrows the search to matching keys cheaply; the expense is the copper arrows — one <em>random</em> heap fetch per match, into physically scattered pages. Brilliant at low selectivity, it degrades as matches multiply: past a crossover of a few percent of the table, the accumulated random I/O exceeds the cost of a sequential scan that reads every page once.</figcaption>
+</figure>
+
+<h3>Index-only scan</h3>
+<p>The optimization that removes the random heap fetch entirely. If every column the query needs is already stored in the index (a <em>covering</em> index), the answer can be assembled from the index leaves alone — the heap is never touched. The one wrinkle is MVCC visibility: the index doesn't record whether a row version is visible to your transaction, so the engine consults a compact <strong>visibility map</strong>; if a page is marked all-visible, it's skipped, and only for the rare not-all-visible page does it fall back to a heap fetch to check. This is why adding the one extra column a query selects can flip a plan from "index scan + thousands of random fetches" to "index-only," a routine and dramatic win.</p>
+
+<figure>
+<div class="frame">
+<svg viewBox="0 0 720 226" role="img" aria-label="Index-only scan: answered from a covering index, heap skipped">
+  <defs><marker id="xa3" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L7,4 L0,8 z" fill="var(--sage-deep)"/></marker>
+  <marker id="xa3r" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto"><path d="M0,0 L6,3.5 L0,7 z" fill="var(--rust)"/></marker></defs>
+  <text x="30" y="20" class="svg-title">covering index — leaves hold (key, needed cols)</text>
+  <rect x="34" y="36" width="300" height="58" rx="6" fill="color-mix(in srgb,var(--cyan) 10%,var(--panel))" stroke="var(--cyan-deep)"/>
+  <g class="svg-mono" fill="var(--ink)" font-size="11"><text x="48" y="60">(k7, region=W, rev=120)</text><text x="48" y="82">(k9, region=E, rev=▸90)</text></g>
+  <text x="184" y="112" text-anchor="middle" class="svg-mono svg-faint">all selected columns present in the index</text>
+  <!-- visibility map gate -->
+  <rect x="372" y="40" width="96" height="50" rx="6" fill="var(--panel-2)" stroke="var(--copper)"/>
+  <text x="420" y="58" text-anchor="middle" class="svg-mono" fill="var(--copper)" font-size="10">visibility</text>
+  <text x="420" y="72" text-anchor="middle" class="svg-mono" fill="var(--copper)" font-size="10">map</text>
+  <line x1="334" y1="65" x2="370" y2="65" stroke="var(--muted)" stroke-width="1.2"/>
+  <!-- all-visible: straight to output -->
+  <path d="M468,58 L556,58" fill="none" stroke="var(--sage-deep)" stroke-width="1.5" marker-end="url(#xa3)"/>
+  <text x="512" y="50" text-anchor="middle" class="svg-mono svg-faint" font-size="10">all-visible ✓ skip heap</text>
+  <rect x="560" y="34" width="132" height="52" rx="6" fill="color-mix(in srgb,var(--sage) 12%,var(--panel))" stroke="var(--sage-deep)"/>
+  <text x="626" y="64" text-anchor="middle" class="svg-mono" fill="var(--sage-deep)">output rows</text>
+  <!-- rare fallback to heap -->
+  <path d="M420,90 L420,150" fill="none" stroke="var(--rust)" stroke-width="1.2" stroke-dasharray="3 3" marker-end="url(#xa3r)"/>
+  <text x="430" y="124" class="svg-mono" fill="var(--rust)" font-size="10">rare: page not all-visible</text>
+  <rect x="300" y="156" width="240" height="50" rx="6" fill="none" stroke="var(--faint)" stroke-dasharray="4 4"/>
+  <text x="420" y="186" text-anchor="middle" class="svg-mono svg-faint">heap — visited only on fallback</text>
+</svg>
+</div>
+<figcaption><b>FIG A3</b>Index-only scan. When the index <em>covers</em> the query, rows are emitted straight from the leaves (sage), and the heap (dashed, faint) is bypassed. The visibility map is the only reason the heap is ever consulted — and only for pages it flags as possibly holding non-visible tuples. Removing the per-match random fetch is what makes this the fastest read path when it applies.</figcaption>
+</figure>
+
+<h3>Bitmap scan</h3>
+<p>The hybrid that captures the middle of the selectivity range. Rather than fetch the heap one row at a time as it walks the index (random, and a page can be hit repeatedly), a <strong>bitmap index scan</strong> first materializes an in-memory bitmap of <em>which heap pages/tuples</em> qualify. Multiple indexes can be combined with bitmap <span class="mono">AND</span>/<span class="mono">OR</span> before touching the heap at all. Then a <strong>bitmap heap scan</strong> walks the heap <em>in physical page order</em>, visiting each flagged page exactly once. The result reads like a partial sequential scan: it recovers I/O ordering and de-duplicates page visits, bridging the gap between a plain index scan (great at very low selectivity) and a sequential scan (great at high selectivity).</p>
+
+<figure>
+<div class="frame">
+<svg viewBox="0 0 720 248" role="img" aria-label="Bitmap scan: per-index bitmaps combined, then ordered heap sweep">
+  <defs><marker id="xa4" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L7,4 L0,8 z" fill="var(--cyan-deep)"/></marker>
+  <marker id="xa4o" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L7,4 L0,8 z" fill="var(--copper)"/></marker></defs>
+  <!-- two indexes to bitmaps -->
+  <rect x="24" y="30" width="116" height="30" rx="5" fill="color-mix(in srgb,var(--cyan) 10%,var(--panel))" stroke="var(--cyan-deep)"/>
+  <text x="82" y="50" text-anchor="middle" class="svg-mono" fill="var(--cyan-deep)" font-size="11">idx: order_date</text>
+  <rect x="24" y="118" width="116" height="30" rx="5" fill="color-mix(in srgb,var(--cyan) 10%,var(--panel))" stroke="var(--cyan-deep)"/>
+  <text x="82" y="138" text-anchor="middle" class="svg-mono" fill="var(--cyan-deep)" font-size="11">idx: segment</text>
+  <!-- bitmap A -->
+  <g>
+    <text x="160" y="44" class="svg-mono svg-faint" font-size="10">bitmap A</text>
+    <g transform="translate(160,52)">
+      <rect width="22" height="18" fill="color-mix(in srgb,var(--cyan) 35%,var(--panel))" stroke="var(--line-strong)"/><rect x="22" width="22" height="18" fill="var(--panel-2)" stroke="var(--line-strong)"/><rect x="44" width="22" height="18" fill="color-mix(in srgb,var(--cyan) 35%,var(--panel))" stroke="var(--line-strong)"/><rect x="66" width="22" height="18" fill="color-mix(in srgb,var(--cyan) 35%,var(--panel))" stroke="var(--line-strong)"/><rect x="88" width="22" height="18" fill="var(--panel-2)" stroke="var(--line-strong)"/>
+      <g class="svg-mono" fill="var(--ink)" font-size="10" text-anchor="middle"><text x="11" y="13">1</text><text x="33" y="13">0</text><text x="55" y="13">1</text><text x="77" y="13">1</text><text x="99" y="13">0</text></g>
+    </g>
+  </g>
+  <!-- bitmap B -->
+  <g>
+    <text x="160" y="116" class="svg-mono svg-faint" font-size="10">bitmap B</text>
+    <g transform="translate(160,124)">
+      <rect width="22" height="18" fill="color-mix(in srgb,var(--cyan) 35%,var(--panel))" stroke="var(--line-strong)"/><rect x="22" width="22" height="18" fill="color-mix(in srgb,var(--cyan) 35%,var(--panel))" stroke="var(--line-strong)"/><rect x="44" width="22" height="18" fill="var(--panel-2)" stroke="var(--line-strong)"/><rect x="66" width="22" height="18" fill="color-mix(in srgb,var(--cyan) 35%,var(--panel))" stroke="var(--line-strong)"/><rect x="88" width="22" height="18" fill="var(--panel-2)" stroke="var(--line-strong)"/>
+      <g class="svg-mono" fill="var(--ink)" font-size="10" text-anchor="middle"><text x="11" y="13">1</text><text x="33" y="13">1</text><text x="55" y="13">0</text><text x="77" y="13">1</text><text x="99" y="13">0</text></g>
+    </g>
+  </g>
+  <line x1="140" y1="45" x2="158" y2="58" stroke="var(--cyan-deep)" stroke-width="1.1" marker-end="url(#xa4)"/>
+  <line x1="140" y1="133" x2="158" y2="128" stroke="var(--cyan-deep)" stroke-width="1.1" marker-end="url(#xa4)"/>
+  <!-- AND gate -->
+  <circle cx="320" cy="98" r="22" fill="var(--panel-2)" stroke="var(--copper)"/>
+  <text x="320" y="102" text-anchor="middle" class="svg-mono" fill="var(--copper)" font-size="11">AND</text>
+  <line x1="272" y1="61" x2="300" y2="90" stroke="var(--muted)" stroke-width="1.1"/>
+  <line x1="272" y1="133" x2="300" y2="106" stroke="var(--muted)" stroke-width="1.1"/>
+  <!-- combined bitmap -->
+  <text x="372" y="92" class="svg-mono svg-faint" font-size="10">combined</text>
+  <g transform="translate(372,98)">
+    <rect width="22" height="18" fill="color-mix(in srgb,var(--copper) 38%,var(--panel))" stroke="var(--line-strong)"/><rect x="22" width="22" height="18" fill="var(--panel-2)" stroke="var(--line-strong)"/><rect x="44" width="22" height="18" fill="var(--panel-2)" stroke="var(--line-strong)"/><rect x="66" width="22" height="18" fill="color-mix(in srgb,var(--copper) 38%,var(--panel))" stroke="var(--line-strong)"/><rect x="88" width="22" height="18" fill="var(--panel-2)" stroke="var(--line-strong)"/>
+    <g class="svg-mono" fill="var(--ink)" font-size="10" text-anchor="middle"><text x="11" y="13">1</text><text x="33" y="13">0</text><text x="55" y="13">0</text><text x="77" y="13">1</text><text x="99" y="13">0</text></g>
+  </g>
+  <line x1="342" y1="98" x2="368" y2="103" stroke="var(--copper)" stroke-width="1.2" marker-end="url(#xa4o)"/>
+  <!-- heap ordered sweep -->
+  <text x="30" y="196" class="svg-title">bitmap heap scan — physical order, each flagged page once</text>
+  <g>
+    <rect x="30" y="206" width="70" height="34" rx="4" fill="color-mix(in srgb,var(--copper) 14%,var(--panel))" stroke="var(--copper)"/>
+    <rect x="108" y="206" width="70" height="34" rx="4" fill="var(--panel-2)" stroke="var(--line-strong)"/>
+    <rect x="186" y="206" width="70" height="34" rx="4" fill="var(--panel-2)" stroke="var(--line-strong)"/>
+    <rect x="264" y="206" width="70" height="34" rx="4" fill="color-mix(in srgb,var(--copper) 14%,var(--panel))" stroke="var(--copper)"/>
+    <rect x="342" y="206" width="70" height="34" rx="4" fill="var(--panel-2)" stroke="var(--line-strong)"/>
+  </g>
+  <g class="svg-mono svg-faint" font-size="10" text-anchor="middle"><text x="65" y="226">P0 ✓</text><text x="143" y="226">P1</text><text x="221" y="226">P2</text><text x="299" y="226">P3 ✓</text><text x="377" y="226">P4</text></g>
+  <line x1="430" y1="223" x2="690" y2="223" stroke="var(--copper)" stroke-width="1.4" marker-end="url(#xa4o)"/>
+  <text x="560" y="216" text-anchor="middle" class="svg-mono svg-faint" font-size="10">sweep ▸ no random, no duplicates</text>
+  <line x1="427" y1="115" x2="427" y2="204" stroke="var(--copper)" stroke-width="1.1" stroke-dasharray="3 3"/>
+</svg>
+</div>
+<figcaption><b>FIG A4</b>Bitmap scan. Each index produces a page/tuple bitmap; bitmaps are combined with <span class="mono">AND</span>/<span class="mono">OR</span> <em>before</em> any heap access (so multi-predicate queries use several indexes at once); then the heap is swept in physical order, hitting each flagged page exactly once. It earns its place across the broad middle of the selectivity range — too many matches for a clean index scan, too few to justify reading the whole table.</figcaption>
+</figure>
+</section>
+
+<section id="atlas-joins">
+<div class="sec-head"><div class="snum">A2</div><h2>Join algorithms — the family in pictures</h2></div>
+<p class="lead">The join is where the optimizer spends most of its intelligence (§06&#8211;07), and the physical-operator choice among these six is the most consequential single decision in most plans. They divide cleanly: <strong>nested-loop</strong> family (cheap to start, quadratic if misused), <strong>sort-merge</strong> (pays for order, then linear), and the <strong>hash</strong> family (linear, memory-hungry, with graceful fallbacks when memory runs out). Watch for the build/probe asymmetry from FIG 07 — it reappears everywhere and becomes the entire design constraint on the GPU (§14).</p>
+
+<h3>Nested-loop join (and the block variant)</h3>
+<p>The definitional join: for each row of the outer input, scan the inner input for matches. Naively that is <span class="mono">|R| × |S|</span> work — fine when the inner is tiny, ruinous otherwise. The standard refinement is the <strong>block (buffered) nested-loop</strong>: buffer a chunk of <span class="mono">B</span> outer rows in memory and scan the inner once <em>per block</em> rather than per row, cutting passes over the inner by a factor of <span class="mono">B</span>. Nested-loop is also the only general option for non-equi join conditions (<span class="mono">&lt;</span>, ranges, inequalities), where hash and merge can't apply.</p>
+
+<figure>
+<div class="frame">
+<svg viewBox="0 0 720 244" role="img" aria-label="Nested-loop join naive versus block-buffered">
+  <defs><marker id="xa5" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto"><path d="M0,0 L6,3.5 L0,7 z" fill="var(--copper)"/></marker>
+  <marker id="xa5f" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto"><path d="M0,0 L6,3.5 L0,7 z" fill="var(--faint)"/></marker></defs>
+  <text x="30" y="20" class="svg-title">naïve · row-at-a-time</text>
+  <!-- outer R -->
+  <text x="60" y="44" text-anchor="middle" class="svg-mono svg-faint" font-size="10">outer R</text>
+  <g><rect x="34" y="52" width="52" height="22" rx="3" fill="color-mix(in srgb,var(--copper) 14%,var(--panel))" stroke="var(--copper)"/><rect x="34" y="80" width="52" height="22" rx="3" fill="var(--panel-2)" stroke="var(--line-strong)"/><rect x="34" y="108" width="52" height="22" rx="3" fill="var(--panel-2)" stroke="var(--line-strong)"/><rect x="34" y="136" width="52" height="22" rx="3" fill="var(--panel-2)" stroke="var(--line-strong)"/></g>
+  <text x="60" y="67" text-anchor="middle" class="svg-mono" fill="var(--ink)" font-size="10">r0</text>
+  <g class="svg-mono svg-faint" font-size="10" text-anchor="middle"><text x="60" y="95">r1</text><text x="60" y="123">r2</text><text x="60" y="151">r3</text></g>
+  <!-- inner S -->
+  <text x="170" y="44" text-anchor="middle" class="svg-mono svg-faint" font-size="10">inner S (scanned fully each r)</text>
+  <g><rect x="144" y="52" width="52" height="22" rx="3" fill="var(--panel-2)" stroke="var(--line-strong)"/><rect x="144" y="80" width="52" height="22" rx="3" fill="var(--panel-2)" stroke="var(--line-strong)"/><rect x="144" y="108" width="52" height="22" rx="3" fill="var(--panel-2)" stroke="var(--line-strong)"/><rect x="144" y="136" width="52" height="22" rx="3" fill="var(--panel-2)" stroke="var(--line-strong)"/></g>
+  <g class="svg-mono svg-faint" font-size="10" text-anchor="middle"><text x="170" y="67">s0</text><text x="170" y="95">s1</text><text x="170" y="123">s2</text><text x="170" y="151">s3</text></g>
+  <g stroke="var(--copper)" stroke-width="1.1"><line x1="86" y1="63" x2="142" y2="63" marker-end="url(#xa5)"/><line x1="86" y1="63" x2="142" y2="91" marker-end="url(#xa5)"/><line x1="86" y1="63" x2="142" y2="119" marker-end="url(#xa5)"/><line x1="86" y1="63" x2="142" y2="147" marker-end="url(#xa5)"/></g>
+  <g stroke="var(--faint)" stroke-width="0.8" stroke-dasharray="2 2"><line x1="86" y1="91" x2="142" y2="63"/><line x1="86" y1="119" x2="142" y2="119"/><line x1="86" y1="147" x2="142" y2="147"/></g>
+  <text x="120" y="184" text-anchor="middle" class="svg-mono" fill="var(--copper)" font-size="10">for each r ∈ R: scan all S</text>
+  <text x="120" y="202" text-anchor="middle" class="svg-mono svg-faint" font-size="11">cost ≈ |R| × |S|</text>
+  <!-- divider -->
+  <line x1="372" y1="28" x2="372" y2="216" stroke="var(--line)" stroke-width="1"/>
+  <!-- block variant -->
+  <text x="410" y="20" class="svg-title">block · buffered</text>
+  <text x="470" y="44" text-anchor="middle" class="svg-mono svg-faint" font-size="10">outer block (B rows in RAM)</text>
+  <rect x="404" y="52" width="132" height="74" rx="5" fill="color-mix(in srgb,var(--copper) 12%,var(--panel))" stroke="var(--copper)"/>
+  <g class="svg-mono" fill="var(--ink)" font-size="10" text-anchor="middle"><text x="470" y="72">r0  r1</text><text x="470" y="92">r2  r3</text><text x="470" y="112">r4  r5</text></g>
+  <text x="620" y="44" text-anchor="middle" class="svg-mono svg-faint" font-size="10">inner S</text>
+  <g><rect x="594" y="52" width="52" height="22" rx="3" fill="var(--panel-2)" stroke="var(--line-strong)"/><rect x="594" y="80" width="52" height="22" rx="3" fill="var(--panel-2)" stroke="var(--line-strong)"/><rect x="594" y="108" width="52" height="22" rx="3" fill="var(--panel-2)" stroke="var(--line-strong)"/></g>
+  <g class="svg-mono svg-faint" font-size="10" text-anchor="middle"><text x="620" y="67">s0</text><text x="620" y="95">s1</text><text x="620" y="123">s2</text></g>
+  <line x1="536" y1="89" x2="592" y2="89" stroke="var(--copper)" stroke-width="1.4" marker-end="url(#xa5)"/>
+  <text x="565" y="82" text-anchor="middle" class="svg-mono svg-faint" font-size="9">once</text>
+  <text x="500" y="184" text-anchor="middle" class="svg-mono" fill="var(--copper)" font-size="10">scan S once per block, not per row</text>
+  <text x="500" y="202" text-anchor="middle" class="svg-mono svg-faint" font-size="11">cost ≈ ⌈|R|/B⌉ × |S|</text>
+</svg>
+</div>
+<figcaption><b>FIG A5</b>Nested-loop join. Left: the naïve form re-scans the entire inner for every outer row — <span class="mono">|R|×|S|</span>. Right: buffering <span class="mono">B</span> outer rows lets one inner scan serve a whole block, dividing the passes over <span class="mono">S</span> by <span class="mono">B</span>. The optimizer reaches for nested-loop when the inner is tiny, when an inequality/non-equi predicate rules out hash and merge, or — in its indexed form below — when the inner has a selective index.</figcaption>
+</figure>
+
+<h3>Index nested-loop join</h3>
+<p>Nested-loop's redemption, and frequently the fastest join when the outer side is small. Replace the inner scan with an <em>index probe</em>: for each outer row, look up the join key in an index on the inner relation and fetch only the matching rows. Cost collapses from <span class="mono">|R|×|S|</span> to roughly <span class="mono">|R| × (h + matches)</span> — a handful of I/Os per outer row. This is the natural partner of a highly selective outer (after a restrictive filter, §04) joined to a large, well-indexed inner: the optimizer probes the big table a few times rather than scanning or hashing all of it.</p>
+
+<figure>
+<div class="frame">
+<svg viewBox="0 0 720 210" role="img" aria-label="Index nested-loop join: per outer row, probe an index on the inner">
+  <defs><marker id="xa6" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L7,4 L0,8 z" fill="var(--copper)"/></marker></defs>
+  <text x="55" y="24" text-anchor="middle" class="svg-mono svg-faint">outer R (small)</text>
+  <g><rect x="28" y="36" width="56" height="24" rx="3" fill="color-mix(in srgb,var(--copper) 12%,var(--panel))" stroke="var(--copper)"/><rect x="28" y="70" width="56" height="24" rx="3" fill="color-mix(in srgb,var(--copper) 12%,var(--panel))" stroke="var(--copper)"/><rect x="28" y="104" width="56" height="24" rx="3" fill="color-mix(in srgb,var(--copper) 12%,var(--panel))" stroke="var(--copper)"/></g>
+  <g class="svg-mono" fill="var(--ink)" font-size="10" text-anchor="middle"><text x="56" y="52">k=7</text><text x="56" y="86">k=4</text><text x="56" y="120">k=9</text></g>
+  <!-- index on S -->
+  <text x="320" y="24" text-anchor="middle" class="svg-mono svg-faint">index on S.key</text>
+  <rect x="240" y="34" width="84" height="22" rx="4" fill="color-mix(in srgb,var(--cyan) 12%,var(--panel))" stroke="var(--cyan-deep)"/>
+  <text x="282" y="49" text-anchor="middle" class="svg-mono" fill="var(--cyan-deep)" font-size="10">root</text>
+  <g><rect x="220" y="78" width="56" height="22" rx="3" fill="var(--panel-2)" stroke="var(--cyan-deep)"/><rect x="288" y="78" width="56" height="22" rx="3" fill="var(--panel-2)" stroke="var(--cyan-deep)"/><rect x="356" y="78" width="56" height="22" rx="3" fill="var(--panel-2)" stroke="var(--cyan-deep)"/></g>
+  <line x1="266" y1="56" x2="248" y2="78" stroke="var(--cyan-deep)" stroke-width="0.9"/><line x1="282" y1="56" x2="316" y2="78" stroke="var(--cyan-deep)" stroke-width="0.9"/><line x1="298" y1="56" x2="384" y2="78" stroke="var(--cyan-deep)" stroke-width="0.9"/>
+  <g class="svg-mono svg-faint" font-size="9" text-anchor="middle"><text x="248" y="93">k4</text><text x="316" y="93">k7</text><text x="384" y="93">k9</text></g>
+  <!-- probe arrows -->
+  <path d="M84,48 C 150,48 200,44 238,45" fill="none" stroke="var(--copper)" stroke-width="1.2" marker-end="url(#xa6)"/>
+  <path d="M84,82 C 150,82 190,86 218,88" fill="none" stroke="var(--copper)" stroke-width="1.2" marker-end="url(#xa6)"/>
+  <path d="M84,116 C 200,116 320,104 354,98" fill="none" stroke="var(--copper)" stroke-width="1.2" marker-end="url(#xa6)"/>
+  <!-- matched rows out -->
+  <text x="560" y="24" text-anchor="middle" class="svg-mono svg-faint">matched S rows</text>
+  <rect x="470" y="34" width="180" height="92" rx="6" fill="color-mix(in srgb,var(--sage) 10%,var(--panel))" stroke="var(--sage-deep)"/>
+  <g class="svg-mono" fill="var(--ink)" font-size="10"><text x="486" y="58">r(7) ⋈ s(7)</text><text x="486" y="80">r(4) ⋈ s(4)</text><text x="486" y="102">r(9) ⋈ s(9)</text></g>
+  <line x1="412" y1="89" x2="468" y2="80" stroke="var(--sage-deep)" stroke-width="1.2" marker-end="url(#xa6)"/>
+  <text x="360" y="172" text-anchor="middle" class="svg-mono" fill="var(--copper)">for each r ∈ R: index-probe S on the join key  ·  cost ≈ |R| × (h + matches)</text>
+  <text x="360" y="192" text-anchor="middle" class="svg-mono svg-faint" font-size="10">no full scan of S — the big side is only ever probed</text>
+</svg>
+</div>
+<figcaption><b>FIG A6</b>Index nested-loop join. Each (few) outer rows drives a cheap index probe into the large inner; only matching inner rows are fetched. The big relation is never scanned in full — the reason this is the optimizer's pick when a selective filter has already shrunk the outer and the inner carries an index on the join key.</figcaption>
+</figure>
+
+<h3>Sort-merge join</h3>
+<p>Sort both inputs on the join key, then merge them with two cursors that advance in lockstep: when the keys match, emit; otherwise advance whichever cursor trails. Duplicate keys are handled by <strong>mark/restore</strong> — remember where a run of equal keys began on the inner so the cursor can rewind to it for each matching outer row. The merge itself is linear; the cost is the sort. Crucially, that sort is <em>free if the inputs already arrive sorted</em> — from an index, or as the byproduct of an upstream operator — which is precisely the physical-property reasoning of §07. Sort-merge also leaves its output sorted, which a downstream <span class="mono">ORDER&nbsp;BY</span> or merge can reuse, and it handles range/band joins that hashing cannot.</p>
+
+<figure>
+<div class="frame">
+<svg viewBox="0 0 720 236" role="img" aria-label="Sort-merge join: two sorted inputs merged with cursors and mark-restore">
+  <defs><marker id="xa7" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L7,4 L0,8 z" fill="var(--sage-deep)"/></marker>
+  <marker id="xa7m" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto"><path d="M0,0 L6,3.5 L0,7 z" fill="var(--muted)"/></marker></defs>
+  <text x="30" y="20" class="svg-title">two inputs sorted on the join key, then merged</text>
+  <!-- R sorted strip -->
+  <text x="30" y="48" class="svg-mono svg-faint" font-size="10">R ↑k</text>
+  <g transform="translate(64,34)">
+    <rect width="44" height="24" rx="3" fill="var(--panel-2)" stroke="var(--line-strong)"/><rect x="48" width="44" height="24" rx="3" fill="color-mix(in srgb,var(--sage) 16%,var(--panel))" stroke="var(--sage-deep)"/><rect x="96" width="44" height="24" rx="3" fill="color-mix(in srgb,var(--sage) 16%,var(--panel))" stroke="var(--sage-deep)"/><rect x="144" width="44" height="24" rx="3" fill="var(--panel-2)" stroke="var(--line-strong)"/><rect x="192" width="44" height="24" rx="3" fill="var(--panel-2)" stroke="var(--line-strong)"/>
+    <g class="svg-mono" fill="var(--ink)" font-size="11" text-anchor="middle"><text x="22" y="16">1</text><text x="70" y="16">3</text><text x="118" y="16">3</text><text x="166" y="16">5</text><text x="214" y="16">8</text></g>
+  </g>
+  <!-- S sorted strip -->
+  <text x="30" y="104" class="svg-mono svg-faint" font-size="10">S ↑k</text>
+  <g transform="translate(64,90)">
+    <rect width="44" height="24" rx="3" fill="var(--panel-2)" stroke="var(--line-strong)"/><rect x="48" width="44" height="24" rx="3" fill="color-mix(in srgb,var(--sage) 16%,var(--panel))" stroke="var(--sage-deep)"/><rect x="96" width="44" height="24" rx="3" fill="var(--panel-2)" stroke="var(--line-strong)"/><rect x="144" width="44" height="24" rx="3" fill="var(--panel-2)" stroke="var(--line-strong)"/><rect x="192" width="44" height="24" rx="3" fill="var(--panel-2)" stroke="var(--line-strong)"/>
+    <g class="svg-mono" fill="var(--ink)" font-size="11" text-anchor="middle"><text x="22" y="16">2</text><text x="70" y="16">3</text><text x="118" y="16">5</text><text x="166" y="16">5</text><text x="214" y="16">9</text></g>
+  </g>
+  <!-- mark/restore loop on key=3 -->
+  <path d="M134,66 C 134,80 134,80 134,88" fill="none" stroke="var(--muted)" stroke-width="1" stroke-dasharray="2 2"/>
+  <path d="M182,66 C 200,80 160,82 138,88" fill="none" stroke="var(--muted)" stroke-width="1" marker-end="url(#xa7m)"/>
+  <text x="250" y="74" class="svg-mono svg-faint" font-size="9">mark/restore on duplicate keys</text>
+  <!-- output -->
+  <text x="500" y="48" text-anchor="middle" class="svg-mono svg-faint" font-size="10">merged output (k matches)</text>
+  <rect x="420" y="56" width="170" height="80" rx="6" fill="color-mix(in srgb,var(--sage) 10%,var(--panel))" stroke="var(--sage-deep)"/>
+  <g class="svg-mono" fill="var(--ink)" font-size="10"><text x="436" y="78">3 ⋈ 3</text><text x="436" y="98">3 ⋈ 3  (dup)</text><text x="436" y="118">5 ⋈ 5,  5 ⋈ 5</text></g>
+  <line x1="306" y1="80" x2="418" y2="92" stroke="var(--sage-deep)" stroke-width="1.3" marker-end="url(#xa7)"/>
+  <text x="360" y="176" text-anchor="middle" class="svg-mono" fill="var(--sage-deep)">merge is O(|R|+|S|) — the cost is the sort, and the sort is free if inputs are already ordered (§07)</text>
+  <text x="360" y="198" text-anchor="middle" class="svg-mono svg-faint" font-size="10">output stays sorted on k · handles range / band joins that hashing cannot</text>
+</svg>
+</div>
+<figcaption><b>FIG A7</b>Sort-merge join. Once both sides share a sort order on the key, a single linear merge emits all matches; mark/restore rewinds the inner cursor across runs of duplicate keys. The algorithm's appeal is conditional on order — pay nothing if it already exists (an index, an upstream sort), pay a full sort if it doesn't — and it uniquely handles inequality/range joins while delivering sorted output for free downstream.</figcaption>
+</figure>
+
+<h3>Hash join (in-memory)</h3>
+<p>The default equi-join when neither a useful sort nor an index is available. Build a hash table from the <em>smaller</em> input, then stream the larger input through it, emitting matches on lookup (§07, FIG 07). It is linear — <span class="mono">O(|R|+|S|)</span> — with one hard precondition: the build side's hash table must fit in memory. The asymmetry is the thing to remember: <em>build is write-heavy</em> (insertions, collision handling, concurrent updates) while <em>probe is read-only and embarrassingly parallel</em>. That single fact dictates the entire GPU implementation (§14) — probes map trivially to thousands of threads; builds need atomics — and motivates the two fallbacks that follow when the build side is too large to fit.</p>
+
+<figure>
+<div class="frame">
+<svg viewBox="0 0 720 208" role="img" aria-label="In-memory hash join with build side resident in memory">
+  <defs><marker id="xa8" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L7,4 L0,8 z" fill="var(--cyan-deep)"/></marker></defs>
+  <!-- RAM container -->
+  <rect x="232" y="30" width="256" height="120" rx="9" fill="none" stroke="var(--copper)" stroke-dasharray="5 4"/>
+  <text x="360" y="26" text-anchor="middle" class="svg-mono" fill="var(--copper)" font-size="10">RAM — build side must fit</text>
+  <!-- build input -->
+  <text x="86" y="26" text-anchor="middle" class="svg-mono svg-faint" font-size="10">build R (smaller)</text>
+  <rect x="40" y="34" width="92" height="100" rx="6" fill="var(--panel-2)" stroke="var(--line-strong)"/>
+  <g class="svg-mono svg-faint" font-size="10" text-anchor="middle"><text x="86" y="56">k=3</text><text x="86" y="76">k=7</text><text x="86" y="96">k=3</text><text x="86" y="116">k=9</text></g>
+  <!-- hash table -->
+  <rect x="252" y="46" width="120" height="88" rx="6" fill="color-mix(in srgb,var(--cyan) 12%,var(--panel))" stroke="var(--cyan-deep)"/>
+  <text x="312" y="64" text-anchor="middle" class="svg-mono" fill="var(--cyan-deep)" font-size="10">hash table</text>
+  <g class="svg-mono" fill="var(--ink)" font-size="10" text-anchor="middle"><text x="312" y="86">h(3): •→•</text><text x="312" y="104">h(7): •</text><text x="312" y="122">h(9): •</text></g>
+  <line x1="132" y1="84" x2="250" y2="84" stroke="var(--cyan-deep)" stroke-width="1.3" marker-end="url(#xa8)"/>
+  <text x="190" y="76" text-anchor="middle" class="svg-mono svg-faint" font-size="9">① build (writes)</text>
+  <!-- probe input -->
+  <text x="560" y="26" text-anchor="middle" class="svg-mono svg-faint" font-size="10">probe S (larger) ▸ stream</text>
+  <rect x="514" y="34" width="92" height="100" rx="6" fill="var(--panel-2)" stroke="var(--line-strong)"/>
+  <g class="svg-mono svg-faint" font-size="10" text-anchor="middle"><text x="560" y="56">3 ✓</text><text x="560" y="76">5 ✗</text><text x="560" y="96">7 ✓</text><text x="560" y="116">3 ✓</text></g>
+  <line x1="488" y1="84" x2="512" y2="84" stroke="var(--cyan-deep)" stroke-width="1.3" marker-start="url(#xa8)"/>
+  <text x="430" y="76" text-anchor="middle" class="svg-mono svg-faint" font-size="9">② probe (reads, parallel)</text>
+  <text x="360" y="176" text-anchor="middle" class="svg-mono" fill="var(--cyan-deep)">O(|R|+|S|) · build write-heavy, probe read-only &amp; parallel — see FIG 07</text>
+  <text x="360" y="196" text-anchor="middle" class="svg-mono svg-faint" font-size="10">precondition: the build-side hash table fits in memory</text>
+</svg>
+</div>
+<figcaption><b>FIG A8</b>In-memory hash join. Build from the small side into a resident hash table, then stream the large side through it. Linear and order-free, it is the go-to equi-join — provided the build side fits. The build/probe asymmetry (FIG 07) is the hinge for everything downstream: it sets the GPU design (§14) and forces the grace/hybrid fallbacks below once "fits in memory" fails.</figcaption>
+</figure>
+
+<h3>Grace / partitioned hash join</h3>
+<p>What to do when the build side does <em>not</em> fit. Hash-partition <em>both</em> inputs by the same function <span class="mono">h(key)</span> into <span class="mono">k</span> buckets, spilling them to disk (or to separate GPU/host regions). Because identical keys hash identically, all matches for a key land in the <em>same partition pair</em> <span class="mono">(R_i, S_i)</span> — so the global join decomposes into <span class="mono">k</span> independent in-memory hash joins, each sized to fit. The price is two passes over both inputs (partition, then join). This is the canonical out-of-core join, and its logic is exactly the GPU spill strategy when an intermediate exceeds device memory (§15).</p>
+
+<figure>
+<div class="frame">
+<svg viewBox="0 0 720 268" role="img" aria-label="Grace hash join: partition both inputs by hash, then join partition pairs">
+  <defs><marker id="xa9" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L7,4 L0,8 z" fill="var(--copper)"/></marker>
+  <marker id="xa9c" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto"><path d="M0,0 L6,3.5 L0,7 z" fill="var(--cyan-deep)"/></marker></defs>
+  <!-- sources + splitters -->
+  <rect x="26" y="40" width="60" height="26" rx="4" fill="var(--panel-2)" stroke="var(--line-strong)"/><text x="56" y="58" text-anchor="middle" class="svg-mono" fill="var(--ink)" font-size="11">R</text>
+  <rect x="26" y="172" width="60" height="26" rx="4" fill="var(--panel-2)" stroke="var(--line-strong)"/><text x="56" y="190" text-anchor="middle" class="svg-mono" fill="var(--ink)" font-size="11">S</text>
+  <text x="150" y="28" text-anchor="middle" class="svg-mono" fill="var(--copper)" font-size="10">h(key) → k buckets</text>
+  <!-- R buckets -->
+  <g>
+    <rect x="120" y="40" width="78" height="22" rx="3" fill="color-mix(in srgb,var(--copper) 10%,var(--panel))" stroke="var(--copper)"/><rect x="120" y="66" width="78" height="22" rx="3" fill="color-mix(in srgb,var(--copper) 10%,var(--panel))" stroke="var(--copper)"/><rect x="120" y="92" width="78" height="22" rx="3" fill="color-mix(in srgb,var(--copper) 10%,var(--panel))" stroke="var(--copper)"/><rect x="120" y="118" width="78" height="22" rx="3" fill="color-mix(in srgb,var(--copper) 10%,var(--panel))" stroke="var(--copper)"/>
+  </g>
+  <g class="svg-mono" fill="var(--ink)" font-size="10" text-anchor="middle"><text x="159" y="55">R₀</text><text x="159" y="81">R₁</text><text x="159" y="107">R₂</text><text x="159" y="133">R₃</text></g>
+  <!-- S buckets -->
+  <g>
+    <rect x="120" y="150" width="78" height="22" rx="3" fill="var(--panel-2)" stroke="var(--line-strong)"/><rect x="120" y="176" width="78" height="22" rx="3" fill="var(--panel-2)" stroke="var(--line-strong)"/><rect x="120" y="202" width="78" height="22" rx="3" fill="var(--panel-2)" stroke="var(--line-strong)"/><rect x="120" y="228" width="78" height="22" rx="3" fill="var(--panel-2)" stroke="var(--line-strong)"/>
+  </g>
+  <g class="svg-mono svg-faint" font-size="10" text-anchor="middle"><text x="159" y="165">S₀</text><text x="159" y="191">S₁</text><text x="159" y="217">S₂</text><text x="159" y="243">S₃</text></g>
+  <line x1="86" y1="53" x2="118" y2="60" stroke="var(--copper)" stroke-width="1" marker-end="url(#xa9)"/>
+  <line x1="86" y1="185" x2="118" y2="178" stroke="var(--copper)" stroke-width="1" marker-end="url(#xa9)"/>
+  <!-- per-partition joins -->
+  <text x="430" y="28" text-anchor="middle" class="svg-mono" fill="var(--cyan-deep)" font-size="10">join each pair in memory (matches co-located by h)</text>
+  <g>
+    <rect x="320" y="44" width="150" height="40" rx="6" fill="color-mix(in srgb,var(--cyan) 10%,var(--panel))" stroke="var(--cyan-deep)"/><text x="395" y="68" text-anchor="middle" class="svg-mono" fill="var(--cyan-deep)" font-size="11">hashjoin(R₀,S₀)</text>
+    <rect x="320" y="96" width="150" height="40" rx="6" fill="color-mix(in srgb,var(--cyan) 10%,var(--panel))" stroke="var(--cyan-deep)"/><text x="395" y="120" text-anchor="middle" class="svg-mono" fill="var(--cyan-deep)" font-size="11">hashjoin(R₁,S₁)</text>
+    <rect x="320" y="148" width="150" height="40" rx="6" fill="var(--panel-2)" stroke="var(--cyan-deep)" stroke-dasharray="3 3"/><text x="395" y="172" text-anchor="middle" class="svg-mono svg-faint" font-size="11">… R₂,S₂  R₃,S₃</text>
+  </g>
+  <line x1="198" y1="51" x2="318" y2="60" stroke="var(--cyan-deep)" stroke-width="1" marker-end="url(#xa9c)"/>
+  <line x1="198" y1="161" x2="318" y2="74" stroke="var(--cyan-deep)" stroke-width="0.8" stroke-dasharray="2 2"/>
+  <line x1="198" y1="77" x2="318" y2="112" stroke="var(--cyan-deep)" stroke-width="1" marker-end="url(#xa9c)"/>
+  <line x1="198" y1="187" x2="318" y2="120" stroke="var(--cyan-deep)" stroke-width="0.8" stroke-dasharray="2 2"/>
+  <!-- output -->
+  <rect x="540" y="80" width="150" height="60" rx="6" fill="color-mix(in srgb,var(--sage) 10%,var(--panel))" stroke="var(--sage-deep)"/><text x="615" y="115" text-anchor="middle" class="svg-mono" fill="var(--sage-deep)">∪ partition outputs</text>
+  <line x1="470" y1="108" x2="538" y2="110" stroke="var(--sage-deep)" stroke-width="1.2" marker-end="url(#xa9c)"/>
+  <text x="395" y="216" text-anchor="middle" class="svg-mono svg-faint" font-size="10">two passes over each input — a too-big join becomes k small ones</text>
+</svg>
+</div>
+<figcaption><b>FIG A9</b>Grace (partitioned) hash join. Partitioning both sides by the same hash guarantees that every key's matches fall in the same partition pair, so the join splits into <span class="mono">k</span> independent in-memory hash joins. It trades one extra pass over the data for the ability to join inputs far larger than memory — the same divide-and-spill move the GPU uses when an intermediate overflows device memory (§15).</figcaption>
+</figure>
+
+<h3>Hybrid hash join</h3>
+<p>Grace's refinement, and what most production engines actually run. If there's <em>some</em> memory but not enough for the whole build side, don't spill everything: keep <strong>partition 0</strong>'s build side resident in RAM while partitioning the rest. Probe rows belonging to partition 0 are joined immediately and never spilled, so their data skips the spill-and-reload round-trip entirely; partitions 1..k spill as in grace and are processed afterward. The payoff is a smooth degradation across the memory spectrum: with abundant memory it collapses to a single in-memory hash join (one partition, no spilling); with almost none it becomes pure grace; in between it spends exactly the memory it has on avoiding I/O for the hottest fraction of the data.</p>
+
+<figure>
+<div class="frame">
+<svg viewBox="0 0 720 258" role="img" aria-label="Hybrid hash join: partition zero kept in memory, rest spilled">
+  <defs><marker id="xa10" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L7,4 L0,8 z" fill="var(--copper)"/></marker>
+  <marker id="xa10r" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto"><path d="M0,0 L6,3.5 L0,7 z" fill="var(--rust)"/></marker>
+  <marker id="xa10s" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L7,4 L0,8 z" fill="var(--sage-deep)"/></marker></defs>
+  <!-- build stream -->
+  <rect x="26" y="44" width="62" height="26" rx="4" fill="var(--panel-2)" stroke="var(--line-strong)"/><text x="57" y="62" text-anchor="middle" class="svg-mono" fill="var(--ink)" font-size="11">build R</text>
+  <text x="150" y="32" text-anchor="middle" class="svg-mono" fill="var(--copper)" font-size="10">h(key)</text>
+  <!-- partition 0 resident -->
+  <rect x="120" y="40" width="150" height="44" rx="6" fill="color-mix(in srgb,var(--copper) 16%,var(--panel))" stroke="var(--copper)"/>
+  <text x="195" y="58" text-anchor="middle" class="svg-mono" fill="var(--copper)" font-size="10">partition 0 → RAM</text>
+  <text x="195" y="74" text-anchor="middle" class="svg-mono svg-faint" font-size="9">hash table kept resident</text>
+  <line x1="88" y1="50" x2="118" y2="54" stroke="var(--copper)" stroke-width="1.1" marker-end="url(#xa10)"/>
+  <!-- spilled partitions -->
+  <g>
+    <rect x="120" y="96" width="150" height="20" rx="3" fill="var(--panel-2)" stroke="var(--faint)" stroke-dasharray="3 3"/><rect x="120" y="120" width="150" height="20" rx="3" fill="var(--panel-2)" stroke="var(--faint)" stroke-dasharray="3 3"/><rect x="120" y="144" width="150" height="20" rx="3" fill="var(--panel-2)" stroke="var(--faint)" stroke-dasharray="3 3"/>
+  </g>
+  <g class="svg-mono svg-faint" font-size="9" text-anchor="middle"><text x="195" y="110">partition 1 → spill</text><text x="195" y="134">partition 2 → spill</text><text x="195" y="158">partition 3 → spill</text></g>
+  <line x1="88" y1="64" x2="118" y2="106" stroke="var(--rust)" stroke-width="0.9" stroke-dasharray="2 2" marker-end="url(#xa10r)"/>
+  <!-- probe stream -->
+  <rect x="26" y="198" width="62" height="26" rx="4" fill="var(--panel-2)" stroke="var(--line-strong)"/><text x="57" y="216" text-anchor="middle" class="svg-mono" fill="var(--ink)" font-size="11">probe S</text>
+  <!-- p0 fast path -->
+  <path d="M88,205 C 180,205 260,120 318,80" fill="none" stroke="var(--sage-deep)" stroke-width="1.4" marker-end="url(#xa10s)"/>
+  <text x="250" y="150" class="svg-mono" fill="var(--sage-deep)" font-size="10">P0 rows: join now (no spill)</text>
+  <!-- p1+ spill path -->
+  <path d="M88,216 C 200,236 300,200 318,170" fill="none" stroke="var(--rust)" stroke-width="1" stroke-dasharray="3 3" marker-end="url(#xa10r)"/>
+  <text x="250" y="232" class="svg-mono svg-faint" font-size="9">P1..k rows: spill, join later</text>
+  <!-- right: phase 2 -->
+  <rect x="360" y="44" width="160" height="40" rx="6" fill="color-mix(in srgb,var(--sage) 12%,var(--panel))" stroke="var(--sage-deep)"/><text x="440" y="68" text-anchor="middle" class="svg-mono" fill="var(--sage-deep)" font-size="11">P0 output (in-memory)</text>
+  <rect x="360" y="120" width="160" height="44" rx="6" fill="var(--panel-2)" stroke="var(--cyan-deep)"/><text x="440" y="139" text-anchor="middle" class="svg-mono" fill="var(--cyan-deep)" font-size="10">phase 2: reload P1..k</text><text x="440" y="155" text-anchor="middle" class="svg-mono svg-faint" font-size="9">grace-join each pair</text>
+  <line x1="270" y1="62" x2="358" y2="64" stroke="var(--sage-deep)" stroke-width="1.1" marker-end="url(#xa10s)"/>
+  <line x1="270" y1="140" x2="358" y2="142" stroke="var(--cyan-deep)" stroke-width="1.1" marker-end="url(#xa10)"/>
+  <rect x="560" y="80" width="132" height="56" rx="6" fill="color-mix(in srgb,var(--sage) 10%,var(--panel))" stroke="var(--sage-deep)"/><text x="626" y="113" text-anchor="middle" class="svg-mono" fill="var(--sage-deep)">∪ all output</text>
+  <line x1="520" y1="64" x2="558" y2="100" stroke="var(--sage-deep)" stroke-width="1" marker-end="url(#xa10s)"/>
+  <line x1="520" y1="142" x2="558" y2="116" stroke="var(--sage-deep)" stroke-width="1" marker-end="url(#xa10s)"/>
+</svg>
+</div>
+<figcaption><b>FIG A10</b>Hybrid hash join. The spare memory you have is spent keeping partition 0 resident: its probe rows join on the fly (sage) and never hit disk, while the remaining partitions spill (rust, dashed) and are joined in a second phase. The result interpolates continuously between in-memory hash (everything fits → one partition) and grace (nothing fits → all spilled), which is why it's the default the optimizer reaches for under real memory budgets.</figcaption>
+</figure>
+</section>
+
+<section id="atlas-joinshape">
+<div class="sec-head"><div class="snum">A3</div><h2>Join shape &amp; distribution — related operators</h2></div>
+<p class="lead">Two families that sit beside the core joins and matter constantly in practice: the <strong>existence joins</strong> the optimizer synthesizes when flattening subqueries (§03), and the <strong>distribution strategies</strong> that decide how a join runs across many workers or GPUs (§16). Both are less about a new algorithm than about <em>how</em> the algorithms above are wired up.</p>
+
+<h3>Semi-join and anti-join</h3>
+<p>These are existence tests dressed as joins. A <strong>semi-join</strong> (the physical form of <span class="mono">EXISTS</span> / <span class="mono">IN</span>) emits each outer row <em>at most once</em> if it has any match in the inner — never inner columns, never a duplicate per extra match — so the implementation can stop at the first hit. An <strong>anti-join</strong> (<span class="mono">NOT EXISTS</span> / <span class="mono">NOT IN</span>) emits exactly the outer rows with <em>no</em> match. The optimizer builds both on top of a hash or merge join, and they are the targets of subquery decorrelation: turning a correlated <span class="mono">EXISTS</span> subquery into a single set-based semi-join is one of the highest-value rewrites in §03, replacing a per-row re-execution with one pass.</p>
+
+<figure>
+<div class="frame">
+<svg viewBox="0 0 720 224" role="img" aria-label="Semi-join and anti-join existence semantics">
+  <defs><marker id="xa11" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L7,4 L0,8 z" fill="var(--sage-deep)"/></marker>
+  <marker id="xa11r" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L7,4 L0,8 z" fill="var(--rust)"/></marker></defs>
+  <!-- semi -->
+  <text x="30" y="20" class="svg-title">semi-join · EXISTS / IN</text>
+  <text x="58" y="44" text-anchor="middle" class="svg-mono svg-faint" font-size="10">R</text>
+  <g><rect x="32" y="52" width="52" height="22" rx="3" fill="var(--panel-2)" stroke="var(--line-strong)"/><rect x="32" y="80" width="52" height="22" rx="3" fill="var(--panel-2)" stroke="var(--line-strong)"/><rect x="32" y="108" width="52" height="22" rx="3" fill="var(--panel-2)" stroke="var(--line-strong)"/><rect x="32" y="136" width="52" height="22" rx="3" fill="var(--panel-2)" stroke="var(--line-strong)"/></g>
+  <g class="svg-mono" fill="var(--ink)" font-size="10" text-anchor="middle"><text x="58" y="67">a</text><text x="58" y="95">b</text><text x="58" y="123">c</text><text x="58" y="151">d</text></g>
+  <rect x="120" y="60" width="74" height="90" rx="6" fill="color-mix(in srgb,var(--cyan) 10%,var(--panel))" stroke="var(--cyan-deep)"/>
+  <text x="157" y="80" text-anchor="middle" class="svg-mono" fill="var(--cyan-deep)" font-size="9">S key-set</text>
+  <text x="157" y="100" text-anchor="middle" class="svg-mono svg-faint" font-size="9">{a, a, c}</text>
+  <text x="157" y="124" text-anchor="middle" class="svg-mono svg-faint" font-size="9">exists?</text>
+  <g><rect x="232" y="52" width="92" height="106" rx="6" fill="color-mix(in srgb,var(--sage) 10%,var(--panel))" stroke="var(--sage-deep)"/></g>
+  <text x="278" y="44" text-anchor="middle" class="svg-mono svg-faint" font-size="10">output ⊆ R</text>
+  <g class="svg-mono" fill="var(--ink)" font-size="10" text-anchor="middle"><text x="278" y="78">a  ✓ (once)</text><text x="278" y="100">c  ✓</text></g>
+  <text x="278" y="128" class="svg-mono svg-faint" font-size="9" text-anchor="middle">b,d dropped</text>
+  <line x1="84" y1="63" x2="118" y2="78" stroke="var(--sage-deep)" stroke-width="1" marker-end="url(#xa11)"/>
+  <line x1="194" y1="95" x2="230" y2="80" stroke="var(--sage-deep)" stroke-width="1.1" marker-end="url(#xa11)"/>
+  <text x="178" y="186" text-anchor="middle" class="svg-mono svg-faint" font-size="9">emit R row at most once · stop at first match</text>
+  <!-- divider -->
+  <line x1="372" y1="28" x2="372" y2="196" stroke="var(--line)" stroke-width="1"/>
+  <!-- anti -->
+  <text x="410" y="20" class="svg-title">anti-join · NOT EXISTS</text>
+  <text x="438" y="44" text-anchor="middle" class="svg-mono svg-faint" font-size="10">R</text>
+  <g><rect x="412" y="52" width="52" height="22" rx="3" fill="var(--panel-2)" stroke="var(--line-strong)"/><rect x="412" y="80" width="52" height="22" rx="3" fill="var(--panel-2)" stroke="var(--line-strong)"/><rect x="412" y="108" width="52" height="22" rx="3" fill="var(--panel-2)" stroke="var(--line-strong)"/><rect x="412" y="136" width="52" height="22" rx="3" fill="var(--panel-2)" stroke="var(--line-strong)"/></g>
+  <g class="svg-mono" fill="var(--ink)" font-size="10" text-anchor="middle"><text x="438" y="67">a</text><text x="438" y="95">b</text><text x="438" y="123">c</text><text x="438" y="151">d</text></g>
+  <rect x="500" y="60" width="74" height="90" rx="6" fill="color-mix(in srgb,var(--cyan) 10%,var(--panel))" stroke="var(--cyan-deep)"/>
+  <text x="537" y="80" text-anchor="middle" class="svg-mono" fill="var(--cyan-deep)" font-size="9">S key-set</text>
+  <text x="537" y="100" text-anchor="middle" class="svg-mono svg-faint" font-size="9">{a, a, c}</text>
+  <text x="537" y="124" text-anchor="middle" class="svg-mono svg-faint" font-size="9">absent?</text>
+  <rect x="612" y="52" width="92" height="106" rx="6" fill="color-mix(in srgb,var(--rust) 10%,var(--panel))" stroke="var(--rust)"/>
+  <text x="658" y="44" text-anchor="middle" class="svg-mono svg-faint" font-size="10">output ⊆ R</text>
+  <g class="svg-mono" fill="var(--ink)" font-size="10" text-anchor="middle"><text x="658" y="84">b  ✓</text><text x="658" y="106">d  ✓</text></g>
+  <text x="658" y="130" class="svg-mono svg-faint" font-size="9" text-anchor="middle">a,c excluded</text>
+  <line x1="574" y1="95" x2="610" y2="92" stroke="var(--rust)" stroke-width="1.1" marker-end="url(#xa11r)"/>
+  <text x="558" y="186" text-anchor="middle" class="svg-mono svg-faint" font-size="9">emit R rows with zero matches</text>
+</svg>
+</div>
+<figcaption><b>FIG A11</b>Semi-join (left) and anti-join (right). Both probe the inner purely for existence: the semi-join keeps an outer row if a match exists (once, regardless of multiplicity); the anti-join keeps it if none does. They are how the optimizer realizes flattened <span class="mono">EXISTS</span>/<span class="mono">NOT&nbsp;EXISTS</span> subqueries (§03) — one set-based pass replacing a correlated, per-row re-evaluation.</figcaption>
+</figure>
+
+<h3>Broadcast vs shuffle (partitioned) join</h3>
+<p>The defining choice for any distributed or multi-GPU join (§16). A <strong>broadcast join</strong> replicates the <em>small</em> side to every worker, which then joins its local shard of the big side against the full small side — the big table never moves across the network. A <strong>shuffle (partitioned) join</strong> hash-partitions <em>both</em> sides by the join key across workers so that matching keys co-locate, then joins locally; its cost is dominated by the all-to-all exchange (FIG 16). The rule is a data-size threshold: broadcast when one side is small enough that shipping <span class="mono">small × workers</span> bytes beats reshuffling everything; shuffle when both sides are large. Getting this wrong — broadcasting a table that's too big, or shuffling when a broadcast would do — is one of the most common causes of a blown distributed query, and the cardinality estimate (§04) is what the decision rides on.</p>
+
+<figure>
+<div class="frame">
+<svg viewBox="0 0 720 258" role="img" aria-label="Broadcast join versus shuffle partitioned join across workers">
+  <defs><marker id="xa12" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L7,4 L0,8 z" fill="var(--copper)"/></marker>
+  <marker id="xa12c" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L7,4 L0,8 z" fill="var(--cyan-deep)"/></marker></defs>
+  <!-- broadcast -->
+  <text x="30" y="20" class="svg-title">broadcast · one side small</text>
+  <rect x="30" y="34" width="86" height="30" rx="5" fill="color-mix(in srgb,var(--copper) 14%,var(--panel))" stroke="var(--copper)"/>
+  <text x="73" y="54" text-anchor="middle" class="svg-mono" fill="var(--copper)" font-size="10">small S</text>
+  <g>
+    <rect x="30" y="100" width="100" height="44" rx="6" fill="var(--panel-2)" stroke="var(--line-strong)"/><text x="80" y="118" text-anchor="middle" class="svg-mono svg-faint" font-size="9">worker 0</text><text x="80" y="134" text-anchor="middle" class="svg-mono" fill="var(--ink)" font-size="9">B₀ ⋈ S</text>
+    <rect x="30" y="152" width="100" height="44" rx="6" fill="var(--panel-2)" stroke="var(--line-strong)"/><text x="80" y="170" text-anchor="middle" class="svg-mono svg-faint" font-size="9">worker 1</text><text x="80" y="186" text-anchor="middle" class="svg-mono" fill="var(--ink)" font-size="9">B₁ ⋈ S</text>
+    <rect x="30" y="204" width="100" height="44" rx="6" fill="var(--panel-2)" stroke="var(--line-strong)"/><text x="80" y="222" text-anchor="middle" class="svg-mono svg-faint" font-size="9">worker 2</text><text x="80" y="238" text-anchor="middle" class="svg-mono" fill="var(--ink)" font-size="9">B₂ ⋈ S</text>
+  </g>
+  <path d="M116,52 C 180,52 200,110 132,122" fill="none" stroke="var(--copper)" stroke-width="1.1" marker-end="url(#xa12)"/>
+  <path d="M116,54 C 200,80 210,170 132,174" fill="none" stroke="var(--copper)" stroke-width="1.1" marker-end="url(#xa12)"/>
+  <path d="M116,56 C 210,120 220,224 132,226" fill="none" stroke="var(--copper)" stroke-width="1.1" marker-end="url(#xa12)"/>
+  <text x="220" y="118" class="svg-mono" fill="var(--copper)" font-size="9">copy S</text>
+  <text x="220" y="132" class="svg-mono" fill="var(--copper)" font-size="9">everywhere</text>
+  <text x="180" y="240" text-anchor="middle" class="svg-mono svg-faint" font-size="9">big side stays put · cost ∝ |S|×workers</text>
+  <!-- divider -->
+  <line x1="372" y1="28" x2="372" y2="248" stroke="var(--line)" stroke-width="1"/>
+  <!-- shuffle -->
+  <text x="410" y="20" class="svg-title">shuffle · both large</text>
+  <rect x="410" y="34" width="80" height="26" rx="4" fill="var(--panel-2)" stroke="var(--line-strong)"/><text x="450" y="51" text-anchor="middle" class="svg-mono" fill="var(--ink)" font-size="10">R (large)</text>
+  <rect x="560" y="34" width="80" height="26" rx="4" fill="var(--panel-2)" stroke="var(--line-strong)"/><text x="600" y="51" text-anchor="middle" class="svg-mono" fill="var(--ink)" font-size="10">S (large)</text>
+  <text x="525" y="86" text-anchor="middle" class="svg-mono" fill="var(--cyan-deep)" font-size="10">hash-partition both by key · all-to-all</text>
+  <g>
+    <rect x="404" y="100" width="104" height="44" rx="6" fill="color-mix(in srgb,var(--cyan) 8%,var(--panel))" stroke="var(--cyan-deep)"/><text x="456" y="118" text-anchor="middle" class="svg-mono svg-faint" font-size="9">worker 0 · key%3=0</text><text x="456" y="134" text-anchor="middle" class="svg-mono" fill="var(--ink)" font-size="9">R₀ ⋈ S₀</text>
+    <rect x="404" y="152" width="104" height="44" rx="6" fill="color-mix(in srgb,var(--cyan) 8%,var(--panel))" stroke="var(--cyan-deep)"/><text x="456" y="170" text-anchor="middle" class="svg-mono svg-faint" font-size="9">worker 1 · key%3=1</text><text x="456" y="186" text-anchor="middle" class="svg-mono" fill="var(--ink)" font-size="9">R₁ ⋈ S₁</text>
+    <rect x="404" y="204" width="104" height="44" rx="6" fill="color-mix(in srgb,var(--cyan) 8%,var(--panel))" stroke="var(--cyan-deep)"/><text x="456" y="222" text-anchor="middle" class="svg-mono svg-faint" font-size="9">worker 2 · key%3=2</text><text x="456" y="238" text-anchor="middle" class="svg-mono" fill="var(--ink)" font-size="9">R₂ ⋈ S₂</text>
+  </g>
+  <g stroke="var(--cyan-deep)" stroke-width="0.9">
+    <line x1="450" y1="60" x2="456" y2="98" marker-end="url(#xa12c)"/>
+    <line x1="600" y1="60" x2="500" y2="98" marker-end="url(#xa12c)"/>
+    <line x1="446" y1="60" x2="456" y2="150" marker-end="url(#xa12c)"/>
+    <line x1="604" y1="60" x2="500" y2="150" marker-end="url(#xa12c)"/>
+  </g>
+  <text x="600" y="118" class="svg-mono svg-faint" font-size="9">repartition</text>
+  <text x="600" y="132" class="svg-mono svg-faint" font-size="9">→ co-locate</text>
+  <text x="556" y="240" text-anchor="middle" class="svg-mono svg-faint" font-size="9">all-to-all dominates (FIG 16)</text>
+</svg>
+</div>
+<figcaption><b>FIG A12</b>Broadcast vs shuffle. Broadcast (left) ships the small side to every worker and leaves the big side untouched — cheap when <span class="mono">|S|×workers</span> is small. Shuffle (right) repartitions both sides by key so matches co-locate, paying the all-to-all (FIG 16) — necessary when both sides are large. The threshold between them is a cardinality call (§04), and it is the distributed optimizer's single most leveraged decision.</figcaption>
+</figure>
+</section>
+
+<section id="atlas-agg">
+<div class="sec-head"><div class="snum">A4</div><h2>Aggregation — grouping and rollup</h2></div>
+<p class="lead">The last operator family: collapsing many rows into per-group results for <span class="mono">GROUP&nbsp;BY</span> and aggregates. The same hash-vs-sort dichotomy that organizes joins organizes aggregation, plus a third pattern — <strong>partial aggregation</strong> — that is the workhorse of parallel and GPU group-by (§14) and the reason a billion-row aggregation can finish by moving only kilobytes between workers.</p>
+
+<h3>Hash aggregation</h3>
+<p>The default <span class="mono">GROUP&nbsp;BY</span>. Maintain a hash table keyed by the grouping columns; for each input row, find its group's slot and fold the row into a running accumulator (<span class="mono">SUM</span>, <span class="mono">COUNT</span>, <span class="mono">MIN</span>, …); when the input is exhausted, emit one row per slot. No ordering requirement and a single pass — <span class="mono">O(rows)</span> — sized to the number of distinct groups. Its failure mode is too many groups to fit in memory, which forces a grace-style spill/partition exactly as with hash join; and its output order is arbitrary. On the GPU this becomes the shared-memory-first, atomics-on-collision pattern of FIG 14.</p>
+
+<figure>
+<div class="frame">
+<svg viewBox="0 0 720 206" role="img" aria-label="Hash aggregation: unordered rows folded into a hash table of accumulators">
+  <defs><marker id="xa13" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L7,4 L0,8 z" fill="var(--cyan-deep)"/></marker></defs>
+  <text x="86" y="24" text-anchor="middle" class="svg-mono svg-faint" font-size="10">unordered input</text>
+  <g><rect x="40" y="34" width="92" height="22" rx="3" fill="var(--panel-2)" stroke="var(--line-strong)"/><rect x="40" y="60" width="92" height="22" rx="3" fill="var(--panel-2)" stroke="var(--line-strong)"/><rect x="40" y="86" width="92" height="22" rx="3" fill="var(--panel-2)" stroke="var(--line-strong)"/><rect x="40" y="112" width="92" height="22" rx="3" fill="var(--panel-2)" stroke="var(--line-strong)"/><rect x="40" y="138" width="92" height="22" rx="3" fill="var(--panel-2)" stroke="var(--line-strong)"/></g>
+  <g class="svg-mono" fill="var(--ink)" font-size="10" text-anchor="middle"><text x="86" y="49">A · 10</text><text x="86" y="75">C · 4</text><text x="86" y="101">A · 5</text><text x="86" y="127">B · 7</text><text x="86" y="153">C · 2</text></g>
+  <!-- hash table accumulators -->
+  <rect x="300" y="40" width="190" height="120" rx="8" fill="color-mix(in srgb,var(--cyan) 10%,var(--panel))" stroke="var(--cyan-deep)"/>
+  <text x="395" y="60" text-anchor="middle" class="svg-mono" fill="var(--cyan-deep)" font-size="10">hash table: key → running agg</text>
+  <g class="svg-mono" fill="var(--ink)" font-size="11"><text x="320" y="88">A → SUM 10→15</text><text x="320" y="112">C → SUM 4→6</text><text x="320" y="136">B → SUM 7</text></g>
+  <g stroke="var(--cyan-deep)" stroke-width="1"><line x1="132" y1="45" x2="298" y2="82" marker-end="url(#xa13)"/><line x1="132" y1="97" x2="298" y2="84" stroke-dasharray="2 2"/><line x1="132" y1="71" x2="298" y2="108" marker-end="url(#xa13)"/><line x1="132" y1="123" x2="298" y2="134" marker-end="url(#xa13)"/></g>
+  <!-- output -->
+  <rect x="556" y="56" width="136" height="88" rx="6" fill="color-mix(in srgb,var(--sage) 10%,var(--panel))" stroke="var(--sage-deep)"/>
+  <text x="624" y="48" text-anchor="middle" class="svg-mono svg-faint" font-size="10">one row / group</text>
+  <g class="svg-mono" fill="var(--ink)" font-size="10"><text x="572" y="84">A → 15</text><text x="572" y="106">B → 7</text><text x="572" y="128">C → 6</text></g>
+  <line x1="490" y1="100" x2="554" y2="100" stroke="var(--sage-deep)" stroke-width="1.2" marker-end="url(#xa13)"/>
+  <text x="360" y="186" text-anchor="middle" class="svg-mono" fill="var(--cyan-deep)">single pass, no order required · O(rows) · spills grace-style if #groups &gt; memory · output order arbitrary</text>
+</svg>
+</div>
+<figcaption><b>FIG A13</b>Hash aggregation. Each row is hashed to its group's slot and folded into a running accumulator in one unordered pass; slots are emitted at the end. Default for <span class="mono">GROUP&nbsp;BY</span>, it costs one pass over the input but needs memory proportional to the distinct-group count — and degrades to a partitioned spill when that exceeds memory, the direct analog of the GPU's shared-memory-first group-by (FIG 14).</figcaption>
+</figure>
+
+<h3>Sort-based (streaming) aggregation</h3>
+<p>Sort the input by the grouping key (or inherit an existing sort) so that all rows of a group become contiguous, then stream with a single accumulator: fold rows while the key is unchanged, emit and reset at each boundary. Memory is <span class="mono">O(1)</span> in the number of groups — only the current group's running value is held — and the output emerges in sorted order. As with sort-merge join, the sort is the cost and it is <em>free when the input already arrives sorted</em> (§07); it also pairs naturally with anything downstream that wants the group key ordered. The hash-vs-sort aggregation choice mirrors the hash-vs-merge join choice exactly: hashing avoids the sort but needs group-sized memory; sorting needs order but runs in constant space.</p>
+
+<figure>
+<div class="frame">
+<svg viewBox="0 0 720 200" role="img" aria-label="Sort-based streaming aggregation over contiguous key runs">
+  <defs><marker id="xa14" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L7,4 L0,8 z" fill="var(--sage-deep)"/></marker></defs>
+  <text x="30" y="22" class="svg-title">sorted by key → equal keys contiguous → one accumulator, emit at each boundary</text>
+  <!-- sorted strip with runs -->
+  <g transform="translate(40,40)">
+    <rect width="46" height="26" rx="3" fill="color-mix(in srgb,var(--copper) 10%,var(--panel))" stroke="var(--copper)"/><rect x="48" width="46" height="26" rx="3" fill="color-mix(in srgb,var(--copper) 10%,var(--panel))" stroke="var(--copper)"/><rect x="96" width="46" height="26" rx="3" fill="color-mix(in srgb,var(--copper) 10%,var(--panel))" stroke="var(--copper)"/>
+    <rect x="158" width="46" height="26" rx="3" fill="color-mix(in srgb,var(--cyan) 12%,var(--panel))" stroke="var(--cyan-deep)"/><rect x="206" width="46" height="26" rx="3" fill="color-mix(in srgb,var(--cyan) 12%,var(--panel))" stroke="var(--cyan-deep)"/>
+    <rect x="268" width="46" height="26" rx="3" fill="color-mix(in srgb,var(--sage) 14%,var(--panel))" stroke="var(--sage-deep)"/><rect x="316" width="46" height="26" rx="3" fill="color-mix(in srgb,var(--sage) 14%,var(--panel))" stroke="var(--sage-deep)"/><rect x="364" width="46" height="26" rx="3" fill="color-mix(in srgb,var(--sage) 14%,var(--panel))" stroke="var(--sage-deep)"/>
+    <g class="svg-mono" fill="var(--ink)" font-size="11" text-anchor="middle"><text x="23" y="17">A</text><text x="71" y="17">A</text><text x="119" y="17">A</text><text x="181" y="17">B</text><text x="229" y="17">B</text><text x="291" y="17">C</text><text x="339" y="17">C</text><text x="387" y="17">C</text></g>
+  </g>
+  <!-- boundary brackets -->
+  <g class="svg-mono svg-faint" font-size="9" text-anchor="middle"><text x="111" y="86">run A</text><text x="261" y="86">run B</text><text x="411" y="86">run C</text></g>
+  <line x1="194" y1="40" x2="194" y2="100" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 2"/>
+  <line x1="344" y1="40" x2="344" y2="100" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 2"/>
+  <!-- accumulator + emits -->
+  <rect x="470" y="36" width="120" height="34" rx="6" fill="var(--panel-2)" stroke="var(--cyan-deep)"/><text x="530" y="57" text-anchor="middle" class="svg-mono" fill="var(--cyan-deep)" font-size="10">1 accumulator</text>
+  <rect x="612" y="36" width="80" height="120" rx="6" fill="color-mix(in srgb,var(--sage) 10%,var(--panel))" stroke="var(--sage-deep)"/>
+  <text x="652" y="28" text-anchor="middle" class="svg-mono svg-faint" font-size="10">output ↑</text>
+  <g class="svg-mono" fill="var(--ink)" font-size="10" text-anchor="middle"><text x="652" y="64">A→Σ</text><text x="652" y="92">B→Σ</text><text x="652" y="120">C→Σ</text></g>
+  <path d="M194,70 C 300,120 420,120 530,72" fill="none" stroke="var(--sage-deep)" stroke-width="1" marker-end="url(#xa14)"/>
+  <line x1="590" y1="53" x2="610" y2="60" stroke="var(--sage-deep)" stroke-width="1.1" marker-end="url(#xa14)"/>
+  <text x="300" y="150" text-anchor="middle" class="svg-mono" fill="var(--sage-deep)">O(1) memory per group · emits in sorted order · sort is free if input already ordered (§07)</text>
+  <text x="300" y="172" text-anchor="middle" class="svg-mono svg-faint" font-size="10">mirror of hash-vs-merge: order instead of memory</text>
+</svg>
+</div>
+<figcaption><b>FIG A14</b>Sort-based (streaming) aggregation. With the input ordered on the grouping key, each group is a contiguous run; a single accumulator folds a run and emits at the boundary, in constant space and sorted order. It is the constant-memory counterpart to hash aggregation — pay for order rather than for group-sized memory — and free whenever the order already exists.</figcaption>
+</figure>
+
+<h3>Partial / two-phase aggregation</h3>
+<p>The move that makes parallel and distributed aggregation cheap, and the single most important pattern for GPU group-by (§14&#8211;16). Split the aggregation in two: each worker/partition first computes a <strong>partial</strong> aggregate over its local rows (pre-aggregation), then a single <strong>final</strong> step merges the partials per key. Because the partial step collapses many rows into one-per-group <em>before</em> any data crosses the network or the PCIe straw (FIG 13), only the tiny partial results are moved — a billion local rows can become a few thousand bytes of partials. The catch is decomposability: the aggregate must be <em>algebraic</em>, expressible as combine-of-partials. <span class="mono">SUM</span>/<span class="mono">COUNT</span>/<span class="mono">MIN</span>/<span class="mono">MAX</span> are trivially so; <span class="mono">AVG</span> works by carrying <span class="mono">(sum, count)</span> and dividing at the end; <em>holistic</em> aggregates like <span class="mono">COUNT(DISTINCT)</span> and <span class="mono">MEDIAN</span> don't decompose and need a different (often shuffle-heavy) plan.</p>
+
+<figure>
+<div class="frame">
+<svg viewBox="0 0 720 240" role="img" aria-label="Two-phase aggregation: local partial aggregates merged into a global final">
+  <defs><marker id="xa15" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L7,4 L0,8 z" fill="var(--copper)"/></marker></defs>
+  <text x="30" y="20" class="svg-title">phase 1 — local partial aggregates (shrink before moving)</text>
+  <!-- three workers -->
+  <g>
+    <text x="92" y="44" text-anchor="middle" class="svg-mono svg-faint" font-size="9">worker 0</text>
+    <rect x="34" y="50" width="116" height="40" rx="5" fill="var(--panel-2)" stroke="var(--line-strong)"/><text x="92" y="66" text-anchor="middle" class="svg-mono svg-faint" font-size="9">many rows</text><text x="92" y="82" text-anchor="middle" class="svg-mono" fill="var(--ink)" font-size="9">A:Σ12 B:Σ5</text>
+    <text x="262" y="44" text-anchor="middle" class="svg-mono svg-faint" font-size="9">worker 1</text>
+    <rect x="204" y="50" width="116" height="40" rx="5" fill="var(--panel-2)" stroke="var(--line-strong)"/><text x="262" y="66" text-anchor="middle" class="svg-mono svg-faint" font-size="9">many rows</text><text x="262" y="82" text-anchor="middle" class="svg-mono" fill="var(--ink)" font-size="9">A:Σ8 C:Σ3</text>
+    <text x="432" y="44" text-anchor="middle" class="svg-mono svg-faint" font-size="9">worker 2</text>
+    <rect x="374" y="50" width="116" height="40" rx="5" fill="var(--panel-2)" stroke="var(--line-strong)"/><text x="432" y="66" text-anchor="middle" class="svg-mono svg-faint" font-size="9">many rows</text><text x="432" y="82" text-anchor="middle" class="svg-mono" fill="var(--ink)" font-size="9">B:Σ4 C:Σ9</text>
+  </g>
+  <text x="600" y="44" text-anchor="middle" class="svg-mono" fill="var(--copper)" font-size="10">only partials</text>
+  <text x="600" y="58" text-anchor="middle" class="svg-mono" fill="var(--copper)" font-size="10">cross the wire</text>
+  <!-- arrows converge to final -->
+  <rect x="250" y="150" width="220" height="58" rx="8" fill="color-mix(in srgb,var(--copper) 10%,var(--panel))" stroke="var(--copper)"/>
+  <text x="360" y="138" text-anchor="middle" class="svg-mono" fill="var(--copper)" font-size="10">phase 2 — final merge (combine partials per key)</text>
+  <g class="svg-mono" fill="var(--ink)" font-size="10" text-anchor="middle"><text x="360" y="174">A:12+8=20  ·  B:5+4=9</text><text x="360" y="194">C:3+9=12   ·  AVG = Σsum / Σcount</text></g>
+  <g stroke="var(--copper)" stroke-width="1.1"><line x1="92" y1="90" x2="300" y2="148" marker-end="url(#xa15)"/><line x1="262" y1="90" x2="350" y2="148" marker-end="url(#xa15)"/><line x1="432" y1="90" x2="420" y2="148" marker-end="url(#xa15)"/></g>
+  <text x="360" y="228" text-anchor="middle" class="svg-mono svg-faint" font-size="10">algebraic aggregates only — SUM/COUNT/MIN/MAX direct, AVG via (sum,count); DISTINCT/MEDIAN are holistic, don't decompose</text>
+</svg>
+</div>
+<figcaption><b>FIG A15</b>Partial / two-phase aggregation. Each worker pre-aggregates locally, so only one partial-per-group leaves the node; a final pass combines partials by key. This shrink-before-you-move structure is what keeps distributed and GPU group-by bandwidth-bound on kilobytes rather than terabytes (FIG 13) — but it applies only to decomposable algebraic aggregates; holistic ones require a heavier, shuffle-based plan.</figcaption>
+</figure>
+
+<h3>One page, every operator</h3>
+<p>The atlas in a single table — precondition, cost, the rule the optimizer applies, and what each becomes on the GPU. This is the §07 decision made concrete, and a fast way to predict a plan's shape before reading <span class="mono">EXPLAIN</span>.</p>
+
+<div class="tbl">
+<table>
+<thead><tr><th>Operator</th><th>Precondition</th><th>Cost (sketch)</th><th>Optimizer picks it when…</th><th>On the GPU</th></tr></thead>
+<tbody>
+<tr><td><strong>Sequential scan</strong></td><td>none</td><td><span class="mono">N_pages</span> seq</td><td>many rows qualify, or small table</td><td>native coalesced column read (§13)</td></tr>
+<tr><td><strong>Index scan</strong></td><td>index on predicate col</td><td><span class="mono">h + matches×rand</span></td><td>very low selectivity</td><td>rare; random gather is GPU-hostile</td></tr>
+<tr><td><strong>Index-only scan</strong></td><td>covering index</td><td><span class="mono">h + leaves</span></td><td>query cols ⊆ index cols</td><td>columnar projection already does this</td></tr>
+<tr><td><strong>Bitmap scan</strong></td><td>≥1 index</td><td>bitmap + ordered heap</td><td>mid selectivity, multi-predicate</td><td>predicate→selection-vector mask</td></tr>
+<tr><td><strong>Nested-loop</strong></td><td>none</td><td><span class="mono">|R|×|S|</span></td><td>tiny inner, or non-equi predicate</td><td>only for tiny/broadcast inners</td></tr>
+<tr><td><strong>Index nested-loop</strong></td><td>index on inner key</td><td><span class="mono">|R|×(h+m)</span></td><td>small outer + indexed inner</td><td>uncommon; favors hash instead</td></tr>
+<tr><td><strong>Sort-merge</strong></td><td>order on key (or sort)</td><td><span class="mono">sort + merge</span></td><td>inputs pre-sorted, or range join</td><td>sort is costly; hash usually wins</td></tr>
+<tr><td><strong>Hash join</strong></td><td>build fits in memory</td><td><span class="mono">|R|+|S|</span></td><td>equi-join, no useful order/index</td><td>the default; build=atomics, probe=parallel (§14)</td></tr>
+<tr><td><strong>Grace hash join</strong></td><td>same hash both sides</td><td>2 passes</td><td>build &gt; memory</td><td>device-memory spill strategy (§15)</td></tr>
+<tr><td><strong>Hybrid hash join</strong></td><td>partial memory</td><td>≈ in-mem + spill tail</td><td>build slightly &gt; memory</td><td>keep hot partition resident in HBM</td></tr>
+<tr><td><strong>Semi / anti join</strong></td><td>existence test</td><td>hash/merge, stop early</td><td>flattened <span class="mono">EXISTS</span>/<span class="mono">NOT EXISTS</span> (§03)</td><td>masked probe, no materialized matches</td></tr>
+<tr><td><strong>Broadcast join</strong></td><td>one side small</td><td><span class="mono">|S|×workers</span> ship</td><td>small × workers &lt; reshuffle</td><td>replicate small table to every GPU</td></tr>
+<tr><td><strong>Shuffle join</strong></td><td>both large</td><td>all-to-all (FIG 16)</td><td>both sides large</td><td>GPUDirect RDMA exchange / UCX (§16)</td></tr>
+<tr><td><strong>Hash aggregation</strong></td><td>groups fit in memory</td><td><span class="mono">O(rows)</span></td><td>default <span class="mono">GROUP BY</span></td><td>shared-memory-first + atomics (FIG 14)</td></tr>
+<tr><td><strong>Sort aggregation</strong></td><td>order on key (or sort)</td><td><span class="mono">sort + scan</span></td><td>input pre-sorted, or ordered output wanted</td><td>segmented reduce over sorted keys</td></tr>
+<tr><td><strong>Partial / two-phase</strong></td><td>algebraic aggregate</td><td>local + final</td><td>parallel/distributed group-by</td><td>essential: shrink before PCIe/network (§16)</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="box key">
+<div class="tag">The atlas in one line</div>
+<p>Every plan is built from three verbs — <strong>read</strong> a table (scan family), <strong>match</strong> two tables (join family), <strong>collapse</strong> rows into groups (aggregation family) — and within each family the same axis recurs: <em>hash</em> (no order, costs memory) versus <em>sort/order</em> (costs a sort, runs lean) versus <em>index/probe</em> (costs a structure, wins when one side is small or selective). The optimizer's whole job (§04&#8211;07) is choosing a point on that axis for every node given the cardinalities; moving to the GPU keeps the axis intact but reprices it — sequential reads and parallel probes get cheaper, random gathers and per-partition shuffles get relatively dearer, and partial aggregation goes from helpful to essential.</p>
+</div>
+</section>
 <footer style="line-height:1.6">
 <p style="margin:0 0 .4rem"><b style="font-weight:600">Query Optimizers &amp; the Road to the GPU</b> — a field manual.</p>
 <p style="margin:0 0 .4rem">Eighteen sections, five parts: from declarative SQL through the cost-based optimizer core to vectorized, compiled, and GPU execution, ending in distributed multi-GPU shuffle — one running star-schema query carried end to end. Built as a single self-contained file.</p>
