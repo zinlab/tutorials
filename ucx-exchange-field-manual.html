@@ -361,6 +361,45 @@
         happen on its single <code>run()</code> thread. Everything else — dozens of Velox driver threads — touches UCX only
         indirectly, by pushing work onto a thread-safe queue. This is the most consequential design decision in the module.</p>
 
+      <div class="diagram">
+        <div class="cap">Threading model · two actors, queues are the only thing between them</div>
+        <svg viewBox="0 0 840 400" role="img" aria-label="Driver threads communicate with the single Communicator thread only through queues">
+          <defs><marker id="tmA" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--copper)"/></marker></defs>
+          <style>
+            .zA{fill:var(--panel);stroke-width:1.4;} .bA{fill:var(--bg-2);stroke:var(--rule);stroke-width:1.1;}
+            .tA{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;}
+            .nA{font-family:'Instrument Sans',sans-serif;font-size:12px;font-weight:600;fill:var(--ink);}
+            .mA{font-family:'JetBrains Mono',monospace;font-size:9.5px;fill:var(--faint);}
+            .sA{font-family:'Source Serif 4',serif;font-size:10.5px;fill:var(--muted);}
+            .aA{fill:none;stroke:var(--copper);stroke-width:1.6;} .lA{font-family:'JetBrains Mono',monospace;font-size:9.5px;fill:var(--muted);}
+          </style>
+          <rect class="zA" x="20" y="44" width="230" height="316" rx="11" style="stroke:var(--sage-dim)"/>
+          <text class="tA" x="135" y="66" text-anchor="middle" fill="var(--sage)">VELOX DRIVER THREADS</text>
+          <text class="sA" x="135" y="82" text-anchor="middle">many &middot; scheduler thread pool</text>
+          <rect class="bA" x="34" y="98" width="202" height="42" rx="6"/><text class="nA" x="44" y="116">Driver 0</text><text class="mA" x="44" y="131">UcxPartitionedOutput::addInput</text>
+          <rect class="bA" x="34" y="150" width="202" height="42" rx="6"/><text class="nA" x="44" y="168">Driver 1</text><text class="mA" x="44" y="183">UcxExchange::isBlocked / getOutput</text>
+          <rect class="bA" x="34" y="202" width="202" height="42" rx="6"/><text class="nA" x="44" y="220">Driver k &hellip;</text><text class="mA" x="44" y="235">more producers / consumers</text>
+          <text class="sA" x="135" y="278" text-anchor="middle" fill="var(--rose)">never call ucp_* / tagSend</text>
+          <text class="sA" x="135" y="294" text-anchor="middle">they only push work &amp; read queues</text>
+          <rect class="zA" x="590" y="44" width="230" height="316" rx="11" style="stroke:var(--cyan-dim)"/>
+          <text class="tA" x="705" y="66" text-anchor="middle" fill="var(--cyan)">COMMUNICATOR THREAD</text>
+          <text class="sA" x="705" y="82" text-anchor="middle">exactly one &middot; owns the worker</text>
+          <rect class="bA" x="604" y="98" width="202" height="44" rx="6" style="stroke:var(--cyan-dim)"/><text class="nA" x="614" y="117">run() loop</text><text class="mA" x="614" y="132">the 4-phase cycle &#8635;</text>
+          <rect class="bA" x="604" y="152" width="202" height="44" rx="6" style="stroke:var(--cyan-dim)"/><text class="nA" x="614" y="171">ucxx::Worker</text><text class="mA" x="614" y="186">the one and only instance</text>
+          <rect class="bA" x="604" y="220" width="202" height="50" rx="6" style="stroke:var(--rose)"/><text class="nA" x="614" y="240" fill="var(--rose)">&#9888; UCX-only zone</text><text class="mA" x="614" y="256">progress() &middot; tagSend &middot; ucp_* here</text>
+          <rect class="bA" x="300" y="104" width="240" height="48" rx="7" style="stroke:var(--copper);stroke-width:1.5"/><text class="nA" x="312" y="124">WorkQueue&lt;CommElement&gt;</text><text class="mA" x="312" y="140">control channel &middot; FIFO + mutex</text>
+          <rect class="bA" x="300" y="226" width="240" height="48" rx="7" style="stroke:var(--sage);stroke-width:1.5"/><text class="nA" x="312" y="246">Exchange / Output queues</text><text class="mA" x="312" y="262">data + wake-up promises</text>
+          <text class="sA" x="420" y="192" text-anchor="middle">the only things crossing the boundary</text>
+          <line class="aA" x1="250" y1="128" x2="298" y2="128" marker-end="url(#tmA)"/><text class="lA" x="274" y="120" text-anchor="middle">push</text>
+          <line class="aA" x1="540" y1="128" x2="588" y2="128" marker-end="url(#tmA)"/><text class="lA" x="564" y="120" text-anchor="middle">pop()</text>
+          <line class="aA" x1="588" y1="250" x2="542" y2="250" marker-end="url(#tmA)"/><text class="lA" x="565" y="242" text-anchor="middle">enqueue</text>
+          <line class="aA" x1="298" y1="250" x2="252" y2="250" marker-end="url(#tmA)"/><text class="lA" x="275" y="242" text-anchor="middle">next()</text>
+          <rect x="248" y="374" width="11" height="11" rx="2" fill="var(--sage)"/><text class="lA" x="264" y="383">driver side</text>
+          <rect x="358" y="374" width="11" height="11" rx="2" fill="var(--copper)"/><text class="lA" x="374" y="383">work queue</text>
+          <rect x="470" y="374" width="11" height="11" rx="2" fill="var(--cyan)"/><text class="lA" x="486" y="383">communicator thread</text>
+        </svg>
+      </div>
+
       <h3>The single-threaded progress loop<span class="tag">Communicator::run</span></h3>
       <p>UCX workers are cheapest and least error-prone when progressed by exactly one thread (the alternative,
         <code>UCS_THREAD_MODE_MULTI</code>, adds internal locking and a long list of foot-guns). This module commits fully
@@ -395,6 +434,29 @@
         was supposed to trigger. Progressing after every item breaks the cycle.</p>
       </div>
 
+      <div class="diagram">
+        <div class="cap">The run() loop &middot; one thread, four phases, forever &mdash; and the queue that feeds each</div>
+        <svg viewBox="0 0 840 450" role="img" aria-label="The Communicator run loop as a four-phase cycle">
+          <defs><marker id="runB" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--copper)"/></marker></defs>
+          <style>
+            .nB{fill:var(--panel);stroke:var(--rule);stroke-width:1.4;} .tB{font-family:'Instrument Sans',sans-serif;font-size:12.5px;font-weight:600;fill:var(--ink);}
+            .mB{font-family:'JetBrains Mono',monospace;font-size:9.5px;fill:var(--faint);} .aB{fill:none;stroke:var(--copper);stroke-width:1.8;}
+            .cB{font-family:'JetBrains Mono',monospace;font-size:12px;fill:var(--copper);font-weight:600;} .sB{font-family:'Source Serif 4',serif;font-size:10.5px;fill:var(--muted);}
+            .lB{font-family:'JetBrains Mono',monospace;font-size:9px;fill:var(--muted);}
+          </style>
+          <rect class="nB" x="315" y="24" width="210" height="56" rx="9" style="stroke:var(--copper)"/><text class="tB" x="420" y="48" text-anchor="middle">&#9312; Drain endpoint cleanups</text><text class="mB" x="420" y="65" text-anchor="middle">deferredEndpointCleanup_.pop()</text>
+          <rect class="nB" x="600" y="189" width="210" height="56" rx="9" style="stroke:var(--copper)"/><text class="tB" x="705" y="213" text-anchor="middle">&#9313; Drain work queue</text><text class="mB" x="705" y="230" text-anchor="middle">process() &rarr; progress(), each item</text>
+          <rect class="nB" x="315" y="354" width="210" height="56" rx="9" style="stroke:var(--copper)"/><text class="tB" x="420" y="378" text-anchor="middle">&#9314; Reap finished requests</text><text class="mB" x="420" y="395" text-anchor="middle">erase where isCompleted()</text>
+          <rect class="nB" x="30" y="189" width="210" height="56" rx="9" style="stroke:var(--copper)"/><text class="tB" x="135" y="213" text-anchor="middle">&#9315; Block for events</text><text class="mB" x="135" y="230" text-anchor="middle">progressWorkerEvent(0)</text>
+          <text class="cB" x="420" y="210" text-anchor="middle">Communicator::run()</text><text class="sB" x="420" y="228" text-anchor="middle">one thread &middot; loops forever &#8635;</text>
+          <path class="aB" d="M525,52 Q665,66 705,187" marker-end="url(#runB)"/>
+          <path class="aB" d="M705,245 Q700,366 527,382" marker-end="url(#runB)"/>
+          <path class="aB" d="M315,382 Q140,366 135,247" marker-end="url(#runB)"/>
+          <path class="aB" d="M135,187 Q175,66 313,52" marker-end="url(#runB)"/>
+          <text class="lB" x="420" y="426" text-anchor="middle">queues that feed the loop &mdash;  deferredEndpointCleanup_ &rarr; &#9312;   workQueue_ &rarr; &#9313;   deferredRequests_ &rarr; &#9314;   signal()/network event &rarr; &#9315;</text>
+        </svg>
+      </div>
+
       <h3>Decoupling many driver threads from one worker<span class="tag">WorkQueue</span></h3>
       <p>The bridge between Velox's thread pool and the single UCX thread is a deliberately boring structure: a
         mutex-guarded <code>std::list</code> with non-blocking <code>push</code>/<code>pop</code>. Any thread may push a
@@ -422,6 +484,39 @@
         anything that itself progresses the worker — and <code>endpoint-&gt;closeBlocking()</code> does exactly that
         internally. So when an endpoint's close-callback fires, it cannot tear itself down; it pushes the work onto a
         deferred queue that the main loop drains at the top of its next iteration.</p>
+
+      <div class="diagram">
+        <div class="cap">Where callbacks come from &mdash; and why one path out of them is forbidden</div>
+        <svg viewBox="0 0 860 450" role="img" aria-label="UCX callbacks originate inside progress; calling progress again is forbidden re-entrancy">
+          <defs>
+            <marker id="cbN" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--copper)"/></marker>
+            <marker id="cbR" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--rose)"/></marker>
+            <marker id="cbS" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--sage)"/></marker>
+          </defs>
+          <style>
+            .bC{fill:var(--panel);stroke:var(--rule);stroke-width:1.3;} .tC{font-family:'Instrument Sans',sans-serif;font-size:12.5px;font-weight:600;fill:var(--ink);}
+            .mC{font-family:'JetBrains Mono',monospace;font-size:9.5px;fill:var(--faint);} .sC{font-family:'Source Serif 4',serif;font-size:10px;fill:var(--muted);}
+            .pC{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.06em;font-weight:600;}
+          </style>
+          <rect class="bC" x="40" y="28" width="230" height="44" rx="8"/><text class="tC" x="155" y="55" text-anchor="middle">Communicator thread</text>
+          <rect class="bC" x="40" y="104" width="230" height="54" rx="8" style="stroke:var(--cyan)"/><text class="tC" x="155" y="127" text-anchor="middle">worker_-&gt;progress()</text><text class="mC" x="155" y="145" text-anchor="middle">the ONLY caller of progress</text>
+          <rect class="bC" x="40" y="206" width="320" height="122" rx="8" style="stroke:var(--copper)"/><text class="tC" x="200" y="230" text-anchor="middle">UCX fires a completion callback</text>
+          <text class="mC" x="200" y="252" text-anchor="middle">onClose &middot; onData &middot; onMetadata</text><text class="mC" x="200" y="268" text-anchor="middle">sendComplete &middot; cStyleAMCallback (AM)</text>
+          <text class="sC" x="200" y="298" text-anchor="middle">every callback in this module</text><text class="sC" x="200" y="312" text-anchor="middle">originates HERE &mdash; inside progress()</text>
+          <rect class="bC" x="520" y="104" width="250" height="54" rx="8" style="stroke:var(--rose)"/><text class="tC" x="645" y="127" text-anchor="middle">closeBlocking()</text><text class="mC" x="645" y="145" text-anchor="middle">internally calls progress()</text>
+          <rect class="bC" x="40" y="362" width="320" height="58" rx="8" style="stroke:var(--sage)"/><text class="tC" x="200" y="384" text-anchor="middle">enqueue only</text><text class="mC" x="200" y="401" text-anchor="middle">deferEndpointCleanup / deferRequestCleanup / addToWorkQueue</text>
+          <rect class="bC" x="470" y="362" width="300" height="58" rx="8" style="stroke:var(--sage)"/><text class="tC" x="620" y="384" text-anchor="middle">main loop &middot; next iteration</text><text class="sC" x="620" y="402" text-anchor="middle">runs the deferred work OUTSIDE progress()</text>
+          <line class="bC" x1="155" y1="72" x2="155" y2="102" stroke="var(--copper)" stroke-width="1.6" marker-end="url(#cbN)"/><text class="sC" x="166" y="91">calls</text>
+          <line x1="155" y1="158" x2="155" y2="204" stroke="var(--copper)" stroke-width="1.6" fill="none" marker-end="url(#cbN)"/><text class="sC" x="166" y="184">completes &rarr;</text>
+          <path d="M360,248 L516,150" fill="none" stroke="var(--rose)" stroke-width="1.7" marker-end="url(#cbR)"/><text class="pC" x="455" y="190" fill="var(--rose)">a callback does this&hellip;</text>
+          <path d="M520,116 Q400,70 274,118" fill="none" stroke="var(--rose)" stroke-width="1.7" stroke-dasharray="5 3" marker-end="url(#cbR)"/><text class="pC" x="400" y="64" text-anchor="middle" fill="var(--rose)">re-enters progress()!</text>
+          <line x1="284" y1="110" x2="300" y2="126" stroke="var(--rose)" stroke-width="2.6"/><line x1="300" y1="110" x2="284" y2="126" stroke="var(--rose)" stroke-width="2.6"/>
+          <text class="pC" x="565" y="92" fill="var(--rose)">&#10007; FORBIDDEN: UB / deadlock</text>
+          <path d="M200,328 L200,360" fill="none" stroke="var(--sage)" stroke-width="1.7" marker-end="url(#cbS)"/><text class="pC" x="210" y="348" fill="var(--sage)">instead</text>
+          <path d="M360,391 L468,391" fill="none" stroke="var(--sage)" stroke-width="1.7" marker-end="url(#cbS)"/><text class="pC" x="414" y="383" text-anchor="middle" fill="var(--sage)">next pass</text>
+          <text class="pC" x="620" y="348" text-anchor="middle" fill="var(--sage)">&#10003; SAFE PATH</text>
+        </svg>
+      </div>
       <figure class="code">
         <figcaption><span class="file">EndpointRef.cpp + Communicator.cpp</span><span class="role">callback → deferred main-loop work</span></figcaption>
 <pre><span class="c-cm">/* static */ void EndpointRef::onClose(ucs_status_t, std::shared_ptr&lt;void&gt; arg) {
@@ -435,6 +530,34 @@
         a buffer the application already freed. The <code>endpointsMutex_</code> is even a <code>recursive_mutex</code>,
         because <code>removeEndpointRef()</code> holds it while calling <code>closeBlocking()</code>, which can re-enter the
         listener callback that re-locks the same mutex.</p>
+
+      <div class="diagram">
+        <div class="cap">Deferred-request lifecycle &middot; why a cancelled request &mdash; and its GPU buffer &mdash; is kept alive</div>
+        <svg viewBox="0 0 860 290" role="img" aria-label="A cancelled request is held in deferredRequests until isCompleted, so its GPU buffer is not freed mid-DMA">
+          <defs><marker id="drD" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--copper)"/></marker>
+          <marker id="drDs" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--copper)"/></marker></defs>
+          <style>
+            .bD{fill:var(--panel);stroke:var(--rule);stroke-width:1.2;} .tD{font-family:'Instrument Sans',sans-serif;font-size:11.5px;font-weight:600;fill:var(--ink);}
+            .mD{font-family:'JetBrains Mono',monospace;font-size:9px;fill:var(--faint);} .sD{font-family:'Source Serif 4',serif;font-size:10.5px;fill:var(--muted);}
+            .barlbl{font-family:'Instrument Sans',sans-serif;font-size:11px;font-weight:600;} .aD{fill:none;stroke:var(--copper);stroke-width:1.5;}
+          </style>
+          <rect class="bD" x="16" y="36" width="148" height="56" rx="7"/><text class="tD" x="90" y="60" text-anchor="middle">posted</text><text class="mD" x="90" y="77" text-anchor="middle">tagSend / tagRecv</text>
+          <rect class="bD" x="186" y="36" width="148" height="56" rx="7"/><text class="tD" x="260" y="60" text-anchor="middle">cancel()</text><text class="mD" x="260" y="77" text-anchor="middle">task aborted</text>
+          <rect class="bD" x="356" y="36" width="148" height="56" rx="7"/><text class="tD" x="430" y="60" text-anchor="middle">deferred</text><text class="mD" x="430" y="77" text-anchor="middle">&rarr; deferredRequests_</text>
+          <rect class="bD" x="526" y="36" width="148" height="56" rx="7"/><text class="tD" x="600" y="60" text-anchor="middle">polled</text><text class="mD" x="600" y="77" text-anchor="middle">isCompleted()? each pass</text>
+          <rect class="bD" x="696" y="36" width="148" height="56" rx="7" style="stroke:var(--sage)"/><text class="tD" x="770" y="60" text-anchor="middle">erased</text><text class="mD" x="770" y="77" text-anchor="middle">request + buffer freed</text>
+          <line class="aD" x1="164" y1="64" x2="184" y2="64" marker-end="url(#drD)"/><line class="aD" x1="334" y1="64" x2="354" y2="64" marker-end="url(#drD)"/>
+          <line class="aD" x1="504" y1="64" x2="524" y2="64" marker-end="url(#drD)"/><line class="aD" x1="674" y1="64" x2="694" y2="64" marker-end="url(#drD)"/>
+          <path class="aD" d="M600,92 q34,22 0,0" /><path d="M634,80 a18,12 0 1 1 -12,12" fill="none" stroke="var(--copper)" stroke-width="1.3" marker-end="url(#drDs)"/><text class="mD" x="648" y="100">not yet &rarr; wait</text>
+          <text class="sD" x="16" y="146">GPU buffer (kept alive via the request&rsquo;s arg shared_ptr)</text>
+          <rect x="16" y="158" width="656" height="30" rx="5" fill="var(--rose)" fill-opacity="0.16" stroke="var(--rose)" stroke-width="1.2"/>
+          <text class="barlbl" x="344" y="177" text-anchor="middle" fill="var(--rose)">HELD &mdash; UCX may still read/write the buffer; freeing here corrupts</text>
+          <rect x="680" y="158" width="164" height="30" rx="5" fill="var(--sage)" fill-opacity="0.16" stroke="var(--sage)" stroke-width="1.2"/>
+          <text class="barlbl" x="762" y="177" text-anchor="middle" fill="var(--sage)">SAFE to free</text>
+          <line x1="676" y1="92" x2="676" y2="192" stroke="var(--faint)" stroke-width="1" stroke-dasharray="3 3"/>
+          <text class="sD" x="430" y="232" text-anchor="middle">Hold until UCX has fully processed the cancellation &mdash; only then is it safe to release the device memory.</text>
+        </svg>
+      </div>
 
       <h3>Connection on demand &amp; endpoint sharing<span class="tag">Acceptor · listenerCallback</span></h3>
       <p>There is no static topology. A consumer's source connects to a producer's listener when it has data to fetch; the
@@ -466,6 +589,31 @@
         <code>EndpointRef</code> wraps each, tracking the set of comm elements using it via <code>weak_ptr</code>; when the
         endpoint closes, it fans the close out to all of them. The peer's real IP is captured from the connection request,
         not trusted from the handshake — a lesson learned the hard way (see §13).</p>
+
+      <div class="diagram">
+        <div class="cap">Endpoint sharing &middot; at most two endpoints between any pair of nodes</div>
+        <svg viewBox="0 0 800 300" role="img" aria-label="Outgoing endpoints to a peer are shared; at most two endpoints exist between two nodes, one per direction">
+          <defs><marker id="epE" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--copper)"/></marker></defs>
+          <style>
+            .zE{fill:var(--panel);stroke:var(--rule);stroke-width:1.4;} .bE{fill:var(--bg-2);stroke:var(--rule);stroke-width:1.2;}
+            .tE{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;} .nE{font-family:'Instrument Sans',sans-serif;font-size:12px;font-weight:600;fill:var(--ink);}
+            .mE{font-family:'JetBrains Mono',monospace;font-size:9px;fill:var(--faint);} .sE{font-family:'Source Serif 4',serif;font-size:10px;fill:var(--muted);}
+            .cE{font-family:'JetBrains Mono',monospace;font-size:10px;fill:var(--bg-2);} .aE{fill:none;stroke:var(--copper);stroke-width:1.8;} .lE{font-family:'JetBrains Mono',monospace;font-size:9px;fill:var(--muted);}
+          </style>
+          <rect class="zE" x="24" y="36" width="320" height="206" rx="11" style="stroke:var(--sage-dim)"/><text class="tE" x="184" y="58" text-anchor="middle" fill="var(--sage)">NODE A &middot; process</text>
+          <rect class="bE" x="44" y="76" width="280" height="148" rx="8" style="stroke:var(--copper)"/><text class="nE" x="54" y="98">EndpointRef (A &rarr; B)</text><text class="mE" x="54" y="113">endpoints_[ host:port ]</text>
+          <rect x="54" y="126" width="58" height="24" rx="5" fill="var(--copper)" opacity="0.85"/><text class="cE" x="83" y="142" text-anchor="middle">Src</text>
+          <rect x="120" y="126" width="58" height="24" rx="5" fill="var(--copper)" opacity="0.85"/><text class="cE" x="149" y="142" text-anchor="middle">Src</text>
+          <rect x="186" y="126" width="58" height="24" rx="5" fill="var(--copper)" opacity="0.85"/><text class="cE" x="215" y="142" text-anchor="middle">Srv</text>
+          <text class="sE" x="54" y="172">weak_ptr set of CommElements</text><text class="sE" x="54" y="188">on close &rarr; fan out close() to all</text>
+          <rect class="zE" x="456" y="36" width="320" height="206" rx="11" style="stroke:var(--cyan-dim)"/><text class="tE" x="616" y="58" text-anchor="middle" fill="var(--cyan)">NODE B &middot; process</text>
+          <rect class="bE" x="476" y="76" width="280" height="148" rx="8" style="stroke:var(--cyan)"/><text class="nE" x="486" y="98">EndpointRef (B &rarr; A)</text><text class="mE" x="486" y="113">endpoints_[ host:port ]</text>
+          <text class="sE" x="486" y="138">its own shared outgoing endpoint</text><text class="sE" x="486" y="154">back toward A</text>
+          <line class="aE" x1="344" y1="112" x2="454" y2="112" marker-end="url(#epE)"/><text class="lE" x="399" y="104" text-anchor="middle">shared endpoint (A&rarr;B)</text>
+          <line class="aE" x1="456" y1="180" x2="346" y2="180" marker-end="url(#epE)"/><text class="lE" x="401" y="172" text-anchor="middle">shared endpoint (B&rarr;A)</text>
+          <text class="sE" x="400" y="272" text-anchor="middle">&#8804; 2 endpoints per node-pair (one per direction) &middot; incoming endpoints are not shared</text>
+        </svg>
+      </div>
     </section>
 
     <section id="protocol">
