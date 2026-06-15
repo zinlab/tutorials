@@ -164,6 +164,7 @@
     .lanes { grid-template-columns:1fr; } .paa .paa-grid { grid-template-columns:1fr; } .paa .pcell { border-right:none; }
     body { font-size:17px; }
   }
+  nav.toc .grp { font-family:"JetBrains Mono",monospace; font-size:9.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--faint); margin:16px 0 5px 9px; }
 </style>
 </head>
 <body>
@@ -189,6 +190,9 @@
       <a href="#nccl"><span class="n">12</span><span>Why not NCCL</span></a>
       <a href="#errors"><span class="n">13</span><span>Error patterns</span></a>
       <a href="#eval"><span class="n">14</span><span>Evaluation &amp; gaps</span></a>
+      <div class="grp">Addenda</div>
+      <a href="#scaling"><span class="n">15</span><span>Scaling past one thread</span></a>
+      <a href="#loop-order"><span class="n">16</span><span>Why cleanup leads</span></a>
     </nav>
     <div class="rail-foot">
       Source read at <code>main</code> · 6.8k LOC core, 4.3k LOC tests.<br>
@@ -1556,6 +1560,252 @@ request_ = endpointRef_-&gt;endpoint_-&gt;<span class="c-fn">tagRecv</span>(
         production hardening</em> (kill the busy-polls, widen the task hash, byte-based backpressure, RMA to drop the metadata
         round-trip, real metrics) rather than any structural rethink. For an <code>experimental/</code> module, that is a
         healthy place to be.</p>
+      </div>
+    </section>
+
+    <section id="scaling">
+      <div class="sec-head"><span class="num">15</span><h2>Scaling past one progress thread</h2></div>
+      <p class="lede">The single progress thread is &sect;03's defining choice, so it's fair to ask whether more threads would go
+        faster. The answer splits sharply on what &ldquo;more threads&rdquo; means: there are two designs hiding in the
+        question and they have <em>opposite</em> verdicts.</p>
+
+      <h3>The naive reading: many threads sharing one worker &mdash; don't<span class="tag">a de-optimization</span></h3>
+      <p>Taken literally, this is several threads all calling <code>progress()</code> (and <code>tagSend</code>/<code>tagRecv</code>)
+        on the <em>same</em> worker. To even be legal it requires building the worker in <code>UCS_THREAD_MODE_MULTI</code>,
+        and it's the wrong move, for reasons baked into how UCX works:</p>
+      <ul>
+        <li><strong>A worker's progress engine is serial.</strong> UCX advances all of a worker's in-flight operations through
+          one internal state machine. In MULTI mode that machine is guarded by a worker-wide lock, so concurrent
+          <code>progress()</code> calls don't run in parallel &mdash; they queue on the lock and execute one at a time. You pay
+          locking on <em>every</em> operation and get no parallel progress in return. UCX's own documentation says exactly
+          this: a worker can be used from many threads, but because of lock contention it performs best driven mostly from
+          one. People who have tried the shared-worker path have measured it running dramatically slower &mdash; in one
+          reported case roughly 100&times; &mdash; than keeping progress on a single thread.</li>
+        <li><strong>It detonates every lock-free invariant in &sect;03.</strong> The module is correct <em>because</em> one
+          thread touches UCX: <code>handleToEndpointRef_</code> needs no mutex, the work queue has a single consumer,
+          callbacks fire on a known thread. Let progress run on many threads and callbacks fire on any of them &mdash; every
+          shared structure now needs locking, and the re-entrancy reasoning (which assumed one call stack) has to be redone.
+          UCX is touchy here in practice too: registering active-message handlers or driving progress concurrently on one
+          worker is a known source of races and crashes.</li>
+      </ul>
+      <p>So &ldquo;multiple communicator threads, one worker&rdquo; is a <em>de-optimization</em>: more lock traffic, the same
+        serial progress, and a far more fragile codebase.</p>
+      <div class="diagram">
+        <div class="cap">Two ways to add threads &middot; one is a de-optimization, one is how you actually scale</div>
+        <svg viewBox="0 0 840 348" role="img" aria-label="Many threads on one worker serialize on a lock; one worker per thread runs in parallel">
+          <defs><marker id="mMa" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--rose)"/></marker>
+          <marker id="mMb" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--sage)"/></marker></defs>
+          <style>
+            .pM{fill:none;stroke-width:1.5;} .bM{fill:var(--bg-2);stroke:var(--rule);stroke-width:1.1;}
+            .tM{font-family:'Instrument Sans',sans-serif;font-size:11.5px;font-weight:600;fill:var(--ink);} .lM{font-family:'JetBrains Mono',monospace;font-size:9.5px;fill:var(--ink-soft);}
+            .mM{font-family:'JetBrains Mono',monospace;font-size:9px;fill:var(--faint);} .sM{font-family:'Source Serif 4',serif;font-size:10px;fill:var(--muted);} .hM{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;letter-spacing:.03em;}
+          </style>
+          <rect class="pM" x="20" y="34" width="388" height="298" rx="11" style="stroke:var(--rose)"/>
+          <text class="hM" x="214" y="56" text-anchor="middle" fill="var(--rose)">&#10007;  many threads &rarr; ONE worker</text>
+          <rect class="bM" x="44" y="70" width="80" height="32" rx="6"/><text class="lM" x="84" y="90" text-anchor="middle">thread 0</text>
+          <rect class="bM" x="164" y="70" width="80" height="32" rx="6"/><text class="lM" x="204" y="90" text-anchor="middle">thread 1</text>
+          <rect class="bM" x="284" y="70" width="80" height="32" rx="6"/><text class="lM" x="324" y="90" text-anchor="middle">thread 2</text>
+          <line x1="84" y1="102" x2="190" y2="144" stroke="var(--rose)" stroke-width="1.4" marker-end="url(#mMa)"/>
+          <line x1="204" y1="102" x2="214" y2="144" stroke="var(--rose)" stroke-width="1.4" marker-end="url(#mMa)"/>
+          <line x1="324" y1="102" x2="238" y2="144" stroke="var(--rose)" stroke-width="1.4" marker-end="url(#mMa)"/>
+          <rect x="118" y="146" width="192" height="34" rx="6" fill="var(--rose)" fill-opacity="0.16" stroke="var(--rose)" stroke-width="1.2"/><text class="tM" x="214" y="167" text-anchor="middle" fill="var(--rose)">shared worker lock</text>
+          <line x1="214" y1="180" x2="214" y2="204" stroke="var(--rose)" stroke-width="1.4" marker-end="url(#mMa)"/>
+          <rect class="bM" x="118" y="206" width="192" height="34" rx="6"/><text class="tM" x="214" y="227" text-anchor="middle">progress() &mdash; serial</text>
+          <text class="sM" x="214" y="266" text-anchor="middle">every op serialized on the worker lock:</text>
+          <text class="sM" x="214" y="281" text-anchor="middle">lock overhead, no parallel progress.</text>
+          <text class="sM" x="214" y="296" text-anchor="middle" fill="var(--rose)">reported up to ~100&times; slower.</text>
+          <rect class="pM" x="432" y="34" width="388" height="298" rx="11" style="stroke:var(--sage)"/>
+          <text class="hM" x="626" y="56" text-anchor="middle" fill="var(--sage)">&#10003;  ONE worker per thread</text>
+          <rect class="bM" x="456" y="70" width="92" height="32" rx="6"/><text class="lM" x="502" y="90" text-anchor="middle">thread 0</text>
+          <rect class="bM" x="580" y="70" width="92" height="32" rx="6"/><text class="lM" x="626" y="90" text-anchor="middle">thread 1</text>
+          <rect class="bM" x="704" y="70" width="92" height="32" rx="6"/><text class="lM" x="750" y="90" text-anchor="middle">thread 2</text>
+          <line x1="502" y1="102" x2="502" y2="142" stroke="var(--sage)" stroke-width="1.4" marker-end="url(#mMb)"/>
+          <line x1="626" y1="102" x2="626" y2="142" stroke="var(--sage)" stroke-width="1.4" marker-end="url(#mMb)"/>
+          <line x1="750" y1="102" x2="750" y2="142" stroke="var(--sage)" stroke-width="1.4" marker-end="url(#mMb)"/>
+          <rect class="bM" x="456" y="144" width="92" height="40" rx="6" style="stroke:var(--sage)"/><text class="tM" x="502" y="162" text-anchor="middle">worker 0</text><text class="mM" x="502" y="176" text-anchor="middle">SINGLE</text>
+          <rect class="bM" x="580" y="144" width="92" height="40" rx="6" style="stroke:var(--sage)"/><text class="tM" x="626" y="162" text-anchor="middle">worker 1</text><text class="mM" x="626" y="176" text-anchor="middle">SINGLE</text>
+          <rect class="bM" x="704" y="144" width="92" height="40" rx="6" style="stroke:var(--sage)"/><text class="tM" x="750" y="162" text-anchor="middle">worker 2</text><text class="mM" x="750" y="176" text-anchor="middle">SINGLE</text>
+          <line x1="502" y1="184" x2="502" y2="206" stroke="var(--sage)" stroke-width="1.4" marker-end="url(#mMb)"/>
+          <line x1="626" y1="184" x2="626" y2="206" stroke="var(--sage)" stroke-width="1.4" marker-end="url(#mMb)"/>
+          <line x1="750" y1="184" x2="750" y2="206" stroke="var(--sage)" stroke-width="1.4" marker-end="url(#mMb)"/>
+          <rect class="bM" x="456" y="208" width="92" height="32" rx="6"/><text class="mM" x="502" y="228" text-anchor="middle">progress 0</text>
+          <rect class="bM" x="580" y="208" width="92" height="32" rx="6"/><text class="mM" x="626" y="228" text-anchor="middle">progress 1</text>
+          <rect class="bM" x="704" y="208" width="92" height="32" rx="6"/><text class="mM" x="750" y="228" text-anchor="middle">progress 2</text>
+          <text class="sM" x="626" y="266" text-anchor="middle">independent workers, no shared lock:</text>
+          <text class="sM" x="626" y="281" text-anchor="middle" fill="var(--sage)">N flows progress in parallel.</text>
+          <text class="sM" x="626" y="296" text-anchor="middle">the standard HPC pattern.</text>
+        </svg>
+      </div>
+
+      <h3>The right reading: one worker per thread &mdash; shard the transport<span class="tag">the design that scales</span></h3>
+      <p>The version that <em>does</em> scale keeps each thread single-threaded over UCX but gives each its <em>own</em>
+        worker. This is the standard high-performance UCX pattern &mdash; MPI implementations, dask-cuda, and the Fugaku/Tofu
+        work all do variants: N independent progress domains, each a private worker in <code>UCS_THREAD_MODE_SINGLE</code>
+        with no internal locking, driving N network flows genuinely in parallel. End to end it looks like this:</p>
+      <ul>
+        <li><strong>One context, N workers.</strong> All workers are created from a single <code>ucp_context</code> &mdash; the
+          per-process object that owns hardware resources and, crucially, the <em>memory domain</em>. Because memory
+          registration lives on the context, not the worker, you register each GPU buffer <em>once</em> and every worker uses
+          the resulting rkey. Sharding doesn't multiply your registration cost.</li>
+        <li><strong>A deterministic shard function.</strong> Both ends compute the same mapping &mdash; e.g.
+          <code>shard = hash(taskId, partition) % N</code> &mdash; so a given transfer lands on matching workers on producer
+          and consumer. Keeping a whole partition on one worker also means that partition's chunks stay ordered; there's no
+          cross-worker reordering to reconcile.</li>
+        <li><strong>Per-worker everything.</strong> Each worker is a full copy of the &sect;03 machine: its own
+          <code>run()</code> loop and eventfd, its own work queue and deferred queues, its own endpoint pool, its own
+          listener. The single-thread invariants hold <em>within</em> a worker exactly as before.</li>
+        <li><strong>Connection routing falls out of &ldquo;endpoints are worker-bound.&rdquo;</strong> In UCX every connection
+          is created in the scope of one worker, and an endpoint cannot be moved to another worker. So each worker gets its
+          own listener on a distinct port, and a node advertises a port per shard. The source connects
+          <code>source.worker[k] &rarr; dest.listener[k]</code>, the <code>Acceptor</code> on <code>dest.worker[k]</code>
+          spawns the server there, and the tag is matched on worker <code>k</code> on both sides. As a bonus, tag matching is
+          now per-worker, so the live-tag population per worker shrinks &mdash; the 32-bit tag-hash collision worry from
+          &sect;13 eases.</li>
+      </ul>
+      <div class="diagram">
+        <div class="cap">The sharded transport, end to end &middot; one context, N single-thread workers, routed by a shard key</div>
+        <svg viewBox="0 0 840 446" role="img" aria-label="A shard function routes partitions across N workers that share one context">
+          <defs><marker id="mSa" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--copper)"/></marker></defs>
+          <style>
+            .bS{fill:var(--bg-2);stroke:var(--rule);stroke-width:1.1;} .laneS{fill:var(--panel);stroke:var(--cyan-dim);stroke-width:1.3;}
+            .tS{font-family:'Instrument Sans',sans-serif;font-size:11.5px;font-weight:600;fill:var(--ink);} .mS{font-family:'JetBrains Mono',monospace;font-size:9px;fill:var(--faint);}
+            .hS{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.04em;font-weight:600;} .sS{font-family:'Source Serif 4',serif;font-size:10px;fill:var(--muted);} .aS{fill:none;stroke:var(--copper);stroke-width:1.4;}
+          </style>
+          <rect x="40" y="32" width="760" height="44" rx="8" fill="var(--copper)" fill-opacity="0.14" stroke="var(--copper)" stroke-width="1.3"/>
+          <text class="hS" x="420" y="52" text-anchor="middle" fill="var(--copper)">shard = hash(taskId, partition) % N</text><text class="sS" x="420" y="67" text-anchor="middle">computed identically on producer and consumer &mdash; both pick the same worker</text>
+          <line class="aS" x1="160" y1="76" x2="148" y2="94" marker-end="url(#mSa)"/><line class="aS" x1="392" y1="76" x2="380" y2="94" marker-end="url(#mSa)"/><line class="aS" x1="612" y1="76" x2="600" y2="94" marker-end="url(#mSa)"/>
+          <g>
+            <rect class="laneS" x="48" y="96" width="200" height="224" rx="10"/><text class="hS" x="148" y="118" text-anchor="middle" fill="var(--cyan)">worker 0 &middot; SINGLE</text>
+            <rect class="bS" x="64" y="130" width="168" height="34" rx="6"/><text class="tS" x="80" y="151">run() loop + eventfd</text>
+            <rect class="bS" x="64" y="172" width="168" height="34" rx="6"/><text class="tS" x="80" y="193">work queue</text>
+            <rect class="bS" x="64" y="214" width="168" height="34" rx="6"/><text class="tS" x="80" y="235">endpoint pool</text>
+            <rect class="bS" x="64" y="256" width="168" height="40" rx="6" style="stroke:var(--copper)"/><text class="tS" x="80" y="274">listener</text><text class="mS" x="80" y="288">:port 0</text>
+          </g>
+          <g>
+            <rect class="laneS" x="280" y="96" width="200" height="224" rx="10"/><text class="hS" x="380" y="118" text-anchor="middle" fill="var(--cyan)">worker 1 &middot; SINGLE</text>
+            <rect class="bS" x="296" y="130" width="168" height="34" rx="6"/><text class="tS" x="312" y="151">run() loop + eventfd</text>
+            <rect class="bS" x="296" y="172" width="168" height="34" rx="6"/><text class="tS" x="312" y="193">work queue</text>
+            <rect class="bS" x="296" y="214" width="168" height="34" rx="6"/><text class="tS" x="312" y="235">endpoint pool</text>
+            <rect class="bS" x="296" y="256" width="168" height="40" rx="6" style="stroke:var(--copper)"/><text class="tS" x="312" y="274">listener</text><text class="mS" x="312" y="288">:port 1</text>
+          </g>
+          <g>
+            <rect class="laneS" x="512" y="96" width="200" height="224" rx="10"/><text class="hS" x="612" y="118" text-anchor="middle" fill="var(--cyan)">worker 2 &middot; SINGLE</text>
+            <rect class="bS" x="528" y="130" width="168" height="34" rx="6"/><text class="tS" x="544" y="151">run() loop + eventfd</text>
+            <rect class="bS" x="528" y="172" width="168" height="34" rx="6"/><text class="tS" x="544" y="193">work queue</text>
+            <rect class="bS" x="528" y="214" width="168" height="34" rx="6"/><text class="tS" x="544" y="235">endpoint pool</text>
+            <rect class="bS" x="528" y="256" width="168" height="40" rx="6" style="stroke:var(--copper)"/><text class="tS" x="544" y="274">listener</text><text class="mS" x="544" y="288">:port 2</text>
+          </g>
+          <text class="hS" x="752" y="210" fill="var(--faint)">&hellip; &times; N</text>
+          <line class="aS" x1="148" y1="320" x2="148" y2="346" marker-end="url(#mSa)"/><line class="aS" x1="380" y1="320" x2="380" y2="346" marker-end="url(#mSa)"/><line class="aS" x1="612" y1="320" x2="612" y2="346" marker-end="url(#mSa)"/>
+          <rect x="40" y="348" width="760" height="46" rx="8" fill="var(--sage)" fill-opacity="0.13" stroke="var(--sage)" stroke-width="1.3"/>
+          <text class="hS" x="420" y="368" text-anchor="middle" fill="var(--sage)">one shared ucp_context</text><text class="sS" x="420" y="384" text-anchor="middle">memory domain &amp; registrations live here &mdash; register each GPU buffer once for all workers</text>
+          <text class="sS" x="420" y="420" text-anchor="middle">Between two nodes: up to 2N endpoints (a pair per shard). A partition stays on one worker, so its chunk order is preserved.</text>
+          <text class="sS" x="420" y="436" text-anchor="middle">Pin each worker to a NUMA-local core; on multi-GPU nodes, shard by device so a worker only moves its own GPU&rsquo;s buffers.</text>
+        </svg>
+      </div>
+
+      <h3>Low-level mechanisms<span class="tag">the concrete pieces</span></h3>
+      <ul>
+        <li><strong>Worker creation.</strong> One shared <code>ucp_context</code> per process; <code>ucp_worker_create</code>
+          with <code>thread_mode = UCS_THREAD_MODE_SINGLE</code> per thread.</li>
+        <li><strong>CPU / NUMA pinning.</strong> Pin each progress thread (pthread affinity) to a core on the NUMA node nearest
+          its NIC, so completion polling and the NIC's DMA stay local &mdash; the same topology logic the rest of the stack
+          cares about.</li>
+        <li><strong>GPU affinity.</strong> Each worker thread sets its device (<code>cudaSetDevice</code>) and primes the
+          context (the <code>cudaFree(0)</code> trick) on that device. On a multi-GPU node the clean shard key <em>is</em> the
+          GPU &mdash; one worker per device &mdash; so a worker only ever moves its own GPU's buffers.</li>
+        <li><strong>Wake-up per worker.</strong> Each worker has its own eventfd; <code>signal()</code> wakes only the worker
+          whose queue a driver touched. A driver enqueuing work computes the shard, pushes to that worker's queue, and signals
+          that worker.</li>
+        <li><strong>Thread-safe shared state.</strong> The process-wide singletons &mdash; the output-queue manager and the
+          intra-node registry &mdash; are now touched by N worker threads, so they need real synchronization (a mutex or a
+          concurrent map), or they get sharded by worker too. This is the tax for giving up the single-thread simplicity.</li>
+        <li><strong>Registration sharing.</strong> One registration cache on the context serves all workers; the registration
+          is the expensive part, and you do it once.</li>
+      </ul>
+
+      <h3>When it's actually worth it<span class="tag">the ceiling</span></h3>
+      <p>Sharding buys throughput only when one progress core is the bottleneck &mdash; and on RDMA hardware that bottleneck is
+        usually <em>message rate, not bandwidth</em>. The NIC offloads the byte movement; the progress thread's job is to
+        <em>post</em> operations and <em>process completions and callbacks</em>, and that is CPU work bounded by one core. So
+        the single thread saturates with many small messages or many concurrent flows, not when one big transfer is in flight
+        (that's NIC-limited, and sharding a single flow wouldn't help). The cases that clearly justify the redesign:</p>
+      <ul>
+        <li><strong>High message rate</strong> &mdash; many partitions/peers, where per-message posting and completion
+          processing maxes a core.</li>
+        <li><strong>Multiple GPUs</strong> &mdash; you want a progress thread per device for locality anyway.</li>
+        <li><strong>Multiple NICs / rails</strong> &mdash; one worker per NIC to drive them in parallel.</li>
+      </ul>
+      <div class="note copper">
+        <span class="lbl">Verdict</span>
+        <p>The single-thread design is the right <em>default</em> &mdash; simplest, race-free, and adequate while RDMA offload
+          keeps one core ahead of the message rate. Worker-per-thread sharding is the principled way to scale past that
+          ceiling, and it is a real redesign (connection routing, a shard-aware protocol, thread-safe singletons, affinity),
+          not a flag. The one option never to reach for is the middle one &mdash; many threads on a single shared worker
+          &mdash; which adds lock overhead for no parallel progress.</p>
+      </div>
+      <p style="font-size:.85rem;color:var(--faint);margin-top:18px;">Threading facts above (worker thread modes, per-worker
+        progress serialization, the worker-per-thread scaling pattern, context-scoped memory registration) are drawn from
+        UCX/NVIDIA UCX documentation and the OpenUCX community; the ~100&times; figure is a user-reported measurement, not a
+        general benchmark.</p>
+    </section>
+
+    <section id="loop-order">
+      <div class="sec-head"><span class="num">16</span><h2>Why cleanup leads the loop</h2></div>
+      <p class="lede">A natural question about <code>run()</code>: phase 1 drains <em>endpoint cleanups</em>, but the other
+        reclamation &mdash; freeing cancelled <em>requests</em> &mdash; is phase 3, after the work. Why does endpoint cleanup go
+        <em>first</em> rather than last? Because the two reclamations have opposite jobs, and the ordering is the whole point.</p>
+
+      <h3>Cleanup leads so the work loop never touches a dead endpoint<span class="tag">prevention</span></h3>
+      <p>A deferred endpoint cleanup got onto the queue because a close callback fired during the <em>previous</em> iteration's
+        progress &mdash; an endpoint dropped. The danger is what's still sitting in the work queue: comm elements (servers and
+        sources) bound to that now-dead endpoint. If phase 2 ran first, the loop could pop one of those elements and call
+        <code>process()</code> on it, which would post a <code>tagSend</code>/<code>tagRecv</code> on a closing or closed
+        endpoint &mdash; wasted work at best, a use-after-free or hard error at worst. Draining cleanups first runs
+        <code>closeAndDrainCommunicators()</code>, which cancels and finalizes exactly those elements <em>before</em> the work
+        loop can step them. Putting it first turns &ldquo;don't act on the dead&rdquo; into a structural guarantee instead of
+        something every element's <code>process()</code> has to defensively re-check in every state.</p>
+      <p>Two more reasons reinforce it. <strong>Reclaim before you allocate:</strong> phase 2 allocates fresh device buffers
+        for incoming chunks, so releasing the closed endpoints' resources first keeps peak memory, endpoints, and file
+        descriptors lower within the iteration. <strong>Minimize the close-to-teardown gap:</strong> the cleanup was deferred
+        last iteration, so handling it at the very top is the soonest safe moment (outside any callback, where
+        <code>closeBlocking()</code> may legally progress the worker), rather than after another full work drain. There's also
+        a small bookkeeping win &mdash; <code>removeEndpointRef</code> prunes the handle&rarr;endpoint map up front, so if a new
+        connection to the same peer arrives during this iteration's progress, the stale handle is already gone and won't trip
+        the &ldquo;handle already exists&rdquo; check.</p>
+
+      <h3>And why request-reaping trails &mdash; the mirror image<span class="tag">collection</span></h3>
+      <p>Phase 3, which frees cancelled requests, sits <em>after</em> the work loop on purpose. A cancelled request can only be
+        released once <code>isCompleted()</code> reports UCX has finished with its buffer, and what <em>drives</em> a
+        cancellation to completion is the per-item <code>progress()</code> inside phase 2. So reaping is placed immediately
+        after the progress-heavy phase to harvest precisely the completions that phase just produced; reaping <em>before</em>
+        phase 2 would mostly find nothing ready and simply defer everything another iteration.</p>
+      <p>So the work loop is bracketed by two reclamations doing opposite things: <strong>purge-before</strong> (phase 1,
+        prevent &mdash; don't run work on endpoints that are already gone) and <strong>reap-after</strong> (phase 3, harvest
+        &mdash; collect the cancellations this iteration's progress just finished). Endpoint cleanup leads because its job is
+        prevention; request cleanup trails because its job is collection.</p>
+      <div class="diagram">
+        <div class="cap">Purge before work, reap after &middot; the two reclamations bracket the loop for opposite reasons</div>
+        <svg viewBox="0 0 840 300" role="img" aria-label="Endpoint cleanup runs before the work loop to prevent acting on dead endpoints; request reaping runs after to collect completions">
+          <defs><marker id="mLa" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--copper)"/></marker>
+          <marker id="mLd" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--cyan)"/></marker></defs>
+          <style>
+            .bL{fill:var(--panel);stroke:var(--rule);stroke-width:1.3;} .tL{font-family:'Instrument Sans',sans-serif;font-size:12px;font-weight:600;fill:var(--ink);}
+            .mL{font-family:'JetBrains Mono',monospace;font-size:9px;fill:var(--faint);} .cL{fill:var(--bg-2);} .ctL{font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:600;}
+            .scL{font-family:'Source Serif 4',serif;font-size:9.5px;fill:var(--muted);} .aL{fill:none;stroke:var(--copper);stroke-width:1.5;} .sL{font-family:'Source Serif 4',serif;font-size:10.5px;fill:var(--muted);}
+          </style>
+          <rect class="cL" x="24" y="44" width="180" height="54" rx="8" style="stroke:var(--rose);stroke-width:1.3"/><text class="ctL" x="114" y="64" text-anchor="middle" fill="var(--rose)">PURGE &mdash; before</text><text class="scL" x="114" y="80" text-anchor="middle">remove dead endpoints so</text><text class="scL" x="114" y="92" text-anchor="middle">&#9313; never steps a dead one</text>
+          <rect class="cL" x="444" y="44" width="180" height="54" rx="8" style="stroke:var(--sage);stroke-width:1.3"/><text class="ctL" x="534" y="64" text-anchor="middle" fill="var(--sage)">REAP &mdash; after</text><text class="scL" x="534" y="80" text-anchor="middle">free only once isCompleted();</text><text class="scL" x="534" y="92" text-anchor="middle">&#9313;&rsquo;s progress completes them</text>
+          <line class="aL" x1="114" y1="98" x2="114" y2="118" marker-end="url(#mLa)"/><line class="aL" x1="534" y1="98" x2="534" y2="118" marker-end="url(#mLa)"/>
+          <rect class="bL" x="24" y="120" width="180" height="58" rx="8" style="stroke:var(--copper)"/><text class="tL" x="114" y="144" text-anchor="middle">&#9312; cleanup</text><text class="mL" x="114" y="160" text-anchor="middle">closeAndDrain + remove</text>
+          <rect class="bL" x="224" y="120" width="200" height="58" rx="8" style="stroke:var(--cyan)"/><text class="tL" x="324" y="144" text-anchor="middle">&#9313; work queue</text><text class="mL" x="324" y="160" text-anchor="middle">process() &rarr; progress()</text>
+          <rect class="bL" x="444" y="120" width="180" height="58" rx="8" style="stroke:var(--copper)"/><text class="tL" x="534" y="144" text-anchor="middle">&#9314; reap requests</text><text class="mL" x="534" y="160" text-anchor="middle">free where isCompleted()</text>
+          <rect class="bL" x="644" y="120" width="172" height="58" rx="8" style="stroke:var(--muted);stroke-dasharray:5 3"/><text class="tL" x="730" y="144" text-anchor="middle">&#9315; block / sleep</text><text class="mL" x="730" y="160" text-anchor="middle">until event or signal()</text>
+          <line class="aL" x1="204" y1="149" x2="222" y2="149" marker-end="url(#mLa)"/><line class="aL" x1="424" y1="149" x2="442" y2="149" marker-end="url(#mLa)"/><line class="aL" x1="624" y1="149" x2="642" y2="149" marker-end="url(#mLa)"/>
+          <path d="M324,178 Q430,224 530,180" fill="none" stroke="var(--cyan)" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#mLd)"/><text class="mL" x="430" y="234" text-anchor="middle" fill="var(--cyan)">&#9313;&rsquo;s progress is what completes them</text>
+          <text class="sL" x="420" y="276" text-anchor="middle">Cleanup leads because its job is prevention; request-reaping trails because its job is collection. Flip either and the loop</text>
+          <text class="sL" x="420" y="291" text-anchor="middle">would act on torn-down state (cleanup last) or waste a pass reaping completions that haven&rsquo;t happened yet (reap first).</text>
+        </svg>
       </div>
     </section>
 
