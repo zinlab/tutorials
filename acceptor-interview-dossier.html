@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Acceptor.cpp — Interview &amp; Code-Review Dossier</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,300..700;1,8..60,400..600&family=Instrument+Sans:ital,wght@0,400..700;1,400..600&family=JetBrains+Mono:ital,wght@0,400..700;1,400..600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#14110c; --bg-2:#1a1611; --panel:#1f1a14; --panel-2:#251f17;
+    --rule:#3a3026; --rule-soft:#2c241b; --ink:#ece5d6; --ink-soft:#c4bba9;
+    --muted:#8d8270; --faint:#6a6151; --copper:#cf8a52; --copper-dim:#a96a39;
+    --cyan:#66b8c4; --cyan-dim:#3f8c98; --sage:#9aa978; --sage-dim:#6f7e52;
+    --rose:#c9707a; --rose-dim:#a4525c; --code-bg:#15110b; --sel:rgba(207,138,82,0.26);
+    --shadow:0 1px 0 rgba(0,0,0,0.4), 0 18px 50px -28px rgba(0,0,0,0.85);
+  }
+  [data-theme="light"] {
+    --bg:#f3efe5; --bg-2:#ede7d8; --panel:#f8f4ea; --panel-2:#efe8d8;
+    --rule:#d6cdb8; --rule-soft:#e2dac8; --ink:#241d14; --ink-soft:#4a4133;
+    --muted:#7a6f5b; --faint:#9b9181; --copper:#a85f29; --copper-dim:#8a4d1f;
+    --cyan:#277380; --cyan-dim:#1d5a65; --sage:#5d6e3c; --sage-dim:#495730;
+    --rose:#a8454f; --rose-dim:#8a3640; --code-bg:#ece5d4; --sel:rgba(168,95,41,0.20);
+    --shadow:0 1px 0 rgba(255,255,255,0.5), 0 18px 50px -30px rgba(60,45,20,0.4);
+  }
+  * { box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  @media (prefers-reduced-motion:reduce){ html{scroll-behavior:auto;} }
+  ::selection { background:var(--sel); }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:"Source Serif 4",Georgia,serif;
+    font-size:18px; line-height:1.66; font-weight:380; -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility; transition:background .35s, color .35s; }
+  .shell { display:grid; grid-template-columns:288px minmax(0,1fr); max-width:1320px; margin:0 auto; }
+  .rail { position:sticky; top:0; align-self:start; height:100vh; overflow-y:auto; padding:30px 22px 60px 30px;
+    border-right:1px solid var(--rule-soft); font-family:"Instrument Sans",system-ui,sans-serif; }
+  .rail::-webkit-scrollbar { width:8px; } .rail::-webkit-scrollbar-thumb { background:var(--rule); border-radius:4px; }
+  main { padding:64px clamp(22px,5vw,76px) 140px; min-width:0; }
+  .badge { font-family:"JetBrains Mono",monospace; font-size:10.5px; letter-spacing:.18em; text-transform:uppercase; color:var(--copper); font-weight:600; }
+  .rail h1 { font-family:"Instrument Sans",sans-serif; font-size:18px; font-weight:600; letter-spacing:-.01em; margin:10px 0 3px; line-height:1.25; }
+  .rail .sub { font-size:12px; color:var(--muted); margin-bottom:22px; font-weight:400; }
+  nav.toc { font-size:13px; }
+  nav.toc .grp { font-family:"JetBrains Mono",monospace; font-size:9.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--faint); margin:18px 0 5px 9px; }
+  nav.toc a { display:flex; gap:9px; align-items:baseline; text-decoration:none; color:var(--ink-soft);
+    padding:5px 9px; border-radius:6px; line-height:1.3; margin:1px 0; border-left:2px solid transparent;
+    transition:background .15s, color .15s, border-color .15s; }
+  nav.toc a .n { font-family:"JetBrains Mono",monospace; font-size:10px; color:var(--faint); min-width:30px; padding-top:1px; }
+  nav.toc a:hover { background:var(--panel); color:var(--ink); }
+  nav.toc a.active { color:var(--copper); border-left-color:var(--copper); background:var(--panel); }
+  nav.toc a.active .n { color:var(--copper-dim); }
+  .rail-foot { margin-top:24px; padding-top:16px; border-top:1px solid var(--rule-soft); font-size:11px; color:var(--faint); }
+  .rail-foot code { font-family:"JetBrains Mono",monospace; font-size:10.5px; color:var(--muted); }
+  .toggle { position:fixed; top:18px; right:20px; z-index:50; font-family:"Instrument Sans",sans-serif; font-size:11.5px;
+    letter-spacing:.04em; background:var(--panel); color:var(--ink-soft); border:1px solid var(--rule); padding:7px 13px;
+    border-radius:20px; cursor:pointer; display:flex; align-items:center; gap:7px; box-shadow:var(--shadow); transition:all .2s; }
+  .toggle:hover { color:var(--copper); border-color:var(--copper-dim); }
+  .toggle .dot { width:8px; height:8px; border-radius:50%; background:var(--copper); }
+  .hero { margin-bottom:54px; }
+  .eyebrow { font-family:"JetBrains Mono",monospace; font-size:11.5px; letter-spacing:.2em; text-transform:uppercase; color:var(--copper); font-weight:600; }
+  .hero h1.title { font-family:"Instrument Sans",sans-serif; font-weight:600; letter-spacing:-.025em;
+    font-size:clamp(2.2rem,5vw,3.5rem); line-height:1.04; margin:18px 0 0; }
+  .hero h1.title em { font-family:"JetBrains Mono",monospace; font-style:normal; font-weight:500; color:var(--copper); font-size:.86em; }
+  .hero .thesis { font-size:clamp(1.08rem,2vw,1.34rem); line-height:1.5; color:var(--ink-soft); max-width:54ch; margin:24px 0 0; }
+  .meta-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); margin-top:40px; border-top:1px solid var(--rule); border-left:1px solid var(--rule); }
+  .meta-grid .cell { border-right:1px solid var(--rule); border-bottom:1px solid var(--rule); padding:14px 16px; }
+  .meta-grid .k { font-family:"JetBrains Mono",monospace; font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); }
+  .meta-grid .v { font-family:"Instrument Sans",sans-serif; font-size:14.5px; color:var(--ink); margin-top:5px; font-weight:500; }
+  section { margin-bottom:72px; scroll-margin-top:28px; }
+  .sec-head { display:flex; align-items:baseline; gap:16px; margin-bottom:8px; border-bottom:1px solid var(--rule); padding-bottom:14px; }
+  .sec-head .num { font-family:"JetBrains Mono",monospace; font-size:13px; color:var(--copper); font-weight:600; padding-top:6px; }
+  h2 { font-family:"Instrument Sans",sans-serif; font-weight:600; letter-spacing:-.02em; font-size:clamp(1.5rem,3vw,2.05rem); line-height:1.1; margin:0; }
+  h3 { font-family:"Instrument Sans",sans-serif; font-weight:600; letter-spacing:-.01em; font-size:1.24rem; margin:38px 0 12px; color:var(--ink); }
+  h4 { font-family:"Instrument Sans",sans-serif; font-weight:600; font-size:1.02rem; margin:26px 0 8px; color:var(--copper); }
+  p { margin:14px 0; max-width:74ch; } .lede { font-size:1.1rem; color:var(--ink-soft); max-width:70ch; }
+  strong { font-weight:600; color:var(--ink); }
+  em.term { font-style:normal; font-family:"JetBrains Mono",monospace; font-size:.86em; color:var(--cyan); background:var(--panel); padding:1px 5px; border-radius:4px; border:1px solid var(--rule-soft); }
+  ul, ol { max-width:74ch; padding-left:22px; } li { margin:7px 0; } li::marker { color:var(--copper-dim); }
+  ul.tight li { margin:4px 0; }
+  p code, li code, td code { background:var(--panel); border:1px solid var(--rule-soft); padding:1px 5px; border-radius:4px; font-size:.84em; color:var(--copper); }
+  figure.code { margin:18px 0; border:1px solid var(--rule); border-radius:9px; overflow:hidden; background:var(--code-bg); box-shadow:var(--shadow); }
+  figure.code figcaption { font-family:"JetBrains Mono",monospace; font-size:11px; color:var(--muted); padding:9px 15px;
+    border-bottom:1px solid var(--rule-soft); background:var(--panel); display:flex; justify-content:space-between; gap:10px; align-items:center; }
+  figure.code figcaption .file { color:var(--copper); } figure.code figcaption .role { color:var(--faint); font-size:10px; text-transform:uppercase; letter-spacing:.1em; }
+  pre { margin:0; padding:16px 18px; overflow-x:auto; font-family:"JetBrains Mono",monospace; font-size:12.4px; line-height:1.6; color:var(--ink-soft); }
+  pre::-webkit-scrollbar { height:9px; } pre::-webkit-scrollbar-thumb { background:var(--rule); border-radius:4px; }
+  code { font-family:"JetBrains Mono",monospace; }
+  .c-cm { color:var(--faint); font-style:italic; } .c-kw { color:var(--copper); } .c-fn { color:var(--cyan); }
+  .c-st { color:var(--sage); } .c-nm { color:var(--rose); }
+  .note { border-left:3px solid var(--rule); background:var(--panel); padding:14px 18px; border-radius:0 8px 8px 0; margin:20px 0; font-size:.95rem; }
+  .note .lbl { font-family:"JetBrains Mono",monospace; font-size:10px; letter-spacing:.15em; text-transform:uppercase; font-weight:600; display:block; margin-bottom:5px; }
+  .note.copper { border-left-color:var(--copper); } .note.copper .lbl { color:var(--copper); }
+  .note.cyan { border-left-color:var(--cyan); } .note.cyan .lbl { color:var(--cyan); }
+  .note.sage { border-left-color:var(--sage); } .note.sage .lbl { color:var(--sage); }
+  .note.rose { border-left-color:var(--rose); } .note.rose .lbl { color:var(--rose); }
+  .note p { margin:6px 0; max-width:none; }
+  .tbl-wrap { overflow-x:auto; margin:22px 0; border:1px solid var(--rule); border-radius:9px; }
+  table { border-collapse:collapse; width:100%; font-size:13.5px; min-width:520px; }
+  thead th { font-family:"Instrument Sans",sans-serif; font-weight:600; text-align:left; font-size:11.5px; letter-spacing:.04em;
+    text-transform:uppercase; color:var(--copper); padding:11px 15px; border-bottom:1px solid var(--rule); background:var(--panel); white-space:nowrap; }
+  tbody td { padding:11px 15px; border-bottom:1px solid var(--rule-soft); vertical-align:top; color:var(--ink-soft); line-height:1.5; }
+  tbody tr:last-child td { border-bottom:none; } tbody tr:hover td { background:var(--bg-2); }
+  table code { font-size:11.5px; } table .hd { font-family:"Instrument Sans",sans-serif; font-weight:600; color:var(--ink); }
+
+  /* reviewer lens cards */
+  .lens-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:16px; margin:26px 0; }
+  .lens { border:1px solid var(--rule); border-radius:11px; padding:18px 18px 16px; background:var(--panel); border-top:3px solid var(--rule); }
+  .lens.cyan { border-top-color:var(--cyan); } .lens.copper { border-top-color:var(--copper); }
+  .lens.sage { border-top-color:var(--sage); } .lens.rose { border-top-color:var(--rose); }
+  .lens .who { font-family:"Instrument Sans",sans-serif; font-weight:600; font-size:1.12rem; display:flex; align-items:baseline; gap:9px; }
+  .lens .who .gh { font-family:"JetBrains Mono",monospace; font-size:11px; color:var(--muted); font-weight:400; }
+  .lens .role { font-family:"JetBrains Mono",monospace; font-size:10.5px; letter-spacing:.04em; margin:6px 0 10px; }
+  .lens.cyan .role { color:var(--cyan); } .lens.copper .role { color:var(--copper); }
+  .lens.sage .role { color:var(--sage); } .lens.rose .role { color:var(--rose); }
+  .lens p { font-size:13.5px; margin:8px 0 0; max-width:none; line-height:1.5; }
+  .lens .probe { font-size:12.5px; color:var(--muted); margin-top:10px; font-family:"Source Serif 4",serif; }
+  .lens .probe b { color:var(--ink-soft); font-weight:600; font-family:"Instrument Sans",sans-serif; }
+
+  /* Q&A blocks */
+  .qa { border:1px solid var(--rule); border-radius:11px; margin:24px 0; overflow:hidden; }
+  .qa > .q { padding:16px 20px; background:var(--panel); border-bottom:1px solid var(--rule); }
+  .qa > .q .qhead { display:flex; align-items:center; gap:10px; margin-bottom:9px; flex-wrap:wrap; }
+  .qa > .q .qn { font-family:"JetBrains Mono",monospace; font-weight:700; font-size:12px; color:var(--bg); background:var(--copper); padding:2px 8px; border-radius:5px; }
+  .qa .pill { font-family:"JetBrains Mono",monospace; font-size:9.5px; letter-spacing:.08em; text-transform:uppercase; padding:2px 8px; border-radius:20px; border:1px solid; font-weight:600; }
+  .pill.cyan { color:var(--cyan); border-color:var(--cyan-dim); } .pill.copper { color:var(--copper); border-color:var(--copper-dim); }
+  .pill.sage { color:var(--sage); border-color:var(--sage-dim); } .pill.rose { color:var(--rose); border-color:var(--rose-dim); }
+  .pill.tone { color:var(--muted); border-color:var(--rule); }
+  .qa > .q .qtext { font-family:"Instrument Sans",sans-serif; font-weight:600; font-size:1.06rem; color:var(--ink); line-height:1.4; }
+  .qa > .body { padding:4px 20px 18px; }
+  .qa .ans { margin-top:14px; }
+  .qa .ans .alabel { font-family:"JetBrains Mono",monospace; font-size:10px; letter-spacing:.15em; text-transform:uppercase; color:var(--sage); font-weight:600; display:block; margin:14px 0 4px; }
+  .qa .ans p { font-size:15px; margin:9px 0; }
+  .qa .ans ul { font-size:14.5px; }
+  .qa .followup { margin-top:16px; border-top:1px dashed var(--rule); padding-top:12px; font-size:13.5px; color:var(--ink-soft); }
+  .qa .followup .fl { font-family:"JetBrains Mono",monospace; font-size:9.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--copper); font-weight:600; margin-right:8px; }
+  .qa.cyan > .q .qn { background:var(--cyan); } .qa.copper > .q .qn { background:var(--copper); }
+  .qa.sage > .q .qn { background:var(--sage); } .qa.rose > .q .qn { background:var(--rose); }
+
+  /* punch list */
+  .punch { counter-reset:pl; }
+  .punch .item { display:grid; grid-template-columns:30px 1fr; gap:14px; padding:14px 0; border-bottom:1px solid var(--rule-soft); }
+  .punch .item:last-child { border-bottom:none; }
+  .punch .item .pn { counter-increment:pl; font-family:"JetBrains Mono",monospace; font-size:11px; color:var(--rose); border:1px solid var(--rose-dim); border-radius:6px; width:26px; height:26px; display:flex; align-items:center; justify-content:center; font-weight:700; }
+  .punch .item .pn::before { content:counter(pl,decimal-leading-zero); }
+  .punch .item .pt { font-family:"Instrument Sans",sans-serif; font-weight:600; color:var(--ink); font-size:15px; }
+  .punch .item .pd { font-size:13.5px; color:var(--ink-soft); margin-top:3px; line-height:1.5; }
+  .punch .item .pd code { font-size:11.5px; }
+  .sev { font-family:"JetBrains Mono",monospace; font-size:9px; letter-spacing:.08em; text-transform:uppercase; padding:1px 6px; border-radius:4px; margin-left:8px; vertical-align:middle; font-weight:600; }
+  .sev.hi { color:var(--rose); border:1px solid var(--rose-dim); } .sev.md { color:var(--copper); border:1px solid var(--copper-dim); } .sev.lo { color:var(--muted); border:1px solid var(--rule); }
+
+  .footer { border-top:1px solid var(--rule); margin-top:80px; padding-top:26px; font-family:"Instrument Sans",sans-serif; font-size:12.5px; color:var(--muted); }
+  .footer code { font-family:"JetBrains Mono",monospace; color:var(--faint); font-size:11.5px; }
+
+  @media (max-width:880px){
+    .shell { grid-template-columns:1fr; }
+    .rail { position:static; height:auto; border-right:none; border-bottom:1px solid var(--rule); padding:26px 22px; }
+    main { padding:40px 22px 100px; }
+    .lens-grid { grid-template-columns:1fr; }
+    body { font-size:17px; }
+  }
+</style>
+</head>
+<body>
+<button class="toggle" id="themeToggle" aria-label="Toggle colour theme"><span class="dot"></span><span id="themeLabel">Light</span></button>
+<div class="shell">
+  <aside class="rail">
+    <div class="badge">Interview Dossier</div>
+    <h1>Acceptor.cpp</h1>
+    <div class="sub"><code>ucx-exchange · PR #16037 reviewers</code></div>
+    <nav class="toc" id="toc">
+      <a href="#file"><span class="n">00</span><span>The file under glass</span></a>
+      <a href="#lenses"><span class="n">01</span><span>Reviewer lenses</span></a>
+      <div class="grp">45-min rounds</div>
+      <a href="#pentschev"><span class="n">R1</span><span>pentschev · transport</span></a>
+      <a href="#wence"><span class="n">R2</span><span>wence- · correctness</span></a>
+      <a href="#karthik"><span class="n">R3</span><span>karthikeyann · libcudf</span></a>
+      <a href="#devavret"><span class="n">R4</span><span>devavret · packing</span></a>
+      <div class="grp">Show review skill</div>
+      <a href="#punch"><span class="n">PL</span><span>Code-review punch list</span></a>
+      <a href="#rapid"><span class="n">RF</span><span>Rapid-fire warm-ups</span></a>
+    </nav>
+    <div class="rail-foot">
+      Target: <code>Acceptor.cpp</code> @ <code>main</code> (130 LOC).<br>
+      4 × 45 min · code review likely.<br>
+      Companion to the UCX Exchange field manual.
+    </div>
+  </aside>
+  <main>
+    <header class="hero">
+      <div class="eyebrow">NVIDIA · Velox cuDF · UCX Exchange</div>
+      <h1 class="title">Defending <em>Acceptor.cpp</em><br>to the people who'd merge it.</h1>
+      <p class="thesis">Four RAPIDS reviewers, 45 minutes each, almost certainly with the editor open on this one file.
+        It's only 130 lines, but it's a UCX active-message callback that parses an untrusted handshake, resolves a raw
+        endpoint handle, makes the intra-node decision, and spawns and registers a server — touching transport, libcudf
+        data ownership, concurrency, and API design all at once. This dossier maps each reviewer's likely angle into
+        concrete questions, code, and model answers — and ends with the review you should give <em>them</em>.</p>
+      <div class="meta-grid">
+        <div class="cell"><div class="k">Round 1</div><div class="v">pentschev — UCXX / async</div></div>
+        <div class="cell"><div class="k">Round 2</div><div class="v">wence- — correctness</div></div>
+        <div class="cell"><div class="k">Round 3</div><div class="v">karthikeyann — libcudf/systems</div></div>
+        <div class="cell"><div class="k">Round 4</div><div class="v">devavret — packing/data</div></div>
+      </div>
+    </header>
+
+    <section id="file">
+      <div class="sec-head"><span class="num">00</span><h2>The file under glass</h2></div>
+      <p class="lede">One function does the real work: <code>Acceptor::cStyleAMCallback</code>, the worker-wide active-message
+        handler that fires when a source's handshake lands. Everything the exchange becomes — which server exists, whether
+        it's intra-node, what tag the response rides — is decided in these ~95 lines. A second three-line method,
+        <code>registerEndpointRef</code>, maintains the handle→endpoint map it depends on.</p>
+      <figure class="code">
+        <figcaption><span class="file">Acceptor.cpp · cStyleAMCallback</span><span class="role">the whole handshake handler</span></figcaption>
+<pre><span class="c-cm">/*static*/ void Acceptor::cStyleAMCallback(
+    std::shared_ptr&lt;ucxx::Request&gt; request, ucp_ep_h ep) {
+  VELOX_CHECK_NOT_NULL(request, ...);
+  VELOX_CHECK(request-&gt;isCompleted(), ...);
+  <span class="c-kw">auto</span> buffer = std::dynamic_pointer_cast&lt;ucxx::Buffer&gt;(request-&gt;getRecvBuffer());
+  VELOX_CHECK_NOT_NULL(buffer, ...);
+  <span class="c-cm">// Validate buffer size BEFORE casting to prevent reading past buffer bounds.</span>
+  VELOX_CHECK_GE(buffer-&gt;getSize(), <span class="c-kw">sizeof</span>(HandshakeMsg), ...);
+  HandshakeMsg* handshakePtr = <span class="c-kw">reinterpret_cast</span>&lt;HandshakeMsg*&gt;(buffer-&gt;data());
+
+  <span class="c-kw">auto</span> communicator = Communicator::getInstance();
+  <span class="c-kw">auto</span> epRef = communicator-&gt;findEndpointRefByHandle(ep);
+  VELOX_CHECK_NOT_NULL(epRef, <span class="c-st">"Could not find endpoint reference"</span>);
+
+  <span class="c-kw">const</span> PartitionKey key = {handshakePtr-&gt;taskId, handshakePtr-&gt;destination};
+
+  <span class="c-cm">// Same process ⇔ same Communicator singleton ⇔ same random workerId.</span>
+  <span class="c-cm">// (Replaced IP comparison, which fails when Docker containers share a host IP.)</span>
+  <span class="c-kw">bool</span> isIntraNodeTransfer =
+      cudf_velox::CudfConfig::getInstance().intraNodeExchange &amp;&amp;
+      (handshakePtr-&gt;workerId == communicator-&gt;getWorkerId());
+
+  <span class="c-kw">if</span> (isIntraNodeTransfer &amp;&amp;
+      !UcxOutputQueueManager::getInstanceRef()-&gt;canUseIntraNode(key.taskId)) {
+    isIntraNodeTransfer = <span class="c-kw">false</span>;   <span class="c-cm">// not initialized, or broadcast</span>
+  }
+
+  <span class="c-kw">auto</span> server = UcxExchangeServer::create(communicator, epRef, key, isIntraNodeTransfer);
+  epRef-&gt;addCommElem(server);
+  communicator-&gt;registerCommElement(server);     <span class="c-cm">// → enters the work queue</span>
+
+  <span class="c-kw">auto</span> response = std::make_shared&lt;HandshakeResponse&gt;();
+  response-&gt;isIntraNodeTransfer = server-&gt;isIntraNodeTransfer();
+  uint64_t responseTag = getHandshakeResponseTag(fnv1a_32(key.toString()));
+
+  <span class="c-cm">// Fire-and-forget: returned Request handle is discarded.</span>
+  epRef-&gt;endpoint_-&gt;tagSend(response.get(), <span class="c-kw">sizeof</span>(*response), ucxx::Tag{responseTag},
+      <span class="c-kw">false</span>, [response, keyStr = key.toString()](ucs_status_t s, std::shared_ptr&lt;void&gt;){ ... },
+      response);
+}</pre>
+      </figure>
+      <p>Read it as a sequence of trust boundaries: <em>(1)</em> bytes off the wire become a <code>HandshakeMsg</code>;
+        <em>(2)</em> a raw <code>ucp_ep_h</code> becomes a tracked <code>EndpointRef</code>; <em>(3)</em> a remote claim
+        (<code>workerId</code>) plus local state (<code>canUseIntraNode</code>) becomes a routing decision; <em>(4)</em> that
+        decision becomes a live, registered server; <em>(5)</em> a reply is launched without tracking it. Every reviewer
+        below probes a different one of those boundaries.</p>
+    </section>
+
+    <section id="lenses">
+      <div class="sec-head"><span class="num">01</span><h2>Reviewer lenses</h2></div>
+      <p class="lede">Tune each round to the person. The same file looks like a transport problem to one reviewer, a
+        correctness problem to another, a data-ownership problem to a third.</p>
+      <div class="lens-grid">
+        <div class="lens cyan">
+          <div class="who">Peter Entschev <span class="gh">@pentschev</span></div>
+          <div class="role">UCXX · ucx-py · dask-cuda · distributed GPU comms</div>
+          <p>He wrote and maintains the UCXX layer this file calls. He'll go deepest, and he'll know every callback rule
+            cold.</p>
+          <p class="probe"><b>Likely probes:</b> AM-callback execution context and what's illegal inside it; request &amp;
+            buffer lifetime across async completion; UCP wireup replay; why AM vs tag; endpoint-handle resolution and
+            races; memory types.</p>
+        </div>
+        <div class="lens rose">
+          <div class="who">Lawrence Mitchell <span class="gh">@wence-</span></div>
+          <div class="role">cudf-polars · correctness · algorithms · HPC numerics</div>
+          <p>Principal engineer, ex-finite-element researcher. A relentless reasoner about edge cases, UB, and "convince me
+            this is actually correct."</p>
+          <p class="probe"><b>Likely probes:</b> strict-aliasing/alignment of the cast; null-termination of a
+            wire <code>char[256]</code>; TOCTOU on the intra-node gate; 32-bit hash collisions; correctness of the
+            workerId equality argument.</p>
+        </div>
+        <div class="lens sage">
+          <div class="who">Karthikeyan Natarajan <span class="gh">@karthikeyann</span></div>
+          <div class="role">libcudf core · CUDA/C++ · JSON/joins · systems</div>
+          <p>Deep libcudf/C++ systems engineer. Cares about lifetimes, singletons, invariants, and resource bookkeeping.</p>
+          <p class="probe"><b>Likely probes:</b> singleton init/teardown order; the handle-map invariant and stale
+            <code>ucp_ep_h</code> reuse; the no-mutex justification; exception safety; endianness assumptions.</p>
+        </div>
+        <div class="lens copper">
+          <div class="who">Devavret Makkar <span class="gh">@devavret</span></div>
+          <div class="role">libcudf · contiguous_split · GPUDirect Storage · Parquet</div>
+          <p>cuDF data-structures and I/O. He'll bridge from this control-plane file to what's actually moving:
+            <code>packed_columns</code> and device buffers.</p>
+          <p class="probe"><b>Likely probes:</b> what the "destructive move" of a shared <code>packed_columns</code> means;
+            why broadcast is unsafe intra-node; struct/wire layout and padding; ownership of GPU memory across the
+            boundary.</p>
+        </div>
+      </div>
+      <div class="note copper">
+        <span class="lbl">Framing that plays well with all four</span>
+        <p>These are infrastructure reviewers, not puzzle-hunters. They reward: stating the invariant a piece of code
+          relies on, naming the failure mode when it's violated, distinguishing "correct" from "correct by accident," and
+          saying "I'd want to verify X against the UCXX version" instead of bluffing. The punch list at the end is how you
+          show you can review, not just answer.</p>
+      </div>
+    </section>
+
+    <section id="pentschev">
+      <div class="sec-head"><span class="num">R1</span><h2>pentschev · transport &amp; async</h2></div>
+      <p class="lede">The UCXX author. Assume he knows the library's internals better than the code does, so the winning
+        move is precision about <em>guarantees</em>: what context this callback runs in, what it may touch, and how lifetimes
+        are kept correct across asynchronous completion.</p>
+
+      <div class="qa cyan">
+        <div class="q"><div class="qhead"><span class="qn">1</span><span class="pill cyan">execution context</span><span class="pill tone">core</span></div>
+          <div class="qtext">This is a UCX active-message receive callback. What thread is it on, and what are you forbidden from doing inside it? Is creating and registering a whole server here safe?</div></div>
+        <div class="body">
+          <div class="ans">
+            <span class="alabel">Model answer</span>
+            <p>It runs on the single thread that progresses the worker — the <code>Communicator::run()</code> loop — because
+              UCX callbacks fire from inside <code>ucp_worker_progress</code>, which only this module's one thread ever calls.
+              That single-threaded progress model is the load-bearing assumption: it's <em>why</em> this callback can touch
+              shared state (the endpoint map, the singletons) without a lock.</p>
+            <p>The cardinal rule inside a progress callback is <strong>you must not re-enter progress</strong>. Anything that
+              calls <code>ucp_worker_progress</code> transitively — most importantly <code>endpoint-&gt;closeBlocking()</code>
+              — is illegal here; it would re-enter the worker and corrupt its state or deadlock. You also must not block
+              indefinitely, and you must not let a C++ exception escape into UCP's C frame.</p>
+            <p>Creating and registering the server is safe precisely because it does <em>none</em> of those things. <code>UcxExchangeServer::create</code>
+              just constructs an object; <code>registerCommElement</code> inserts it into a set and pushes it onto the
+              thread-safe work queue. The actual protocol work happens later, when the main loop pops it and calls
+              <code>process()</code> — outside any callback. The design consistently defers all progress-touching work
+              (endpoint teardown, cancelled-request cleanup) to the main loop for exactly this reason.</p>
+          </div>
+          <div class="followup"><span class="fl">He'll push</span>"You said no exceptions should escape — does this file obey that?" → No, and that's the sharpest bug here. The CHECKs throw; see punch-list #1. Volunteer it.</div>
+        </div>
+      </div>
+
+      <div class="qa cyan">
+        <div class="q"><div class="qhead"><span class="qn">2</span><span class="pill cyan">lifetime</span><span class="pill tone">hard</span></div>
+          <div class="qtext">The response send is "fire-and-forget" — you discard the returned <code>Request</code> and <code>response</code> is a local <code>shared_ptr</code>. Walk me through how the send buffer stays alive until completion. Is this actually safe?</div></div>
+        <div class="body">
+          <figure class="code"><figcaption><span class="file">Acceptor.cpp</span><span class="role">double-held response buffer</span></figcaption>
+<pre><span class="c-kw">auto</span> response = std::make_shared&lt;HandshakeResponse&gt;();
+epRef-&gt;endpoint_-&gt;tagSend(
+    response.get(), <span class="c-kw">sizeof</span>(*response), ucxx::Tag{responseTag}, <span class="c-kw">false</span>,
+    [response, keyStr = key.toString()](ucs_status_t s, std::shared_ptr&lt;void&gt; arg){ ... },
+    response);   <span class="c-cm">// ← also passed as callbackData (arg)</span></pre></figure>
+          <div class="ans">
+            <span class="alabel">Model answer</span>
+            <p>The buffer survives because <code>response</code> is held in two independent places that both outlive the
+              local: the completion lambda captures it by value, and it's passed again as the <code>callbackData</code>
+              (<code>arg</code>). UCXX keeps the in-flight <code>Request</code> alive internally until the operation completes
+              regardless of whether the caller keeps the returned handle, and the Request owns the callback and its
+              captures. So <code>response.get()</code> stays valid until the send finishes and the callback fires —
+              dropping the returned handle is fine.</p>
+            <p>Where I'd want to be careful: this relies on UCXX retaining the request until completion, and it is
+              <em>not</em> protected the way the <code>Server</code>/<code>Source</code> sends are. Those retain finished
+              requests in a <code>completedRequests_</code> vector specifically because UCP's
+              <code>ucp_wireup_replay_pending_requests</code> can re-fire a callback on an already-completed request — and
+              if the <code>Request</code> (and thus the lambda) were freed, that's a use-after-free. Here the lambda owns
+              <code>response</code>, so even a replayed callback wouldn't touch freed memory, but the asymmetry is worth a
+              comment: it's safe for a different reason than the rest of the module, and that's easy to break later.</p>
+          </div>
+          <div class="followup"><span class="fl">Strong close</span>"If I wanted it bulletproof and consistent with the rest of the file, I'd hold the returned request alongside the endpoint or in a small completed-requests list rather than relying on UCXX's internal retention."</div>
+        </div>
+      </div>
+
+      <div class="qa cyan">
+        <div class="q"><div class="qhead"><span class="qn">3</span><span class="pill cyan">AM vs tag</span></div>
+          <div class="qtext">Why is the handshake an active message, but the response and all subsequent data are tag-matched? Why not use tags for everything?</div></div>
+        <div class="body">
+          <div class="ans">
+            <span class="alabel">Model answer</span>
+            <p>Because at handshake time there is no one on the server side to post a matching receive. A tagged receive
+              requires the receiver to have already called <code>tagRecv</code> with the right tag and a buffer — but the
+              <code>UcxExchangeServer</code> doesn't exist yet; its creation is the <em>result</em> of the handshake. An
+              active message needs no pre-posted receive: the sender pushes it and UCX dispatches it to a worker-wide
+              registered callback (here keyed by owner <code>"velox"</code> and id <code>123</code>). It's the bootstrap
+              primitive — exactly the right tool for "I want to talk to a server that doesn't exist yet."</p>
+            <p>Once the server exists, both sides have agreed on a partition key, so they can derive a deterministic 64-bit
+              tag and use ordinary tag matching for the response and the metadata/data stream. Tag matching is also the
+              better fit there: it lets one endpoint carry many independent, concurrently-outstanding transfers
+              demultiplexed purely by tag, with the receiver controlling where each lands. AM's callback model would be
+              awkward for the bulk GPU data path.</p>
+          </div>
+          <div class="followup"><span class="fl">He may add</span>"What memory type is the handshake?" → <code>UCS_MEMORY_TYPE_HOST</code>; the source sends it from a host <code>HandshakeMsg</code>, which is why the receiver can <code>reinterpret_cast</code> host bytes (see Round 2/3 for the alignment caveat).</div>
+        </div>
+      </div>
+
+      <div class="qa cyan">
+        <div class="q"><div class="qhead"><span class="qn">4</span><span class="pill cyan">handle resolution</span><span class="pill tone">race</span></div>
+          <div class="qtext">You get a raw <code>ucp_ep_h ep</code> and look it up with <code>findEndpointRefByHandle</code>. Where is that map populated, and is there a race between populating it and reading it here?</div></div>
+        <div class="body">
+          <figure class="code"><figcaption><span class="file">Acceptor.cpp + Communicator.cpp</span><span class="role">handle → EndpointRef</span></figcaption>
+<pre><span class="c-cm">// Populated in the listener callback when a peer connects:</span>
+<span class="c-kw">void</span> Acceptor::<span class="c-fn">registerEndpointRef</span>(std::shared_ptr&lt;EndpointRef&gt; ref) {
+  handleToEndpointRef_.insert({ref-&gt;endpoint_-&gt;getHandle(), ref});
+}
+<span class="c-cm">// Read here in the AM callback:</span>
+<span class="c-kw">auto</span> epRef = communicator-&gt;findEndpointRefByHandle(ep);</pre></figure>
+          <div class="ans">
+            <span class="alabel">Model answer</span>
+            <p>No data race, and the reason is again the single-threaded progress model. The map is written in
+              <code>registerEndpointRef</code>, called from <code>listenerCallback</code> during
+              <code>worker_-&gt;progress()</code>, and read here in the AM callback, also during
+              <code>worker_-&gt;progress()</code>. Same thread, never concurrent, so a plain <code>std::map</code> with no
+              mutex is correct — which is exactly what the header comment claims.</p>
+            <p>The interesting question isn't a data race, it's <strong>ordering</strong>: can the handshake AM be
+              dispatched before <code>registerEndpointRef</code> has run for that endpoint? In this design the ordering holds
+              because the connection is established first (the listener callback creates the endpoint and registers it),
+              and the handshake AM travels on that already-established endpoint — UCX won't deliver an AM on an endpoint the
+              listener hasn't finished accepting. The <code>VELOX_CHECK_NOT_NULL(epRef)</code> is the assertion of that
+              invariant. If it ever fired, it would mean the ordering assumption was wrong, not that a lock was missing.</p>
+          </div>
+          <div class="followup"><span class="fl">He'll dig</span>"Does anything ever <em>remove</em> from that map?" → Not in this file — see punch-list #4. <code>ucp_ep_h</code> values can be reused after close, so an insert-only map risks stale aliasing. This is a real one to raise.</div>
+        </div>
+      </div>
+
+      <div class="qa cyan">
+        <div class="q"><div class="qhead"><span class="qn">5</span><span class="pill cyan">CUDA × UCX</span></div>
+          <div class="qtext">Nothing in this file touches CUDA, yet the module forces <code>cudaFree(0)</code> in the run loop before creating the UCX context. Why does ordering between the CUDA context and UCX matter, and how does it relate to what happens here?</div></div>
+        <div class="body">
+          <div class="ans">
+            <span class="alabel">Model answer</span>
+            <p>UCX, when built with CUDA support, probes for GPU transports and registers CUDA memory hooks as part of
+              context/worker creation. If a valid CUDA context doesn't exist yet, that initialization can mis-detect device
+              capabilities or set up the memory-type machinery incorrectly — so the worker that later DMAs device buffers
+              may not select the GPUDirect path it should. The <code>cudaFree(0)</code> is the idiomatic way to force-create
+              the primary context on the current device before the UCX context is built, so transport selection sees the
+              GPU.</p>
+            <p>It relates to the Acceptor indirectly but importantly: the server this callback spawns will, on the data
+              path, hand UCX a raw device pointer via <code>tagSend</code> and expect a zero-copy GPU→GPU transfer. That only
+              works if the worker was initialized against a real CUDA context. So the ordering guarantee established at
+              startup is a precondition for everything the Acceptor sets in motion. It's the same class of bug the Dask/UCX
+              stack hit historically — CUDA context created on the wrong device, or after UCX, breaking GPU transport
+              selection.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="qa cyan">
+        <div class="q"><div class="qhead"><span class="qn">6</span><span class="pill cyan">protocol</span><span class="pill tone">design</span></div>
+          <div class="qtext">The response tag is <code>getHandshakeResponseTag(fnv1a_32(key.toString()))</code> and carries one bit of information. Why a tag derived from the key rather than, say, replying on the AM, and is one bit enough?</div></div>
+        <div class="body">
+          <div class="ans">
+            <span class="alabel">Model answer</span>
+            <p>The source needs to receive the response into a buffer it controls, and it already knows the partition key,
+              so both sides can independently derive the same <code>HANDSHAKE_RESPONSE</code> tag from
+              <code>fnv1a_32(key)</code>. The source posts a <code>tagRecv</code> on that tag right after sending the
+              handshake; the server <code>tagSend</code>s onto it. Using a tag rather than replying via AM keeps the
+              response symmetric with the rest of the tag-matched protocol and lets the source's receiver state machine
+              handle it uniformly. The op-type byte in the tag (<code>0x04</code>) keeps it from colliding with metadata
+              (<code>0x02</code>) or data (<code>0x03</code>) on the same key.</p>
+            <p>One bit (<code>isIntraNodeTransfer</code>) is enough for what it must convey today — it switches the source
+              between the UCX data path and the in-process registry. The struct is padded to 8 bytes, so there's headroom to
+              add fields without changing the wire size. The real fragility isn't the payload, it's the 32-bit key hash in
+              the tag: two distinct keys colliding would cross-deliver responses. Fine at small scale, a latent hazard at
+              cluster scale — I'd want a wider hash or a coordinator-assigned id (punch-list #6).</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="wence">
+      <div class="sec-head"><span class="num">R2</span><h2>wence- · correctness &amp; edge cases</h2></div>
+      <p class="lede">A principal engineer who reasons about programs the way a numerical analyst reasons about error bounds.
+        He distinguishes "correct" from "correct on this compiler, this aligned buffer, this well-behaved peer." Lead with the
+        invariant; name precisely when it breaks.</p>
+
+      <div class="qa rose">
+        <div class="q"><div class="qhead"><span class="qn">1</span><span class="pill rose">UB</span><span class="pill tone">aliasing/alignment</span></div>
+          <div class="qtext">Is <code>reinterpret_cast&lt;HandshakeMsg*&gt;(buffer-&gt;data())</code> followed by reading <code>handshakePtr-&gt;workerId</code> well-defined C++? Convince me.</div></div>
+        <div class="body">
+          <div class="ans">
+            <span class="alabel">Model answer</span>
+            <p>Strictly, no — it's UB-adjacent on two counts, though it works in practice. First, <strong>strict
+              aliasing</strong>: there is no <code>HandshakeMsg</code> object living in that buffer; there are bytes UCX
+              wrote. Reading them through a <code>HandshakeMsg*</code> accesses an object that was never created there, which
+              the standard doesn't bless. The conforming way to get a real object is to <code>memcpy</code> the bytes into a
+              <code>HandshakeMsg</code> (or, in C++23, <code>std::start_lifetime_as</code>). Second, <strong>alignment</strong>:
+              <code>HandshakeMsg</code> contains a <code>uint64_t</code>, so it has 8-byte alignment; reading
+              <code>workerId</code> through the pointer requires <code>buffer-&gt;data()</code> to be 8-aligned. UCXX buffers
+              are heap allocations with at least <code>max_align_t</code> alignment, so in practice it holds, but the code
+              doesn't assert it.</p>
+            <p>Why it works anyway: the sender <code>memcpy</code>-equivalent wrote a <code>HandshakeMsg</code>'s object
+              representation, the layout is trivially copyable and identical on both little-endian peers, and the buffer is
+              suitably aligned. So the object representation matches and the reads return the right values. But "correct
+              object representation on a matching ABI" is not the same as "defined behavior." The clean fix costs nothing:</p>
+            <figure class="code"><figcaption><span class="file">suggested</span><span class="role">defined, aligned, bounded</span></figcaption>
+<pre>HandshakeMsg msg;
+std::memcpy(&amp;msg, buffer-&gt;data(), <span class="c-kw">sizeof</span>(msg));  <span class="c-cm">// real object, no aliasing/alignment trap</span></pre></figure>
+          </div>
+          <div class="followup"><span class="fl">He'll appreciate</span>You proactively pairing this with the size check that already precedes it — the <code>VELOX_CHECK_GE(getSize, sizeof(HandshakeMsg))</code> makes the <code>memcpy</code> safe to do in full.</div>
+        </div>
+      </div>
+
+      <div class="qa rose">
+        <div class="q"><div class="qhead"><span class="qn">2</span><span class="pill rose">untrusted input</span><span class="pill tone">overread</span></div>
+          <div class="qtext"><code>const PartitionKey key = {handshakePtr-&gt;taskId, handshakePtr-&gt;destination}</code>. <code>taskId</code> is a wire <code>char[256]</code>. What exactly does this construct, and what happens if a peer sends 256 non-zero bytes?</div></div>
+        <div class="body">
+          <div class="ans">
+            <span class="alabel">Model answer</span>
+            <p><code>PartitionKey::taskId</code> is a <code>std::string</code>, so this aggregate-initializes the string from
+              a <code>char*</code> — which means it reads <strong>until it finds a null terminator</strong>. If the received
+              256 bytes contain no null, the <code>std::string</code> constructor walks off the end of the handshake buffer
+              into adjacent memory until it happens to hit a zero byte: a buffer overread. Best case it grabs garbage and the
+              key never matches a real task; worst case it reads unmapped memory and crashes, or leaks adjacent bytes into a
+              key that then appears in logs.</p>
+            <p>Today it's safe only because the <em>sender</em> is disciplined — it <code>strncpy</code>s into
+              <code>taskId[256]</code> and explicitly writes <code>taskId[255] = '\0'</code>. But that's a correctness
+              property enforced on the wrong side of a trust boundary. The receiver should not assume a well-formed peer.
+              The bounded construction is one line:</p>
+            <figure class="code"><figcaption><span class="file">suggested</span><span class="role">bound the string to the field</span></figcaption>
+<pre>std::string taskId(handshakePtr-&gt;taskId,
+                   ::strnlen(handshakePtr-&gt;taskId, <span class="c-kw">sizeof</span>(handshakePtr-&gt;taskId)));</pre></figure>
+          </div>
+          <div class="followup"><span class="fl">He'll probe further</span>"Same buffer, <code>destination</code> — any issue?" → No: it's a fixed-width <code>uint32_t</code> at a known offset, fully covered by the size check. Only the variable-length string field is dangerous.</div>
+        </div>
+      </div>
+
+      <div class="qa rose">
+        <div class="q"><div class="qhead"><span class="qn">3</span><span class="pill rose">TOCTOU</span><span class="pill tone">concurrency</span></div>
+          <div class="qtext">You call <code>canUseIntraNode(key.taskId)</code>, then create and register a server using the result. The producing task lives on other threads. Argue that the gap between the check and the use is safe — or admit it isn't.</div></div>
+        <div class="body">
+          <div class="ans">
+            <span class="alabel">Model answer</span>
+            <p>There is a real time-of-check/time-of-use window, and the honest answer is that it's <em>bounded</em> rather
+              than eliminated. <code>canUseIntraNode</code> returns false in two cases: the task isn't initialized yet
+              (placeholder queue), or it's a broadcast task. Consider how each side can move after the check:</p>
+            <ul>
+              <li><strong>Broadcast-ness is monotone.</strong> A task's <code>kind</code> (partitioned vs broadcast) is set
+                once at <code>initializeTask</code> and never changes. So if the check sees "not broadcast," it can't become
+                broadcast later — the dangerous direction (a destructive-move corrupting a shared broadcast buffer) is
+                excluded by construction, provided the task is already initialized when checked.</li>
+              <li><strong>Initialization is a one-way edge,</strong> published via an atomic <code>initialized_</code> with
+                release/acquire ordering, so the lock-free reader here sees a consistent view of <code>kind</code> and the
+                task pointer. A task that's uninitialized at check time just falls back to the remote path — a missed
+                optimization, not a corruption.</li>
+              <li><strong>The task could be removed</strong> between check and the server's first publish. That's handled
+                downstream: <code>removeTask</code> calls <code>cancelTask</code> on the registry, so the intra-node server's
+                <code>publish</code> returns an already-fulfilled future and the source's <code>poll</code> gets a synthesized
+                <code>atEnd</code>. No hang, clean termination.</li>
+            </ul>
+            <p>So it's safe, but for layered reasons rather than because the window is closed. I'd add a one-line comment
+              stating the "broadcast is monotone after init" invariant, because the safety depends on it and it's invisible
+              from this file.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="qa rose">
+        <div class="q"><div class="qhead"><span class="qn">4</span><span class="pill rose">hashing</span><span class="pill tone">collision</span></div>
+          <div class="qtext"><code>fnv1a_32(key.toString())</code> gives a 32-bit value that becomes part of every tag for this key. Quantify the collision risk and tell me the consequence when two keys collide.</div></div>
+        <div class="body">
+          <div class="ans">
+            <span class="alabel">Model answer</span>
+            <p>The consequence first, because it's what matters: two distinct <code>(taskId, destination)</code> keys that
+              hash to the same 32-bit value produce the same top 32 bits of their tags. Their metadata/data/response tags
+              would then alias on a shared endpoint, and UCX tag matching could deliver one key's chunk to the other's posted
+              receive. That's <strong>silent data corruption</strong> — a consumer gets bytes from the wrong partition — or a
+              hang if the sizes don't line up. Not a crash you'd catch; a wrong answer.</p>
+            <p>The probability is a birthday problem over a 32-bit space (~4.29 billion). Collision probability reaches ~50%
+              at roughly <code>√(2 · 2³²) ≈ 2.7×10⁴ ≈ 65,000</code> simultaneously-live keys, and even ~1% risk arrives near
+              ~9,000 keys. A single query's partition count is usually well under that, so per-query it's fine. But keys
+              include the full <code>taskId</code>, and across a long-lived, high-throughput cluster the population of live
+              keys can climb. The defense-in-depth answer is to widen to a 64-bit hash (the tag's top half could carry more
+              if the 24-bit sequence and 8-bit op were repacked) or, better, have the coordinator assign dense, unique task
+              ids so the tag space is exact rather than hashed. I'd flag it as low-probability-but-high-severity.</p>
+          </div>
+          <div class="followup"><span class="fl">He may ask</span>"Is FNV-1a even a good choice?" → It's fine as a fast non-cryptographic hash with decent distribution for short strings; the problem isn't FNV's quality, it's the 32-bit width relative to the key population and the severity of an aliasing collision.</div>
+        </div>
+      </div>
+
+      <div class="qa rose">
+        <div class="q"><div class="qhead"><span class="qn">5</span><span class="pill rose">correctness argument</span></div>
+          <div class="qtext">Intra-node is decided by <code>workerId == getWorkerId()</code>. Make the affirmative correctness argument: when is this exactly right, and what's the failure mode of the approach it replaced?</div></div>
+        <div class="body">
+          <div class="ans">
+            <span class="alabel">Model answer</span>
+            <p>The <code>workerId</code> is a 64-bit random value generated once per <code>Communicator</code>, and the
+              <code>Communicator</code> is a process-wide singleton. So two endpoints reporting the same <code>workerId</code>
+              are, with overwhelming probability, served by the same singleton — i.e. the same process. Same process is
+              exactly the precondition the <code>IntraNodeTransferRegistry</code> needs, because it hands a
+              <code>shared_ptr&lt;packed_columns&gt;</code> across the boundary: that only works inside one address space.
+              So the equality is a sound proxy for "can share by pointer." The only way it's wrong is a 64-bit RNG collision
+              between two different processes — about <code>2⁻⁶⁴</code>, which is negligible — and there's no stale-value
+              risk because the id is fixed for the process lifetime.</p>
+            <p>The approach it replaced compared IP addresses (<code>getLocalIpAddresses</code>) to decide "same node." That
+              conflates <em>same host</em> with <em>same process</em>, and worse, it breaks under containers: multiple Docker
+              containers on one host can share the host's IP, so the check would report "same node" for peers that are
+              actually isolated in separate processes/namespaces — and then try to share a pointer across an address-space
+              boundary that doesn't exist, corrupting memory. The <code>workerId</code> check fixes this because identity is
+              tied to the <em>process's</em> singleton, not the host's network identity. It's a nice example of choosing an
+              invariant that matches what you actually need (shared address space) rather than a correlated-but-wrong proxy
+              (shared IP).</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="karthik">
+      <div class="sec-head"><span class="num">R3</span><h2>karthikeyann · systems &amp; libcudf</h2></div>
+      <p class="lede">A deep CUDA/C++ libcudf engineer. He'll interrogate resource bookkeeping, singleton lifecycles, map
+        invariants, and the boundary assumptions that make the no-lock claim hold.</p>
+
+      <div class="qa sage">
+        <div class="q"><div class="qhead"><span class="qn">1</span><span class="pill sage">singletons</span><span class="pill tone">lifecycle</span></div>
+          <div class="qtext">This function reaches three singletons — <code>Communicator</code>, <code>UcxOutputQueueManager</code>, <code>IntraNodeTransferRegistry</code>. What guarantees they're alive when called, and what's the teardown story?</div></div>
+        <div class="body">
+          <div class="ans">
+            <span class="alabel">Model answer</span>
+            <p>They're alive on the way <em>in</em> by construction: this callback only runs while the
+              <code>Communicator</code>'s progress loop is running, and that loop is the <code>Communicator</code>, so it
+              can't be destroyed mid-callback. <code>Communicator::getInstance</code> additionally asserts non-null — it
+              requires <code>initAndGet</code> to have run first, so a misordered startup fails loudly rather than
+              dereferencing null. <code>UcxOutputQueueManager</code> and <code>IntraNodeTransferRegistry</code> use Meyers
+              singletons (function-local <code>static</code>), which C++11 guarantees are initialized exactly once, thread-safely,
+              on first use — so even a first-ever handshake initializes them correctly.</p>
+            <p>The teardown story is the soft spot. The order in which function-local statics across different translation
+              units are destroyed at process exit is unspecified. If, during shutdown, one singleton's destructor touched
+              another that had already been destroyed, you'd hit the static-deinitialization-order problem. In practice this
+              module sidesteps it because the registry/queue-manager destructors don't reach into each other, and the
+              process is usually torn down hard. But if I were hardening it, I'd either give these explicit
+              <code>shutdown()</code> semantics tied to the <code>Communicator</code>'s lifecycle, or use the
+              <code>shared_ptr</code>-returning singleton pattern (which they already do) consistently so liveness during
+              teardown is reference-counted rather than order-dependent.</p>
+          </div>
+          <div class="followup"><span class="fl">He may ask</span>"Why return <code>shared_ptr</code> from a singleton at all?" → So callers (like a server's captured <code>queueMgr_</code>) can keep the manager alive for their own lifetime even if global teardown begins — turning an ordering problem into a refcount.</div>
+        </div>
+      </div>
+
+      <div class="qa sage">
+        <div class="q"><div class="qhead"><span class="qn">2</span><span class="pill sage">map invariant</span><span class="pill tone">resource</span></div>
+          <div class="qtext"><code>registerEndpointRef</code> asserts <code>res.second</code> — the handle must not already be present. When could the same <code>ucp_ep_h</code> appear twice, and does anything remove entries?</div></div>
+        <div class="body">
+          <figure class="code"><figcaption><span class="file">Acceptor.cpp</span><span class="role">insert-only handle map</span></figcaption>
+<pre><span class="c-kw">void</span> Acceptor::<span class="c-fn">registerEndpointRef</span>(std::shared_ptr&lt;EndpointRef&gt; ref) {
+  <span class="c-kw">auto</span> res = handleToEndpointRef_.insert({ref-&gt;endpoint_-&gt;getHandle(), ref});
+  VELOX_CHECK(res.second, <span class="c-st">"Endpoint handle already exists!"</span>);
+}</pre></figure>
+          <div class="ans">
+            <span class="alabel">Model answer</span>
+            <p>A <code>ucp_ep_h</code> is an opaque pointer-like handle. The dangerous case is <strong>handle reuse</strong>:
+              when an endpoint is closed, UCP can recycle that handle value for a future endpoint. If the old
+              <code>EndpointRef</code> was never removed from this map, a later <code>insert</code> of the recycled handle
+              would either trip the <code>VELOX_CHECK</code> (best case — a loud failure) or, if the check weren't there,
+              silently leave the map pointing at a stale <code>EndpointRef</code> while the AM callback resolves new
+              connections to the dead one.</p>
+            <p>And as written, <strong>this file never removes from the map</strong> — <code>registerEndpointRef</code> only
+              inserts. <code>Communicator::removeEndpointRef</code> erases from the <code>endpoints_</code> (host:port) map but
+              I don't see it prune <code>acceptor_.handleToEndpointRef_</code>. So the map is monotonically growing, and it's
+              vulnerable to handle reuse across a long run. I'd raise this directly: there should be a removal path keyed off
+              endpoint close (the same deferred-cleanup point that tears the endpoint down), and I'd want to confirm whether
+              the <code>VELOX_CHECK</code> firing has been observed in long-running tests — if it has, that's the symptom.</p>
+          </div>
+          <div class="followup"><span class="fl">Honest framing</span>"I read this file and <code>Communicator.cpp</code>; I didn't exhaustively trace every caller, so I'd verify there's no cleanup elsewhere before calling it a leak — but the absence of a removal path here is worth flagging." That hedge is the right register for a reviewer.</div>
+        </div>
+      </div>
+
+      <div class="qa sage">
+        <div class="q"><div class="qhead"><span class="qn">3</span><span class="pill sage">no-lock claim</span></div>
+          <div class="qtext">The header says <code>handleToEndpointRef_</code> needs no mutex because reads and writes are both on the Communicator thread. What would have to change for that to become false?</div></div>
+        <div class="body">
+          <div class="ans">
+            <span class="alabel">Model answer</span>
+            <p>The claim rests entirely on "all access happens during <code>worker_-&gt;progress()</code>, and only one
+              thread ever progresses the worker." Both writers (<code>registerEndpointRef</code> via the listener callback)
+              and readers (<code>findEndpointRefByHandle</code> via the AM callback) run inside progress. As long as that's
+              true, an unsynchronized <code>std::map</code> is correct and a mutex would be pure overhead.</p>
+            <p>It breaks the moment progress becomes multi-threaded. Concretely: if someone introduced a worker pool with
+              per-worker progress threads (a natural scaling move, and one the module's single-thread bottleneck invites),
+              or enabled a UCXX mode where callbacks can fire on a thread other than the one calling progress, or called
+              <code>findEndpointRefByHandle</code> from a Velox driver thread for some new feature — then reads and writes
+              would race and you'd need a mutex (or a concurrent map). So the safety isn't intrinsic to the data structure;
+              it's a property of the threading architecture, and it should be guarded by a comment <em>and</em> ideally a
+              debug assertion that the current thread is the Communicator thread, so a future change trips an assert instead
+              of a heisenbug.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="qa sage">
+        <div class="q"><div class="qhead"><span class="qn">4</span><span class="pill sage">portability</span><span class="pill tone">endianness</span></div>
+          <div class="qtext">The protocol header says cross-endian transfers are unsupported. Where in this file does that assumption live, and is it the right call?</div></div>
+        <div class="body">
+          <div class="ans">
+            <span class="alabel">Model answer</span>
+            <p>It lives in two places here. The obvious one is reading <code>handshakePtr-&gt;workerId</code> and
+              <code>handshakePtr-&gt;destination</code> straight out of the wire bytes — multi-byte integers interpreted in
+              host byte order. If the peers disagreed on endianness, <code>workerId</code> would compare unequal even for the
+              same process (impossible across endianness anyway, but the point stands for the general case) and
+              <code>destination</code> would be garbage. The subtler one is <code>fnv1a_32(key.toString())</code>: the hash is
+              over the <em>string</em> form of the key, so it's endianness-independent by construction — a nice property,
+              since both sides compute the response tag from the same string and will agree regardless. So the only
+              endian-fragile reads are the raw integer fields.</p>
+            <p>Is "unsupported, documented" the right call? For this deployment, yes. Every realistic target — x86 and
+              ARM/Grace — is little-endian, and GPUs are little-endian, so paying for byte-swapping on a hot control path to
+              support a hardware class that doesn't exist in the fleet would be wasted complexity. The right engineering move
+              is exactly what they did: assume it, document it loudly in the protocol header, and add a
+              <code>static_assert</code> or a startup check if there were ever any doubt. I'd just make sure the assumption is
+              asserted somewhere, not only in a comment.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="devavret">
+      <div class="sec-head"><span class="num">R4</span><h2>devavret · packing &amp; data ownership</h2></div>
+      <p class="lede">cuDF data structures and I/O. This file is control-plane, so he'll bridge from it to what's actually
+        moving — <code>packed_columns</code>, device buffers, and who owns them across the boundary the Acceptor opens.</p>
+
+      <div class="qa copper">
+        <div class="q"><div class="qhead"><span class="qn">1</span><span class="pill copper">data structure</span><span class="pill tone">core</span></div>
+          <div class="qtext">The intra-node gate exists partly because of a "destructive move" of a shared <code>packed_columns</code>. Tell me what <code>packed_columns</code> actually is, and why a move corrupts a broadcast.</div></div>
+        <div class="body">
+          <div class="ans">
+            <span class="alabel">Model answer</span>
+            <p><code>cudf::packed_columns</code> is the output of <code>contiguous_split</code>/<code>pack</code> for one
+              partition: a pair of owning pointers — a host-side <code>unique_ptr&lt;vector&lt;uint8_t&gt;&gt; metadata</code>
+              describing every column's type, null count, and byte offsets <em>within</em> a single contiguous buffer, and a
+              <code>unique_ptr&lt;rmm::device_buffer&gt; gpu_data</code> holding all those column bytes concatenated on the
+              device. <code>unpack(metadata, gpu_data)</code> rebuilds a <code>table_view</code> that points into the buffer
+              with no copy.</p>
+            <p>The corruption comes from how the intra-node path hands data over. In broadcast mode, the producer enqueues
+              the <em>same</em> <code>shared_ptr&lt;packed_columns&gt;</code> to every destination's server, so all the
+              broadcast servers reference one shared object. The intra-node source, on retrieval, does
+              <code>std::move(data-&gt;gpu_data)</code> and <code>std::move(data-&gt;metadata)</code> to take ownership without
+              copying. That move <em>empties the shared object</em> — its <code>unique_ptr</code>s become null. Any other
+              destination server still pointing at that shared <code>packed_columns</code> now sees a null device buffer and
+              either sends garbage or crashes. So <code>canUseIntraNode</code> disables the fast path for broadcast: the
+              zero-copy move is only safe when the buffer has exactly one consumer. For partitioned output that's true (each
+              partition goes to one destination); for broadcast it isn't.</p>
+          </div>
+          <div class="followup"><span class="fl">He may extend</span>"How would you make intra-node work for broadcast?" → Either reference-count retrievals and only move on the last, or hand out a shallow copy/view and let RMM's shared device ownership handle it — at the cost of the simple destructive-move semantics.</div>
+        </div>
+      </div>
+
+      <div class="qa copper">
+        <div class="q"><div class="qhead"><span class="qn">2</span><span class="pill copper">wire layout</span><span class="pill tone">padding</span></div>
+          <div class="qtext"><code>HandshakeResponse</code> is a <code>bool</code> plus <code>uint8_t padding[7]</code>. Why hand-write the padding instead of letting the compiler insert it?</div></div>
+        <div class="body">
+          <figure class="code"><figcaption><span class="file">UcxExchangeProtocol.h</span><span class="role">explicit padding for a wire struct</span></figcaption>
+<pre><span class="c-kw">struct</span> <span class="c-fn">HandshakeResponse</span> {
+  <span class="c-kw">bool</span>    isIntraNodeTransfer{<span class="c-kw">false</span>};
+  uint8_t padding[<span class="c-nm">7</span>]{};   <span class="c-cm">// zero-initialized</span>
+};</pre></figure>
+          <div class="ans">
+            <span class="alabel">Model answer</span>
+            <p>Three reasons, all of which matter for a struct that goes on the wire. First, <strong>deterministic size and
+              layout</strong>: making the padding explicit and zero-initialized (<code>{}</code>) means every byte of the 8 is
+              defined and the same on both peers, so <code>sizeof</code> is stable across compilers and the receiver reads
+              exactly what the sender wrote. Compiler-inserted padding bytes are <em>indeterminate</em> — sending a struct
+              with uninitialized padding leaks whatever was on the stack into the wire (a determinism and, in principle,
+              info-leak issue), and tools like MSAN flag it.</p>
+            <p>Second, <strong>alignment headroom</strong>: padding to 8 bytes keeps the struct naturally aligned and leaves
+              room to add fields later without changing the wire size — you can replace some padding with a real field and
+              old/new layouts stay the same length. Third, it's <strong>self-documenting</strong>: it signals "this is a wire
+              format, every byte is accounted for," which is the same discipline cuDF/Arrow apply to columnar buffers where
+              offset and validity layout are part of the contract. It's the analogue of zero-filling a buffer's pad region
+              before serializing.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="qa copper">
+        <div class="q"><div class="qhead"><span class="qn">3</span><span class="pill copper">ownership</span><span class="pill tone">gpu memory</span></div>
+          <div class="qtext">Trace GPU-buffer ownership from the moment this server is created to the moment the consumer has the data — remote path. Who frees the device buffer, and when?</div></div>
+        <div class="body">
+          <div class="ans">
+            <span class="alabel">Model answer</span>
+            <p>On the producer side, <code>contiguous_split</code> allocates the device buffer (via RMM) and hands ownership
+              into a <code>packed_columns</code> that's enqueued. The server this callback created pulls that
+              <code>shared_ptr&lt;packed_columns&gt;</code> from the queue and, in <code>sendData</code>, wraps it in a
+              <code>DataSendContext</code> so the GPU buffer stays alive for the duration of the <code>tagSend</code>. UCX
+              DMAs <em>out of</em> that device memory; ownership doesn't transfer to UCX — it just reads it. When the send
+              completes, the completion callback moves the buffer out of the context and the server resets its
+              <code>dataPtr_</code>, so the producer-side device allocation is freed right after the DMA finishes.</p>
+            <p>On the consumer side, ownership is freshly minted: the source allocates a brand-new
+              <code>rmm::device_buffer</code> of exactly <code>dataSizeBytes</code> and UCX DMAs <em>into</em> it. That buffer
+              becomes the <code>gpu_data</code> of a new <code>packed_columns</code>, which <code>unpack</code> views and the
+              exchange operator wraps — zero-copy — into a <code>CudfVector</code>. From there it's a normal Velox vector:
+              ownership rides the <code>shared_ptr</code> chain and RMM frees the device buffer when the last reference (the
+              vector, then whatever downstream operator consumed it) drops. So there are two distinct device allocations per
+              chunk — one on each side — each owned and freed locally; nothing is shared across the wire, which is exactly
+              what you want for a network transfer. The <em>only</em> place a device buffer is shared across owners is the
+              intra-node path, which is why that one needs the broadcast guard.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="qa copper">
+        <div class="q"><div class="qhead"><span class="qn">4</span><span class="pill copper">config &amp; sizing</span></div>
+          <div class="qtext">The intra-node decision is gated by a config flag <code>intraNodeExchange</code>. When would you turn it off, and separately — what governs whether the chunks this server sends are well-sized for transfer?</div></div>
+        <div class="body">
+          <div class="ans">
+            <span class="alabel">Model answer</span>
+            <p>You'd disable <code>intraNodeExchange</code> mainly to isolate behavior: to A/B the UCX path's performance and
+              correctness without the registry shortcut masking it, to debug a suspected issue in the registry's busy-poll
+              handoff, or in a topology where co-located producer/consumer pairs are rare enough that the branch isn't worth
+              its complexity. It's a safety valve to force a single, uniform code path. Functionally the remote path is a
+              strict superset — it always works — so turning the flag off can only cost performance for co-located tasks, not
+              correctness.</p>
+            <p>Chunk sizing is decided upstream of this server, in <code>UcxPartitionedOutput</code>: it accumulates inputs to
+              a target of ~10,000 rows (matching the HTTP path's chunking) before it concatenates and
+              <code>contiguous_split</code>s. That target is the real throughput knob. Too small and you pay per-chunk
+              overhead — a metadata round trip, a kernel launch for the split, and on the remote path a UCX rendezvous — for
+              tiny payloads, so latency dominates. Too large and you inflate peak device memory (the merged table plus the
+              split outputs co-resident) and coarsen backpressure, since the consumer's water marks count tables, not bytes.
+              The sweet spot balances amortizing the fixed per-chunk costs against memory pressure and pipeline granularity;
+              ~10k rows is a reasonable default, but for very wide or very narrow schemas a byte-based target would be more
+              robust than a row-based one.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="punch">
+      <div class="sec-head"><span class="num">PL</span><h2>Code-review punch list</h2></div>
+      <p class="lede">The fastest way to read as a peer rather than a candidate: review the file <em>back</em>. If they open
+        the editor, lead with these. Each is phrased the way you'd leave it as a PR comment — observation, why it matters,
+        suggested fix — and hedged where you haven't traced the whole tree.</p>
+      <div class="punch">
+        <div class="item"><div class="pn"></div><div><div class="pt">Exceptions can escape a UCX callback<span class="sev hi">high</span></div>
+          <div class="pd">The <code>VELOX_CHECK*</code> macros throw <code>VeloxException</code>, but this runs inside
+          <code>ucp_worker_progress</code> — a C frame. <code>listenerCallback</code> in this same module deliberately uses
+          <code>LOG(ERROR)</code>+<code>return</code> and notes throwing from a UCX callback is UB. The Acceptor is
+          inconsistent. <em>Fix:</em> replace the CHECKs with logged early-returns, or confirm UCXX wraps AM dispatch in a
+          try/catch for this version before relying on it.</div></div></div>
+        <div class="item"><div class="pn"></div><div><div class="pt">Unbounded <code>std::string</code> from a wire <code>char[256]</code><span class="sev hi">high</span></div>
+          <div class="pd">Constructing <code>PartitionKey.taskId</code> from <code>handshakePtr-&gt;taskId</code> reads until a null;
+          a peer sending 256 non-zero bytes causes an overread. <em>Fix:</em>
+          <code>std::string(taskId, strnlen(taskId, sizeof(taskId)))</code>. Don't trust the sender's null-termination across
+          a trust boundary.</div></div></div>
+        <div class="item"><div class="pn"></div><div><div class="pt">Type-punning via <code>reinterpret_cast</code><span class="sev md">med</span></div>
+          <div class="pd">No <code>HandshakeMsg</code> object lives in the buffer; reading members through the cast is strict-aliasing
+          UB and assumes 8-byte alignment. <em>Fix:</em> <code>memcpy</code> into a local <code>HandshakeMsg</code> (the
+          preceding size check already makes this safe).</div></div></div>
+        <div class="item"><div class="pn"></div><div><div class="pt">Handle map is insert-only<span class="sev md">med</span></div>
+          <div class="pd"><code>handleToEndpointRef_</code> is only ever inserted into here; I don't see a removal path in this
+          file or <code>removeEndpointRef</code>. <code>ucp_ep_h</code> values can be recycled after close, risking stale
+          aliasing (or tripping the "handle already exists" CHECK). <em>Fix:</em> erase the entry at endpoint-close cleanup.
+          <em>Caveat:</em> verify no cleanup exists elsewhere before calling it a leak.</div></div></div>
+        <div class="item"><div class="pn"></div><div><div class="pt">Fire-and-forget response relies on UCXX internals<span class="sev md">med</span></div>
+          <div class="pd">Dropping the returned <code>Request</code> is only safe because UCXX retains it until completion and the
+          lambda owns the buffer; unlike <code>Server</code>/<code>Source</code> it isn't guarded against wireup replay.
+          <em>Fix:</em> at least a comment stating the contract, or retain the request consistently with the rest of the
+          module.</div></div></div>
+        <div class="item"><div class="pn"></div><div><div class="pt">32-bit key hash in tags<span class="sev md">med</span></div>
+          <div class="pd"><code>fnv1a_32(key)</code> in the tag's top half can alias across <code>(taskId, dest)</code> pairs at
+          cluster scale → cross-delivery (silent corruption) or hangs. Low probability, high severity. <em>Fix:</em> 64-bit
+          hash or coordinator-assigned dense task ids.</div></div></div>
+        <div class="item"><div class="pn"></div><div><div class="pt">TOCTOU on the intra-node gate is uncommented<span class="sev lo">low</span></div>
+          <div class="pd">Safety depends on "broadcast-ness is monotone after init" and on <code>cancelTask</code> handling
+          mid-flight removal. Correct, but invisible here. <em>Fix:</em> one-line invariant comment; optional debug assert
+          that <code>kind</code> can't transition.</div></div></div>
+        <div class="item"><div class="pn"></div><div><div class="pt">Vestigial <code>peerIp</code> and implicit host-memory assumption<span class="sev lo">low</span></div>
+          <div class="pd"><code>peerIp</code> is computed but only logged now that <code>workerId</code> drives the decision —
+          dead-ish weight. And the buffer is assumed host memory (<code>UCS_MEMORY_TYPE_HOST</code>) without an assertion.
+          <em>Fix:</em> drop or document <code>peerIp</code>; assert/comment the memory type.</div></div></div>
+      </div>
+      <div class="note copper">
+        <span class="lbl">How to deliver these</span>
+        <p>Order by severity, state the failure mode before the fix, and flag what you didn't verify. "These are the two I'd
+          block the PR on, these are nits" is the sentence that signals you've actually reviewed code at this level. Pair #1
+          and #2 (both untrusted-input/UB on the receive boundary) — grouping them shows you see the theme, not just the
+          lines.</p>
+      </div>
+    </section>
+
+    <section id="rapid">
+      <div class="sec-head"><span class="num">RF</span><h2>Rapid-fire warm-ups</h2></div>
+      <p class="lede">The 30-second openers an interviewer uses to calibrate. Crisp, correct, no rambling.</p>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Prompt</th><th>Crisp answer</th></tr></thead>
+        <tbody>
+          <tr><td class="hd">What's an active message?</td><td>A send that triggers a pre-registered receiver-side callback with no pre-posted receive — the bootstrap primitive for talking to an endpoint before it has state.</td></tr>
+          <tr><td class="hd">Why AM for the handshake but tags after?</td><td>The server doesn't exist yet, so no one can post a matching <code>tagRecv</code>. Once it exists, both sides share a key and derive deterministic tags.</td></tr>
+          <tr><td class="hd">What is a <code>ucp_ep_h</code>?</td><td>An opaque UCP endpoint handle (pointer-like). Recyclable after close — hence the map-staleness concern.</td></tr>
+          <tr><td class="hd">Why is no mutex needed on the handle map?</td><td>Both reads and writes happen inside <code>worker_-&gt;progress()</code>, and one thread alone progresses the worker. Single-threaded by architecture.</td></tr>
+          <tr><td class="hd">What does <code>fnv1a_32</code> give you?</td><td>A fast 32-bit non-cryptographic hash; here it makes per-key tags. Distribution is fine; the width is the risk.</td></tr>
+          <tr><td class="hd">Why is broadcast excluded from intra-node?</td><td>Destinations share one <code>shared_ptr&lt;packed_columns&gt;</code>; the intra-node source's destructive <code>move</code> would null it for the others.</td></tr>
+          <tr><td class="hd">What does <code>workerId</code> equality prove?</td><td>Same process (same <code>Communicator</code> singleton) ⇒ shared address space ⇒ pointer hand-off is legal. 64-bit random, ~2⁻⁶⁴ false match.</td></tr>
+          <tr><td class="hd">Why <code>cudaFree(0)</code> before UCX init?</td><td>Force-create the CUDA primary context so UCX detects GPU transports and sets up memory-type hooks for GPUDirect.</td></tr>
+          <tr><td class="hd">Why explicit padding in the wire struct?</td><td>Deterministic <code>sizeof</code> across compilers, no indeterminate padding bytes on the wire, and headroom to add fields.</td></tr>
+          <tr><td class="hd">What's the one bit in <code>HandshakeResponse</code>?</td><td><code>isIntraNodeTransfer</code> — it tells the source to use the in-process registry instead of the UCX data path.</td></tr>
+        </tbody>
+      </table></div>
+      <div class="note cyan">
+        <span class="lbl">Bridge to your own work</span>
+        <p>If they ask "how does this connect to what you've done" — this is your UCX-in-distributed-query territory. Natural
+          bridges: the rendezvous-as-backpressure trick and one-sided RMA / active-message data paths for irregular shuffles
+          (the metadata round-trip here is exactly what RMA could amortize); single-worker progress vs sharded workers as a
+          throughput trade-off; and packing/<code>contiguous_split</code> as the GPU analogue of serialize-free shuffle.</p>
+      </div>
+    </section>
+
+    <div class="footer">
+      <p><strong style="color:var(--ink);font-family:'Instrument Sans',sans-serif;">Acceptor.cpp — Interview &amp; Code-Review Dossier.</strong>
+      Built from a direct read of <code>velox/experimental/ucx-exchange/Acceptor.cpp</code> and the surrounding module at
+      <code>main</code>. Reviewer areas drawn from public NVIDIA/RAPIDS profiles (pentschev · UCXX/dask-cuda;
+      wence- · cudf-polars/correctness; karthikeyann · libcudf; devavret · libcudf/I-O). Model answers are best-effort and
+      worth verifying against the current UCXX version where noted. Companion to the UCX Exchange field manual.</p>
+      <p style="margin-top:10px;color:var(--faint);">Design system · Source Serif 4 · Instrument Sans · JetBrains Mono · copper / cyan / sage / rose · dark default.</p>
+    </div>
+  </main>
+</div>
+<script>
+(function(){
+  var root = document.documentElement, label = document.getElementById('themeLabel'), KEY='acc-dossier-theme';
+  function apply(t){ root.setAttribute('data-theme', t); if(label) label.textContent=(t==='dark'?'Light':'Dark'); }
+  var saved=null; try{ saved=localStorage.getItem(KEY); }catch(e){}
+  if(saved){ apply(saved); }
+  document.getElementById('themeToggle').addEventListener('click', function(){
+    var next = root.getAttribute('data-theme')==='dark' ? 'light' : 'dark';
+    apply(next); try{ localStorage.setItem(KEY, next); }catch(e){}
+  });
+  var links = [].slice.call(document.querySelectorAll('nav.toc a'));
+  var map={}; links.forEach(function(a){ map[a.getAttribute('href').slice(1)]=a; });
+  var sections = [].slice.call(document.querySelectorAll('section[id]'));
+  if('IntersectionObserver' in window){
+    var spy = new IntersectionObserver(function(es){
+      es.forEach(function(en){ if(en.isIntersecting){
+        links.forEach(function(l){ l.classList.remove('active'); });
+        var a=map[en.target.id]; if(a) a.classList.add('active');
+      }});
+    }, { rootMargin:'-12% 0px -78% 0px', threshold:0 });
+    sections.forEach(function(s){ spy.observe(s); });
+  }
+})();
+</script>
+</body>
+</html>
