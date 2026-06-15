@@ -357,11 +357,79 @@
 
     <section id="transport">
       <div class="sec-head"><span class="num">03</span><h2>Transport core</h2></div>
-      <p class="lede">One <code>Communicator</code> singleton per process owns one UCXX worker, and <em>all</em> UCX calls
-        happen on its single <code>run()</code> thread. Everything else — dozens of Velox driver threads — touches UCX only
-        indirectly, by pushing work onto a thread-safe queue. This is the most consequential design decision in the module.</p>
-
+      <p class="lede">One <code>Communicator</code> object per process owns one UCXX <em class="term">worker</em>, and <em>every</em>
+        UCX call in the whole module happens on that worker's single <code>run()</code> thread. Dozens of Velox driver
+        threads never touch UCX directly &mdash; they hand work across through a queue. This section builds up <em>why</em> that
+        shape is almost forced, starting from the one UCX concept the rest depends on.</p>
+      <h3>First, the one idea everything rests on: <em>progress</em><span class="tag">the UCX engine</span></h3>
+      <p>UCX is <strong>asynchronous</strong>. When your code asks to send or receive &mdash; <code>tagSend</code>,
+        <code>tagRecv</code>, <code>amSend</code> &mdash; that call does not move any bytes. It writes down what you want (a
+        buffer, a 64-bit tag, a callback to run when the operation finishes) and returns immediately. The operation is now
+        <em>posted</em>, but completely inert. Nothing has happened on the network yet.</p>
+      <p>The thing that actually drives posted operations forward is a single function: <code>worker-&gt;progress()</code>.
+        Calling it hands the worker a slice of CPU to do whatever is currently possible &mdash; poll the network for arrived
+        data, match a posted receive against an incoming send, copy bytes into your buffer, and, when an operation finishes,
+        <strong>run the completion callback you registered for it</strong>. Think of <code>progress()</code> as turning a
+        crank: the machine only moves while you're turning it.</p>
+      <p>Two consequences fall out of this, and the entire rest of this section is downstream of them:</p>
+      <ul>
+        <li><strong>If nobody calls <code>progress()</code>, nothing ever finishes.</strong> A posted receive sits there
+          forever no matter what arrives on the wire, because matching and completing it is work that only happens during a
+          <code>progress()</code> call.</li>
+        <li><strong>Your completion callbacks run <em>inside</em> <code>progress()</code>.</strong> <code>onData</code>,
+          <code>onMetadata</code>, <code>sendComplete</code>, the handshake handler &mdash; every one is invoked from within
+          some <code>progress()</code> call, on whatever thread made that call. This single fact is behind the re-entrancy
+          rule we hit later.</li>
+      </ul>
       <div class="diagram">
+        <div class="cap">The idea underneath everything &middot; <em style="color:var(--copper);font-style:normal">posting</em> an operation is not <em style="color:var(--cyan);font-style:normal">progressing</em> it</div>
+        <svg viewBox="0 0 840 270" role="img" aria-label="Posting a UCX operation only records it; progress() is what advances it and fires the callback">
+          <defs><marker id="mF" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--copper)"/></marker>
+          <marker id="mFd" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--faint)"/></marker></defs>
+          <style>
+            .bF{fill:var(--bg-2);stroke:var(--rule);stroke-width:1.2;} .tF{font-family:'Instrument Sans',sans-serif;font-size:12px;font-weight:600;fill:var(--ink);}
+            .mF{font-family:'JetBrains Mono',monospace;font-size:9.5px;fill:var(--faint);} .sF{font-family:'Source Serif 4',serif;font-size:10.5px;fill:var(--muted);}
+            .aF{fill:none;stroke:var(--copper);stroke-width:1.6;} .lF{font-family:'JetBrains Mono',monospace;font-size:9.5px;fill:var(--muted);}
+          </style>
+          <text class="lF" x="24" y="22" fill="var(--copper)">1 &middot; YOU POST (records intent, returns at once)</text>
+          <rect class="bF" x="24" y="30" width="300" height="52" rx="7"/><text class="tF" x="34" y="52">Your code calls</text><text class="mF" x="34" y="68">tagRecv(buf, tag, onData)</text>
+          <line class="aF" x1="324" y1="56" x2="368" y2="56" marker-end="url(#mF)"/><text class="lF" x="346" y="48" text-anchor="middle">post</text>
+          <rect class="bF" x="372" y="30" width="216" height="52" rx="7"/><text class="tF" x="382" y="52">UCX records it</text><text class="mF" x="382" y="68">inert &mdash; no bytes move</text>
+          <text class="sF" x="628" y="50">time passes&hellip;</text><text class="sF" x="628" y="65">still nothing happens</text>
+          <path d="M480,82 L416,158" fill="none" stroke="var(--faint)" stroke-width="1.3" stroke-dasharray="4 3" marker-end="url(#mFd)"/><text class="lF" x="476" y="124">progress works on it</text>
+          <text class="lF" x="24" y="152" fill="var(--cyan)">2 &middot; SOMEONE PROGRESSES (the engine runs)</text>
+          <rect class="bF" x="24" y="160" width="210" height="58" rx="7" style="stroke:var(--cyan)"/><text class="tF" x="34" y="184">worker-&gt;progress()</text><text class="mF" x="34" y="200">the engine &#8635;</text>
+          <line class="aF" x1="234" y1="189" x2="284" y2="189" marker-end="url(#mF)"/>
+          <rect class="bF" x="286" y="160" width="244" height="58" rx="7"/><text class="tF" x="296" y="184">UCX matches &amp; moves bytes</text><text class="mF" x="296" y="200">data &rarr; your buffer</text>
+          <line class="aF" x1="530" y1="189" x2="580" y2="189" marker-end="url(#mF)"/>
+          <rect class="bF" x="582" y="160" width="206" height="58" rx="7" style="stroke:var(--copper)"/><text class="tF" x="592" y="184">fires onData(buf)</text><text class="mF" x="592" y="200">your callback runs</text>
+          <text class="lF" x="420" y="252" text-anchor="middle" fill="var(--copper)" style="font-weight:600">Completion callbacks fire ONLY here &mdash; inside progress().</text>
+        </svg>
+      </div>
+      <h3>Why a single thread owns the worker<span class="tag">and what an FSM is</span></h3>
+      <p>A UCX worker <em>can</em> be progressed by several threads at once &mdash; but only if you create it in
+        <code>UCS_THREAD_MODE_MULTI</code>, which makes the worker take an internal lock on every operation and brings a long
+        list of subtle hazards. This module makes the opposite choice: <strong>exactly one thread ever calls
+        <code>progress()</code>, or any other UCX function.</strong> That thread is the <code>Communicator</code>'s
+        <code>run()</code> loop. Because UCX state is only ever touched from one place, there are no data races on it and no
+        locks needed inside UCX &mdash; the design buys simplicity and speed while giving up nothing it actually needs.</p>
+      <p>But one thread has to serve many conversations at once: every transfer flowing into or out of this worker, possibly
+        dozens at a time. Each conversation is written as a <strong>finite state machine</strong> &mdash; <em>FSM</em> for
+        short. An FSM is just a small, fixed set of named states with rules for moving between them. A receiver, for example,
+        walks <code>Created &rarr; ReadyToReceive &rarr; WaitingForMetadata &rarr; WaitingForData &rarr; &hellip; &rarr;
+        Done</code>. There are two kinds here: the <code>UcxExchangeServer</code> (sender side) and the
+        <code>UcxExchangeSource</code> (receiver side); &sect;06 and &sect;08 walk their states in full. For now, all that
+        matters is: an FSM does its work <em>one step at a time</em>, and the method that takes one step is called
+        <code>process()</code>.</p>
+      <h3>The actors, and the one channel between them<span class="tag">drivers vs the worker</span></h3>
+      <p>So there are two populations of threads. On one side, Velox's pool of <em class="term">driver</em> threads runs the
+        query operators &mdash; they call <code>addInput</code>, <code>getOutput</code>, <code>isBlocked</code>. On the other,
+        the lone Communicator thread owns the worker and is the only one allowed to speak UCX. The two must never touch UCX
+        state at the same time, so they don't share it: a driver that wants something to happen on the network
+        <em>describes</em> the work and drops it into a thread-safe queue, and the Communicator thread picks it up. Data flows
+        back the same way, through the exchange / output queues. Those queues are the <em>only</em> thing crossing the
+        boundary.</p>
+<div class="diagram">
         <div class="cap">Threading model · two actors, queues are the only thing between them</div>
         <svg viewBox="0 0 840 400" role="img" aria-label="Driver threads communicate with the single Communicator thread only through queues">
           <defs><marker id="tmA" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--copper)"/></marker></defs>
@@ -399,14 +467,10 @@
           <rect x="470" y="374" width="11" height="11" rx="2" fill="var(--cyan)"/><text class="lA" x="486" y="383">communicator thread</text>
         </svg>
       </div>
-
-      <h3>The single-threaded progress loop<span class="tag">Communicator::run</span></h3>
-      <p>UCX workers are cheapest and least error-prone when progressed by exactly one thread (the alternative,
-        <code>UCS_THREAD_MODE_MULTI</code>, adds internal locking and a long list of foot-guns). This module commits fully
-        to that model. The loop does four things in order, forever: drain deferred endpoint cleanups, drain the work queue
-        (calling <code>process()</code> on each element and progressing UCX <em>after each one</em>), reap completed deferred
-        requests, then block until a network event or an explicit wake-up.</p>
-      <figure class="code">
+      <h3>The run() loop, phase by phase<span class="tag">Communicator::run</span></h3>
+      <p>The Communicator thread does the same four things over and over, forever. Read the loop with the previous idea in
+        mind &mdash; <em>progress is the engine</em>:</p>
+<figure class="code">
         <figcaption><span class="file">Communicator.cpp</span><span class="role">run() · the heart of the module</span></figcaption>
 <pre><span class="c-kw">while</span> (running_) {
   <span class="c-cm">// 1. Cleanups that callbacks could not do themselves (see below).</span>
@@ -426,15 +490,12 @@
   <span class="c-kw">else</span>             worker_-&gt;progress();
 }</pre>
       </figure>
-      <div class="note copper">
-        <span class="lbl">The deadlock the comment guards</span>
-        <p>If you drained the whole work queue and only <em>then</em> progressed, an element that posted a <code>tagRecv</code>
-        inside <code>process()</code> would never see its completion callback fire, so it would never re-enqueue itself, so
-        the queue would empty and the loop would block forever waiting for a network event that the un-progressed receive
-        was supposed to trigger. Progressing after every item breaks the cycle.</p>
-      </div>
-
-      <div class="diagram">
+      <p>In plain terms: <strong>phase 1</strong> finishes any teardown that callbacks weren't allowed to do themselves (why,
+        shortly). <strong>Phase 2</strong> drains the work queue &mdash; for each waiting FSM it calls <code>process()</code>
+        (one step) and then immediately progresses the worker. <strong>Phase 3</strong> releases cancelled operations whose
+        buffers UCX has finally finished with. <strong>Phase 4</strong> waits for the next thing to do. The cycle below shows
+        which queue feeds each phase.</p>
+<div class="diagram">
         <div class="cap">The run() loop &middot; one thread, four phases, forever &mdash; and the queue that feeds each</div>
         <svg viewBox="0 0 840 450" role="img" aria-label="The Communicator run loop as a four-phase cycle">
           <defs><marker id="runB" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--copper)"/></marker></defs>
@@ -456,13 +517,40 @@
           <text class="lB" x="420" y="426" text-anchor="middle">queues that feed the loop &mdash;  deferredEndpointCleanup_ &rarr; &#9312;   workQueue_ &rarr; &#9313;   deferredRequests_ &rarr; &#9314;   signal()/network event &rarr; &#9315;</text>
         </svg>
       </div>
-
-      <h3>Decoupling many driver threads from one worker<span class="tag">WorkQueue</span></h3>
-      <p>The bridge between Velox's thread pool and the single UCX thread is a deliberately boring structure: a
-        mutex-guarded <code>std::list</code> with non-blocking <code>push</code>/<code>pop</code>. Any thread may push a
-        <code>CommElement</code>; only the Communicator thread pops and runs it. When a driver enqueues work in blocking
-        mode it also calls <code>worker_-&gt;signal()</code> to wake the loop out of <code>progressWorkerEvent</code>.</p>
-      <figure class="code">
+      <h4>&ldquo;Block until a network event or a wake-up&rdquo; &mdash; what that actually means</h4>
+      <p>Phase 4 is worth slowing down on, because it is two <em>different</em> ways of calling progress for two different
+        situations.</p>
+      <p>While there is work to do, the loop uses the <strong>non-blocking</strong> form, <code>worker-&gt;progress()</code>:
+        do whatever is ready right now and return at once, even if that's nothing. In a tight loop that would spin the CPU at
+        100% &mdash; fine for the short burst while draining work, wasteful when idle. So once everything is drained &mdash;
+        the work queue empty and every operation just waiting on the network &mdash; the loop switches to the
+        <strong>blocking</strong> form, <code>progressWorkerEvent(0)</code>, which puts the thread to <em>sleep</em> until
+        there is genuinely something to do. An idle worker then costs ~0% CPU instead of spinning.</p>
+      <p>So what wakes it? Two kinds of event:</p>
+      <ul>
+        <li><strong>A network event</strong> &mdash; a packet arrives, a connection request comes in, an operation the worker
+          is watching becomes ready. The operating system can wake a sleeping thread when the worker's underlying file
+          descriptor becomes readable; that's what the blocking wait listens for.</li>
+        <li><strong>An explicit wake-up</strong> &mdash; the subtle one. Suppose the Communicator thread is asleep, and
+          meanwhile a <em>different</em> thread (a Velox driver) pushes a new element onto the work queue. The sleeper has no
+          idea: it is waiting on <em>network</em> events, and a queue insertion is not a network event &mdash; it would sleep
+          right through the new work. The fix is <code>worker-&gt;signal()</code>, a call any thread can make to forcibly
+          rouse the sleeping worker. Under the hood it pokes the very same notification the blocking wait is watching (an
+          eventfd-style nudge), so the worker wakes, loops around, sees the new queue item, and runs it. That is what
+          &ldquo;an explicit wake-up&rdquo; is: <code>signal()</code> &mdash; called by <code>addToWorkQueue</code> whenever
+          a driver hands over work, by the deferred-cleanup path, and by <code>stop()</code> when the loop must exit. Every
+          place that gives the thread something new to notice also signals it, so it never sleeps through work.</li>
+      </ul>
+      <h3>What process() does, and why elements go dormant<span class="tag">WorkQueue</span></h3>
+      <p><code>process()</code> takes one FSM from its current state to its next. It looks at the state, performs the single
+        action that state calls for &mdash; in <code>ReadyToReceive</code>, post the <code>tagRecv</code> for the next
+        chunk's metadata; in <code>DataReady</code>, send the data &mdash; and usually updates the state. It is deliberately
+        written to <strong>do one step and return</strong>, never to loop or block inside. That's what lets one thread
+        interleave many FSMs: step element A, progress, step element B, progress, come back to A.</p>
+      <p>The work queue therefore has a precise meaning: <strong>it holds exactly the elements that have work to do right
+        now.</strong> A driver (or a callback) puts an element in by calling <code>addToWorkQueue</code>, which also signals
+        the worker:</p>
+<figure class="code">
         <figcaption><span class="file">WorkQueue.h / Communicator.cpp</span><span class="role">cross-thread handoff</span></figcaption>
 <pre><span class="c-cm">// push always succeeds; never blocks. pop never blocks; nullptr if empty.</span>
 <span class="c-kw">void</span> <span class="c-fn">push</span>(std::shared_ptr&lt;T&gt; item) {
@@ -475,17 +563,144 @@
   signalWorker();   <span class="c-cm">// worker_-&gt;signal() in blocking mode; no-op otherwise</span>
 }</pre>
       </figure>
-      <p>This is why both FSMs are written as <em>re-entrant step functions</em>: each <code>process()</code> call advances
-        the state by one move and then either re-enqueues itself (more work to do now) or goes dormant (waiting on a callback
-        or backpressure). The Communicator thread is never blocked inside an element; it round-robins them.</p>
-
-      <h3>Why callbacks must defer their own cleanup<span class="tag">re-entrancy hazard</span></h3>
-      <p>A UCX completion callback runs <em>inside</em> <code>worker_-&gt;progress()</code>. From there you may not call
-        anything that itself progresses the worker — and <code>endpoint-&gt;closeBlocking()</code> does exactly that
-        internally. So when an endpoint's close-callback fires, it cannot tear itself down; it pushes the work onto a
-        deferred queue that the main loop drains at the top of its next iteration.</p>
-
+      <p>That meaning is what drives the two behaviors people find confusing:</p>
+      <ul>
+        <li>After <code>process()</code> runs, if the element still has <em>immediate</em> work &mdash; it just moved to a
+          state whose next step can run without waiting &mdash; it puts itself back with <code>addToWorkQueue(self)</code>,
+          to be popped and stepped again. This is what &ldquo;<strong>re-enqueue itself</strong>&rdquo; means.</li>
+        <li>But if the element's next step is to <em>wait for the network</em> &mdash; it just posted a receive and now needs
+          the data to arrive &mdash; it does <strong>not</strong> re-enqueue. It goes <strong>dormant</strong>: it simply
+          stops being in the queue. There is nothing for the thread to do on its behalf until the network responds, so
+          keeping it in the queue would only burn cycles re-checking a state that can't advance.</li>
+      </ul>
+      <p>And here is the loop-back that makes the whole scheme work: <strong>what brings a dormant element back is its own
+        completion callback.</strong> When the data finally arrives &mdash; during some later <code>progress()</code> call
+        &mdash; UCX fires the element's <code>onData</code>, and that callback calls <code>addToWorkQueue(self)</code>,
+        returning the element to the queue so it can take its next step. A dormant element is re-awakened <em>only</em> by the
+        very callback that fires inside <code>progress()</code>. Hold onto that &mdash; it is exactly why the deadlock below
+        happens.</p>
       <div class="diagram">
+        <div class="cap">Why an element is &mdash; or isn&rsquo;t &mdash; in the work queue &middot; the re-enqueue / dormant cycle</div>
+        <svg viewBox="0 0 840 340" role="img" aria-label="An element re-enqueues itself when it has work now and goes dormant when waiting on the network; its callback re-enqueues it">
+          <defs>
+            <marker id="mG" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--copper)"/></marker>
+            <marker id="mGs" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--sage)"/></marker>
+            <marker id="mGm" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--muted)"/></marker>
+          </defs>
+          <style>
+            .bG{fill:var(--panel);stroke:var(--rule);stroke-width:1.3;} .tG{font-family:'Instrument Sans',sans-serif;font-size:12px;font-weight:600;fill:var(--ink);}
+            .mG{font-family:'JetBrains Mono',monospace;font-size:9px;fill:var(--faint);} .sG{font-family:'Source Serif 4',serif;font-size:10px;fill:var(--muted);}
+            .lG{font-family:'JetBrains Mono',monospace;font-size:9px;fill:var(--muted);}
+          </style>
+          <rect class="bG" x="40" y="44" width="210" height="52" rx="8" style="stroke:var(--copper)"/><text class="tG" x="145" y="68" text-anchor="middle">in WorkQueue</text><text class="mG" x="145" y="84" text-anchor="middle">has work to do now</text>
+          <rect class="bG" x="330" y="40" width="240" height="58" rx="8" style="stroke:var(--cyan)"/><text class="tG" x="450" y="64" text-anchor="middle">Communicator thread</text><text class="mG" x="450" y="80" text-anchor="middle">pop() &rarr; process()  (one step)</text>
+          <polygon class="bG" points="690,32 748,69 690,106 632,69"/><text class="mG" x="690" y="66" text-anchor="middle">more work</text><text class="mG" x="690" y="79" text-anchor="middle">now?</text>
+          <rect class="bG" x="596" y="150" width="196" height="50" rx="8" style="stroke:var(--copper)"/><text class="tG" x="694" y="173" text-anchor="middle">re-enqueue self</text><text class="mG" x="694" y="189" text-anchor="middle">addToWorkQueue(self)</text>
+          <rect class="bG" x="330" y="232" width="210" height="56" rx="8" style="stroke:var(--muted);stroke-dasharray:5 3"/><text class="tG" x="435" y="256" text-anchor="middle">dormant</text><text class="mG" x="435" y="272" text-anchor="middle">OUT of the queue</text>
+          <rect class="bG" x="40" y="232" width="240" height="56" rx="8" style="stroke:var(--sage)"/><text class="tG" x="160" y="256" text-anchor="middle">onData / onMetadata fires</text><text class="mG" x="160" y="272" text-anchor="middle">(inside progress())</text>
+          <line x1="250" y1="70" x2="328" y2="70" fill="none" stroke="var(--copper)" stroke-width="1.6" marker-end="url(#mG)"/><text class="lG" x="289" y="62" text-anchor="middle">pop</text>
+          <line x1="570" y1="69" x2="630" y2="69" fill="none" stroke="var(--copper)" stroke-width="1.6" marker-end="url(#mG)"/>
+          <path d="M690,106 L694,148" fill="none" stroke="var(--copper)" stroke-width="1.6" marker-end="url(#mG)"/><text class="lG" x="702" y="130">YES</text>
+          <path d="M596,176 Q420,142 252,73" fill="none" stroke="var(--copper)" stroke-width="1.6" marker-end="url(#mG)"/><text class="lG" x="430" y="138" text-anchor="middle">stays busy &rarr; loop</text>
+          <path d="M648,100 Q540,178 442,232" fill="none" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#mGm)"/><text class="lG" x="566" y="150" text-anchor="middle">NO &mdash; waits on network</text>
+          <line x1="330" y1="260" x2="282" y2="260" fill="none" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#mGm)"/><text class="lG" x="306" y="252" text-anchor="middle">until&hellip;</text>
+          <path d="M160,232 L147,98" fill="none" stroke="var(--sage)" stroke-width="1.6" marker-end="url(#mGs)"/><text class="lG" x="92" y="170" fill="var(--sage)">callback</text><text class="lG" x="92" y="182" fill="var(--sage)">re-enqueues</text>
+          <text class="sG" x="420" y="320" text-anchor="middle">In the queue only while it has immediate work. When it must wait for the network it goes dormant &mdash; and only its callback brings it back.</text>
+        </svg>
+      </div>
+      <h3>The deadlock: why progress after <em>every</em> item<span class="tag">the rule decoded</span></h3>
+      <p>Now the paragraph that's easy to read past. First, <em>which</em> <code>progress()</code> is this about? The loop
+        calls progress in two places: the <strong>non-blocking</strong> one after <em>each</em> work item in phase 2, and the
+        <strong>blocking</strong> one in phase 4. The rule is about <strong>the per-item progress in phase 2</strong> &mdash;
+        not phase 1 (endpoint cleanup), which posts no receives. Here is the failure, walked with that per-item progress
+        <em>removed</em>:</p>
+      <ol>
+        <li>An element is popped and its <code>process()</code> runs. It's in <code>ReadyToReceive</code>, so it posts a
+          <code>tagRecv</code> for metadata and goes dormant &mdash; it does <em>not</em> re-enqueue, because it's now waiting
+          on the network. Remember: posting a receive is inert; nothing has progressed it yet.</li>
+        <li>The drain loop moves on. Nothing else is pending, so the work queue empties.</li>
+        <li>With the queue empty, the loop reaches phase 4 and goes to sleep in the blocking wait.</li>
+        <li><strong>Why does &ldquo;never progressed&rdquo; matter?</strong> Because an operation only advances &mdash; and
+          its callback only fires &mdash; during a <code>progress()</code> call. This element is counting on its
+          <code>onData</code> callback to wake it back up, and that callback can only fire from progress. No progress ran on
+          the freshly-posted receive, so the callback never fires.</li>
+        <li><strong>Why does it &ldquo;never re-enqueue itself&rdquo;?</strong> Because the only thing that would re-enqueue
+          a dormant element is that same <code>onData</code> callback. Callback never fires &rArr;
+          <code>addToWorkQueue(self)</code> is never called &rArr; the element stays dormant, off the queue, indefinitely.</li>
+        <li>Meanwhile the loop is asleep waiting for a <em>new</em> network event &mdash; but there may be none coming. The
+          data the element wants might already be sitting in UCX's internal buffers (it arrived, or rode along with the
+          rendezvous), needing only a <code>progress()</code> call to be matched and delivered. The blocking wait fires on
+          <em>new</em> readiness; it will happily sleep through data that has already arrived but hasn't been progressed.
+          That's the chicken-and-egg: the element won't re-enter the queue until its callback fires, the callback won't fire
+          until progress runs, and progress won't run until something wakes the loop &mdash; which nothing will. The worker
+          hangs.</li>
+      </ol>
+      <p><strong>Why does &ldquo;progress after every item&rdquo; break the cycle?</strong> Because the instant
+        <code>process()</code> posts that receive, the very next line progresses the worker &mdash; giving UCX a chance to
+        advance the receive <em>right then</em>. Often it completes immediately: the callback fires synchronously, the
+        element re-enqueues, and the drain loop simply keeps going. And if the data genuinely isn't here yet, that progress
+        call still arms the operation correctly, so the <em>network</em> event that completes it will properly wake the
+        blocking phase. Either way the vicious cycle never forms. That's why it must be &ldquo;progress after every
+        item,&rdquo; not &ldquo;progress once at the end.&rdquo;</p>
+      <div class="diagram">
+        <div class="cap">The deadlock the &ldquo;progress after every item&rdquo; rule prevents</div>
+        <svg viewBox="0 0 840 380" role="img" aria-label="Without per-item progress the worker can sleep forever; with it the loop always advances">
+          <defs><marker id="mHr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--rose)"/></marker>
+          <marker id="mHs" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--sage)"/></marker></defs>
+          <style>
+            .hL{fill:var(--panel);stroke:var(--rose);stroke-width:1.2;} .hR{fill:var(--panel);stroke:var(--sage);stroke-width:1.2;}
+            .hx{font-family:'Instrument Sans',sans-serif;font-size:11.5px;font-weight:500;fill:var(--ink-soft);}
+            .hh{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.04em;font-weight:600;}
+          </style>
+          <text class="hh" x="215" y="26" text-anchor="middle" fill="var(--rose)">&#10007;  progress ONCE at the end</text>
+          <text class="hh" x="625" y="26" text-anchor="middle" fill="var(--sage)">&#10003;  progress AFTER every item</text>
+          <rect class="hL" x="40" y="44" width="350" height="40" rx="7"/><text class="hx" x="215" y="69" text-anchor="middle">&#9312; process() posts tagRecv, goes dormant</text>
+          <rect class="hL" x="40" y="98" width="350" height="40" rx="7"/><text class="hx" x="215" y="123" text-anchor="middle">&#9313; work queue empties</text>
+          <rect class="hL" x="40" y="152" width="350" height="40" rx="7"/><text class="hx" x="215" y="177" text-anchor="middle">&#9314; loop sleeps in the blocking wait</text>
+          <rect class="hL" x="40" y="206" width="350" height="40" rx="7"/><text class="hx" x="215" y="231" text-anchor="middle">&#9315; the receive was never progressed</text>
+          <rect class="hL" x="40" y="260" width="350" height="40" rx="7"/><text class="hx" x="215" y="285" text-anchor="middle">&#9316; callback can&rsquo;t fire &rarr; no re-enqueue</text>
+          <rect x="40" y="320" width="350" height="44" rx="7" fill="var(--rose)" fill-opacity="0.16" stroke="var(--rose)" stroke-width="1.3"/><text class="hh" x="215" y="347" text-anchor="middle" fill="var(--rose)">worker hangs forever</text>
+          <rect class="hR" x="450" y="44" width="350" height="40" rx="7"/><text class="hx" x="625" y="69" text-anchor="middle">&#9312; process() posts tagRecv</text>
+          <rect class="hR" x="450" y="98" width="350" height="40" rx="7"/><text class="hx" x="625" y="123" text-anchor="middle">&#9313; progress() runs immediately</text>
+          <rect class="hR" x="450" y="152" width="350" height="40" rx="7"/><text class="hx" x="625" y="177" text-anchor="middle">&#9314; UCX advances / completes it</text>
+          <rect class="hR" x="450" y="206" width="350" height="40" rx="7"/><text class="hx" x="625" y="231" text-anchor="middle">&#9315; onData fires &rarr; re-enqueues the element</text>
+          <rect class="hR" x="450" y="260" width="350" height="40" rx="7"/><text class="hx" x="625" y="285" text-anchor="middle">&#9316; queue non-empty &rarr; loop keeps going</text>
+          <rect x="450" y="320" width="350" height="44" rx="7" fill="var(--sage)" fill-opacity="0.16" stroke="var(--sage)" stroke-width="1.3"/><text class="hh" x="625" y="347" text-anchor="middle" fill="var(--sage)">never stalls</text>
+          <line x1="215" y1="84" x2="215" y2="96" stroke="var(--rose)" stroke-width="1.4" marker-end="url(#mHr)"/>
+          <line x1="215" y1="138" x2="215" y2="150" stroke="var(--rose)" stroke-width="1.4" marker-end="url(#mHr)"/>
+          <line x1="215" y1="192" x2="215" y2="204" stroke="var(--rose)" stroke-width="1.4" marker-end="url(#mHr)"/>
+          <line x1="215" y1="246" x2="215" y2="258" stroke="var(--rose)" stroke-width="1.4" marker-end="url(#mHr)"/>
+          <line x1="215" y1="300" x2="215" y2="318" stroke="var(--rose)" stroke-width="1.4" marker-end="url(#mHr)"/>
+          <line x1="625" y1="84" x2="625" y2="96" stroke="var(--sage)" stroke-width="1.4" marker-end="url(#mHs)"/>
+          <line x1="625" y1="138" x2="625" y2="150" stroke="var(--sage)" stroke-width="1.4" marker-end="url(#mHs)"/>
+          <line x1="625" y1="192" x2="625" y2="204" stroke="var(--sage)" stroke-width="1.4" marker-end="url(#mHs)"/>
+          <line x1="625" y1="246" x2="625" y2="258" stroke="var(--sage)" stroke-width="1.4" marker-end="url(#mHs)"/>
+          <line x1="625" y1="300" x2="625" y2="318" stroke="var(--sage)" stroke-width="1.4" marker-end="url(#mHs)"/>
+        </svg>
+      </div>
+      <h3>Why callbacks must defer their own cleanup<span class="tag">re-entrancy</span></h3>
+      <p>This subsection is just the re-entrancy rule from earlier, cashed out. Recall the two facts: completion callbacks run
+        <em>inside</em> <code>progress()</code>, and <code>endpoint-&gt;closeBlocking()</code> &mdash; the call that tears an
+        endpoint down &mdash; <em>itself calls <code>progress()</code></em> internally (it has to drive the close handshake to
+        completion). Put them together and a callback that called <code>closeBlocking()</code> would be calling progress from
+        inside progress. That is <strong>re-entrancy</strong>, and UCX forbids it: re-entering the worker corrupts the very
+        state machine you're in the middle of advancing &mdash; depending on the build, undefined behavior or an outright
+        deadlock.</p>
+      <p>So when an endpoint's own close callback fires (UCX telling you &ldquo;this connection just dropped&rdquo;), it
+        <em>cannot</em> clean the endpoint up there and then &mdash; cleanup needs <code>closeBlocking()</code>, which needs
+        progress, which it's already inside. The only safe move is to write the work down and get out:</p>
+<figure class="code">
+        <figcaption><span class="file">EndpointRef.cpp + Communicator.cpp</span><span class="role">callback → deferred main-loop work</span></figcaption>
+<pre><span class="c-cm">/* static */ void EndpointRef::onClose(ucs_status_t, std::shared_ptr&lt;void&gt; arg) {
+  <span class="c-cm">// Runs in the UCX progress thread. MUST NOT progress or block here.</span>
+  <span class="c-kw">auto</span> ep = std::static_pointer_cast&lt;EndpointRef&gt;(arg);
+  Communicator::getInstance()-&gt;deferEndpointCleanup(ep);   <span class="c-cm">// just enqueue</span>
+}</pre>
+      </figure>
+      <p>&ldquo;Defer&rdquo; just means: don't do the dangerous thing now; leave a note for the main loop to do it when it's
+        safe. That note is drained in <strong>phase 1</strong> of the run loop &mdash; outside any callback, where calling
+        progress is fine. The diagram makes the forbidden back-edge and the safe deferral explicit.</p>
+<div class="diagram">
         <div class="cap">Where callbacks come from &mdash; and why one path out of them is forbidden</div>
         <svg viewBox="0 0 860 450" role="img" aria-label="UCX callbacks originate inside progress; calling progress again is forbidden re-entrancy">
           <defs>
@@ -517,21 +732,21 @@
           <text class="pC" x="620" y="348" text-anchor="middle" fill="var(--sage)">&#10003; SAFE PATH</text>
         </svg>
       </div>
-      <figure class="code">
-        <figcaption><span class="file">EndpointRef.cpp + Communicator.cpp</span><span class="role">callback → deferred main-loop work</span></figcaption>
-<pre><span class="c-cm">/* static */ void EndpointRef::onClose(ucs_status_t, std::shared_ptr&lt;void&gt; arg) {
-  <span class="c-cm">// Runs in the UCX progress thread. MUST NOT progress or block here.</span>
-  <span class="c-kw">auto</span> ep = std::static_pointer_cast&lt;EndpointRef&gt;(arg);
-  Communicator::getInstance()-&gt;deferEndpointCleanup(ep);   <span class="c-cm">// just enqueue</span>
-}</pre>
-      </figure>
-      <p>The same logic governs <em>cancelled</em> requests. A request whose GPU buffer is referenced by UCX internals is
-        moved to <code>deferredRequests_</code> and held alive until <code>isCompleted()</code> — otherwise UCX could DMA into
-        a buffer the application already freed. The <code>endpointsMutex_</code> is even a <code>recursive_mutex</code>,
-        because <code>removeEndpointRef()</code> holds it while calling <code>closeBlocking()</code>, which can re-enter the
-        listener callback that re-locks the same mutex.</p>
-
-      <div class="diagram">
+      <p>The same re-entrancy explains an otherwise-odd choice nearby: <code>endpointsMutex_</code> is a
+        <code>recursive_mutex</code> &mdash; a lock the <em>same thread</em> is allowed to acquire more than once without
+        deadlocking itself (a plain mutex would deadlock on the second acquire). Why is that needed?
+        <code>removeEndpointRef()</code> takes the lock and then calls <code>closeBlocking()</code>; that progresses the
+        worker; that progress can fire the <em>listener</em> callback for a brand-new incoming connection; and that callback
+        also wants the same lock. Same thread, lock already held, second acquisition &mdash; precisely the case a recursive
+        mutex exists for.</p>
+      <p>A close cousin of deferred cleanup guards a different danger: <strong>freeing GPU memory out from under UCX.</strong>
+        While a transfer is in flight, UCX may be actively DMA-ing into or out of the device buffer. If the task is cancelled
+        and the code frees that buffer immediately, UCX could still be mid-transfer &mdash; a use-after-free on the GPU. So a
+        cancelled request isn't dropped; it's moved to <code>deferredRequests_</code> and <em>held alive there</em> (which
+        keeps its device buffer alive, since the request owns a reference to it) until <code>isCompleted()</code> finally
+        reports that UCX has fully wound the operation down. Only then are the request and its buffer released &mdash; phase 3
+        of the loop. The lifecycle below shows the buffer pinned in a &ldquo;do not free&rdquo; state until that moment.</p>
+<div class="diagram">
         <div class="cap">Deferred-request lifecycle &middot; why a cancelled request &mdash; and its GPU buffer &mdash; is kept alive</div>
         <svg viewBox="0 0 860 290" role="img" aria-label="A cancelled request is held in deferredRequests until isCompleted, so its GPU buffer is not freed mid-DMA">
           <defs><marker id="drD" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--copper)"/></marker>
@@ -558,12 +773,14 @@
           <text class="sD" x="430" y="232" text-anchor="middle">Hold until UCX has fully processed the cancellation &mdash; only then is it safe to release the device memory.</text>
         </svg>
       </div>
-
-      <h3>Connection on demand &amp; endpoint sharing<span class="tag">Acceptor · listenerCallback</span></h3>
-      <p>There is no static topology. A consumer's source connects to a producer's listener when it has data to fetch; the
-        producer's server object <em>does not exist</em> until the handshake arrives. The <code>Acceptor</code>'s
-        active-message callback is what conjures it:</p>
-      <figure class="code">
+      <h3>Connection on demand &amp; endpoint sharing<span class="tag">Acceptor &middot; listenerCallback</span></h3>
+      <p>The last piece is how the connections themselves are managed. An <em class="term">endpoint</em> in UCX is a handle to
+        a connection to one specific peer &mdash; the object you call <code>tagSend</code>/<code>tagRecv</code>/<code>amSend</code>
+        on. This module builds no fixed mesh of endpoints up front; there is no static topology. A consumer's source opens an
+        endpoint to a producer's listener only when it actually has data to fetch, and the producer's server object doesn't
+        even <em>exist</em> until the handshake lands and the <code>Acceptor</code>'s active-message callback spawns it.
+        Connections, like the servers behind them, are created on demand:</p>
+<figure class="code">
         <figcaption><span class="file">Acceptor.cpp</span><span class="role">handshake → server, spawned on demand</span></figcaption>
 <pre><span class="c-cm">/* static */ void Acceptor::cStyleAMCallback(
     std::shared_ptr&lt;ucxx::Request&gt; request, ucp_ep_h ep) {
@@ -584,13 +801,17 @@
   <span class="c-cm">// ... reply with a HandshakeResponse carrying isIntraNode ...</span>
 }</pre>
       </figure>
-      <p>Endpoints are pooled by remote <code>host:port</code>: outgoing endpoints to the same peer are shared, incoming
-        ones are not, so between any two nodes there are at most two endpoints (one per direction). An
-        <code>EndpointRef</code> wraps each, tracking the set of comm elements using it via <code>weak_ptr</code>; when the
-        endpoint closes, it fans the close out to all of them. The peer's real IP is captured from the connection request,
-        not trusted from the handshake — a lesson learned the hard way (see §13).</p>
-
-      <div class="diagram">
+      <p>To keep connections from multiplying, endpoints are pooled by remote <code>host:port</code>. <em>Outgoing</em>
+        endpoints to a given peer are shared &mdash; five sources all pulling from the same remote node reuse one endpoint
+        rather than opening five &mdash; while <em>incoming</em> endpoints (ones the peer opened to us) are not. The result is
+        the tidy invariant in the diagram: between any two nodes there are at most two endpoints, one per direction.</p>
+      <p>Each shared endpoint is wrapped in an <code>EndpointRef</code> that tracks every comm element currently using it, and
+        it does so with <code>weak_ptr</code>s so a finished server or source can be destroyed without the EndpointRef
+        keeping it artificially alive. When the underlying connection drops, the EndpointRef fans the close out to all of
+        them, so every FSM that depended on that connection is told to wind down. (As an aside, the peer's real IP is read
+        from the connection request itself rather than trusted from the handshake payload &mdash; a safety fix covered in
+        &sect;13.)</p>
+<div class="diagram">
         <div class="cap">Endpoint sharing &middot; at most two endpoints between any pair of nodes</div>
         <svg viewBox="0 0 800 300" role="img" aria-label="Outgoing endpoints to a peer are shared; at most two endpoints exist between two nodes, one per direction">
           <defs><marker id="epE" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="var(--copper)"/></marker></defs>
