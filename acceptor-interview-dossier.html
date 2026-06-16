@@ -181,6 +181,10 @@
       <a href="#feedback"><span class="n">FN</span><span>The two-part pattern</span></a>
       <a href="#karthik-impl"><span class="n">H1</span><span>karthikeyann &middot; GPU partition</span></a>
       <a href="#wence-impl"><span class="n">H2</span><span>wence- &middot; scan &amp; stability</span></a>
+      <div class="grp">Refining the bet</div>
+      <a href="#rethink"><span class="n">FB2</span><span>Why partition? + the menu</span></a>
+      <a href="#karthik-join"><span class="n">H3</span><span>karthikeyann &middot; distributed join</span></a>
+      <a href="#wence-sort"><span class="n">H4</span><span>wence- &middot; distributed sort</span></a>
     </nav>
     <div class="rail-foot">
       Target: <code>Acceptor.cpp</code> @ <code>main</code> (130 LOC).<br>
@@ -1133,6 +1137,218 @@ out[ offsets[p] + rank_p(i) ] = in[i];
           the three edges &mdash; identity-padding for non-pow2, the <code>n = 0</code> guard, and in-place safety via
           disjoint-writes-plus-barrier &mdash; before he asks. Volunteering the boundary cases is the single highest-signal move
           with a correctness reviewer, and it pre-empts exactly the fencepost bugs he's known for catching.</p>
+      </div>
+    </section>
+
+    <section id="rethink">
+      <div class="sec-head"><span class="num">FB2</span><h2>Re-examining the bet: why partition recurred, and the wider menu</h2></div>
+      <p class="lede">Fair challenge &mdash; both predicted tasks were partition-shaped. The honest answer is two-sided: there's
+        a real reason for it, and a real over-fit to fix. Your friends' taxonomy is the corrective; it's a good guess, with one
+        reframing for the Velox context.</p>
+
+      <h3>Why partition kept showing up<span class="tag">it's the substrate, not one algorithm</span></h3>
+      <p>It isn't a coincidence and it isn't <em>only</em> over-fitting. In a distributed dataframe engine, nearly every
+        communication-heavy operation has the <strong>same shape</strong>: <em>shuffle by some key, then run a local
+        operation.</em></p>
+      <ul>
+        <li><strong>Join</strong> = shuffle both sides by join key &rarr; local hash join.</li>
+        <li><strong>Group-by</strong> = shuffle by group key &rarr; local aggregate (or partial-aggregate &rarr; shuffle &rarr; merge).</li>
+        <li><strong>Sort</strong> = range-partition (a shuffle by range) &rarr; local sort.</li>
+        <li><strong>Distinct / set ops</strong> = shuffle by value &rarr; local dedup.</li>
+      </ul>
+      <p>So hash partitioning/shuffle isn't one item on the menu &mdash; it's the <strong>common substrate the whole menu is
+        built on</strong>. That's why this PR <em>is</em> a shuffle (it's the reusable primitive), why your friends call it
+        &ldquo;the most fundamental,&rdquo; and why I anchored there. And the two tasks weren't two separate guesses: the
+        shuffle pipeline is <code>hash &rarr; prefix-sum offsets &rarr; pack &rarr; all-to-all &rarr; unpack</code>, so
+        karthikeyann's &ldquo;partition&rdquo; and wence-'s &ldquo;scan&rdquo; are the <em>same pipeline at two zoom
+        levels</em> &mdash; the whole thing vs the prefix-sum inside it.</p>
+      <p>The legitimate half of your critique: a panel of <strong>distributed-computing experts</strong> won't all probe the
+        substrate &mdash; each will probe the <em>local operation in their domain</em> that sits on top of it. The spine
+        (partition + scan) is the right deep bet; I under-covered the branches. The fix is to add the single most-likely
+        non-partition task per reviewer &mdash; which is what H3 and H4 below do.</p>
+
+      <h3>Your friends' guess: a good one, with one reframing<span class="tag">breadth you were missing</span></h3>
+      <p>It's strong, and it's complementary to this dossier rather than redundant. What it gets right: it names shuffle as the
+        spine; it organizes the family by <em>what forces data movement</em> (need keys together &rarr; hash/range partition;
+        need global order &rarr; sample + all-to-all + local sort; need global prefix &rarr; local scan + exchange totals +
+        offset fix) &mdash; exactly the mental model a distributed-systems interviewer is testing; and the pipeline it draws is
+        the shuffle this PR implements. It supplies the <strong>breadth</strong> my prep was thin on.</p>
+      <p>Two adjustments before you lean on it:</p>
+      <ul>
+        <li><strong>Re-map from Dask to Velox.</strong> The taxonomy is framed around Dask-cuDF / Dask-CUDA &mdash; each GPU
+          owning dataframe partitions, Dask scheduling the all-to-all. This PR is <em>Velox-native</em>: the shuffle is a Velox
+          exchange operator, the transport is UCX, and pack/unpack is cuDF <code>contiguous_split</code>/<code>unpack</code>
+          &mdash; not Dask. The communication <em>patterns</em> transfer perfectly; the <em>framework</em> doesn't. Don't tell
+          the people who built the Velox path that &ldquo;Dask does the shuffle&rdquo; &mdash; say &ldquo;the same all-to-all
+          pattern, implemented as a Velox + UCX exchange.&rdquo;</li>
+        <li><strong>It's the <em>what</em>, not the <em>how</em>.</strong> The menu tells you which algorithms communicate; the
+          hands-on rounds grade whether you can <em>implement</em> one and reason about its edges &mdash; the depth the
+          H-sections supply. And neither the menu nor the algorithms touch the <strong>code-review</strong> half the hiring
+          manager flagged; that's the actual PR reading, which R1&ndash;R4 and the punch list cover.</li>
+      </ul>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Algorithm family</th><th>Comm tier</th><th>Maps onto this PR as&hellip;</th><th>Most likely prober</th></tr></thead>
+        <tbody>
+          <tr><td class="hd">Hash partition / shuffle</td><td>heavy</td><td><em>is</em> the PR: hash &rarr; offsets &rarr; pack &rarr; UCX all-to-all &rarr; unpack</td><td>all four &middot; core</td></tr>
+          <tr><td class="hd">Distributed hash join</td><td>heavy</td><td>shuffle both sides by key &rarr; local join</td><td>karthikeyann <span class="pill sage">H3</span></td></tr>
+          <tr><td class="hd">Distributed group-by / agg</td><td>heavy</td><td>shuffle by group key &rarr; partial-agg + merge</td><td>karthikeyann</td></tr>
+          <tr><td class="hd">Distributed sort / range partition</td><td>heavy</td><td>range-partition (shuffle by range) &rarr; local sort + merge</td><td>wence- <span class="pill rose">H4</span></td></tr>
+          <tr><td class="hd">Set ops / distinct / unique</td><td>heavy</td><td>shuffle by value &rarr; local dedup</td><td>wence- / karthikeyann</td></tr>
+          <tr><td class="hd">Scan across partitions</td><td>moderate</td><td>the offset step of the shuffle: local scan &rarr; exchange totals &rarr; fix</td><td>wence- <span class="pill rose">H2</span></td></tr>
+          <tr><td class="hd">Rank / quantile / median</td><td>moderate</td><td>depends on distributed sort / sampling</td><td>wence-</td></tr>
+          <tr><td class="hd">Gather / scatter after shuffle</td><td>the unpack</td><td>placing received rows into the output (the scatter)</td><td>devavret / karthikeyann</td></tr>
+          <tr><td class="hd">Rolling / window (halo)</td><td>moderate</td><td>boundary-row exchange between neighbours</td><td>lower likelihood</td></tr>
+          <tr><td class="hd">Elementwise / filter / string / datetime</td><td>local</td><td>no cross-GPU comm</td><td>unlikely as a comm task</td></tr>
+        </tbody>
+      </table></div>
+      <p style="font-size:.85rem;color:var(--faint);">The &ldquo;most likely prober&rdquo; column is my inference from each
+        reviewer's public domain, not confirmed assignments.</p>
+      <div class="note copper">
+        <span class="lbl">The panel &amp; the triad</span>
+        <p>The hiring manager's two signals &mdash; <em>distributed-computing experts</em> and <em>code reviews likely</em>
+          &mdash; line up with the per-reviewer triad you've now seen twice: <strong>(1)</strong> a design discussion of the
+          distributed algorithm in their domain, <strong>(2)</strong> a hands-on implementation / correctness task, and
+          <strong>(3)</strong> a code review of the actual PR. This dossier now covers all three: design (this section + the
+          menu), hands-on (H1/H2 on the spine, H3/H4 on the branches), and code review (R1&ndash;R4 + the punch list). Walk in
+          expecting all three per 45 minutes.</p>
+      </div>
+    </section>
+
+    <section id="karthik-join">
+      <div class="sec-head"><span class="num">H3</span><h2>Hands-on &middot; karthikeyann: distributed hash join</h2></div>
+      <p class="lede">His strongest domain is joins, and it's the #2 communication-heavy operation &mdash; the most likely
+        <em>non-partition</em> task. The task to rehearse: <em>&ldquo;Design a multi-GPU inner hash join. Walk the algorithm,
+        the communication, and where it breaks &mdash; then write the local build/probe.&rdquo;</em></p>
+
+      <h3>The algorithm: shuffle both sides by key, then join locally</h3>
+      <p>Equal keys must end up on the same GPU, so partition <em>both</em> tables by the join key with the <strong>same</strong>
+        hash: <code>dest = hash(key) % G</code>. Each GPU ships each row to the GPU owning its key (the all-to-all &mdash; here,
+        the UCX exchange). After the shuffle, every GPU holds all build-side and probe-side rows whose keys hash to its
+        partition, so matches are co-located and each GPU runs an ordinary <em>local</em> hash join. The communication is the
+        two shuffles; the join itself is local.</p>
+
+      <h4>Local build + probe (open addressing)</h4>
+      <figure class="code"><figcaption><span class="file">join.cu</span><span class="role">build the hash table</span></figcaption>
+<pre><span class="c-cm">// Build: insert build-side keys into an open-addressing table (this GPU's partition).</span>
+<span class="c-kw">__global__</span> <span class="c-kw">void</span> <span class="c-fn">buildKernel</span>(<span class="c-kw">const</span> <span class="c-kw">int</span>* keys, <span class="c-kw">const</span> <span class="c-kw">int</span>* rowid, <span class="c-kw">int</span> n,
+                            <span class="c-kw">int</span>* tKey, <span class="c-kw">int</span>* tRow, <span class="c-kw">int</span> cap) {
+  <span class="c-kw">int</span> stride = gridDim.x*blockDim.x;
+  <span class="c-kw">for</span> (<span class="c-kw">int</span> i = blockIdx.x*blockDim.x + threadIdx.x; i &lt; n; i += stride) {
+    <span class="c-kw">int</span> k = keys[i], slot = <span class="c-fn">hash</span>(k) % cap;        <span class="c-cm">// open addressing, linear probe</span>
+    <span class="c-kw">while</span> (<span class="c-kw">true</span>) {
+      <span class="c-kw">int</span> prev = <span class="c-fn">atomicCAS</span>(&amp;tKey[slot], EMPTY, k);   <span class="c-cm">// claim an empty slot</span>
+      <span class="c-kw">if</span> (prev == EMPTY) { tRow[slot] = rowid[i]; <span class="c-kw">break</span>; }
+      slot = (slot + <span class="c-nm">1</span>) % cap;                       <span class="c-cm">// collision -&gt; next slot</span>
+    }
+  }
+}</pre></figure>
+      <figure class="code"><figcaption><span class="file">join.cu</span><span class="role">probe &amp; emit matches</span></figcaption>
+<pre><span class="c-cm">// Probe: for each probe key, walk its run to the first EMPTY and emit every match.</span>
+<span class="c-kw">__global__</span> <span class="c-kw">void</span> <span class="c-fn">probeKernel</span>(<span class="c-kw">const</span> <span class="c-kw">int</span>* keys, <span class="c-kw">int</span> n, <span class="c-kw">const</span> <span class="c-kw">int</span>* tKey,
+                  <span class="c-kw">const</span> <span class="c-kw">int</span>* tRow, <span class="c-kw">int</span> cap, <span class="c-kw">int</span>* outB, <span class="c-kw">int</span>* outP, <span class="c-kw">int</span>* outCount) {
+  <span class="c-kw">int</span> stride = gridDim.x*blockDim.x;
+  <span class="c-kw">for</span> (<span class="c-kw">int</span> i = blockIdx.x*blockDim.x + threadIdx.x; i &lt; n; i += stride) {
+    <span class="c-kw">int</span> k = keys[i], slot = <span class="c-fn">hash</span>(k) % cap;
+    <span class="c-kw">while</span> (tKey[slot] != EMPTY) {                    <span class="c-cm">// EMPTY ends the probe run</span>
+      <span class="c-kw">if</span> (tKey[slot] == k) {
+        <span class="c-kw">int</span> o = <span class="c-fn">atomicAdd</span>(outCount, <span class="c-nm">1</span>);            <span class="c-cm">// simple sizing; two-pass avoids this atomic</span>
+        outB[o] = tRow[slot]; outP[o] = i;
+      }
+      slot = (slot + <span class="c-nm">1</span>) % cap;
+    }
+  }
+}</pre></figure>
+      <div class="note sage">
+        <span class="lbl">The catch he'll make you say</span>
+        <p>One slot per key stores only <em>one</em> build row, so this is wrong for <strong>duplicate build keys</strong>
+          (many-to-many) &mdash; you need a multimap (cuCo <code>static_multimap</code>) or a two-pass
+          <em>count &rarr; exclusive-scan &rarr; materialize</em> for the output, which is the partition/scan primitive from H1/H2
+          again. The same two-pass fixes output <strong>sizing</strong>: a many-to-many join can emit
+          <code>|R&#8345;|&times;|S&#8345;|</code> per key &mdash; far more than the input &mdash; so you count matches, scan to
+          per-row offsets, then fill deterministically instead of racing on <code>atomicAdd</code>.</p>
+      </div>
+
+      <h3>The design points to volunteer</h3>
+      <ul>
+        <li><strong>Broadcast vs partitioned join.</strong> If one side is small, <em>replicate</em> it to every GPU (broadcast
+          join) and leave the big table in place &mdash; no shuffle of the big table. Otherwise shuffle both by key
+          (partitioned join). Picking this correctly is the single biggest perf lever.</li>
+        <li><strong>Build the smaller side.</strong> After the shuffle, build the hash table on whichever partition is smaller
+          &mdash; less memory, fewer probes.</li>
+        <li><strong>Skew.</strong> A hot key colocates all its rows on one GPU. Detect hot keys and special-case them (broadcast
+          just the hot key's build rows), or salt the key &mdash; otherwise one GPU is the whole job's critical path.</li>
+        <li><strong>Null semantics.</strong> Equi-join normally treats nulls as non-matching (null &ne; null); libcudf exposes a
+          <code>null_equality</code> flag &mdash; name it.</li>
+        <li><strong>Spill.</strong> If a post-shuffle partition exceeds device memory, spill to host (ties to the host-spilling
+          work) or sub-partition recursively (radix/grace hash join).</li>
+        <li><strong>cuDF reality.</strong> <code>cudf::hash_partition</code> does the shuffle (transported by the UCX exchange);
+          <code>cudf::inner_join</code> runs locally on a cuCo hash table. Multi-column keys are handled by row-hashing.</li>
+      </ul>
+      <div class="note sage">
+        <span class="lbl">In the room</span>
+        <p>State the three-step shape first (shuffle both &rarr; local build/probe &rarr; the output is itself a count+scan), write
+          build and probe, then <em>volunteer</em> the duplicate-key multimap issue and the broadcast-vs-partitioned choice
+          before he asks. Connect it home: &ldquo;the shuffle here is exactly the partition primitive from before; this PR's UCX
+          exchange is the all-to-all that moves the repartitioned tables.&rdquo;</p>
+      </div>
+    </section>
+
+    <section id="wence-sort">
+      <div class="sec-head"><span class="num">H4</span><h2>Hands-on &middot; wence-: distributed sort via range partitioning</h2></div>
+      <p class="lede">Correctness-rich, distributed, and squarely in his lane (global ordering, fencepost boundaries) &mdash;
+        the most likely non-partition task for him. The task to rehearse: <em>&ldquo;Sort a dataset spread across G GPUs.
+        Give the algorithm, then convince me the boundaries and ties are right.&rdquo;</em></p>
+
+      <h3>The algorithm: sample &rarr; range-partition &rarr; local sort &rarr; merge</h3>
+      <p>Unlike a hash shuffle, sort needs a <em>range</em> shuffle so each GPU ends up with a contiguous slice of the global key
+        order. Sort (or sample) locally; sample to choose <code>G-1</code> <strong>splitters</strong> that cut the global range
+        into G roughly-equal buckets; range-partition every row to the GPU owning its range (the all-to-all); each GPU then
+        merges the sorted runs it received. The concatenation <code>bucket&#8320; ++ bucket&#8321; ++ &hellip; ++
+        bucket&#8331;&#8331;&#8331;</code> is the globally sorted result.</p>
+      <figure class="code"><figcaption><span class="file">range.cu</span><span class="role">assign a key to its range bucket</span></figcaption>
+<pre><span class="c-cm">// bucket = #{ splitters &lt;= key }  (upper_bound)  -&gt; half-open ranges [s[b-1], s[b])</span>
+<span class="c-kw">__device__</span> <span class="c-kw">int</span> <span class="c-fn">bucketOf</span>(<span class="c-kw">int</span> key, <span class="c-kw">const</span> <span class="c-kw">int</span>* splitters, <span class="c-kw">int</span> G) {
+  <span class="c-kw">int</span> lo = <span class="c-nm">0</span>, hi = G - <span class="c-nm">1</span>;
+  <span class="c-kw">while</span> (lo &lt; hi) {
+    <span class="c-kw">int</span> mid = (lo + hi) &gt;&gt; <span class="c-nm">1</span>;
+    <span class="c-kw">if</span> (splitters[mid] &lt;= key) lo = mid + <span class="c-nm">1</span>;   <span class="c-cm">// key &gt;= splitter -&gt; higher bucket</span>
+    <span class="c-kw">else</span>                       hi = mid;
+  }
+  <span class="c-kw">return</span> lo;                                     <span class="c-cm">// 0 .. G-1</span>
+}</pre></figure>
+
+      <h3>The correctness argument &mdash; the deliverable</h3>
+      <ul>
+        <li><strong>Boundary convention is a global contract.</strong> The <code>&lt;=</code> above sends a key <em>equal</em> to
+          a splitter into the higher bucket. Whatever you pick, it must be byte-identical on every GPU &mdash; otherwise equal
+          keys split across GPUs and the result isn't sorted. Pick <code>upper_bound</code> (or <code>lower_bound</code>)
+          deliberately and use it everywhere; mixing them shifts every boundary by a tie set (the classic off-by-one).</li>
+        <li><strong>Ties / duplicates.</strong> Equal keys all land in one bucket, so colocation holds. For a <em>stable</em>
+          global sort, ties need a deterministic global order &mdash; sort on a composite <code>(key, globalRowId)</code>. The
+          bucket is decided by <code>key</code> alone; the composite only orders rows <em>within</em> the final sorted output.</li>
+        <li><strong>Empty buckets.</strong> Close or equal splitters can give a bucket zero rows &mdash; a zero-width run and an
+          empty exchange. Half-open ranges <code>[s[b-1], s[b])</code> everywhere make this fall out correctly; never compute a
+          &ldquo;last index&rdquo; as <code>end - 1</code>.</li>
+        <li><strong>Sampling sets <em>balance</em>, not <em>correctness</em>.</strong> Even terrible splitters still yield a
+          sorted result &mdash; each bucket is sorted and the buckets are range-ordered &mdash; just imbalanced. Separating these
+          two concerns out loud is exactly the distinction he's listening for. (Regular/sample sort bounds bucket sizes within
+          ~2&times; with enough samples; that's a balance guarantee, not a correctness one.)</li>
+        <li><strong>The merge after exchange.</strong> Each GPU receives sorted runs and k-way-merges them; the
+          <code>&lt;</code> vs <code>&le;</code> in the merge comparator decides stability, and the merge indices are where
+          fencepost bugs live (the &ldquo;index of the right run&rdquo; class). State the merge invariant:
+          <code>out</code> is sorted iff every input run is sorted and the comparator is a total order.</li>
+        <li><strong>Skew is fundamental here.</strong> A heavy duplicate can't be range-split &mdash; all identical keys go to one
+          bucket regardless of splitters. Unlike hash skew, there's no salting fix; you'd sub-partition on a secondary key or
+          spill.</li>
+      </ul>
+      <div class="note rose">
+        <span class="lbl">In the room</span>
+        <p>Open with the invariant (&ldquo;concatenation of range-separated, locally-sorted buckets = global sort&rdquo;), write
+          <code>bucketOf</code> and immediately call out the <code>&lt;=</code> boundary as a global contract and the
+          <code>(key, globalRowId)</code> tie-break for stability. Then <em>volunteer</em> empty buckets, &ldquo;sampling is
+          balance not correctness,&rdquo; and the merge fencepost &mdash; pre-empting the exact bug class he's known for catching
+          in repartition code. Close by noting the per-bucket send counts are a histogram + scan: the same primitive as H1/H2,
+          transported by this PR's UCX exchange.</p>
       </div>
     </section>
 
