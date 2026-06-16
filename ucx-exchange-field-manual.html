@@ -193,6 +193,13 @@
       <div class="grp">Addenda</div>
       <a href="#scaling"><span class="n">15</span><span>Scaling past one thread</span></a>
       <a href="#loop-order"><span class="n">16</span><span>Why cleanup leads</span></a>
+      <div class="grp">System design</div>
+      <a href="#sd-system"><span class="n">17</span><span>The exchange as a system</span></a>
+      <a href="#sd-flow"><span class="n">18</span><span>Flow control &amp; backpressure</span></a>
+      <a href="#sd-memory"><span class="n">19</span><span>Memory &amp; registration</span></a>
+      <a href="#sd-scale"><span class="n">20</span><span>Connections &amp; scaling</span></a>
+      <a href="#sd-fault"><span class="n">21</span><span>Fault tolerance</span></a>
+      <a href="#sd-tradeoff"><span class="n">22</span><span>Why UCX (trade-offs)</span></a>
     </nav>
     <div class="rail-foot">
       Source read at <code>main</code> · 6.8k LOC core, 4.3k LOC tests.<br>
@@ -1806,6 +1813,283 @@ request_ = endpointRef_-&gt;endpoint_-&gt;<span class="c-fn">tagRecv</span>(
           <text class="sL" x="420" y="276" text-anchor="middle">Cleanup leads because its job is prevention; request-reaping trails because its job is collection. Flip either and the loop</text>
           <text class="sL" x="420" y="291" text-anchor="middle">would act on torn-down state (cleanup last) or waste a pass reaping completions that haven&rsquo;t happened yet (reap first).</text>
         </svg>
+      </div>
+    </section>
+
+    <section id="sd-system">
+      <div class="sec-head"><span class="num">17</span><h2>The exchange as a system</h2></div>
+      <p class="lede">Zoom out from the FSMs and the progress loop: <em>what is this thing architecturally?</em> It is a dynamic,
+        point-to-point <strong>all-to-all shuffle service</strong> for GPU-resident columnar data. Almost every design question an
+        interviewer asks is one of a handful of forces acting on that service &mdash; this section is the lens, and &sect;18&ndash;&sect;22 walk
+        each force in turn.</p>
+
+      <h3>The design</h3>
+      <p>The service is a <strong>shuffle</strong>: producers partition their output by key and push each partition toward the
+        consumer that owns it; consumers receive and reassemble their partition. Mapped onto the operators (&sect;02, &sect;05, &sect;07),
+        <em class="term">UcxPartitionedOutput</em> accumulates, concats, hash/equal-partitions, then <code>contiguous_split</code>
+        + packs; the exchange moves the packed partitions; <em class="term">UcxExchangeSource</em> receives, unpacks, and feeds the
+        downstream operator. The defining choice is the split into <strong>two planes</strong>: a <em>control plane</em> (the
+        handshake plus per-chunk metadata &mdash; exact byte size, the cuDF layout, the 64-bit tag, the <code>PartitionKey</code>)
+        and a <em>data plane</em> (the device buffer itself, moved once and zero-copy). Membership is dynamic:
+        connection-on-demand, no fixed world size, no global barrier (&sect;06, &sect;11&middot;P2).</p>
+      <div class="diagram"><div class="cap">two planes &middot; negotiate on a thin control path, move bulk once on a zero-copy data path</div>
+<svg viewBox="0 0 760 290" role="img"><marker id="d17a" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--cyan)"/></marker><marker id="d17b" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--sage)"/></marker><rect x="44" y="96" width="200" height="92" rx="10" fill="var(--panel)" stroke="var(--copper)" stroke-width="1.4"/><text x="144" y="138" text-anchor="middle" font-family="Instrument Sans,sans-serif" font-size="10.5" font-weight="600" fill="var(--copper)">UcxPartitionedOutput</text><text x="144" y="156" text-anchor="middle" font-family="Source Serif 4,serif" font-size="9" font-weight="400" fill="var(--muted)">producer &middot; partition + pack</text><rect x="516" y="96" width="200" height="92" rx="10" fill="var(--panel)" stroke="var(--copper)" stroke-width="1.4"/><text x="616" y="138" text-anchor="middle" font-family="Instrument Sans,sans-serif" font-size="10.5" font-weight="600" fill="var(--copper)">UcxExchangeSource</text><text x="616" y="156" text-anchor="middle" font-family="Source Serif 4,serif" font-size="9" font-weight="400" fill="var(--muted)">consumer &middot; recv + unpack</text><text x="380" y="40" text-anchor="middle" font-family="Source Serif 4,serif" font-size="10" font-weight="600" fill="var(--cyan)">CONTROL PLANE &mdash; small, latency-bound, negotiable</text><line x1="244" y1="64" x2="516" y2="64" stroke="var(--cyan)" stroke-width="1.4" opacity="0.8" marker-end="url(#d17a)"/><rect x="266" y="52" width="96" height="24" rx="5" fill="var(--cyan)" fill-opacity="0.16" stroke="var(--cyan)" stroke-width="1"/><text x="314" y="68" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9.5" font-weight="600" fill="var(--cyan)">handshake</text><rect x="380" y="52" width="170" height="24" rx="5" fill="var(--cyan)" fill-opacity="0.16" stroke="var(--cyan)" stroke-width="1"/><text x="465" y="68" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9.5" font-weight="600" fill="var(--cyan)">metadata: size&middot;layout&middot;tag</text><text x="380" y="250" text-anchor="middle" font-family="Source Serif 4,serif" font-size="10" font-weight="600" fill="var(--sage)">DATA PLANE &mdash; large, bandwidth-bound, moved once</text><line x1="244" y1="222" x2="516" y2="222" stroke="var(--sage)" stroke-width="3.2" opacity="0.8" marker-end="url(#d17b)"/><rect x="300" y="210" width="210" height="24" rx="5" fill="var(--sage)" fill-opacity="0.16" stroke="var(--sage)" stroke-width="1"/><text x="405" y="226" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9.5" font-weight="600" fill="var(--sage)">packed device buffer (contiguous_split)</text><text x="380" y="278" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9" font-weight="400" fill="var(--faint)">zero-copy GPUDirect RDMA / NVLink &mdash; no host bounce, no serialization</text><line x1="300" y1="76" x2="360" y2="206" stroke="var(--muted)" stroke-width="1" opacity="0.4"/><text x="312" y="150" text-anchor="start" font-family="JetBrains Mono,monospace" font-size="8.5" font-weight="400" fill="var(--faint)">size &rarr; consumer pre-allocates the exact device buffer</text></svg></div>
+
+      <h3>Why it&rsquo;s shaped this way</h3>
+      <p>Separating the planes lets the consumer reserve the <em>exact</em> device buffer before the data arrives (the size rides
+        on the control plane) and lets flow control act through the control/rendezvous path without ever touching data bandwidth.
+        Connection-on-demand makes the system <em>elastic</em> &mdash; tasks launch, retry, and tear down freely with nothing
+        pre-wired. And a zero-copy data plane keeps cost at link bandwidth (NVLink / IB / RoCE), not CPU marshalling.</p>
+
+      <h3>Common issues &amp; the strategies that address them</h3>
+      <div class="paa">
+        <div class="paa-h"><span class="ix">17</span>Forces on the shuffle service &mdash; and how the design answers them</div>
+        <div class="paa-grid">
+          <div class="pcell prob"><div class="pk">Issue</div><p>A metadata round-trip per chunk adds latency on the control plane.</p></div>
+          <div class="pcell appr"><div class="pk">Strategy</div><p>Amortize: reuse schema/tags across chunks of the same stream, pipeline the next chunk&rsquo;s metadata behind the current data transfer, and coalesce tiny chunks.</p></div>
+          <div class="pcell prob"><div class="pk">Issue</div><p>Dynamic membership means there is no global view to optimize against (placement, scheduling).</p></div>
+          <div class="pcell appr"><div class="pk">Strategy</div><p>Make the <em>mapping</em> static even though the <em>connections</em> are dynamic: a deterministic owner <code>hash(key) % G</code> fixes who-gets-what at plan time; connections just materialize that mapping on demand.</p></div>
+          <div class="pcell prob"><div class="pk">Issue</div><p>The 32-bit FNV-1a task hash can collide in a long-lived, many-task cluster &mdash; misrouted bytes.</p></div>
+          <div class="pcell appr"><div class="pk">Strategy</div><p>Namespace the tag space by <code>(taskId, partition, epoch)</code> and widen the hash; treat the tag as a routing key whose collision probability you can bound.</p></div>
+        </div>
+      </div>
+
+      <div class="note copper">
+        <span class="lbl">In a design discussion</span>
+        <p>Open at this altitude: &ldquo;It&rsquo;s a dynamic, point-to-point GPU shuffle with a <em>control plane</em> &mdash;
+          handshake, sized metadata, tags &mdash; and a zero-copy <em>data plane</em> of device buffers over GPUDirect.&rdquo;
+          Then drill into whichever force they probe. Naming the two planes first signals you understand the architecture, not
+          just the code, and every later topic (flow control, memory, topology, failure) hangs off one plane or the other.</p>
+      </div>
+    </section>
+
+    <section id="sd-flow">
+      <div class="sec-head"><span class="num">18</span><h2>Flow control &amp; backpressure</h2></div>
+      <p class="lede">The single most likely distributed-systems question here, and one a reviewer flagged directly. The data path
+        is <strong>push</strong>-based with no native pull, so absent backpressure a slow consumer grows an unbounded queue and
+        OOMs the GPU. How you bound it is a design choice with real trade-offs.</p>
+
+      <h3>The design</h3>
+      <p>The server <code>tagSend</code>s partitions unconditionally; the protocol has no &ldquo;pause&rdquo; message. The valve is
+        <strong>UCX rendezvous plus watermarks</strong> (&sect;06, &sect;08, &sect;11&middot;P6). Rendezvous requires a <em>posted
+        receive</em> before a bulk transfer can proceed, so when the consumer&rsquo;s queue crosses the <em>high-water</em> mark
+        the source goes <strong>dormant</strong> and stops posting receives &mdash; the server&rsquo;s next <code>tagSend</code>
+        then blocks at rendezvous. A CAS-guarded wake re-arms the source once the queue drains to the <em>low-water</em> mark, and
+        the producer side adds an independent count/byte block. This is <strong>implicit, credit-free</strong> backpressure: the
+        absence of a posted receive is the stop signal.</p>
+      <div class="diagram"><div class="cap">backpressure without a pull protocol &middot; rendezvous + high/low watermarks as the valve</div>
+<svg viewBox="0 0 720 320" role="img"><marker id="d18r" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--rose)"/></marker><marker id="d18s" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--sage)"/></marker><rect x="80" y="64" width="120" height="200" rx="6" fill="var(--panel)" stroke="var(--muted)" stroke-width="1.3"/><rect x="80" y="94" width="120" height="170" rx="0" fill="var(--rose)" fill-opacity="0.14"/><line x1="74" y1="94" x2="206" y2="94" stroke="var(--rose)" stroke-width="1.4" stroke-dasharray="4 3"/><line x1="74" y1="214" x2="206" y2="214" stroke="var(--sage)" stroke-width="1.4" stroke-dasharray="4 3"/><text x="210" y="98" text-anchor="start" font-family="JetBrains Mono,monospace" font-size="9.5" font-weight="400" fill="var(--rose)">high (32)</text><text x="210" y="218" text-anchor="start" font-family="JetBrains Mono,monospace" font-size="9.5" font-weight="400" fill="var(--sage)">low (16)</text><text x="140" y="56" text-anchor="middle" font-family="Source Serif 4,serif" font-size="10" font-weight="400" fill="var(--muted)">consumer queue</text><rect x="420" y="72" width="200" height="54" rx="10" fill="var(--panel)" stroke="var(--sage)" stroke-width="1.4"/><text x="520" y="95" text-anchor="middle" font-family="Instrument Sans,sans-serif" font-size="10.5" font-weight="600" fill="var(--sage)">ACTIVE</text><text x="520" y="113" text-anchor="middle" font-family="Source Serif 4,serif" font-size="9" font-weight="400" fill="var(--muted)">posts receives</text><rect x="420" y="196" width="200" height="54" rx="10" fill="var(--panel)" stroke="var(--rose)" stroke-width="1.4"/><text x="520" y="219" text-anchor="middle" font-family="Instrument Sans,sans-serif" font-size="10.5" font-weight="600" fill="var(--rose)">DORMANT</text><text x="520" y="237" text-anchor="middle" font-family="Source Serif 4,serif" font-size="9" font-weight="400" fill="var(--muted)">stops posting receives</text><line x1="308" y1="94" x2="420" y2="99" stroke="var(--rose)" stroke-width="1.4" opacity="0.85" marker-end="url(#d18r)"/><text x="330" y="88" text-anchor="start" font-family="JetBrains Mono,monospace" font-size="9" font-weight="400" fill="var(--rose)">queue &gt; high</text><line x1="520" y1="126" x2="520" y2="196" stroke="var(--rose)" stroke-width="1.4" opacity="0.85" marker-end="url(#d18r)"/><text x="528" y="165" text-anchor="start" font-family="JetBrains Mono,monospace" font-size="9" font-weight="400" fill="var(--rose)">go dormant</text><line x1="420" y1="223" x2="308" y2="214" stroke="var(--sage)" stroke-width="1.4" opacity="0.85" marker-end="url(#d18s)"/><text x="316" y="208" text-anchor="start" font-family="JetBrains Mono,monospace" font-size="9" font-weight="400" fill="var(--sage)">queue &lt; low &rarr; CAS wake</text><text x="420" y="290" text-anchor="start" font-family="JetBrains Mono,monospace" font-size="9" font-weight="400" fill="var(--faint)">while DORMANT, no receive is posted &rarr; the server&rsquo;s next tagSend BLOCKS at UCX rendezvous &mdash; the</text><text x="420" y="304" text-anchor="start" font-family="JetBrains Mono,monospace" font-size="9" font-weight="400" fill="var(--faint)">absence of a posted receive IS the &lsquo;stop&rsquo; signal. No extra protocol message is sent.</text></svg></div>
+      <p>The design space worth naming: <strong>credit-based</strong> flow control (the consumer explicitly grants N buffers of
+        credit; precise, but adds messages and accounting), a bounded <strong>sliding window</strong> of in-flight chunks, or
+        <strong>rendezvous-as-valve</strong> as used here (zero extra messages, coarser granularity).</p>
+
+      <h3>Why it&rsquo;s shaped this way</h3>
+      <p>It buys end-to-end flow control with <em>no extra protocol messages</em> &mdash; UCX&rsquo;s own rendezvous semantics do
+        the throttling &mdash; giving bounded queue depth and therefore bounded GPU memory, with no credit accounting to get wrong.</p>
+
+      <h3>Common issues &amp; the strategies that address them</h3>
+      <div class="paa">
+        <div class="paa-h"><span class="ix">18</span>Where push-based backpressure bites, and the fix</div>
+        <div class="paa-grid">
+          <div class="pcell prob"><div class="pk">Issue</div><p>Thresholds are <em>counts</em> of tables (32 / 16), not bytes &mdash; a few huge chunks can still blow past the intended memory ceiling.</p></div>
+          <div class="pcell appr"><div class="pk">Strategy</div><p>Account in <em>bytes</em>: the control plane already carries the exact chunk size, so the watermark can be a byte budget, making the memory bound precise regardless of chunk size.</p></div>
+          <div class="pcell prob"><div class="pk">Issue</div><p>Deadlock risk if both directions of a path can block at rendezvous simultaneously (a cycle of waiters).</p></div>
+          <div class="pcell appr"><div class="pk">Strategy</div><p>Keep the data plane one-directional per stream and never let the control plane block on data; the dependency graph is then acyclic by construction &mdash; state that argument explicitly.</p></div>
+          <div class="pcell prob"><div class="pk">Issue</div><p>Dormancy adds latency: flow resumes only after the queue drains to low-water and the source is re-armed.</p></div>
+          <div class="pcell appr"><div class="pk">Strategy</div><p>Tune the low/high <em>hysteresis</em> gap to trade memory for throughput, and prefetch so the source re-arms before the consumer fully starves.</p></div>
+          <div class="pcell prob"><div class="pk">Issue</div><p>Fairness: one hot source sharing the single worker can starve others; and a vestigial second &ldquo;flow control&rdquo; in the client is a documented no-op &mdash; pure confusion.</p></div>
+          <div class="pcell appr"><div class="pk">Strategy</div><p>Per-source credits or round-robin servicing in the work queue for fairness; and delete the dead control path so there is exactly one authoritative valve.</p></div>
+        </div>
+      </div>
+
+      <div class="note rose">
+        <span class="lbl">In a design discussion</span>
+        <p>Lead with the failure mode (slow consumer &rarr; unbounded device queue &rarr; OOM), then name the valve (rendezvous +
+          high/low watermarks, <em>no extra messages</em>), then critique it yourself: counts-not-bytes, the hysteresis/latency
+          trade, and the deadlock-freedom argument (one-directional data plane). Offering credit-based flow control as the precise
+          alternative &mdash; and saying when you&rsquo;d pay for it &mdash; shows range.</p>
+      </div>
+    </section>
+
+    <section id="sd-memory">
+      <div class="sec-head"><span class="num">19</span><h2>Memory, registration &amp; spilling</h2></div>
+      <p class="lede">GPU memory is the scarce resource, and RDMA cannot touch unregistered memory. The exchange&rsquo;s memory
+        design is three moves: <strong>register once, pool aggressively, spill before you OOM.</strong></p>
+
+      <h3>The design</h3>
+      <p><strong>Registration.</strong> UCX RDMA requires <em>registered</em> (pinned) memory and a remote key (<code>rkey</code>);
+        registration pins pages and programs the NIC, so it is expensive &mdash; a registration cache amortizes it across reuses of
+        the same buffer. <strong>Pooling.</strong> An RMM pool pre-allocates a large device arena and sub-allocates in O(1),
+        avoiding a <code>cudaMalloc</code> (and its implicit sync) per chunk; pooled buffers stay registered, so reuse skips
+        re-registration. <strong>Zero-copy.</strong> <code>contiguous_split</code> lays a partition out as one device buffer; the
+        server <code>tagSend</code>s the raw pointer and GPUDirect RDMA / NVLink moves it (&sect;11&middot;P1); when GPUDirect is
+        unavailable (topology or driver), the fallback stages through pinned host memory. <strong>Spilling.</strong> When the
+        device pool is exhausted &mdash; skew, or a slow drain &mdash; packed buffers spill to pinned host memory (or disk) and
+        reload on demand, turning a memory spike into graceful degradation instead of an OOM.</p>
+
+      <h3>Why it&rsquo;s shaped this way</h3>
+      <p>The cache and pool drive steady-state allocation and registration cost to near-zero, so bandwidth stays link-bound rather
+        than allocator-bound; the zero-copy path keeps the data plane off the CPU; and spilling converts the worst case (memory
+        exhaustion under skew) from a crash into a slowdown.</p>
+
+      <h3>Common issues &amp; the strategies that address them</h3>
+      <div class="paa">
+        <div class="paa-h"><span class="ix">19</span>Where GPU-memory mechanics bite, and the fix</div>
+        <div class="paa-grid">
+          <div class="pcell prob"><div class="pk">Issue</div><p>Registration is costly and the cache thrashes if buffers churn.</p></div>
+          <div class="pcell appr"><div class="pk">Strategy</div><p>Persistent, pre-registered buffer pools sized to the working set; reuse the same buffers across chunks so registration is paid once.</p></div>
+          <div class="pcell prob"><div class="pk">Issue</div><p><code>contiguous_split</code> makes a transient full-size copy of the partition &mdash; a peak allocation on top of the source.</p></div>
+          <div class="pcell appr"><div class="pk">Strategy</div><p>Bound concurrency so peaks don&rsquo;t overlap, free the source promptly after packing, and pack in chunks when a partition is large.</p></div>
+          <div class="pcell prob"><div class="pk">Issue</div><p>Pool fragmentation under mixed allocation sizes.</p></div>
+          <div class="pcell appr"><div class="pk">Strategy</div><p>Size-binned pools / power-of-two suballocation; periodic compaction of the arena.</p></div>
+          <div class="pcell prob"><div class="pk">Issue</div><p>GPUDirect is not always available (PCIe topology, driver, no NVLink) and skew exhausts one consumer&rsquo;s pool first.</p></div>
+          <div class="pcell appr"><div class="pk">Strategy</div><p>Detect and fall back to host staging; pick the GPU&rsquo;s affine NIC (&sect;20); spill by size/LRU and cap inflow with byte-based backpressure (&sect;18).</p></div>
+        </div>
+      </div>
+
+      <div class="note sage">
+        <span class="lbl">In a design discussion</span>
+        <p>Name the three moves &mdash; registered memory + <code>rkey</code>, an RMM pool with <em>cached registration</em>, and a
+          zero-copy path with host-staging fallback &mdash; then position <em>spilling</em> as the OOM safety valve that pairs with
+          byte-based flow control. The point to land: bandwidth should be bounded by the link, and memory by an explicit budget,
+          not by the allocator or by luck.</p>
+      </div>
+    </section>
+
+    <section id="sd-scale">
+      <div class="sec-head"><span class="num">20</span><h2>Connections, topology &amp; scaling</h2></div>
+      <p class="lede">Scaling the exchange across many GPUs and nodes turns three knobs: <strong>connection count</strong>,
+        <strong>progress throughput</strong>, and <strong>hardware locality</strong>.</p>
+
+      <h3>The design</h3>
+      <p><strong>Connection-on-demand.</strong> Endpoints are worker-bound; a source connects only when it has work, and the
+        Acceptor&rsquo;s active-message handshake spawns the server (&sect;06, &sect;11&middot;P2) &mdash; no pre-wired mesh.
+        <strong>All-to-all topology.</strong> N participants imply up to N&sup2; endpoints; connection count and setup cost grow
+        quadratically, mitigated by endpoint reuse and a 2-level shuffle that aggregates intra-node first, then exchanges a few
+        inter-node links. <strong>Progress throughput.</strong> One worker per thread, sharded by <code>hash(taskId, partition) %
+        T</code>, sharing a <code>ucp_context</code> for registration, with per-worker listeners (&sect;15) &mdash; the single-core
+        ceiling is <em>message rate</em>, not bandwidth. <strong>Hardware locality.</strong> GPU&harr;NIC affinity (use the NIC on
+        the GPU&rsquo;s PCIe/NVLink rail), NUMA-local progress threads, NVLink intra-node, rail-aligned routing.</p>
+      <div class="diagram"><div class="cap">connection topology &middot; flat all-to-all (~N&sup2; endpoints) vs a 2-level hierarchical shuffle</div>
+<svg viewBox="0 0 720 310" role="img"><text x="180" y="52" text-anchor="middle" font-family="Source Serif 4,serif" font-size="11" font-weight="600" fill="var(--rose)">flat all-to-all</text><line x1="100" y1="96" x2="260" y2="96" stroke="var(--rose)" stroke-width="1.2" opacity="0.55"/><line x1="100" y1="96" x2="100" y2="224" stroke="var(--rose)" stroke-width="1.2" opacity="0.55"/><line x1="100" y1="96" x2="260" y2="224" stroke="var(--rose)" stroke-width="1.2" opacity="0.55"/><line x1="260" y1="96" x2="100" y2="224" stroke="var(--rose)" stroke-width="1.2" opacity="0.55"/><line x1="260" y1="96" x2="260" y2="224" stroke="var(--rose)" stroke-width="1.2" opacity="0.55"/><line x1="100" y1="224" x2="260" y2="224" stroke="var(--rose)" stroke-width="1.2" opacity="0.55"/><circle cx="100" cy="96" r="22" fill="var(--panel)" stroke="var(--rose)" stroke-width="1.4"/><text x="100" y="100" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" font-weight="600" fill="var(--rose)">n0</text><circle cx="260" cy="96" r="22" fill="var(--panel)" stroke="var(--rose)" stroke-width="1.4"/><text x="260" y="100" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" font-weight="600" fill="var(--rose)">n1</text><circle cx="100" cy="224" r="22" fill="var(--panel)" stroke="var(--rose)" stroke-width="1.4"/><text x="100" y="228" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" font-weight="600" fill="var(--rose)">n2</text><circle cx="260" cy="224" r="22" fill="var(--panel)" stroke="var(--rose)" stroke-width="1.4"/><text x="260" y="228" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" font-weight="600" fill="var(--rose)">n3</text><text x="180" y="272" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9.5" font-weight="400" fill="var(--rose)">every node &harr; every node</text><text x="180" y="288" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9" font-weight="400" fill="var(--faint)">N(N-1) directed endpoints &mdash; quadratic</text><line x1="360" y1="70" x2="360" y2="260" stroke="var(--muted)" stroke-width="1" opacity="0.3"/><text x="540" y="52" text-anchor="middle" font-family="Source Serif 4,serif" font-size="11" font-weight="600" fill="var(--sage)">hierarchical (2-level)</text><line x1="470" y1="96" x2="610" y2="96" stroke="var(--sage)" stroke-width="1.4" opacity="0.8"/><line x1="470" y1="224" x2="610" y2="224" stroke="var(--sage)" stroke-width="1.4" opacity="0.8"/><line x1="610" y1="96" x2="470" y2="224" stroke="var(--copper)" stroke-width="1.8" opacity="0.9"/><circle cx="470" cy="96" r="22" fill="var(--panel)" stroke="var(--sage)" stroke-width="1.4"/><text x="470" y="100" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" font-weight="600" fill="var(--sage)">n0</text><circle cx="610" cy="96" r="22" fill="var(--panel)" stroke="var(--sage)" stroke-width="1.4"/><text x="610" y="100" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" font-weight="600" fill="var(--sage)">n1</text><circle cx="470" cy="224" r="22" fill="var(--panel)" stroke="var(--sage)" stroke-width="1.4"/><text x="470" y="228" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" font-weight="600" fill="var(--sage)">n2</text><circle cx="610" cy="224" r="22" fill="var(--panel)" stroke="var(--sage)" stroke-width="1.4"/><text x="610" y="228" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" font-weight="600" fill="var(--sage)">n3</text><text x="540" y="272" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9.5" font-weight="400" fill="var(--sage)">aggregate intra-rack, few cross-rack links</text><text x="540" y="288" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9" font-weight="400" fill="var(--faint)">cross-node links roughly linear</text><text x="540" y="168" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9" font-weight="600" fill="var(--copper)">cross-rack</text></svg></div>
+
+      <h3>Why it&rsquo;s shaped this way</h3>
+      <p>Connection-on-demand keeps membership elastic with no global barrier; sharded workers lift the single-core message-rate
+        ceiling; affinity makes effective bandwidth approach the link rather than a cross-NUMA fraction of it; and the hierarchy
+        cuts the quadratic inter-node connection count toward linear.</p>
+
+      <h3>Common issues &amp; the strategies that address them</h3>
+      <div class="paa">
+        <div class="paa-h"><span class="ix">20</span>What breaks at scale, and the fix</div>
+        <div class="paa-grid">
+          <div class="pcell prob"><div class="pk">Issue</div><p>O(N&sup2;) connection blow-up and setup latency at large node counts.</p></div>
+          <div class="pcell appr"><div class="pk">Strategy</div><p>Hierarchical all-to-all (intra-node aggregation, then a thin inter-node layer), endpoint pooling, and lazy connect.</p></div>
+          <div class="pcell prob"><div class="pk">Issue</div><p>Load imbalance across shards &mdash; hot partitions land on one worker.</p></div>
+          <div class="pcell appr"><div class="pk">Strategy</div><p>More shards than workers plus work-stealing; partition-aware sharding so heavy keys spread.</p></div>
+          <div class="pcell prob"><div class="pk">Issue</div><p>Head-of-line blocking on a shared worker &mdash; one big transfer stalls the rest.</p></div>
+          <div class="pcell appr"><div class="pk">Strategy</div><p>Per-shard queues, chunk large transfers, and keep control-plane progress separable from bulk data.</p></div>
+          <div class="pcell prob"><div class="pk">Issue</div><p>Cross-NUMA / wrong-rail penalties (NIC on the far socket from the GPU) and the small-message message-rate ceiling.</p></div>
+          <div class="pcell appr"><div class="pk">Strategy</div><p>Pin progress threads to the GPU&rsquo;s NUMA node, select the affine NIC, align routing to rails; batch/coalesce small chunks and shard progress to raise the ceiling.</p></div>
+        </div>
+      </div>
+
+      <div class="note copper">
+        <span class="lbl">In a design discussion</span>
+        <p>Name the quadratic up front (&ldquo;flat all-to-all is ~N&sup2; endpoints&rdquo;) and the hierarchical fix, then
+          connection-on-demand for elasticity, sharded workers for throughput (and that the limit is message rate, not bandwidth,
+          per &sect;15), and GPU&ndash;NIC affinity + NUMA pinning for locality. That four-part answer covers nearly every
+          &ldquo;how does this scale?&rdquo; follow-up.</p>
+      </div>
+    </section>
+
+    <section id="sd-fault">
+      <div class="sec-head"><span class="num">21</span><h2>Fault tolerance &amp; delivery semantics</h2></div>
+      <p class="lede">Distributed means partial failure. What does the exchange guarantee when a task aborts mid-transfer, a UCP
+        callback replays, or a peer goes silent?</p>
+
+      <h3>The design</h3>
+      <p><strong>Fire-and-forget at the edge.</strong> The handshake response is fire-and-forget; <em>completions</em> drive
+        state, not acknowledgements (&sect;06). <strong>Lifetime discipline.</strong> Every async callback captures
+        <code>weak_from_this()</code> and no-ops if the object is gone, guards on expected state to ignore UCP wireup replays, and
+        retains completed requests so their lambdas stay valid for the object&rsquo;s lifetime (&sect;11&middot;P4).
+        <strong>Cancellation / drain.</strong> <code>closeAndDrainCommunicators</code> cancels endpoints first (purge-before),
+        then reaps completions (reap-after) &mdash; the loop ordering of &sect;16. <strong>Delivery semantics.</strong> At this
+        layer you get effectively <em>at-least-once</em> within a task&rsquo;s lifetime; <em>exactly-once</em> requires idempotent
+        consumption or dedup (sequence numbers / tags). Timeouts detect dead peers; transient errors get bounded retries.</p>
+
+      <h3>Why it&rsquo;s shaped this way</h3>
+      <p>The discipline makes the system safe under cancellation and UCP replay (no use-after-free); drain ordering makes teardown
+        clean (no work on dead endpoints, no leaked requests); and pushing exactly-once up to an idempotent <code>unpack</code>
+        keeps the transport itself simple rather than baking in a heavyweight reliability protocol.</p>
+
+      <h3>Common issues &amp; the strategies that address them</h3>
+      <div class="paa">
+        <div class="paa-h"><span class="ix">21</span>Failure modes, and the discipline that contains them</div>
+        <div class="paa-grid">
+          <div class="pcell prob"><div class="pk">Issue</div><p>UCP wireup replays fire callbacks on already-completed requests.</p></div>
+          <div class="pcell appr"><div class="pk">Strategy</div><p>A state guard in every callback: ignore the event unless the FSM is in the state that expects it.</p></div>
+          <div class="pcell prob"><div class="pk">Issue</div><p>Use-after-free on a freed <code>Request</code>&rsquo;s lambda when a task aborts mid-transfer.</p></div>
+          <div class="pcell appr"><div class="pk">Strategy</div><p><code>weak_from_this()</code> capture that no-ops if the object is gone, plus a retained <code>completedRequests_</code> vector.</p></div>
+          <div class="pcell prob"><div class="pk">Issue</div><p>Partial transfers or a peer dying mid-chunk; duplicates on retry breaking exactly-once.</p></div>
+          <div class="pcell appr"><div class="pk">Strategy</div><p>Timeouts + bounded retry with backoff; sequence numbers per <code>(taskId, partition)</code> and an idempotent <code>unpack</code> that drops already-seen chunks.</p></div>
+          <div class="pcell prob"><div class="pk">Issue</div><p>Timeout tuning (too short &rarr; false dead-peer; too long &rarr; stalls), and the 32-bit task hash can collide.</p></div>
+          <div class="pcell appr"><div class="pk">Strategy</div><p>Heartbeats / adaptive timeouts separate liveness from progress; widen and namespace the routing tag (&sect;17).</p></div>
+        </div>
+      </div>
+
+      <div class="note rose">
+        <span class="lbl">In a design discussion</span>
+        <p>Name the three failure modes &mdash; replay, use-after-free, partial transfer &mdash; then the lifetime discipline as
+          the safety pattern, then the semantics: at-least-once at the transport, exactly-once via idempotent consumption. Close
+          with the drain-then-reap ordering (&sect;16). Stating the guarantee you actually provide (and what it would cost to
+          strengthen it) is the senior move.</p>
+      </div>
+    </section>
+
+    <section id="sd-tradeoff">
+      <div class="sec-head"><span class="num">22</span><h2>The trade-off space: why UCX</h2></div>
+      <p class="lede">The &ldquo;what transport would you use?&rdquo; question. The honest answer is a <em>matching argument</em>:
+        the workload is a dynamic, point-to-point, zero-copy GPU shuffle, and that shape selects UCX over the collective and RPC
+        alternatives.</p>
+
+      <h3>The design &mdash; the options and where they sit</h3>
+      <p><strong>UCX</strong> is a transport abstraction (its UCT layer selects <code>rc</code> / <code>ud</code> /
+        <code>cuda_ipc</code> / <code>cuda_copy</code> / <code>tcp</code>) with point-to-point flexibility, first-class GPU support
+        (GPUDirect), dynamic membership, and tag matching &mdash; it fits irregular, late-bound shuffles. <strong>NCCL</strong> is
+        collective-optimized (allreduce, all-to-all) and topology-aware, superb for dense regular collectives and training, but
+        rigid: a fixed communicator/world and collective semantics fit a <em>static dense</em> all-to-all, not a dynamic
+        point-to-point shuffle with tasks coming and going (&sect;12). <strong>MPI</strong> is the HPC standard but its world is
+        fixed at launch &mdash; awkward for an elastic, task-based engine. <strong>gRPC / Thrift / TCP</strong> are general and
+        easy, but a host bounce plus serialization make them slow for GPU bulk (fine for the control plane). <strong>Raw RDMA
+        verbs</strong> give maximal control at maximal complexity &mdash; UCX is the abstraction over them.</p>
+      <div class="diagram"><div class="cap">the trade-off space &middot; the workload (dynamic, point-to-point, zero-copy GPU shuffle) selects UCX</div>
+<svg viewBox="0 0 720 360" role="img"><marker id="d22" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--muted)"/></marker><line x1="120" y1="300" x2="660" y2="300" stroke="var(--muted)" stroke-width="1.2" opacity="1.0"/><line x1="120" y1="300" x2="120" y2="60" stroke="var(--muted)" stroke-width="1.2" opacity="1.0"/><text x="390" y="330" text-anchor="middle" font-family="Source Serif 4,serif" font-size="9.5" font-weight="400" fill="var(--muted)">membership &amp; pattern</text><text x="120" y="318" text-anchor="start" font-family="JetBrains Mono,monospace" font-size="9" font-weight="400" fill="var(--faint)">collective &middot; static</text><text x="660" y="318" text-anchor="end" font-family="JetBrains Mono,monospace" font-size="9" font-weight="400" fill="var(--faint)">point-to-point &middot; dynamic</text><text x="108" y="180" text-anchor="middle" font-family="Source Serif 4,serif" font-size="9.5" font-weight="400" fill="var(--muted)">data path</text><text x="112" y="300" text-anchor="end" font-family="JetBrains Mono,monospace" font-size="9" font-weight="400" fill="var(--faint)">host &middot; serialized</text><text x="112" y="68" text-anchor="end" font-family="JetBrains Mono,monospace" font-size="9" font-weight="400" fill="var(--faint)">GPU &middot; zero-copy</text><rect x="476" y="60" width="184" height="91" rx="9" fill="var(--copper)" fill-opacity="0.08" stroke="var(--copper)" stroke-width="1" stroke-dasharray="4 3"/><text x="652" y="82" text-anchor="end" font-family="Source Serif 4,serif" font-size="9.5" font-weight="600" fill="var(--copper)">fit for this workload</text><circle cx="250" cy="98" r="8" fill="var(--sage)" fill-opacity="0.5" stroke="var(--sage)" stroke-width="1.5"/><text x="263.6" y="101.4" text-anchor="start" font-family="Source Serif 4,serif" font-size="10.5" font-weight="600" fill="var(--sage)">NCCL</text><text x="263.6" y="114.4" text-anchor="start" font-family="JetBrains Mono,monospace" font-size="8.5" font-weight="400" fill="var(--faint)">collectives, rigid world</text><circle cx="212" cy="194" r="8" fill="var(--cyan)" fill-opacity="0.5" stroke="var(--cyan)" stroke-width="1.5"/><text x="225.8" y="197.4" text-anchor="start" font-family="Source Serif 4,serif" font-size="10.5" font-weight="600" fill="var(--cyan)">MPI</text><text x="225.8" y="210.4" text-anchor="start" font-family="JetBrains Mono,monospace" font-size="8.5" font-weight="400" fill="var(--faint)">static world @ launch</text><circle cx="422" cy="271" r="8" fill="var(--muted)" fill-opacity="0.5" stroke="var(--muted)" stroke-width="1.5"/><text x="436.40000000000003" y="274.2" text-anchor="start" font-family="Source Serif 4,serif" font-size="10.5" font-weight="600" fill="var(--muted)">gRPC / TCP</text><text x="436.40000000000003" y="287.2" text-anchor="start" font-family="JetBrains Mono,monospace" font-size="8.5" font-weight="400" fill="var(--faint)">fine for control plane</text><circle cx="552" cy="146" r="8" fill="var(--muted)" fill-opacity="0.5" stroke="var(--muted)" stroke-width="1.5"/><text x="538.0" y="149.4" text-anchor="end" font-family="Source Serif 4,serif" font-size="10.5" font-weight="600" fill="var(--muted)">raw RDMA</text><text x="538.0" y="162.4" text-anchor="end" font-family="JetBrains Mono,monospace" font-size="8.5" font-weight="400" fill="var(--faint)">max control, max complexity</text><circle cx="574" cy="89" r="10" fill="var(--copper)" fill-opacity="0.5" stroke="var(--copper)" stroke-width="1.5"/><text x="557.5999999999999" y="91.80000000000001" text-anchor="end" font-family="Source Serif 4,serif" font-size="10.5" font-weight="600" fill="var(--copper)">UCX</text><text x="557.5999999999999" y="104.80000000000001" text-anchor="end" font-family="JetBrains Mono,monospace" font-size="8.5" font-weight="400" fill="var(--faint)">dynamic P2P + GPU zero-copy</text></svg></div>
+
+      <h3>Why UCX here &mdash; and the cost</h3>
+      <p>The workload is dynamic membership + point-to-point GPU shuffle + zero-copy, which is precisely UCX&rsquo;s sweet spot.
+        NCCL&rsquo;s collective model does not match the irregular, late-bound pattern; gRPC is too slow on the data plane (though
+        it could carry control). The cost is real: UCX is lower-level, so you build flow control, lifetime safety, and routing
+        yourself &mdash; which is exactly why &sect;11 and &sect;18&ndash;&sect;21 exist.</p>
+
+      <h3>Common issues &amp; the strategies that address them</h3>
+      <div class="paa">
+        <div class="paa-h"><span class="ix">22</span>The price of UCX&rsquo;s flexibility, and how to pay it</div>
+        <div class="paa-grid">
+          <div class="pcell prob"><div class="pk">Issue</div><p>UCX hands you primitives, not a shuffle: flow control, reliability, and routing are yours to build.</p></div>
+          <div class="pcell appr"><div class="pk">Strategy</div><p>Treat &sect;18&ndash;&sect;21 as the missing layer; reuse battle-tested patterns (rendezvous valve, lifetime discipline) rather than inventing.</p></div>
+          <div class="pcell prob"><div class="pk">Issue</div><p>A dense regular collective sub-step (e.g. an allreduce) is wasteful to hand-roll on point-to-point sends.</p></div>
+          <div class="pcell appr"><div class="pk">Strategy</div><p>Hybrid: UCX for the irregular shuffle, NCCL for any dense collective; pick per sub-operation, not per system.</p></div>
+          <div class="pcell prob"><div class="pk">Issue</div><p>UCX transport selection and environment tuning is fiddly and silently affects performance.</p></div>
+          <div class="pcell appr"><div class="pk">Strategy</div><p>Pin the transports you expect (rail, <code>cuda_ipc</code> intra-node), log the chosen UCT, and measure rather than trust defaults.</p></div>
+        </div>
+      </div>
+
+      <div class="note copper">
+        <span class="lbl">In a design discussion</span>
+        <p>Lead with the matching argument &mdash; &ldquo;dynamic + point-to-point + GPU zero-copy &rarr; UCX&rdquo; &mdash; then
+          concede where the alternatives win: NCCL for dense collectives, gRPC for the control plane, MPI for a static HPC world.
+          Naming what UCX <em>doesn&rsquo;t</em> give you (and that &sect;11/&sect;18&ndash;&sect;21 are that missing layer) is more
+          convincing than selling it as a silver bullet.</p>
       </div>
     </section>
 
