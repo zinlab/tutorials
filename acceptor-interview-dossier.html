@@ -177,6 +177,10 @@
       <div class="grp">Show review skill</div>
       <a href="#punch"><span class="n">PL</span><span>Code-review punch list</span></a>
       <a href="#rapid"><span class="n">RF</span><span>Rapid-fire warm-ups</span></a>
+      <div class="grp">Hands-on (post-feedback)</div>
+      <a href="#feedback"><span class="n">FN</span><span>The two-part pattern</span></a>
+      <a href="#karthik-impl"><span class="n">H1</span><span>karthikeyann &middot; GPU partition</span></a>
+      <a href="#wence-impl"><span class="n">H2</span><span>wence- &middot; scan &amp; stability</span></a>
     </nav>
     <div class="rail-foot">
       Target: <code>Acceptor.cpp</code> @ <code>main</code> (130 LOC).<br>
@@ -892,6 +896,243 @@ std::memcpy(&amp;msg, buffer-&gt;data(), <span class="c-kw">sizeof</span>(msg));
           bridges: the rendezvous-as-backpressure trick and one-sided RMA / active-message data paths for irregular shuffles
           (the metadata round-trip here is exactly what RMA could amortize); single-worker progress vs sharded workers as a
           throughput trade-off; and packing/<code>contiguous_split</code> as the GPU analogue of serialize-free shuffle.</p>
+      </div>
+    </section>
+
+    <section id="feedback">
+      <div class="sec-head"><span class="num">FN</span><h2>Field notes: the two-part pattern</h2></div>
+      <p class="lede">Your completed rounds revealed the format. Each reviewer runs <strong>a design conversation in their
+        domain plus a hands-on implementation task in their specialty</strong> &mdash; not only code-review Q&amp;A. That changes
+        how to prep karthikeyann and wence-: expect each to ask you to <em>write</em> something.</p>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Reviewer</th><th>Design / discussion</th><th>Hands-on task</th></tr></thead>
+        <tbody>
+          <tr><td class="hd">pentschev <span class="pill cyan">done</span></td><td>Overall transport design.</td><td>Implement flow control: when a device's queued bytes exceed the high-water mark, signal it on the metadata channel and back-pressure the sender.</td></tr>
+          <tr><td class="hd">devavret <span class="pill copper">done</span></td><td>Packing / data ownership.</td><td>Write a CUDA kernel to even-odd partition an array.</td></tr>
+          <tr><td class="hd">karthikeyann <span class="pill sage">next</span></td><td>libcudf internals, lifetimes, the data path.</td><td><em>Predicted:</em> a libcudf-flavoured GPU primitive &mdash; most likely the general <strong>multi-way partition</strong> that <code>hash_partition</code> is built on (devavret's even-odd is the P=2 case).</td></tr>
+          <tr><td class="hd">wence- <span class="pill rose">next</span></td><td>Correctness, edge cases, algorithms.</td><td><em>Predicted:</em> an algorithm with a correctness twist &mdash; most likely the <strong>parallel scan</strong> underneath partition, plus &ldquo;make it stable / handle the empty &amp; zero-row edges.&rdquo;</td></tr>
+        </tbody>
+      </table></div>
+      <p>The prediction isn't a wild guess: it follows the observed pattern (domain + implementation) and their public work.
+        <strong>karthikeyann</strong> is a libcudf-core CUDA/C++ engineer (joins, JSON, strings) &mdash; the kind of interviewer
+        who has you build a GPU primitive and then probes where the cycles and the atomics go. <strong>wence-</strong> is a
+        correctness-first principal (cudf-polars; a track record of fixing fencepost and off-by-one bugs in repartition logic)
+        &mdash; the kind who asks for an algorithm and then asks you to <em>prove</em> it right at the boundaries. The two
+        tasks below are chosen so that, together with devavret's even-odd kernel, they reconstruct the exact GPU partition
+        primitive the producer's <code>hash_partition(MURMUR3)</code> sits on. That is the most defensible thing to walk in
+        prepared for, and it lets you connect every answer back to the PR.</p>
+      <div class="note rose">
+        <span class="lbl">Caveat on sourcing</span>
+        <p>GitHub's API was rate-limited and its PR pages block fetching, so I could not read karthikeyann's or wence-'s actual
+          line comments on PR #16037. The tailoring here is inferred from their public work and the interview pattern you
+          reported &mdash; treat the specific task <em>predictions</em> as high-probability, not confirmed. The techniques and
+          solutions themselves are standard and correct regardless of which exact task lands.</p>
+      </div>
+    </section>
+
+    <section id="karthik-impl">
+      <div class="sec-head"><span class="num">H1</span><h2>Hands-on &middot; karthikeyann: multi-way partition on the GPU</h2></div>
+      <p class="lede">The task to rehearse: <em>&ldquo;You have N keys and a function mapping each to a partition id in
+        [0, P). Produce a contiguous, per-partition output array plus the offsets &mdash; on the GPU. Walk me through it and tell
+        me where the performance goes.&rdquo;</em> This is exactly <code>cudf::hash_partition</code>'s engine, and devavret's
+        even-odd kernel is its P=2, <code>pid = key &amp; 1</code> special case &mdash; say so out loud.</p>
+
+      <h3>The shape: four phases<span class="tag">map &rarr; histogram &rarr; scan &rarr; scatter</span></h3>
+      <p>Every GPU partition (and the partitioning pass of radix sort) is the same four steps: map each element to a bucket,
+        count the buckets, exclusive-scan the counts into per-bucket start offsets, then scatter each element into its bucket's
+        run. State that skeleton first; it shows you know the primitive, not just one kernel.</p>
+
+      <h4>Phases 1&ndash;2 &middot; map + a <em>privatized</em> histogram</h4>
+      <p>The naive histogram &mdash; one global <code>atomicAdd</code> per element into <code>hist[pid]</code> &mdash; collapses
+        under contention: N threads hammering P global counters. The fix every libcudf engineer expects is per-block
+        histograms in shared memory, with a single global atomic per (block, partition) at the end.</p>
+      <figure class="code"><figcaption><span class="file">partition.cu</span><span class="role">privatized histogram</span></figcaption>
+<pre><span class="c-cm">// Phase 1+2: map each key to a partition, histogram with PRIVATIZED counters.</span>
+<span class="c-kw">__global__</span> <span class="c-kw">void</span> <span class="c-fn">countPartitions</span>(<span class="c-kw">const</span> uint32_t* keys, <span class="c-kw">int</span> n, <span class="c-kw">int</span> P,
+                                <span class="c-kw">int</span>* pid, <span class="c-kw">int</span>* gHist) {
+  <span class="c-kw">extern</span> <span class="c-kw">__shared__</span> <span class="c-kw">int</span> sHist[];                 <span class="c-cm">// P ints, on-chip</span>
+  <span class="c-kw">for</span> (<span class="c-kw">int</span> p = threadIdx.x; p &lt; P; p += blockDim.x) sHist[p] = <span class="c-nm">0</span>;
+  <span class="c-fn">__syncthreads</span>();
+  <span class="c-kw">int</span> stride = gridDim.x * blockDim.x;
+  <span class="c-kw">for</span> (<span class="c-kw">int</span> i = blockIdx.x*blockDim.x + threadIdx.x; i &lt; n; i += stride) {
+    <span class="c-kw">int</span> p = <span class="c-fn">murmur3</span>(keys[i]) % P;                <span class="c-cm">// the partition map (MURMUR3 in the real code)</span>
+    pid[i] = p;                                  <span class="c-cm">// remember it for the scatter pass</span>
+    <span class="c-fn">atomicAdd</span>(&amp;sHist[p], <span class="c-nm">1</span>);                     <span class="c-cm">// SHARED-mem atomic -- cheap, stays on-chip</span>
+  }
+  <span class="c-fn">__syncthreads</span>();
+  <span class="c-kw">for</span> (<span class="c-kw">int</span> p = threadIdx.x; p &lt; P; p += blockDim.x)
+    <span class="c-kw">if</span> (sHist[p]) <span class="c-fn">atomicAdd</span>(&amp;gHist[p], sHist[p]); <span class="c-cm">// ONE global atomic per (block,partition)</span>
+}</pre></figure>
+
+      <h4>Phase 3 &middot; exclusive scan &rarr; offsets</h4>
+      <figure class="code"><figcaption><span class="file">partition.cu</span><span class="role">counts &rarr; start offsets</span></figcaption>
+<pre><span class="c-cm">// Exclusive scan of the P bucket counts -&gt; the start slot of each partition.</span>
+<span class="c-cm">// P is small, so one cub/thrust call (or a single-block Blelloch -- see H2).</span>
+thrust::<span class="c-fn">exclusive_scan</span>(gHist, gHist + P, offsets);  <span class="c-cm">// offsets[p] = first slot of partition p</span>
+offsets[P] = n;                                   <span class="c-cm">// closing boundary; use half-open ranges</span></pre></figure>
+
+      <h4>Phase 4 &middot; scatter (and the stability catch)</h4>
+      <p>The simplest correct scatter uses an atomic cursor per partition. It is contiguous and correct &mdash; but the order
+        <em>within</em> a partition is whatever order the atomics happened to resolve, so it is <strong>not stable</strong>.
+        Flag that distinction yourself; it is the thing a libcudf reviewer is listening for.</p>
+      <figure class="code"><figcaption><span class="file">partition.cu</span><span class="role">atomic-cursor scatter (correct, not stable)</span></figcaption>
+<pre><span class="c-kw">__global__</span> <span class="c-kw">void</span> <span class="c-fn">scatter</span>(<span class="c-kw">const</span> T* in, <span class="c-kw">const</span> <span class="c-kw">int</span>* pid, <span class="c-kw">int</span> n,
+                        <span class="c-kw">int</span>* cursor, T* out) {   <span class="c-cm">// cursor = mutable copy of offsets[0..P)</span>
+  <span class="c-kw">int</span> stride = gridDim.x * blockDim.x;
+  <span class="c-kw">for</span> (<span class="c-kw">int</span> i = blockIdx.x*blockDim.x + threadIdx.x; i &lt; n; i += stride) {
+    <span class="c-kw">int</span> pos = <span class="c-fn">atomicAdd</span>(&amp;cursor[pid[i]], <span class="c-nm">1</span>);    <span class="c-cm">// claim the next free slot in this partition</span>
+    out[pos] = in[i];                            <span class="c-cm">// SCATTERED write -- the dominant cost</span>
+  }
+}</pre></figure>
+      <p>To make it stable, each element lands at a <em>deterministic</em> slot &mdash; its offset plus its rank among
+        same-partition elements that came before it &mdash; computed with a block-wise decomposition (the same machinery as a
+        radix-sort pass), so the final scatter needs no atomics:</p>
+      <figure class="code"><figcaption><span class="file">stable.cu</span><span class="role">deterministic, stable placement</span></figcaption>
+<pre><span class="c-cm">// element i lands at:</span>
+out[ offsets[p] + rank_p(i) ] = in[i];
+   <span class="c-cm">// rank_p(i) = #{ j &lt; i : pid[j] == p }  -- its order among same-partition predecessors</span>
+
+<span class="c-cm">// compute rank_p with a block-wise pass (what cub::DevicePartition / radix sort do):</span>
+<span class="c-cm">//   1. each block builds its LOCAL per-partition histogram</span>
+<span class="c-cm">//   2. exclusive-scan those across blocks, per partition  -&gt; blockBase[block][p]</span>
+<span class="c-cm">//   3. each block re-scans its rows in order, keeping a per-partition counter r,</span>
+<span class="c-cm">//      writing  out[ offsets[p] + blockBase[block][p] + r ]</span>
+<span class="c-cm">// every slot written exactly once -&gt; a valid permutation, no atomics in the final pass</span></pre></figure>
+
+      <h3>Where the performance goes<span class="tag">say this unprompted</span></h3>
+      <ul>
+        <li><strong>The scatter write is the cost.</strong> Reads of <code>keys[i]</code>/<code>pid[i]</code> are coalesced;
+          the partition <em>write</em> is inherently scattered &mdash; a partition's slots are far apart in memory, so the writes
+          can't coalesce. There is no way around this for a true partition; libcudf accepts it. (You can stage a block's output
+          partition-contiguously in shared/global scratch and copy out, trading complexity for write locality.)</li>
+        <li><strong>Histogram contention &rarr; privatize.</strong> Shared-memory atomics are far cheaper than global; the global
+          histogram then takes only one atomic per (block, partition). If P is too large to hold a shared histogram, you fall
+          back to global atomics or sub-histogramming, or switch to a sort-based partition (radix-sort by pid).</li>
+        <li><strong>Skew is a hotspot.</strong> A dominant partition serializes on its <code>cursor[p]</code> in the atomic
+          version; the block-wise stable version spreads the work and removes the final-pass atomics.</li>
+        <li><strong>Occupancy.</strong> The shared histogram is <code>P</code> ints per block, which caps blocks per SM as P
+          grows.</li>
+        <li><strong>Determinism.</strong> Only the stable version is run-to-run reproducible &mdash; a natural bridge to wence-'s
+          round.</li>
+        <li><strong>libcudf reality.</strong> All of this is built on CUB device primitives; <code>cudf::hash_partition</code>
+          returns the partitioned table plus offsets, and the producer then <code>contiguous_split</code>s at those offsets to
+          get the per-partition <code>packed_columns</code> it ships.</li>
+      </ul>
+      <div class="note sage">
+        <span class="lbl">Follow-ups he'll push &mdash; and the move</span>
+        <p><em>&ldquo;Handle nulls.&rdquo;</em> Partition the validity bitmask alongside the data, or send nulls to a bucket per
+          the null policy &mdash; columnar partition must carry validity. <em>&ldquo;What if P is millions?&rdquo;</em> Drop the
+          privatized histogram; partition by sorting on pid (radix sort), whose downsweep <em>is</em> a partition.
+          <em>&ldquo;Guarantee determinism?&rdquo;</em> Only with the stable, atomics-free scatter. <em>In the room:</em> say the
+          four phases, write the privatized histogram (that's the part that reads as GPU maturity), then volunteer
+          &ldquo;atomic scatter is correct but not stable; here's the stable permutation and why it's valid,&rdquo; and
+          name-drop CUB and <code>hash_partition</code>. Open by noting this generalises the even-odd kernel from devavret's
+          round.</p>
+      </div>
+    </section>
+
+    <section id="wence-impl">
+      <div class="sec-head"><span class="num">H2</span><h2>Hands-on &middot; wence-: scan &amp; stable partition, proven correct</h2></div>
+      <p class="lede">The task to rehearse: <em>&ldquo;Partition needs an exclusive prefix sum to turn bucket counts into
+        offsets. Implement a work-efficient parallel exclusive scan, and convince me it's correct &mdash; including non-power-of-two
+        sizes and in place. Then use it to make the partition stable and handle empty partitions and a zero-row input.&rdquo;</em>
+        With wence-, the implementation is the easy half; the <em>correctness argument at the edges</em> is what's being graded.</p>
+
+      <h3>Work-efficient exclusive scan (Blelloch)<span class="tag">O(n) work</span></h3>
+      <p>Lead with the definition, not the code: an exclusive scan sets <code>out[i]</code> to the reduction of everything
+        <em>strictly</em> before <code>i</code>, with <code>out[0]</code> = the identity. Blelloch does it in O(n) work (vs
+        Hillis-Steele's O(n&nbsp;log&nbsp;n)) via an up-sweep then a down-sweep over a balanced tree:</p>
+      <figure class="code"><figcaption><span class="file">scan.cu</span><span class="role">up-sweep / clear / down-sweep</span></figcaption>
+<pre><span class="c-cm">// Exclusive scan of x[0..n) in shared memory, n a power of two.</span>
+<span class="c-kw">__global__</span> <span class="c-kw">void</span> <span class="c-fn">blellochScan</span>(<span class="c-kw">int</span>* x, <span class="c-kw">int</span> n) {
+  <span class="c-kw">int</span> t = threadIdx.x, offset = <span class="c-nm">1</span>;
+  <span class="c-cm">// up-sweep (reduce): partial sums up the tree; x[n-1] ends = total sum</span>
+  <span class="c-kw">for</span> (<span class="c-kw">int</span> d = n &gt;&gt; <span class="c-nm">1</span>; d &gt; <span class="c-nm">0</span>; d &gt;&gt;= <span class="c-nm">1</span>) {
+    <span class="c-fn">__syncthreads</span>();
+    <span class="c-kw">if</span> (t &lt; d) {
+      <span class="c-kw">int</span> ai = offset*(<span class="c-nm">2</span>*t + <span class="c-nm">1</span>) - <span class="c-nm">1</span>;
+      <span class="c-kw">int</span> bi = offset*(<span class="c-nm">2</span>*t + <span class="c-nm">2</span>) - <span class="c-nm">1</span>;
+      x[bi] += x[ai];
+    }
+    offset *= <span class="c-nm">2</span>;
+  }
+  <span class="c-kw">if</span> (t == <span class="c-nm">0</span>) x[n - <span class="c-nm">1</span>] = <span class="c-nm">0</span>;            <span class="c-cm">// inject identity -&gt; makes the scan EXCLUSIVE</span>
+  <span class="c-cm">// down-sweep: push partials down, swap-add at each node</span>
+  <span class="c-kw">for</span> (<span class="c-kw">int</span> d = <span class="c-nm">1</span>; d &lt; n; d *= <span class="c-nm">2</span>) {
+    offset &gt;&gt;= <span class="c-nm">1</span>;
+    <span class="c-fn">__syncthreads</span>();
+    <span class="c-kw">if</span> (t &lt; d) {
+      <span class="c-kw">int</span> ai = offset*(<span class="c-nm">2</span>*t + <span class="c-nm">1</span>) - <span class="c-nm">1</span>;
+      <span class="c-kw">int</span> bi = offset*(<span class="c-nm">2</span>*t + <span class="c-nm">2</span>) - <span class="c-nm">1</span>;
+      <span class="c-kw">int</span> tmp = x[ai];
+      x[ai]  = x[bi];                       <span class="c-cm">// left child takes the parent's value</span>
+      x[bi] += tmp;                         <span class="c-cm">// right child takes parent + old-left</span>
+    }
+  }
+  <span class="c-fn">__syncthreads</span>();
+}</pre></figure>
+
+      <h3>The correctness argument &mdash; the actual deliverable</h3>
+      <ul>
+        <li><strong>Up-sweep invariant.</strong> After the step with stride <code>offset</code>, the node at each index
+          <code>offset&middot;k&minus;1</code> holds the sum of the <code>offset</code> leaves beneath it. At the end
+          (<code>offset = n</code>), <code>x[n-1]</code> is the total &mdash; a standard balanced reduction.</li>
+        <li><strong>Why clear <code>x[n-1]</code>.</strong> Exclusive means <code>out[0]</code> is the identity and the root
+          contributes nothing to itself. Writing <code>0</code> (the additive identity) seeds the down-sweep so the recurrence
+          comes out exclusive rather than inclusive.</li>
+        <li><strong>Down-sweep invariant.</strong> Each node hands its value to its left child and (its value + the left
+          subtree's sum) to its right child &mdash; precisely the exclusive-scan recurrence on the tree. After the last step,
+          <code>x[i]</code> = sum of all leaves strictly left of <code>i</code>.</li>
+        <li><strong>In place is safe.</strong> Within a step the written indices <code>{ai, bi}</code> are distinct across the
+          active threads, and every read is of a value finalised in the previous step; the <code>__syncthreads()</code> before
+          each step makes those writes visible. Barrier + disjoint writes &rArr; no read/write race despite sharing the array.
+          This is the &ldquo;convince me it's correct in place&rdquo; he's after.</li>
+        <li><strong>Non-power-of-two <code>n</code>.</strong> The index math assumes <code>n = 2&#7491;</code>. For general N,
+          round up to the next power of two and <strong>pad with the identity (0)</strong>. Padding with 0 is safe <em>because</em>
+          it's the additive identity: the real prefixes and total are unchanged, and the extra outputs are discarded. (For a
+          min-scan you'd pad with +&infin;, etc. &mdash; the requirement is a monoid with a known identity.)</li>
+        <li><strong>Fencepost guards.</strong> <code>n = 0</code> must early-return before touching <code>x[n-1]</code>;
+          <code>n = 1</code> runs neither sweep, sets <code>x[0] = 0</code>, and correctly yields <code>[0]</code>. State these
+          explicitly &mdash; empty and singleton are exactly where these go wrong.</li>
+        <li><strong>Beyond one block</strong> (perf, mention it): for N &gt; block size, scan each block, scan the per-block
+          totals, then add each block's prefix back &mdash; the classic three-phase scan. And the GPU&nbsp;Gems index padding
+          (<code>i &gt;&gt; LOG_NUM_BANKS</code>) removes shared-memory bank conflicts; correctness-neutral, but worth a
+          sentence.</li>
+      </ul>
+
+      <h3>From scan to a <em>stable</em> partition &mdash; and the edges<span class="tag">his fencepost wheelhouse</span></h3>
+      <p>Offsets are the exclusive scan of the histogram, with <code>offsets[P] = N</code>. Element <code>i</code> in partition
+        <code>p</code> lands at <code>offsets[p] + rank_p(i)</code>, where <code>rank_p(i) = #{ j &lt; i : pid[j] == p }</code>
+        &mdash; and computing that per-input rank in parallel <em>is</em> the scan you just wrote, applied per partition across
+        blocks. So the scan is the engine of stability. State the invariants and the edges before he asks:</p>
+      <ul>
+        <li><strong>Invariants.</strong> <code>offsets</code> is monotone non-decreasing; <code>offsets[P] == N</code>;
+          <code>&sum; hist == N</code>; each run length <code>offsets[p+1] &minus; offsets[p] == hist[p]</code>.</li>
+        <li><strong>Empty partition.</strong> <code>hist[p] == 0</code> &rArr; <code>offsets[p] == offsets[p+1]</code>: a
+          zero-width run, which downstream (<code>contiguous_split</code>, the wire) must accept as an empty chunk. The trap is
+          treating <code>offsets[p+1] &minus; 1</code> as a &ldquo;last index&rdquo; &mdash; for an empty partition that's
+          <em>below</em> the start. Use half-open ranges <code>[offsets[p], offsets[p+1])</code> everywhere and the fencepost
+          disappears.</li>
+        <li><strong>Zero-row input (N = 0).</strong> The histogram is all zeros &rArr; offsets is all zeros, length
+          <code>P+1</code> &rArr; no scatter &rArr; P empty partitions. The correct result is a well-formed all-zero offsets
+          array, not a crash and not a length-<code>P</code> array. This is the case the scan's <code>n = 0</code> guard
+          protects.</li>
+        <li><strong>Stability as a permutation.</strong> For fixed <code>p</code>, <code>rank_p</code> is a bijection from the
+          <code>hist[p]</code> same-partition elements onto <code>[0, hist[p])</code>, so their slots fill
+          <code>[offsets[p], offsets[p+1])</code> exactly; across partitions the ranges are disjoint (monotone offsets). Hence
+          the placement is a bijection on <code>[0, N)</code> &mdash; every slot written once, input order preserved within each
+          partition. Stating it as a permutation is the register wence- speaks in.</li>
+      </ul>
+      <div class="note rose">
+        <span class="lbl">Follow-ups he'll push &mdash; and the move</span>
+        <p><em>&ldquo;Prove it for N = 3.&rdquo;</em> Pad to 4 with a 0, run the sweeps, show <code>out = [0, x0, x0+x1]</code>
+          and the padded slot ignored. <em>&ldquo;Associativity / identity requirement?&rdquo;</em> A monoid; the operator must
+          be associative, and exclusive needs an identity &mdash; Blelloch preserves left-to-right order, so even non-commutative
+          ops are fine. <em>&ldquo;Is the partition deterministic?&rdquo;</em> The stable version is bit-identical run to run;
+          the atomic-cursor version isn't. <em>In the room:</em> open with the recurrence, write Blelloch, then <em>volunteer</em>
+          the three edges &mdash; identity-padding for non-pow2, the <code>n = 0</code> guard, and in-place safety via
+          disjoint-writes-plus-barrier &mdash; before he asks. Volunteering the boundary cases is the single highest-signal move
+          with a correctness reviewer, and it pre-empts exactly the fencepost bugs he's known for catching.</p>
       </div>
     </section>
 
