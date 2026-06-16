@@ -157,6 +157,19 @@
     .lens-grid { grid-template-columns:1fr; }
     body { font-size:17px; }
   }
+  /* inline diagrams + dimension lists (hands-on walk-throughs) */
+  .diagram { margin:24px 0; padding:20px 18px; border:1px solid var(--rule); border-radius:11px; background:var(--bg-2); }
+  .diagram .cap { font-family:"JetBrains Mono",monospace; font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); margin-bottom:14px; text-align:center; }
+  .diagram svg { display:block; width:100%; height:auto; max-width:100%; }
+  .diagram svg text { fill:var(--ink); }
+  .dlist { margin:18px 0; border:1px solid var(--rule); border-radius:9px; overflow:hidden; }
+  .dlist .row { display:grid; grid-template-columns:160px 1fr; gap:0; border-bottom:1px solid var(--rule-soft); }
+  .dlist .row:last-child { border-bottom:none; }
+  .dlist .t { font-family:"JetBrains Mono",monospace; font-size:11px; color:var(--copper); padding:9px 13px; background:var(--panel); border-right:1px solid var(--rule); }
+  .dlist .d { font-size:13.5px; color:var(--ink-soft); padding:9px 13px; line-height:1.5; }
+  .dlist .d code { font-size:11.5px; }
+  .pic-h { font-family:"Instrument Sans",sans-serif; font-weight:600; font-size:1.18rem; margin:34px 0 10px; color:var(--ink); display:flex; align-items:baseline; gap:9px; }
+  .pic-h .pin { font-family:"JetBrains Mono",monospace; font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--copper); border:1px solid var(--copper-dim); border-radius:4px; padding:1px 6px; }
 </style>
 </head>
 <body>
@@ -185,6 +198,8 @@
       <a href="#rethink"><span class="n">FB2</span><span>Why partition? + the menu</span></a>
       <a href="#karthik-join"><span class="n">H3</span><span>karthikeyann &middot; distributed join</span></a>
       <a href="#wence-sort"><span class="n">H4</span><span>wence- &middot; distributed sort</span></a>
+      <div class="grp">Reference</div>
+      <a href="#full-code"><span class="n">CODE</span><span>Complete implementations</span></a>
     </nav>
     <div class="rail-foot">
       Target: <code>Acceptor.cpp</code> @ <code>main</code> (130 LOC).<br>
@@ -217,7 +232,7 @@
         <code>registerEndpointRef</code>, maintains the handle→endpoint map it depends on.</p>
       <figure class="code">
         <figcaption><span class="file">Acceptor.cpp · cStyleAMCallback</span><span class="role">the whole handshake handler</span></figcaption>
-<pre><span class="c-cm">/*static*/ void Acceptor::cStyleAMCallback(
+<pre><span class="c-cm">/*static*/</span> void Acceptor::cStyleAMCallback(
     std::shared_ptr&lt;ucxx::Request&gt; request, ucp_ep_h ep) {
   VELOX_CHECK_NOT_NULL(request, ...);
   VELOX_CHECK(request-&gt;isCompleted(), ...);
@@ -941,6 +956,32 @@ std::memcpy(&amp;msg, buffer-&gt;data(), <span class="c-kw">sizeof</span>(msg));
         me where the performance goes.&rdquo;</em> This is exactly <code>cudf::hash_partition</code>'s engine, and devavret's
         even-odd kernel is its P=2, <code>pid = key &amp; 1</code> special case &mdash; say so out loud.</p>
 
+      <div class="pic-h"><span class="pin">picture it</span>What the problem actually is</div>
+      <p>You have a pile of <strong>N</strong> rows in arbitrary order, each stamped with a bucket number <code>0..P&minus;1</code>
+        (the hash of its key, mod P). The job is to physically rearrange them so every bucket-0 row sits together at the front,
+        then every bucket-1 row, then bucket-2 &mdash; one contiguous block per bucket &mdash; and to report where each block
+        starts. That rearrangement <em>is</em> the shuffle's core: once rows are bucket-contiguous, the network ships bucket
+        <code>b</code> to GPU <code>b</code> as a single slab.</p>
+      <div class="dlist">
+        <div class="row"><div class="t">N</div><div class="d">number of rows to partition (the diagram uses <code>N = 12</code>; real batches are ~10k+).</div></div>
+        <div class="row"><div class="t">P</div><div class="d">number of buckets. For a shuffle, <code>P = number of destination GPUs</code>.</div></div>
+        <div class="row"><div class="t">grid</div><div class="d"><code>BLOCKS &times; THREADS</code> &mdash; threads stride over the N rows.</div></div>
+        <div class="row"><div class="t">on each device</div><div class="d">This is a <strong>single-GPU</strong> kernel, so &ldquo;devices&rdquo; here means the GPU&rsquo;s memory tiers, not multiple GPUs: <em>global memory</em> holds <code>keys[N], pid[N], gHist[P], offsets[P+1], out[N]</code>; <em>on-chip shared memory</em> holds the per-block histogram <code>sHist[P]</code>. It is the local building block H3/H4 run on every GPU.</div></div>
+      </div>
+<div class="diagram"><div class="cap">multi-way partition &middot; N=12 rows &rarr; P=3 contiguous buckets (one GPU)</div>
+<svg viewBox="0 0 760 410" role="img" aria-label="partition pipeline"><defs><marker id="p1a" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="var(--copper)"/></marker></defs>
+<text x="44" y="52" text-anchor="start" font-family="Source Serif 4,serif" font-size="10.5" font-weight="400" fill="var(--copper)">&#9312; map: each of N=12 rows &rarr; a bucket pid = hash(key) % 3</text>
+<rect x="44" y="64" width="50" height="32" rx="4" fill="var(--copper)" fill-opacity="0.20" stroke="var(--copper)" stroke-width="1.1"/><text x="69" y="84" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">0</text><rect x="102" y="64" width="50" height="32" rx="4" fill="var(--cyan)" fill-opacity="0.20" stroke="var(--cyan)" stroke-width="1.1"/><text x="127" y="84" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">1</text><rect x="160" y="64" width="50" height="32" rx="4" fill="var(--copper)" fill-opacity="0.20" stroke="var(--copper)" stroke-width="1.1"/><text x="185" y="84" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">0</text><rect x="218" y="64" width="50" height="32" rx="4" fill="var(--sage)" fill-opacity="0.20" stroke="var(--sage)" stroke-width="1.1"/><text x="243" y="84" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">2</text><rect x="276" y="64" width="50" height="32" rx="4" fill="var(--cyan)" fill-opacity="0.20" stroke="var(--cyan)" stroke-width="1.1"/><text x="301" y="84" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">1</text><rect x="334" y="64" width="50" height="32" rx="4" fill="var(--copper)" fill-opacity="0.20" stroke="var(--copper)" stroke-width="1.1"/><text x="359" y="84" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">0</text><rect x="392" y="64" width="50" height="32" rx="4" fill="var(--sage)" fill-opacity="0.20" stroke="var(--sage)" stroke-width="1.1"/><text x="417" y="84" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">2</text><rect x="450" y="64" width="50" height="32" rx="4" fill="var(--cyan)" fill-opacity="0.20" stroke="var(--cyan)" stroke-width="1.1"/><text x="475" y="84" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">1</text><rect x="508" y="64" width="50" height="32" rx="4" fill="var(--copper)" fill-opacity="0.20" stroke="var(--copper)" stroke-width="1.1"/><text x="533" y="84" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">0</text><rect x="566" y="64" width="50" height="32" rx="4" fill="var(--sage)" fill-opacity="0.20" stroke="var(--sage)" stroke-width="1.1"/><text x="591" y="84" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">2</text><rect x="624" y="64" width="50" height="32" rx="4" fill="var(--cyan)" fill-opacity="0.20" stroke="var(--cyan)" stroke-width="1.1"/><text x="649" y="84" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">1</text><rect x="682" y="64" width="50" height="32" rx="4" fill="var(--copper)" fill-opacity="0.20" stroke="var(--copper)" stroke-width="1.1"/><text x="707" y="84" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">0</text>
+<line x1="380" y1="104" x2="380" y2="146" stroke="var(--copper)" stroke-width="1.5" marker-end="url(#p1a)"/><text x="392" y="130" text-anchor="start" font-family="Source Serif 4,serif" font-size="10" font-weight="400" fill="var(--muted)">&#9313; histogram (counts per bucket)</text>
+<rect x="120" y="150" width="150" height="40" rx="4" fill="var(--copper)" fill-opacity="0.18" stroke="var(--copper)" stroke-width="1.1"/><text x="195" y="174" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">bucket 0 : 5</text><rect x="330" y="150" width="150" height="40" rx="4" fill="var(--cyan)" fill-opacity="0.18" stroke="var(--cyan)" stroke-width="1.1"/><text x="405" y="174" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">bucket 1 : 4</text><rect x="540" y="150" width="150" height="40" rx="4" fill="var(--sage)" fill-opacity="0.18" stroke="var(--sage)" stroke-width="1.1"/><text x="615" y="174" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">bucket 2 : 3</text>
+<line x1="380" y1="192" x2="380" y2="234" stroke="var(--copper)" stroke-width="1.5" marker-end="url(#p1a)"/><text x="392" y="220" text-anchor="start" font-family="Source Serif 4,serif" font-size="10" font-weight="400" fill="var(--muted)">&#9314; exclusive scan &rarr; start offsets</text>
+<rect x="120" y="238" width="150" height="38" rx="4" fill="var(--copper)" fill-opacity="0.10" stroke="var(--copper)" stroke-width="1.1"/><text x="195" y="261" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">offset = 0</text><rect x="330" y="238" width="150" height="38" rx="4" fill="var(--cyan)" fill-opacity="0.10" stroke="var(--cyan)" stroke-width="1.1"/><text x="405" y="261" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">offset = 5</text><rect x="540" y="238" width="150" height="38" rx="4" fill="var(--sage)" fill-opacity="0.10" stroke="var(--sage)" stroke-width="1.1"/><text x="615" y="261" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">offset = 9</text><text x="700" y="261" text-anchor="start" font-family="JetBrains Mono,monospace" font-size="9.5" font-weight="400" fill="var(--faint)">total = 12</text>
+<line x1="380" y1="280" x2="380" y2="326" stroke="var(--copper)" stroke-width="1.5" marker-end="url(#p1a)"/><text x="392" y="312" text-anchor="start" font-family="Source Serif 4,serif" font-size="10" font-weight="400" fill="var(--muted)">&#9315; scatter into each bucket&rsquo;s run</text>
+<rect x="44" y="332" width="50" height="32" rx="4" fill="var(--copper)" fill-opacity="0.20" stroke="var(--copper)" stroke-width="1.1"/><text x="69" y="352" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)"></text><rect x="102" y="332" width="50" height="32" rx="4" fill="var(--copper)" fill-opacity="0.20" stroke="var(--copper)" stroke-width="1.1"/><text x="127" y="352" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)"></text><rect x="160" y="332" width="50" height="32" rx="4" fill="var(--copper)" fill-opacity="0.20" stroke="var(--copper)" stroke-width="1.1"/><text x="185" y="352" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)"></text><rect x="218" y="332" width="50" height="32" rx="4" fill="var(--copper)" fill-opacity="0.20" stroke="var(--copper)" stroke-width="1.1"/><text x="243" y="352" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)"></text><rect x="276" y="332" width="50" height="32" rx="4" fill="var(--copper)" fill-opacity="0.20" stroke="var(--copper)" stroke-width="1.1"/><text x="301" y="352" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)"></text><rect x="334" y="332" width="50" height="32" rx="4" fill="var(--cyan)" fill-opacity="0.20" stroke="var(--cyan)" stroke-width="1.1"/><text x="359" y="352" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)"></text><rect x="392" y="332" width="50" height="32" rx="4" fill="var(--cyan)" fill-opacity="0.20" stroke="var(--cyan)" stroke-width="1.1"/><text x="417" y="352" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)"></text><rect x="450" y="332" width="50" height="32" rx="4" fill="var(--cyan)" fill-opacity="0.20" stroke="var(--cyan)" stroke-width="1.1"/><text x="475" y="352" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)"></text><rect x="508" y="332" width="50" height="32" rx="4" fill="var(--cyan)" fill-opacity="0.20" stroke="var(--cyan)" stroke-width="1.1"/><text x="533" y="352" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)"></text><rect x="566" y="332" width="50" height="32" rx="4" fill="var(--sage)" fill-opacity="0.20" stroke="var(--sage)" stroke-width="1.1"/><text x="591" y="352" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)"></text><rect x="624" y="332" width="50" height="32" rx="4" fill="var(--sage)" fill-opacity="0.20" stroke="var(--sage)" stroke-width="1.1"/><text x="649" y="352" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)"></text><rect x="682" y="332" width="50" height="32" rx="4" fill="var(--sage)" fill-opacity="0.20" stroke="var(--sage)" stroke-width="1.1"/><text x="707" y="352" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)"></text>
+<text x="44" y="392" text-anchor="start" font-family="JetBrains Mono,monospace" font-size="9.5" font-weight="400" fill="var(--faint)">0</text><text x="334" y="392" text-anchor="start" font-family="JetBrains Mono,monospace" font-size="9.5" font-weight="400" fill="var(--faint)">5</text><text x="566" y="392" text-anchor="start" font-family="JetBrains Mono,monospace" font-size="9.5" font-weight="400" fill="var(--faint)">9</text><text x="732" y="392" text-anchor="start" font-family="JetBrains Mono,monospace" font-size="9.5" font-weight="400" fill="var(--faint)">12</text>
+<text x="44" y="408" text-anchor="start" font-family="JetBrains Mono,monospace" font-size="9" font-weight="400" fill="var(--faint)">global mem: keys[12], pid[12], gHist[3], offsets[4], out[12]   &middot;   shared mem: per-block sHist[3]</text>
+</svg></div>
+
       <h3>The shape: four phases<span class="tag">map &rarr; histogram &rarr; scan &rarr; scatter</span></h3>
       <p>Every GPU partition (and the partitioning pass of radix sort) is the same four steps: map each element to a bucket,
         count the buckets, exclusive-scan the counts into per-bucket start offsets, then scatter each element into its bucket's
@@ -1041,6 +1082,30 @@ out[ offsets[p] + rank_p(i) ] = in[i];
         offsets. Implement a work-efficient parallel exclusive scan, and convince me it's correct &mdash; including non-power-of-two
         sizes and in place. Then use it to make the partition stable and handle empty partitions and a zero-row input.&rdquo;</em>
         With wence-, the implementation is the easy half; the <em>correctness argument at the edges</em> is what's being graded.</p>
+
+      <div class="pic-h"><span class="pin">picture it</span>What the problem actually is</div>
+      <p>An exclusive prefix sum answers, for every position, <em>&ldquo;how many things came before me?&rdquo;</em> Feed it the
+        bucket counts <code>[5, 4, 3]</code> and it returns <code>[0, 5, 9]</code> &mdash; bucket 0 starts at slot 0, bucket 1 at
+        slot 5, bucket 2 at slot 9. Those are exactly the offsets H1 needs. The hard part isn&rsquo;t the idea, it&rsquo;s doing
+        all <strong>n</strong> answers in parallel in <code>O(n)</code> work: Blelloch treats the array as a balanced binary
+        tree, sweeps partial sums <em>up</em> the tree, clears the root, then sweeps them back <em>down</em>.</p>
+      <div class="dlist">
+        <div class="row"><div class="t">n</div><div class="d">array length. The work-efficient form wants a power of two; for other sizes, pad up with the identity (0).</div></div>
+        <div class="row"><div class="t">threads</div><div class="d"><code>n / 2</code> &mdash; each thread owns one pair of tree nodes per step.</div></div>
+        <div class="row"><div class="t">depth</div><div class="d"><code>log&#8322;(n)</code> synchronized steps per sweep (3 for n=8).</div></div>
+        <div class="row"><div class="t">on each device</div><div class="d"><strong>Single-GPU, single-block</strong>: the working array lives entirely in <em>shared memory</em> (<code>x[n]</code>); threads are tree nodes. For <code>n</code> larger than a block, the 3-phase scan: scan each block &rarr; scan the block totals &rarr; add each block&rsquo;s prefix back.</div></div>
+      </div>
+<div class="diagram"><div class="cap">work-efficient exclusive scan (Blelloch) &middot; n=8, the array at each phase</div>
+<svg viewBox="0 0 700 380" role="img" aria-label="Blelloch scan phases"><defs></defs>
+<text x="40" y="76" text-anchor="start" font-family="Source Serif 4,serif" font-size="11" font-weight="400" fill="var(--muted)">input</text><rect x="120" y="54" width="52" height="34" rx="4" fill="var(--muted)" fill-opacity="0.10" stroke="var(--muted)" stroke-width="1.1"/><text x="146" y="75" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">3</text><rect x="182" y="54" width="52" height="34" rx="4" fill="var(--muted)" fill-opacity="0.10" stroke="var(--muted)" stroke-width="1.1"/><text x="208" y="75" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">1</text><rect x="244" y="54" width="52" height="34" rx="4" fill="var(--muted)" fill-opacity="0.10" stroke="var(--muted)" stroke-width="1.1"/><text x="270" y="75" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">7</text><rect x="306" y="54" width="52" height="34" rx="4" fill="var(--muted)" fill-opacity="0.10" stroke="var(--muted)" stroke-width="1.1"/><text x="332" y="75" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">0</text><rect x="368" y="54" width="52" height="34" rx="4" fill="var(--muted)" fill-opacity="0.10" stroke="var(--muted)" stroke-width="1.1"/><text x="394" y="75" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">4</text><rect x="430" y="54" width="52" height="34" rx="4" fill="var(--muted)" fill-opacity="0.10" stroke="var(--muted)" stroke-width="1.1"/><text x="456" y="75" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">1</text><rect x="492" y="54" width="52" height="34" rx="4" fill="var(--muted)" fill-opacity="0.10" stroke="var(--muted)" stroke-width="1.1"/><text x="518" y="75" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">6</text><rect x="554" y="54" width="52" height="34" rx="4" fill="var(--muted)" fill-opacity="0.10" stroke="var(--muted)" stroke-width="1.1"/><text x="580" y="75" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">3</text>
+<text x="40" y="118" text-anchor="start" font-family="Source Serif 4,serif" font-size="10" font-weight="400" fill="var(--copper)">up-sweep (strides 1,2,4): each node += its left sibling &mdash; x[7] becomes the total (25)</text>
+<text x="40" y="162" text-anchor="start" font-family="Source Serif 4,serif" font-size="11" font-weight="400" fill="var(--muted)">after</text><rect x="120" y="140" width="52" height="34" rx="4" fill="var(--muted)" fill-opacity="0.10" stroke="var(--muted)" stroke-width="1.1"/><text x="146" y="161" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">3</text><rect x="182" y="140" width="52" height="34" rx="4" fill="var(--copper)" fill-opacity="0.20" stroke="var(--copper)" stroke-width="1.1"/><text x="208" y="161" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">4</text><rect x="244" y="140" width="52" height="34" rx="4" fill="var(--muted)" fill-opacity="0.10" stroke="var(--muted)" stroke-width="1.1"/><text x="270" y="161" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">7</text><rect x="306" y="140" width="52" height="34" rx="4" fill="var(--copper)" fill-opacity="0.20" stroke="var(--copper)" stroke-width="1.1"/><text x="332" y="161" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">11</text><rect x="368" y="140" width="52" height="34" rx="4" fill="var(--muted)" fill-opacity="0.10" stroke="var(--muted)" stroke-width="1.1"/><text x="394" y="161" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">4</text><rect x="430" y="140" width="52" height="34" rx="4" fill="var(--copper)" fill-opacity="0.20" stroke="var(--copper)" stroke-width="1.1"/><text x="456" y="161" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">5</text><rect x="492" y="140" width="52" height="34" rx="4" fill="var(--muted)" fill-opacity="0.10" stroke="var(--muted)" stroke-width="1.1"/><text x="518" y="161" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">6</text><rect x="554" y="140" width="52" height="34" rx="4" fill="var(--copper)" fill-opacity="0.20" stroke="var(--copper)" stroke-width="1.1"/><text x="580" y="161" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">25</text>
+<text x="40" y="204" text-anchor="start" font-family="Source Serif 4,serif" font-size="10" font-weight="400" fill="var(--cyan)">clear x[7] = 0  (inject the identity &rarr; makes the scan EXCLUSIVE)</text>
+<text x="40" y="248" text-anchor="start" font-family="Source Serif 4,serif" font-size="11" font-weight="400" fill="var(--muted)">after</text><rect x="120" y="226" width="52" height="34" rx="4" fill="var(--muted)" fill-opacity="0.10" stroke="var(--muted)" stroke-width="1.1"/><text x="146" y="247" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">3</text><rect x="182" y="226" width="52" height="34" rx="4" fill="var(--muted)" fill-opacity="0.10" stroke="var(--muted)" stroke-width="1.1"/><text x="208" y="247" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">4</text><rect x="244" y="226" width="52" height="34" rx="4" fill="var(--muted)" fill-opacity="0.10" stroke="var(--muted)" stroke-width="1.1"/><text x="270" y="247" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">7</text><rect x="306" y="226" width="52" height="34" rx="4" fill="var(--muted)" fill-opacity="0.10" stroke="var(--muted)" stroke-width="1.1"/><text x="332" y="247" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">11</text><rect x="368" y="226" width="52" height="34" rx="4" fill="var(--muted)" fill-opacity="0.10" stroke="var(--muted)" stroke-width="1.1"/><text x="394" y="247" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">4</text><rect x="430" y="226" width="52" height="34" rx="4" fill="var(--muted)" fill-opacity="0.10" stroke="var(--muted)" stroke-width="1.1"/><text x="456" y="247" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">5</text><rect x="492" y="226" width="52" height="34" rx="4" fill="var(--muted)" fill-opacity="0.10" stroke="var(--muted)" stroke-width="1.1"/><text x="518" y="247" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">6</text><rect x="554" y="226" width="52" height="34" rx="4" fill="var(--copper)" fill-opacity="0.20" stroke="var(--copper)" stroke-width="1.1"/><text x="580" y="247" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">0</text>
+<text x="40" y="290" text-anchor="start" font-family="Source Serif 4,serif" font-size="10" font-weight="400" fill="var(--sage)">down-sweep (strides 4,2,1): tmp=left; left=parent; right += tmp</text>
+<text x="40" y="334" text-anchor="start" font-family="Source Serif 4,serif" font-size="11" font-weight="400" fill="var(--muted)">result</text><rect x="120" y="312" width="52" height="34" rx="4" fill="var(--copper)" fill-opacity="0.20" stroke="var(--copper)" stroke-width="1.1"/><text x="146" y="333" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">0</text><rect x="182" y="312" width="52" height="34" rx="4" fill="var(--copper)" fill-opacity="0.20" stroke="var(--copper)" stroke-width="1.1"/><text x="208" y="333" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">3</text><rect x="244" y="312" width="52" height="34" rx="4" fill="var(--copper)" fill-opacity="0.20" stroke="var(--copper)" stroke-width="1.1"/><text x="270" y="333" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">4</text><rect x="306" y="312" width="52" height="34" rx="4" fill="var(--copper)" fill-opacity="0.20" stroke="var(--copper)" stroke-width="1.1"/><text x="332" y="333" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">11</text><rect x="368" y="312" width="52" height="34" rx="4" fill="var(--copper)" fill-opacity="0.20" stroke="var(--copper)" stroke-width="1.1"/><text x="394" y="333" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">11</text><rect x="430" y="312" width="52" height="34" rx="4" fill="var(--copper)" fill-opacity="0.20" stroke="var(--copper)" stroke-width="1.1"/><text x="456" y="333" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">15</text><rect x="492" y="312" width="52" height="34" rx="4" fill="var(--copper)" fill-opacity="0.20" stroke="var(--copper)" stroke-width="1.1"/><text x="518" y="333" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">16</text><rect x="554" y="312" width="52" height="34" rx="4" fill="var(--copper)" fill-opacity="0.20" stroke="var(--copper)" stroke-width="1.1"/><text x="580" y="333" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" fill="var(--ink)">22</text>
+<text x="120" y="372" text-anchor="start" font-family="JetBrains Mono,monospace" font-size="9" font-weight="400" fill="var(--faint)">shared mem: x[8]   &middot;   threads = n/2 = 4   &middot;   tree depth = log2(8) = 3 synchronized steps each sweep</text>
+</svg></div>
 
       <h3>Work-efficient exclusive scan (Blelloch)<span class="tag">O(n) work</span></h3>
       <p>Lead with the definition, not the code: an exclusive scan sets <code>out[i]</code> to the reduction of everything
@@ -1220,6 +1285,30 @@ out[ offsets[p] + rank_p(i) ] = in[i];
         <em>non-partition</em> task. The task to rehearse: <em>&ldquo;Design a multi-GPU inner hash join. Walk the algorithm,
         the communication, and where it breaks &mdash; then write the local build/probe.&rdquo;</em></p>
 
+      <div class="pic-h"><span class="pin">picture it</span>What the problem actually is</div>
+      <p>Two tables, <strong>R</strong> (build) and <strong>S</strong> (probe), are smeared across <strong>G</strong> GPUs
+        &mdash; an R-row with key 42 might sit on GPU 0 while the matching S-row with key 42 sits on GPU 2. They can&rsquo;t be
+        joined until they share a GPU. So every GPU computes, for each of its rows, the owner <code>GPU = hash(key) % G</code>,
+        and ships the row there &mdash; the <strong>all-to-all</strong>. Afterwards GPU <code>g</code> holds every R-row and
+        S-row whose key hashes to <code>g</code>, so all keys that could possibly match are co-resident, and each GPU runs an
+        ordinary <em>local</em> hash join.</p>
+      <div class="dlist">
+        <div class="row"><div class="t">G</div><div class="d">number of GPUs (the diagram uses <code>G = 3</code>); also the number of hash buckets.</div></div>
+        <div class="row"><div class="t">|R|, |S|</div><div class="d">total build / probe rows, spread arbitrarily across the GPUs before the shuffle.</div></div>
+        <div class="row"><div class="t">dest</div><div class="d"><code>hash(key) % G</code> &mdash; the GPU that owns a row, identical for both tables so equal keys meet.</div></div>
+        <div class="row"><div class="t">device mapping</div><div class="d"><strong>Multi-GPU.</strong> <em>Before:</em> GPU&nbsp;g holds an arbitrary mix of R and S rows. <em>Shuffle:</em> each row &rarr; <code>GPU hash(key)%G</code> &mdash; this all-to-all <em>is</em> the PR&rsquo;s UCX exchange. <em>After:</em> GPU&nbsp;g = <code>R_g &cup; S_g</code> (all rows hashing to g). <em>Local:</em> GPU&nbsp;g builds a hash table on <code>R_g</code> and probes with <code>S_g</code> &mdash; the single-GPU kernel below.</div></div>
+      </div>
+<div class="diagram"><div class="cap">distributed hash join &middot; the all-to-all that co-locates matching keys (G=3 GPUs)</div>
+<svg viewBox="0 0 760 340" role="img" aria-label="all-to-all shuffle by hash"><defs><marker id="p3a" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L5,3 L0,6 Z" fill="var(--faint)"/></marker></defs>
+<text x="126" y="24" text-anchor="middle" font-family="Source Serif 4,serif" font-size="10.5" font-weight="400" fill="var(--muted)">BEFORE: a mix on each GPU</text>
+<text x="636" y="24" text-anchor="middle" font-family="Source Serif 4,serif" font-size="10.5" font-weight="400" fill="var(--muted)">AFTER: one bucket per GPU</text>
+<rect x="36" y="33" width="176" height="78" rx="9" fill="var(--panel)" stroke="var(--cyan)" stroke-width="1.3"/><text x="48" y="51" text-anchor="start" font-family="JetBrains Mono,monospace" font-size="10.5" font-weight="600" fill="var(--cyan)">GPU 0</text><rect x="48" y="81" width="30" height="20" rx="4" fill="var(--copper)" fill-opacity="0.45" stroke="var(--copper)" stroke-width="1"/><rect x="84" y="81" width="30" height="20" rx="4" fill="var(--cyan)" fill-opacity="0.45" stroke="var(--cyan)" stroke-width="1"/><rect x="120" y="81" width="30" height="20" rx="4" fill="var(--sage)" fill-opacity="0.45" stroke="var(--sage)" stroke-width="1"/><rect x="156" y="81" width="30" height="20" rx="4" fill="var(--copper)" fill-opacity="0.45" stroke="var(--copper)" stroke-width="1"/><rect x="36" y="137" width="176" height="78" rx="9" fill="var(--panel)" stroke="var(--cyan)" stroke-width="1.3"/><text x="48" y="155" text-anchor="start" font-family="JetBrains Mono,monospace" font-size="10.5" font-weight="600" fill="var(--cyan)">GPU 1</text><rect x="48" y="185" width="30" height="20" rx="4" fill="var(--cyan)" fill-opacity="0.45" stroke="var(--cyan)" stroke-width="1"/><rect x="84" y="185" width="30" height="20" rx="4" fill="var(--sage)" fill-opacity="0.45" stroke="var(--sage)" stroke-width="1"/><rect x="120" y="185" width="30" height="20" rx="4" fill="var(--copper)" fill-opacity="0.45" stroke="var(--copper)" stroke-width="1"/><rect x="156" y="185" width="30" height="20" rx="4" fill="var(--cyan)" fill-opacity="0.45" stroke="var(--cyan)" stroke-width="1"/><rect x="36" y="241" width="176" height="78" rx="9" fill="var(--panel)" stroke="var(--cyan)" stroke-width="1.3"/><text x="48" y="259" text-anchor="start" font-family="JetBrains Mono,monospace" font-size="10.5" font-weight="600" fill="var(--cyan)">GPU 2</text><rect x="48" y="289" width="30" height="20" rx="4" fill="var(--sage)" fill-opacity="0.45" stroke="var(--sage)" stroke-width="1"/><rect x="84" y="289" width="30" height="20" rx="4" fill="var(--copper)" fill-opacity="0.45" stroke="var(--copper)" stroke-width="1"/><rect x="120" y="289" width="30" height="20" rx="4" fill="var(--cyan)" fill-opacity="0.45" stroke="var(--cyan)" stroke-width="1"/><rect x="156" y="289" width="30" height="20" rx="4" fill="var(--sage)" fill-opacity="0.45" stroke="var(--sage)" stroke-width="1"/><line x1="212" y1="72" x2="548" y2="72" stroke="var(--copper)" stroke-width="1" opacity="0.35" marker-end="url(#p3a)"/><line x1="212" y1="72" x2="548" y2="176" stroke="var(--cyan)" stroke-width="1" opacity="0.35" marker-end="url(#p3a)"/><line x1="212" y1="72" x2="548" y2="280" stroke="var(--sage)" stroke-width="1" opacity="0.35" marker-end="url(#p3a)"/><line x1="212" y1="176" x2="548" y2="72" stroke="var(--copper)" stroke-width="1" opacity="0.35" marker-end="url(#p3a)"/><line x1="212" y1="176" x2="548" y2="176" stroke="var(--cyan)" stroke-width="1" opacity="0.35" marker-end="url(#p3a)"/><line x1="212" y1="176" x2="548" y2="280" stroke="var(--sage)" stroke-width="1" opacity="0.35" marker-end="url(#p3a)"/><line x1="212" y1="280" x2="548" y2="72" stroke="var(--copper)" stroke-width="1" opacity="0.35" marker-end="url(#p3a)"/><line x1="212" y1="280" x2="548" y2="176" stroke="var(--cyan)" stroke-width="1" opacity="0.35" marker-end="url(#p3a)"/><line x1="212" y1="280" x2="548" y2="280" stroke="var(--sage)" stroke-width="1" opacity="0.35" marker-end="url(#p3a)"/><rect x="548" y="33" width="176" height="78" rx="9" fill="var(--panel)" stroke="var(--copper)" stroke-width="1.3"/><text x="560" y="51" text-anchor="start" font-family="JetBrains Mono,monospace" font-size="10.5" font-weight="600" fill="var(--copper)">GPU 0</text><rect x="560" y="81" width="30" height="20" rx="4" fill="var(--copper)" fill-opacity="0.45" stroke="var(--copper)" stroke-width="1"/><rect x="596" y="81" width="30" height="20" rx="4" fill="var(--copper)" fill-opacity="0.45" stroke="var(--copper)" stroke-width="1"/><rect x="632" y="81" width="30" height="20" rx="4" fill="var(--copper)" fill-opacity="0.45" stroke="var(--copper)" stroke-width="1"/><rect x="668" y="81" width="30" height="20" rx="4" fill="var(--copper)" fill-opacity="0.45" stroke="var(--copper)" stroke-width="1"/><rect x="548" y="137" width="176" height="78" rx="9" fill="var(--panel)" stroke="var(--cyan)" stroke-width="1.3"/><text x="560" y="155" text-anchor="start" font-family="JetBrains Mono,monospace" font-size="10.5" font-weight="600" fill="var(--cyan)">GPU 1</text><rect x="560" y="185" width="30" height="20" rx="4" fill="var(--cyan)" fill-opacity="0.45" stroke="var(--cyan)" stroke-width="1"/><rect x="596" y="185" width="30" height="20" rx="4" fill="var(--cyan)" fill-opacity="0.45" stroke="var(--cyan)" stroke-width="1"/><rect x="632" y="185" width="30" height="20" rx="4" fill="var(--cyan)" fill-opacity="0.45" stroke="var(--cyan)" stroke-width="1"/><rect x="668" y="185" width="30" height="20" rx="4" fill="var(--cyan)" fill-opacity="0.45" stroke="var(--cyan)" stroke-width="1"/><rect x="548" y="241" width="176" height="78" rx="9" fill="var(--panel)" stroke="var(--sage)" stroke-width="1.3"/><text x="560" y="259" text-anchor="start" font-family="JetBrains Mono,monospace" font-size="10.5" font-weight="600" fill="var(--sage)">GPU 2</text><rect x="560" y="289" width="30" height="20" rx="4" fill="var(--sage)" fill-opacity="0.45" stroke="var(--sage)" stroke-width="1"/><rect x="596" y="289" width="30" height="20" rx="4" fill="var(--sage)" fill-opacity="0.45" stroke="var(--sage)" stroke-width="1"/><rect x="632" y="289" width="30" height="20" rx="4" fill="var(--sage)" fill-opacity="0.45" stroke="var(--sage)" stroke-width="1"/><rect x="668" y="289" width="30" height="20" rx="4" fill="var(--sage)" fill-opacity="0.45" stroke="var(--sage)" stroke-width="1"/>
+<text x="380" y="160" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="11" font-weight="600" fill="var(--copper)">all-to-all</text>
+<text x="380" y="176" text-anchor="middle" font-family="Source Serif 4,serif" font-size="9.5" font-weight="400" fill="var(--muted)">row &rarr; GPU</text>
+<text x="380" y="189" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9.5" font-weight="400" fill="var(--muted)">hash(key) % 3</text>
+<text x="36" y="332" text-anchor="start" font-family="JetBrains Mono,monospace" font-size="9.5" font-weight="400" fill="var(--faint)">AFTER: GPU g holds every R-row AND S-row with hash(key)%3 == g  &rarr;  matches are co-located  &rarr;  local hash join</text>
+</svg></div>
+
       <h3>The algorithm: shuffle both sides by key, then join locally</h3>
       <p>Equal keys must end up on the same GPU, so partition <em>both</em> tables by the join key with the <strong>same</strong>
         hash: <code>dest = hash(key) % G</code>. Each GPU ships each row to the GPU owning its key (the all-to-all &mdash; here,
@@ -1260,12 +1349,7 @@ out[ offsets[p] + rank_p(i) ] = in[i];
 }</pre></figure>
       <div class="note sage">
         <span class="lbl">The catch he'll make you say</span>
-        <p>One slot per key stores only <em>one</em> build row, so this is wrong for <strong>duplicate build keys</strong>
-          (many-to-many) &mdash; you need a multimap (cuCo <code>static_multimap</code>) or a two-pass
-          <em>count &rarr; exclusive-scan &rarr; materialize</em> for the output, which is the partition/scan primitive from H1/H2
-          again. The same two-pass fixes output <strong>sizing</strong>: a many-to-many join can emit
-          <code>|R&#8345;|&times;|S&#8345;|</code> per key &mdash; far more than the input &mdash; so you count matches, scan to
-          per-row offsets, then fill deterministically instead of racing on <code>atomicAdd</code>.</p>
+        <p>This open-addressing build inserts <em>every</em> build row into its own slot, so it already handles <strong>duplicate keys</strong> &mdash; it&rsquo;s effectively a multimap: the probe walks the run until an empty slot and matches all equal-key slots along the way. The catches he&rsquo;ll actually want named are different: the table needs headroom (<code>cap &gt; total build rows</code>) or probing degrades and the probe-until-empty loop can spin; and the output is sized and ordered by a <em>racy</em> <code>atomicAdd</code>. Production uses cuCo <code>static_multimap</code>, and sizes the output deterministically with a two-pass <em>count &rarr; exclusive-scan &rarr; materialize</em> &mdash; the partition/scan primitive from H1/H2 again &mdash; since a many-to-many join can emit far more rows than the input.</p>
       </div>
 
       <h3>The design points to volunteer</h3>
@@ -1298,6 +1382,33 @@ out[ offsets[p] + rank_p(i) ] = in[i];
       <p class="lede">Correctness-rich, distributed, and squarely in his lane (global ordering, fencepost boundaries) &mdash;
         the most likely non-partition task for him. The task to rehearse: <em>&ldquo;Sort a dataset spread across G GPUs.
         Give the algorithm, then convince me the boundaries and ties are right.&rdquo;</em></p>
+
+      <div class="pic-h"><span class="pin">picture it</span>What the problem actually is</div>
+      <p>Sorting across GPUs has a twist hashing can&rsquo;t handle: the <em>output</em> must be ordered, so GPU 0 must end up
+        with the smallest keys, GPU 1 the next slice, and so on &mdash; <strong>contiguous ranges, not a hash scatter</strong>.
+        So you first choose <code>G&minus;1</code> splitter values that cut the key range into G slices (by sampling), then every
+        GPU sends each row to the GPU owning its slice &mdash; <code>bucketOf</code>, a binary search over the splitters. After
+        this range exchange GPU <code>g</code> holds exactly the keys in slice <code>g</code>; each GPU sorts locally; and
+        reading GPU 0, then GPU 1, then GPU 2 in order is the globally sorted result.</p>
+      <div class="dlist">
+        <div class="row"><div class="t">G</div><div class="d">number of GPUs (3 here); you compute <code>G&minus;1</code> splitters.</div></div>
+        <div class="row"><div class="t">splitters</div><div class="d"><code>splitters[0..G&minus;2]</code> &mdash; the range boundaries, chosen by sampling so buckets are roughly balanced.</div></div>
+        <div class="row"><div class="t">bucket</div><div class="d"><code>upper_bound(splitters, key) &isin; [0, G)</code> &mdash; the owning GPU for a key.</div></div>
+        <div class="row"><div class="t">device mapping</div><div class="d"><strong>Multi-GPU.</strong> <em>Before:</em> GPU&nbsp;g holds arbitrary unsorted keys spanning all ranges. <em>Sample:</em> gather samples &rarr; sort &rarr; pick <code>G&minus;1</code> splitters. <em>Range exchange:</em> each row &rarr; <code>GPU bucketOf(key)</code> (all-to-all = the UCX exchange). <em>After:</em> GPU&nbsp;g = all keys in <code>[s[g&minus;1], s[g])</code>, then sorts locally. <em>Result:</em> <code>concat(GPU0, GPU1, &hellip;)</code> is globally sorted.</div></div>
+      </div>
+<div class="diagram"><div class="cap">distributed sort &middot; range-partition gives each GPU a CONTIGUOUS key slice (G=3)</div>
+<svg viewBox="0 0 800 360" role="img" aria-label="range partition by splitters"><defs><marker id="p4a" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L5,3 L0,6 Z" fill="var(--copper)"/></marker></defs>
+<text x="400" y="24" text-anchor="middle" font-family="Source Serif 4,serif" font-size="10.5" font-weight="400" fill="var(--muted)">BEFORE: each GPU holds arbitrary unsorted keys spanning all ranges</text>
+<rect x="48" y="34" width="210" height="52" rx="9" fill="var(--panel)" stroke="var(--muted)" stroke-width="1.3"/><text x="60" y="52" text-anchor="start" font-family="JetBrains Mono,monospace" font-size="10.5" font-weight="600" fill="var(--muted)">GPU 0</text><rect x="60" y="56" width="30" height="20" rx="4" fill="var(--copper)" fill-opacity="0.45" stroke="var(--copper)" stroke-width="1"/><rect x="96" y="56" width="30" height="20" rx="4" fill="var(--sage)" fill-opacity="0.45" stroke="var(--sage)" stroke-width="1"/><rect x="132" y="56" width="30" height="20" rx="4" fill="var(--cyan)" fill-opacity="0.45" stroke="var(--cyan)" stroke-width="1"/><rect x="168" y="56" width="30" height="20" rx="4" fill="var(--copper)" fill-opacity="0.45" stroke="var(--copper)" stroke-width="1"/><rect x="286" y="34" width="210" height="52" rx="9" fill="var(--panel)" stroke="var(--muted)" stroke-width="1.3"/><text x="298" y="52" text-anchor="start" font-family="JetBrains Mono,monospace" font-size="10.5" font-weight="600" fill="var(--muted)">GPU 1</text><rect x="298" y="56" width="30" height="20" rx="4" fill="var(--cyan)" fill-opacity="0.45" stroke="var(--cyan)" stroke-width="1"/><rect x="334" y="56" width="30" height="20" rx="4" fill="var(--copper)" fill-opacity="0.45" stroke="var(--copper)" stroke-width="1"/><rect x="370" y="56" width="30" height="20" rx="4" fill="var(--sage)" fill-opacity="0.45" stroke="var(--sage)" stroke-width="1"/><rect x="406" y="56" width="30" height="20" rx="4" fill="var(--cyan)" fill-opacity="0.45" stroke="var(--cyan)" stroke-width="1"/><rect x="524" y="34" width="210" height="52" rx="9" fill="var(--panel)" stroke="var(--muted)" stroke-width="1.3"/><text x="536" y="52" text-anchor="start" font-family="JetBrains Mono,monospace" font-size="10.5" font-weight="600" fill="var(--muted)">GPU 2</text><rect x="536" y="56" width="30" height="20" rx="4" fill="var(--sage)" fill-opacity="0.45" stroke="var(--sage)" stroke-width="1"/><rect x="572" y="56" width="30" height="20" rx="4" fill="var(--cyan)" fill-opacity="0.45" stroke="var(--cyan)" stroke-width="1"/><rect x="608" y="56" width="30" height="20" rx="4" fill="var(--copper)" fill-opacity="0.45" stroke="var(--copper)" stroke-width="1"/><rect x="644" y="56" width="30" height="20" rx="4" fill="var(--sage)" fill-opacity="0.45" stroke="var(--sage)" stroke-width="1"/>
+<line x1="400" y1="92" x2="400" y2="128" stroke="var(--copper)" stroke-width="1.5" marker-end="url(#p4a)"/>
+<text x="412" y="114" text-anchor="start" font-family="Source Serif 4,serif" font-size="10" font-weight="400" fill="var(--muted)">range-partition: each row &rarr; GPU = upper_bound(splitters, key)</text>
+<line x1="60" y1="176" x2="760" y2="176" stroke="var(--rule)" stroke-width="1.5"/>
+<rect x="60" y="162" width="233" height="28" rx="3" fill="var(--copper)" fill-opacity="0.16" stroke="var(--copper)" stroke-width="1"/><rect x="293" y="162" width="234" height="28" rx="3" fill="var(--cyan)" fill-opacity="0.16" stroke="var(--cyan)" stroke-width="1"/><rect x="527" y="162" width="233" height="28" rx="3" fill="var(--sage)" fill-opacity="0.16" stroke="var(--sage)" stroke-width="1"/><line x1="293" y1="154" x2="293" y2="198" stroke="var(--ink)" stroke-width="1.4"/><text x="293" y="148" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" font-weight="400" fill="var(--ink)">s0</text><line x1="527" y1="154" x2="527" y2="198" stroke="var(--ink)" stroke-width="1.4"/><text x="527" y="148" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" font-weight="400" fill="var(--ink)">s1</text><text x="176" y="181" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9.5" font-weight="400" fill="var(--copper)">key &lt; s0</text><text x="410" y="181" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9.5" font-weight="400" fill="var(--cyan)">s0 &le; key &lt; s1</text><text x="643" y="181" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9.5" font-weight="400" fill="var(--sage)">key &ge; s1</text>
+<line x1="400" y1="204" x2="400" y2="230" stroke="var(--copper)" stroke-width="1.5" marker-end="url(#p4a)"/>
+<rect x="48" y="236" width="210" height="54" rx="9" fill="var(--panel)" stroke="var(--copper)" stroke-width="1.3"/><text x="60" y="254" text-anchor="start" font-family="JetBrains Mono,monospace" font-size="10.5" font-weight="600" fill="var(--copper)">GPU 0 : range 0</text><rect x="60" y="260" width="30" height="20" rx="4" fill="var(--copper)" fill-opacity="0.45" stroke="var(--copper)" stroke-width="1"/><rect x="96" y="260" width="30" height="20" rx="4" fill="var(--copper)" fill-opacity="0.45" stroke="var(--copper)" stroke-width="1"/><rect x="132" y="260" width="30" height="20" rx="4" fill="var(--copper)" fill-opacity="0.45" stroke="var(--copper)" stroke-width="1"/><rect x="168" y="260" width="30" height="20" rx="4" fill="var(--copper)" fill-opacity="0.45" stroke="var(--copper)" stroke-width="1"/><rect x="286" y="236" width="210" height="54" rx="9" fill="var(--panel)" stroke="var(--cyan)" stroke-width="1.3"/><text x="298" y="254" text-anchor="start" font-family="JetBrains Mono,monospace" font-size="10.5" font-weight="600" fill="var(--cyan)">GPU 1 : range 1</text><rect x="298" y="260" width="30" height="20" rx="4" fill="var(--cyan)" fill-opacity="0.45" stroke="var(--cyan)" stroke-width="1"/><rect x="334" y="260" width="30" height="20" rx="4" fill="var(--cyan)" fill-opacity="0.45" stroke="var(--cyan)" stroke-width="1"/><rect x="370" y="260" width="30" height="20" rx="4" fill="var(--cyan)" fill-opacity="0.45" stroke="var(--cyan)" stroke-width="1"/><rect x="406" y="260" width="30" height="20" rx="4" fill="var(--cyan)" fill-opacity="0.45" stroke="var(--cyan)" stroke-width="1"/><rect x="524" y="236" width="210" height="54" rx="9" fill="var(--panel)" stroke="var(--sage)" stroke-width="1.3"/><text x="536" y="254" text-anchor="start" font-family="JetBrains Mono,monospace" font-size="10.5" font-weight="600" fill="var(--sage)">GPU 2 : range 2</text><rect x="536" y="260" width="30" height="20" rx="4" fill="var(--sage)" fill-opacity="0.45" stroke="var(--sage)" stroke-width="1"/><rect x="572" y="260" width="30" height="20" rx="4" fill="var(--sage)" fill-opacity="0.45" stroke="var(--sage)" stroke-width="1"/><rect x="608" y="260" width="30" height="20" rx="4" fill="var(--sage)" fill-opacity="0.45" stroke="var(--sage)" stroke-width="1"/><rect x="644" y="260" width="30" height="20" rx="4" fill="var(--sage)" fill-opacity="0.45" stroke="var(--sage)" stroke-width="1"/>
+<text x="48" y="322" text-anchor="start" font-family="JetBrains Mono,monospace" font-size="9.5" font-weight="400" fill="var(--faint)">AFTER: GPU 0 = smallest keys &hellip; GPU 2 = largest, each locally sorted  &rarr;  concat(GPU0, GPU1, GPU2) = globally sorted</text>
+<text x="48" y="340" text-anchor="start" font-family="JetBrains Mono,monospace" font-size="9" font-weight="400" fill="var(--faint)">contrast hash: a hash shuffle scatters keys; a RANGE shuffle hands each GPU a contiguous, ordered slice.</text>
+</svg></div>
 
       <h3>The algorithm: sample &rarr; range-partition &rarr; local sort &rarr; merge</h3>
       <p>Unlike a hash shuffle, sort needs a <em>range</em> shuffle so each GPU ends up with a contiguous slice of the global key
@@ -1350,6 +1461,301 @@ out[ offsets[p] + rank_p(i) ] = in[i];
           in repartition code. Close by noting the per-bucket send counts are a histogram + scan: the same primitive as H1/H2,
           transported by this PR's UCX exchange.</p>
       </div>
+    </section>
+
+    <section id="full-code">
+      <div class="sec-head"><span class="num">CODE</span><h2>Complete implementations</h2></div>
+      <p class="lede">The four problems as compilable programs. The two single-GPU primitives run end-to-end and
+        self-verify; the two distributed ones give complete local kernels plus the multi-GPU orchestration around them
+        (the all-to-all is this PR&rsquo;s UCX exchange). Build each with <code>nvcc</code>; the demos need only one GPU.</p>
+      <h3>1 &middot; Multi-way partition <span class="tag">single GPU &middot; runs &amp; verifies</span></h3>
+      <figure class="code"><figcaption><span class="file">partition.cu</span><span class="role">map &rarr; histogram &rarr; scan &rarr; scatter</span></figcaption>
+<pre><span class="c-cm">// partition.cu  --  multi-way partition on one GPU.   build: nvcc -O2 partition.cu -o partition</span>
+#include &lt;cstdio&gt;
+#include &lt;cstdint&gt;
+#include &lt;vector&gt;
+#include &lt;random&gt;
+#include &lt;thrust/device_vector.h&gt;
+#include &lt;thrust/host_vector.h&gt;
+#include &lt;thrust/scan.h&gt;
+#include &lt;thrust/copy.h&gt;
+
+__device__ __host__ inline uint32_t hash32(uint32_t x) {        <span class="c-cm">// a cheap bit-mixer</span>
+    x ^= x &gt;&gt; 16; x *= 0x7feb352dU; x ^= x &gt;&gt; 15;
+    x *= 0x846ca68bU; x ^= x &gt;&gt; 16; return x;
+}
+
+<span class="c-cm">// Phases 1+2: map each key to a bucket, histogram with a PRIVATIZED (shared-mem) counter.</span>
+__global__ void countKernel(const uint32_t* keys, int n, int P, int* pid, int* gHist) {
+    extern __shared__ int sHist[];                              <span class="c-cm">// P ints, on-chip</span>
+    for (int p = threadIdx.x; p &lt; P; p += blockDim.x) sHist[p] = 0;
+    __syncthreads();
+    const int stride = gridDim.x * blockDim.x;
+    for (int i = blockIdx.x * blockDim.x + threadIdx.x; i &lt; n; i += stride) {
+        int p = hash32(keys[i]) % P;
+        pid[i] = p;                                             <span class="c-cm">// remember for the scatter</span>
+        atomicAdd(&amp;sHist[p], 1);                                <span class="c-cm">// cheap shared-mem atomic</span>
+    }
+    __syncthreads();
+    for (int p = threadIdx.x; p &lt; P; p += blockDim.x)
+        if (sHist[p]) atomicAdd(&amp;gHist[p], sHist[p]);           <span class="c-cm">// one global atomic per (block,bucket)</span>
+}
+
+<span class="c-cm">// Phase 4: scatter each row into its bucket's run. Atomic-cursor (CORRECT, not stable).</span>
+<span class="c-cm">// For a STABLE result, replace the atomic cursor with a block-wise rank (see H1 notes).</span>
+__global__ void scatterKernel(const uint32_t* keys, const int* pid, int n,
+                              int* cursor, uint32_t* out) {
+    const int stride = gridDim.x * blockDim.x;
+    for (int i = blockIdx.x * blockDim.x + threadIdx.x; i &lt; n; i += stride) {
+        int pos = atomicAdd(&amp;cursor[pid[i]], 1);                <span class="c-cm">// claim next slot in this bucket</span>
+        out[pos] = keys[i];
+    }
+}
+
+int main() {
+    const int n = 1 &lt;&lt; 20, P = 8, TH = 256, BL = 256;
+    std::vector&lt;uint32_t&gt; h_keys(n);
+    std::mt19937 rng(1);
+    for (auto&amp; k : h_keys) k = rng();
+
+    thrust::device_vector&lt;uint32_t&gt; keys(h_keys.begin(), h_keys.end()), out(n);
+    thrust::device_vector&lt;int&gt; pid(n), gHist(P, 0), offsets(P + 1), cursor(P);
+
+    countKernel&lt;&lt;&lt;BL, TH, P * sizeof(int)&gt;&gt;&gt;(
+        keys.data().get(), n, P, pid.data().get(), gHist.data().get());
+
+    <span class="c-cm">// Phase 3: exclusive scan of the histogram -&gt; per-bucket start offsets.</span>
+    thrust::exclusive_scan(gHist.begin(), gHist.end(), offsets.begin());
+    offsets[P] = n;
+    thrust::copy(offsets.begin(), offsets.begin() + P, cursor.begin());
+
+    scatterKernel&lt;&lt;&lt;BL, TH&gt;&gt;&gt;(
+        keys.data().get(), pid.data().get(), n, cursor.data().get(), out.data().get());
+    cudaDeviceSynchronize();
+
+    <span class="c-cm">// verify: each output row sits in its bucket's [offset[p], offset[p+1]) range.</span>
+    thrust::host_vector&lt;uint32_t&gt; ho = out;
+    thrust::host_vector&lt;int&gt; hoff = offsets;
+    bool ok = true;
+    for (int p = 0; p &lt; P &amp;&amp; ok; ++p)
+        for (int i = hoff[p]; i &lt; hoff[p + 1]; ++i)
+            if ((int)(hash32(ho[i]) % P) != p) { ok = false; break; }
+    printf("partition %s   (n=%d, P=%d)\n", ok ? "OK" : "FAIL", n, P);
+    return 0;
+}</pre></figure>
+      <h3>2 &middot; Work-efficient exclusive scan (Blelloch) <span class="tag">single GPU &middot; runs &amp; verifies</span></h3>
+      <figure class="code"><figcaption><span class="file">scan.cu</span><span class="role">up-sweep / clear / down-sweep, padded to a power of two</span></figcaption>
+<pre><span class="c-cm">// scan.cu  --  work-efficient exclusive scan (Blelloch), single block.   build: nvcc -O2 scan.cu -o scan</span>
+#include &lt;cstdio&gt;
+#include &lt;vector&gt;
+#include &lt;random&gt;
+#include &lt;cuda_runtime.h&gt;
+
+<span class="c-cm">// Exclusive scan of g[0..n) via shared memory; n must be a power of two; blockDim.x == n/2.</span>
+__global__ void blellochScan(int* g, int n) {
+    extern __shared__ int x[];
+    int t = threadIdx.x;
+    x[2*t] = g[2*t];  x[2*t + 1] = g[2*t + 1];                  <span class="c-cm">// load 2 elements per thread</span>
+    int offset = 1;
+    for (int d = n &gt;&gt; 1; d &gt; 0; d &gt;&gt;= 1) {                      <span class="c-cm">// up-sweep (reduce)</span>
+        __syncthreads();
+        if (t &lt; d) {
+            int ai = offset*(2*t + 1) - 1, bi = offset*(2*t + 2) - 1;
+            x[bi] += x[ai];
+        }
+        offset *= 2;
+    }
+    if (t == 0) x[n - 1] = 0;                                   <span class="c-cm">// clear root -&gt; exclusive</span>
+    for (int d = 1; d &lt; n; d *= 2) {                            <span class="c-cm">// down-sweep</span>
+        offset &gt;&gt;= 1;
+        __syncthreads();
+        if (t &lt; d) {
+            int ai = offset*(2*t + 1) - 1, bi = offset*(2*t + 2) - 1;
+            int tmp = x[ai];  x[ai] = x[bi];  x[bi] += tmp;     <span class="c-cm">// swap + add</span>
+        }
+    }
+    __syncthreads();
+    g[2*t] = x[2*t];  g[2*t + 1] = x[2*t + 1];                  <span class="c-cm">// store back</span>
+}
+
+static int nextPow2(int v) { int p = 1; while (p &lt; v) p &lt;&lt;= 1; return p; }
+
+int main() {
+    const int N = 1000;                                        <span class="c-cm">// arbitrary (not a power of two)</span>
+    const int n = nextPow2(N);                                 <span class="c-cm">// pad up; identity (0) fill is safe</span>
+    std::vector&lt;int&gt; h(n, 0);
+    std::mt19937 rng(7);
+    for (int i = 0; i &lt; N; ++i) h[i] = rng() % 10;
+
+    int* d = nullptr;
+    cudaMalloc(&amp;d, n * sizeof(int));
+    cudaMemcpy(d, h.data(), n * sizeof(int), cudaMemcpyHostToDevice);
+    blellochScan&lt;&lt;&lt;1, n / 2, n * sizeof(int)&gt;&gt;&gt;(d, n);         <span class="c-cm">// single block; needs n &lt;= 2*1024</span>
+    std::vector&lt;int&gt; got(n);
+    cudaMemcpy(got.data(), d, n * sizeof(int), cudaMemcpyDeviceToHost);
+
+    bool ok = true; int acc = 0;                               <span class="c-cm">// check vs a serial exclusive scan</span>
+    for (int i = 0; i &lt; N; ++i) { if (got[i] != acc) { ok = false; break; } acc += h[i]; }
+    printf("scan %s   (N=%d, padded to n=%d)\n", ok ? "OK" : "FAIL", N, n);
+    cudaFree(d);
+    return 0;
+}
+<span class="c-cm">// For n larger than one block: scan each block, scan the block totals, add each block's prefix back.</span></pre></figure>
+      <h3>3 &middot; Distributed hash join <span class="tag">local join runs &middot; shuffle sketched</span></h3>
+      <p>The local build/probe runs on one GPU and prints a match count; the multi-GPU shuffle (partition both tables by
+        <code>hash(key)%G</code>, all-to-all, then this local join) is the commented orchestration.</p>
+      <figure class="code"><figcaption><span class="file">distributed_join.cu</span><span class="role">linear-probe multimap build + probe; orchestration in comments</span></figcaption>
+<pre><span class="c-cm">// distributed_join.cu  --  local hash-join build/probe (runs), multi-GPU glue sketched.</span>
+<span class="c-cm">//   build: nvcc -O2 distributed_join.cu -o djoin</span>
+#include &lt;cstdio&gt;
+#include &lt;cstdint&gt;
+#include &lt;vector&gt;
+#include &lt;random&gt;
+#include &lt;thrust/device_vector.h&gt;
+
+constexpr int EMPTY = -1;
+__device__ __host__ inline uint32_t h32(uint32_t x){ x^=x&gt;&gt;16; x*=0x7feb352dU; x^=x&gt;&gt;15; x*=0x846ca68bU; x^=x&gt;&gt;16; return x; }
+
+<span class="c-cm">// ---- LOCAL JOIN (this runs on each GPU after the shuffle) ----</span>
+<span class="c-cm">// Linear-probe open addressing, inserting EVERY build row -&gt; a multimap (handles duplicate keys).</span>
+__global__ void buildKernel(const int* key, const int* row, int n, int* tKey, int* tRow, int cap) {
+    int stride = gridDim.x * blockDim.x;
+    for (int i = blockIdx.x*blockDim.x + threadIdx.x; i &lt; n; i += stride) {
+        int k = key[i], slot = h32(k) % cap;
+        while (true) {
+            int prev = atomicCAS(&amp;tKey[slot], EMPTY, k);        <span class="c-cm">// claim the next empty slot</span>
+            if (prev == EMPTY) { tRow[slot] = row[i]; break; }
+            slot = (slot + 1) % cap;                            <span class="c-cm">// collision -&gt; probe forward</span>
+        }
+    }
+}
+__global__ void probeKernel(const int* key, int n, const int* tKey, const int* tRow,
+                            int cap, int* outB, int* outP, int* outCnt, int outCap) {
+    int stride = gridDim.x * blockDim.x;
+    for (int i = blockIdx.x*blockDim.x + threadIdx.x; i &lt; n; i += stride) {
+        int k = key[i], slot = h32(k) % cap;
+        while (tKey[slot] != EMPTY) {                           <span class="c-cm">// EMPTY ends the run</span>
+            if (tKey[slot] == k) {                              <span class="c-cm">// matches ALL equal-key slots</span>
+                int o = atomicAdd(outCnt, 1);                   <span class="c-cm">// (two-pass count+scan avoids this race)</span>
+                if (o &lt; outCap) { outB[o] = tRow[slot]; outP[o] = i; }
+            }
+            slot = (slot + 1) % cap;
+        }
+    }
+}
+
+int localJoin(const std::vector&lt;int&gt;&amp; bKey, const std::vector&lt;int&gt;&amp; bRow,
+              const std::vector&lt;int&gt;&amp; pKey, std::vector&lt;int&gt;&amp; outB, std::vector&lt;int&gt;&amp; outP) {
+    int nb = bKey.size(), np = pKey.size(), cap = 1;
+    while (cap &lt; nb * 2) cap &lt;&lt;= 1;                             <span class="c-cm">// load factor &lt; 0.5 (need headroom!)</span>
+    thrust::device_vector&lt;int&gt; dbk(bKey), dbr(bRow), dpk(pKey);
+    thrust::device_vector&lt;int&gt; tK(cap, EMPTY), tR(cap);
+    int outCap = np * 4;                                        <span class="c-cm">// generous; size with count+scan in prod</span>
+    thrust::device_vector&lt;int&gt; ob(outCap), op(outCap), cnt(1, 0);
+    buildKernel&lt;&lt;&lt;256,256&gt;&gt;&gt;(dbk.data().get(), dbr.data().get(), nb, tK.data().get(), tR.data().get(), cap);
+    probeKernel&lt;&lt;&lt;256,256&gt;&gt;&gt;(dpk.data().get(), np, tK.data().get(), tR.data().get(), cap,
+                             ob.data().get(), op.data().get(), cnt.data().get(), outCap);
+    cudaDeviceSynchronize();
+    int m = cnt[0]; if (m &gt; outCap) m = outCap;
+    outB.assign(ob.begin(), ob.begin() + m); outP.assign(op.begin(), op.begin() + m);
+    return m;
+}
+
+<span class="c-cm">// ---- DISTRIBUTED ORCHESTRATION (per GPU; transport abstracted) ----</span>
+<span class="c-cm">//   for each local row r:   dest = h32(key(r)) % G</span>
+<span class="c-cm">//   group rows by dest      == partition.cu (histogram + scan + scatter into send buffers)</span>
+<span class="c-cm">//   all_to_all(send buffers)                       &lt;-- the UCX exchange in THIS PR</span>
+<span class="c-cm">//   now this GPU holds R_g and S_g  -&gt;  localJoin(R_g.key, R_g.row, S_g.key, outB, outP)</span>
+
+int main() {                                                   <span class="c-cm">// demo: a LOCAL join on one GPU</span>
+    const int nb = 1 &lt;&lt; 16, np = 1 &lt;&lt; 16;
+    std::mt19937 rng(3);
+    std::vector&lt;int&gt; bKey(nb), bRow(nb), pKey(np);
+    for (int i = 0; i &lt; nb; ++i) { bKey[i] = rng() % 50000; bRow[i] = i; }   <span class="c-cm">// duplicates present</span>
+    for (int i = 0; i &lt; np; ++i)   pKey[i] = rng() % 50000;
+    std::vector&lt;int&gt; outB, outP;
+    int m = localJoin(bKey, bRow, pKey, outB, outP);
+    printf("local join produced %d matches\n", m);
+    return 0;
+}</pre></figure>
+      <h3>4 &middot; Distributed sort &mdash; range partition <span class="tag">local pieces run &middot; exchange sketched</span></h3>
+      <p>The local sort and the range-bucket histogram run on one GPU; the sample &rarr; splitters &rarr; range exchange
+        &rarr; merge pipeline is the commented orchestration.</p>
+      <figure class="code"><figcaption><span class="file">distributed_sort.cu</span><span class="role">bucketOf (upper_bound) + send histogram + local sort</span></figcaption>
+<pre><span class="c-cm">// distributed_sort.cu  --  range-partition + local sort (runs), multi-GPU glue sketched.</span>
+<span class="c-cm">//   build: nvcc -O2 distributed_sort.cu -o dsort</span>
+#include &lt;cstdio&gt;
+#include &lt;vector&gt;
+#include &lt;random&gt;
+#include &lt;algorithm&gt;
+#include &lt;thrust/device_vector.h&gt;
+#include &lt;thrust/host_vector.h&gt;
+#include &lt;thrust/sort.h&gt;
+
+<span class="c-cm">// bucket = #{ splitters &lt;= key }  (upper_bound) -&gt; half-open ranges [s[b-1], s[b])</span>
+__device__ int bucketOf(int key, const int* splitters, int G) {
+    int lo = 0, hi = G - 1;
+    while (lo &lt; hi) {
+        int mid = (lo + hi) &gt;&gt; 1;
+        if (splitters[mid] &lt;= key) lo = mid + 1;               <span class="c-cm">// key &gt;= splitter -&gt; higher bucket</span>
+        else hi = mid;
+    }
+    return lo;                                                 <span class="c-cm">// 0..G-1</span>
+}
+<span class="c-cm">// assign each key its destination bucket and histogram the send counts (privatized).</span>
+__global__ void rangeCount(const int* keys, int n, const int* splitters, int G,
+                           int* bucket, int* gHist) {
+    extern __shared__ int s[];
+    for (int b = threadIdx.x; b &lt; G; b += blockDim.x) s[b] = 0;
+    __syncthreads();
+    int stride = gridDim.x * blockDim.x;
+    for (int i = blockIdx.x*blockDim.x + threadIdx.x; i &lt; n; i += stride) {
+        int b = bucketOf(keys[i], splitters, G);
+        bucket[i] = b;
+        atomicAdd(&amp;s[b], 1);
+    }
+    __syncthreads();
+    for (int b = threadIdx.x; b &lt; G; b += blockDim.x)
+        if (s[b]) atomicAdd(&amp;gHist[b], s[b]);
+}
+<span class="c-cm">// G-1 splitters by regular sampling of a sorted sample (decides balance, not correctness).</span>
+std::vector&lt;int&gt; chooseSplitters(std::vector&lt;int&gt; sample, int G) {
+    std::sort(sample.begin(), sample.end());
+    std::vector&lt;int&gt; sp(G - 1);
+    for (int i = 1; i &lt; G; ++i) sp[i - 1] = sample[(size_t)i * sample.size() / G];
+    return sp;
+}
+
+<span class="c-cm">// ---- DISTRIBUTED ORCHESTRATION (per GPU; transport abstracted) ----</span>
+<span class="c-cm">//   1. local sort (thrust::sort) + sample</span>
+<span class="c-cm">//   2. all-gather samples -&gt; chooseSplitters -&gt; broadcast G-1 splitters     (small)</span>
+<span class="c-cm">//   3. rangeCount -&gt; send histogram; exclusive-scan -&gt; send offsets</span>
+<span class="c-cm">//   4. all_to_all by bucket                          &lt;-- the UCX exchange in THIS PR</span>
+<span class="c-cm">//   5. each GPU merges the sorted runs it received   (cudf::merge)</span>
+<span class="c-cm">//   concat(GPU 0, GPU 1, ...) is globally sorted.</span>
+
+int main() {                                                   <span class="c-cm">// demo: local sort + range bucketing</span>
+    const int n = 1 &lt;&lt; 20, G = 4;
+    std::mt19937 rng(5);
+    std::vector&lt;int&gt; h(n); for (auto&amp; v : h) v = rng() % 1000000;
+
+    thrust::device_vector&lt;int&gt; keys(h);
+    thrust::sort(keys.begin(), keys.end());                    <span class="c-cm">// local sort</span>
+
+    std::vector&lt;int&gt; sample(1024);
+    for (auto&amp; s : sample) s = rng() % 1000000;
+    std::vector&lt;int&gt; sp = chooseSplitters(sample, G);
+    thrust::device_vector&lt;int&gt; dsp(sp), bucket(n), gHist(G, 0);
+
+    rangeCount&lt;&lt;&lt;256,256,G*sizeof(int)&gt;&gt;&gt;(keys.data().get(), n, dsp.data().get(), G,
+                                          bucket.data().get(), gHist.data().get());
+    cudaDeviceSynchronize();
+    thrust::host_vector&lt;int&gt; hc = gHist;
+    printf("range-partition send counts to %d GPUs:", G);
+    for (int b = 0; b &lt; G; ++b) printf(" %d", (int)hc[b]);
+    printf("\n");
+    return 0;
+}</pre></figure>
     </section>
 
     <div class="footer">
