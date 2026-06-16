@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jupiter Cloud-Resolving Model — Computation & Science Walkthrough</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2330; --ink:#e6edf3; --muted:#9aa7b4;
+    --line:#2b3440; --teal:#3fb8af; --amber:#f2b134; --rust:#e07a4b; --blue:#5aa9e6;
+    --green:#5cb874; --violet:#a78bfa; --cream:#f4e3c1; --tan:#d9b48a; --red:#e85d5d;
+    --code:#0b0f14;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.6; font-size:16px;
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:28px 22px 80px}
+  header.hero{
+    background:radial-gradient(120% 140% at 80% -10%, #3a2c1e 0%, #1a1410 40%, #0d1117 75%);
+    border:1px solid var(--line); border-radius:16px; padding:30px 30px 26px; margin-bottom:26px;
+    position:relative; overflow:hidden;
+  }
+  header.hero .planet{
+    position:absolute; right:-40px; top:-40px; width:230px; height:230px; border-radius:50%;
+    background:
+      repeating-linear-gradient(8deg,#c98a4b 0 14px,#e3b888 14px 24px,#a9692f 24px 34px,#f0d6a8 34px 42px,#b97a3c 42px 56px);
+    box-shadow: inset -30px -10px 60px rgba(0,0,0,.55), 0 0 50px rgba(240,200,140,.18);
+    opacity:.85;
+  }
+  header.hero .spot{position:absolute;right:55px;top:120px;width:46px;height:30px;border-radius:50%;
+    background:radial-gradient(circle at 40% 40%,#c0432e,#7d2417);opacity:.9}
+  h1{font-size:27px;margin:0 0 8px;letter-spacing:.2px}
+  .sub{color:var(--muted);max-width:680px;font-size:15px}
+  .tagrow{margin-top:16px;display:flex;flex-wrap:wrap;gap:8px}
+  .tag{font-size:12px;padding:4px 10px;border-radius:20px;border:1px solid var(--line);
+    background:#0e141b;color:var(--muted)}
+  h2{font-size:21px;margin:42px 0 6px;padding-top:14px;border-top:1px solid var(--line)}
+  h2 .n{color:var(--teal);font-variant-numeric:tabular-nums;margin-right:10px}
+  h3{font-size:16px;margin:24px 0 6px;color:var(--cream)}
+  p{margin:10px 0}
+  .lead{color:var(--muted);margin-top:2px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+  @media(max-width:820px){.grid2,.grid3{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+  .card h4{margin:0 0 6px;font-size:14.5px;color:var(--ink)}
+  .card.sci{border-left:3px solid var(--amber)}
+  .card.comp{border-left:3px solid var(--teal)}
+  .pill{display:inline-block;font-size:11px;letter-spacing:.4px;text-transform:uppercase;
+    padding:2px 8px;border-radius:6px;font-weight:600;margin-bottom:8px}
+  .pill.sci{background:rgba(242,177,52,.13);color:var(--amber)}
+  .pill.comp{background:rgba(63,184,175,.13);color:var(--teal)}
+  code,.mono{font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace;font-size:13px}
+  code{background:#0b0f14;border:1px solid var(--line);padding:1px 6px;border-radius:5px;color:#cfe8e6}
+  pre{background:var(--code);border:1px solid var(--line);border-radius:10px;padding:14px 16px;
+    overflow:auto;font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;color:#d7e2ea}
+  pre .c{color:#6b7787}
+  pre .k{color:var(--violet)}
+  pre .s{color:var(--green)}
+  pre .f{color:var(--blue)}
+  .eq{background:#0b0f14;border:1px dashed #38424f;border-radius:10px;padding:12px 16px;margin:12px 0;
+    font-size:15px;color:#eaf2f6;overflow-x:auto}
+  .eq .lab{float:right;color:var(--muted);font-size:12px}
+  .var{color:var(--teal)} .op{color:var(--rust)}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13.5px}
+  th,td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}
+  th{background:#11161d;color:var(--cream);font-weight:600}
+  td .mono{color:#cfe8e6}
+  .note{font-size:13px;color:var(--muted);margin-top:8px}
+  .kicker{color:var(--teal);font-weight:600;font-size:12px;letter-spacing:.6px;text-transform:uppercase}
+  .svgbox{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px;margin:16px 0}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12.5px;color:var(--muted);margin-top:6px;padding:0 6px 6px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .sw{width:12px;height:12px;border-radius:3px;display:inline-block}
+  .callout{background:linear-gradient(90deg,rgba(63,184,175,.08),transparent);border:1px solid var(--line);
+    border-left:3px solid var(--teal);border-radius:10px;padding:12px 16px;margin:14px 0}
+  ul.tight{margin:8px 0;padding-left:20px} ul.tight li{margin:4px 0}
+  .foot{margin-top:50px;color:var(--muted);font-size:12.5px;border-top:1px solid var(--line);padding-top:16px}
+  a{color:var(--teal)}
+  .num-badge{display:inline-block;min-width:22px;height:22px;line-height:22px;text-align:center;border-radius:6px;
+    background:#11161d;border:1px solid var(--line);color:var(--teal);font-size:12px;margin-right:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div class="planet"></div><div class="spot"></div>
+  <h1>Modeling Jupiter's Weather Layer</h1>
+  <div class="sub">A systematic walkthrough of <code>run_jupiter_crm.py</code> with <code>jup_crm_100.yaml</code> — what each computation does, and the physical mechanism behind it. This is a <b>cloud-resolving model (CRM)</b>: a 3-D box of Jupiter's atmosphere in which moist convection, condensation, and precipitation are simulated directly.</div>
+  <div class="tagrow">
+    <span class="tag">snapy · dynamical core</span>
+    <span class="tag">kintera · thermo + chemistry</span>
+    <span class="tag">paddle · glue layer</span>
+    <span class="tag">PyTorch tensors / GPU</span>
+    <span class="tag">finite-volume Godunov</span>
+    <span class="tag">operator splitting</span>
+  </div>
+</header>
+
+<p class="lead">The model answers a concrete question: <b>if you heat a column of Jupiter's hydrogen atmosphere from below and cool it from the top, how do convective storms organize, and where do water, ammonia, and ammonium-hydrosulfide clouds form and rain out?</b> The 100 in the filename is the imposed heat flux (100 W m⁻², an accelerated stand-in for Jupiter's internal heat).</p>
+
+<!-- ============================================================= -->
+<h2><span class="n">0</span>The software stack &amp; how data flows</h2>
+<p>The Python driver is thin orchestration. The physics lives in compiled C++/CUDA libraries exposed to Python through pybind11, all operating on <b>PyTorch tensors</b> so the whole simulation can run on a GPU.</p>
+
+<div class="svgbox">
+<svg viewBox="0 0 1000 330" width="100%" role="img" aria-label="Software stack diagram">
+  <defs>
+    <marker id="ar" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#9aa7b4"/></marker>
+  </defs>
+  <!-- driver -->
+  <rect x="350" y="14" width="300" height="56" rx="10" fill="#1c2330" stroke="#3fb8af"/>
+  <text x="500" y="38" fill="#e6edf3" font-size="15" font-weight="700" text-anchor="middle">run_jupiter_crm.py</text>
+  <text x="500" y="57" fill="#9aa7b4" font-size="11.5" text-anchor="middle">driver: build mesh · init profile · time loop · output</text>
+
+  <!-- yaml -->
+  <rect x="40" y="20" width="250" height="44" rx="9" fill="#11161d" stroke="#f2b134"/>
+  <text x="165" y="40" fill="#f2b134" font-size="13" font-weight="700" text-anchor="middle">jup_crm_100.yaml</text>
+  <text x="165" y="55" fill="#9aa7b4" font-size="10.5" text-anchor="middle">grid · species · reactions · forcing</text>
+  <line x1="290" y1="42" x2="348" y2="42" stroke="#9aa7b4" stroke-width="1.5" marker-end="url(#ar)"/>
+
+  <!-- three libs -->
+  <g>
+    <rect x="40" y="130" width="270" height="120" rx="11" fill="#161b22" stroke="#5aa9e6"/>
+    <text x="175" y="154" fill="#5aa9e6" font-size="15" font-weight="700" text-anchor="middle">snapy</text>
+    <text x="175" y="174" fill="#cdd6df" font-size="11.5" text-anchor="middle">Dynamical core (fluid motion)</text>
+    <text x="175" y="194" fill="#9aa7b4" font-size="10.5" text-anchor="middle">Mesh · EquationOfState</text>
+    <text x="175" y="210" fill="#9aa7b4" font-size="10.5" text-anchor="middle">WENO5 · HLLC · RK3</text>
+    <text x="175" y="226" fill="#9aa7b4" font-size="10.5" text-anchor="middle">forcing · sedimentation · I/O</text>
+  </g>
+  <g>
+    <rect x="365" y="130" width="270" height="120" rx="11" fill="#161b22" stroke="#f2b134"/>
+    <text x="500" y="154" fill="#f2b134" font-size="15" font-weight="700" text-anchor="middle">kintera</text>
+    <text x="500" y="174" fill="#cdd6df" font-size="11.5" text-anchor="middle">Thermo + chemistry</text>
+    <text x="500" y="194" fill="#9aa7b4" font-size="10.5" text-anchor="middle">ThermoX / ThermoY (EOS)</text>
+    <text x="500" y="210" fill="#9aa7b4" font-size="10.5" text-anchor="middle">Kinetics (cloud microphysics)</text>
+    <text x="500" y="226" fill="#9aa7b4" font-size="10.5" text-anchor="middle">saturation · nucleation · evap</text>
+  </g>
+  <g>
+    <rect x="690" y="130" width="270" height="120" rx="11" fill="#161b22" stroke="#5cb874"/>
+    <text x="825" y="154" fill="#5cb874" font-size="15" font-weight="700" text-anchor="middle">paddle</text>
+    <text x="825" y="174" fill="#cdd6df" font-size="11.5" text-anchor="middle">Python glue helpers</text>
+    <text x="825" y="194" fill="#9aa7b4" font-size="10.5" text-anchor="middle">setup_profile()</text>
+    <text x="825" y="210" fill="#9aa7b4" font-size="10.5" text-anchor="middle">evolve_kinetics()</text>
+    <text x="825" y="226" fill="#9aa7b4" font-size="10.5" text-anchor="middle">couples snapy ↔ kintera</text>
+  </g>
+
+  <line x1="430" y1="70" x2="220" y2="128" stroke="#9aa7b4" stroke-width="1.3" marker-end="url(#ar)"/>
+  <line x1="500" y1="70" x2="500" y2="128" stroke="#9aa7b4" stroke-width="1.3" marker-end="url(#ar)"/>
+  <line x1="570" y1="70" x2="790" y2="128" stroke="#9aa7b4" stroke-width="1.3" marker-end="url(#ar)"/>
+
+  <rect x="300" y="285" width="400" height="34" rx="9" fill="#0b0f14" stroke="#2b3440"/>
+  <text x="500" y="307" fill="#9aa7b4" font-size="11.5" text-anchor="middle">C++17 / CUDA core · PyTorch tensors · pybind11 bindings</text>
+  <line x1="175" y1="250" x2="430" y2="284" stroke="#2b3440" stroke-width="1.1"/>
+  <line x1="500" y1="250" x2="500" y2="284" stroke="#2b3440" stroke-width="1.1"/>
+  <line x1="825" y1="250" x2="570" y2="284" stroke="#2b3440" stroke-width="1.1"/>
+</svg>
+<div class="legend">
+  <span><span class="sw" style="background:#5aa9e6"></span>moves mass &amp; momentum around (transport)</span>
+  <span><span class="sw" style="background:#f2b134"></span>decides phase, temperature, reactions (local physics)</span>
+  <span><span class="sw" style="background:#5cb874"></span>orchestration</span>
+</div>
+</div>
+
+<p><code>pyharp</code> and <code>pydisort</code> (radiative transfer) also live in the repo set, but this particular CRM configuration represents radiation as simple <b>prescribed</b> top-cooling / bottom-heating rather than a full radiative-transfer solve.</p>
+
+<!-- ============================================================= -->
+<h2><span class="n">1</span>The inputs — decoding <code>jup_crm_100.yaml</code></h2>
+<p class="lead">Every physical choice the simulation makes is declared here. The blocks map one-to-one onto modules in the libraries.</p>
+
+<div class="grid2">
+  <div class="card">
+    <h4>Geometry &amp; grid</h4>
+    <p>Cartesian box, 100³ cells with 3 ghost layers. <b>x1 is vertical</b> (0→300 km, so ≈3 km cells); x2,x3 are horizontal (0→2400 km, ≈24 km cells).</p>
+    <pre><span class="k">cells:</span> nx1:100 nx2:100 nx3:100
+<span class="k">bounds:</span> x1 0–300 km · x2,x3 0–2400 km</pre>
+  </div>
+  <div class="card">
+    <h4>Boundary conditions</h4>
+    <p><b>Reflecting</b> top &amp; bottom (no flow through the lid/floor, free-slip); <b>periodic</b> on the four sides — the box is a representative patch of a much larger atmosphere.</p>
+  </div>
+  <div class="card">
+    <h4>Forcing — what drives the weather</h4>
+    <p>Gravity <span class="mono">g = 22 m s⁻²</span> downward. A radiative-style <b>cooling</b> of −100 W m⁻² spread over the top 5 cells, and <b>heating</b> of +100 W m⁻² over the bottom 5 cells. Cooling aloft + heating below = an unstable column that <b>convects</b>.</p>
+  </div>
+  <div class="card">
+    <h4>Initial thermodynamic state</h4>
+    <p>Base of column at <span class="mono">P=100 bar, T=600 K</span>; temperature floored at <span class="mono">Tmin=110 K</span>. Deep volatile abundances (mole fractions): <span class="mono">H₂O 3×10⁻³</span>, <span class="mono">NH₃ 3.2×10⁻⁴</span>, <span class="mono">H₂S 1×10⁻⁵</span> — roughly Jovian deep composition.</p>
+  </div>
+</div>
+
+<h3>The 10 species — a "dry" gas plus three condensible systems</h3>
+<p>The first species is the background <b>dry</b> H₂/He gas (it is never created or destroyed). Each condensible element appears as a vapor and as two condensed forms: a small <b>cloud</b> particle and a larger, falling <b>precipitation</b> particle (suffix <code>,p</code>).</p>
+
+<table>
+<tr><th>Role</th><th>Species</th><th>cv/R</th><th>u₀/R (K)</th><th>Meaning of u₀</th></tr>
+<tr><td>background gas</td><td class="mono">dry (H₂+He)</td><td>2.5</td><td>—</td><td>inert carrier</td></tr>
+<tr><td>vapors</td><td class="mono">H2O, NH3, H2S</td><td>2.5</td><td>0</td><td>reference energy</td></tr>
+<tr><td>cloud (suspended)</td><td class="mono">H2O(l), NH3(s), NH4SH(s)</td><td>9.0</td><td>−3430 / −5520 / −12000</td><td>latent energy released on condensation</td></tr>
+<tr><td>precip (falling)</td><td class="mono">H2O(l,p), NH3(s,p), NH4SH(s,p)</td><td>9.0</td><td>−3430 / −5520 / −12000</td><td>same, larger particles</td></tr>
+</table>
+<p class="note">The negative internal-energy offsets <span class="mono">u₀</span> are the latent-heat bookkeeping: turning vapor into condensate releases energy that warms the surrounding gas — the engine of moist convection.</p>
+
+<h3>The reaction network — cloud microphysics as "chemistry"</h3>
+<p>Nine reactions, organized as three vapor→cloud→precip conveyor belts. Each belt has the same three steps; the third belt builds Jupiter's signature <b>NH₄SH</b> cloud from two vapors.</p>
+
+<div class="svgbox">
+<svg viewBox="0 0 1000 430" width="100%" role="img" aria-label="Reaction network diagram">
+  <defs>
+    <marker id="a2" markerWidth="11" markerHeight="11" refX="8" refY="3.5" orient="auto"><path d="M0,0 L8,3.5 L0,7 Z" fill="#cdd6df"/></marker>
+    <marker id="a3" markerWidth="11" markerHeight="11" refX="8" refY="3.5" orient="auto"><path d="M0,0 L8,3.5 L0,7 Z" fill="#5aa9e6"/></marker>
+  </defs>
+
+  <!-- column headers -->
+  <text x="175" y="28" fill="#5aa9e6" font-size="14" font-weight="700" text-anchor="middle">Water (H₂O)</text>
+  <text x="500" y="28" fill="#a78bfa" font-size="14" font-weight="700" text-anchor="middle">Ammonia (NH₃)</text>
+  <text x="825" y="28" fill="#e07a4b" font-size="14" font-weight="700" text-anchor="middle">Ammonium hydrosulfide</text>
+
+  <!-- generic three-stage template, drawn 3x -->
+  <!-- WATER -->
+  <g>
+    <rect x="90" y="55" width="170" height="40" rx="8" fill="#11161d" stroke="#5aa9e6"/><text x="175" y="80" fill="#dfe8f0" font-size="13" text-anchor="middle">H₂O vapor</text>
+    <rect x="90" y="180" width="170" height="40" rx="8" fill="#11161d" stroke="#cdd6df"/><text x="175" y="205" fill="#dfe8f0" font-size="13" text-anchor="middle">H₂O(l) cloud</text>
+    <rect x="90" y="305" width="170" height="40" rx="8" fill="#11161d" stroke="#cdd6df"/><text x="175" y="330" fill="#dfe8f0" font-size="13" text-anchor="middle">H₂O(l,p) rain</text>
+    <line x1="175" y1="95" x2="175" y2="178" stroke="#cdd6df" stroke-width="1.6" marker-end="url(#a2)"/>
+    <line x1="175" y1="220" x2="175" y2="303" stroke="#cdd6df" stroke-width="1.6" marker-end="url(#a2)"/>
+    <path d="M255,308 C300,250 300,150 232,98" fill="none" stroke="#5aa9e6" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#a3)"/>
+  </g>
+  <!-- AMMONIA -->
+  <g>
+    <rect x="415" y="55" width="170" height="40" rx="8" fill="#11161d" stroke="#a78bfa"/><text x="500" y="80" fill="#dfe8f0" font-size="13" text-anchor="middle">NH₃ vapor</text>
+    <rect x="415" y="180" width="170" height="40" rx="8" fill="#11161d" stroke="#cdd6df"/><text x="500" y="205" fill="#dfe8f0" font-size="13" text-anchor="middle">NH₃(s) cloud</text>
+    <rect x="415" y="305" width="170" height="40" rx="8" fill="#11161d" stroke="#cdd6df"/><text x="500" y="330" fill="#dfe8f0" font-size="13" text-anchor="middle">NH₃(s,p) snow</text>
+    <line x1="500" y1="95" x2="500" y2="178" stroke="#cdd6df" stroke-width="1.6" marker-end="url(#a2)"/>
+    <line x1="500" y1="220" x2="500" y2="303" stroke="#cdd6df" stroke-width="1.6" marker-end="url(#a2)"/>
+    <path d="M580,308 C625,250 625,150 557,98" fill="none" stroke="#5aa9e6" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#a3)"/>
+  </g>
+  <!-- NH4SH -->
+  <g>
+    <rect x="700" y="40" width="120" height="34" rx="8" fill="#11161d" stroke="#a78bfa"/><text x="760" y="62" fill="#dfe8f0" font-size="12" text-anchor="middle">NH₃</text>
+    <rect x="838" y="40" width="120" height="34" rx="8" fill="#11161d" stroke="#e07a4b"/><text x="898" y="62" fill="#dfe8f0" font-size="12" text-anchor="middle">H₂S</text>
+    <rect x="740" y="180" width="170" height="40" rx="8" fill="#11161d" stroke="#cdd6df"/><text x="825" y="205" fill="#dfe8f0" font-size="13" text-anchor="middle">NH₄SH(s) cloud</text>
+    <rect x="740" y="305" width="170" height="40" rx="8" fill="#11161d" stroke="#cdd6df"/><text x="825" y="330" fill="#dfe8f0" font-size="12.5" text-anchor="middle">NH₄SH(s,p)</text>
+    <line x1="760" y1="74" x2="810" y2="178" stroke="#cdd6df" stroke-width="1.6" marker-end="url(#a2)"/>
+    <line x1="898" y1="74" x2="840" y2="178" stroke="#cdd6df" stroke-width="1.6" marker-end="url(#a2)"/>
+    <line x1="825" y1="220" x2="825" y2="303" stroke="#cdd6df" stroke-width="1.6" marker-end="url(#a2)"/>
+    <path d="M905,310 C952,250 952,140 838,72" fill="none" stroke="#5aa9e6" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#a3)"/>
+  </g>
+
+  <!-- step labels -->
+  <text x="300" y="140" fill="#5cb874" font-size="11.5" font-weight="600">nucleation</text>
+  <text x="300" y="265" fill="#f2b134" font-size="11.5" font-weight="600">coagulation</text>
+  <text x="300" y="395" fill="#5aa9e6" font-size="11.5" font-weight="600">evaporation (dashed, returns vapor)</text>
+  <text x="60" y="410" fill="#9aa7b4" font-size="11">↓ gravity also makes "p" particles sediment (fall) at −20 m/s</text>
+</svg>
+<div class="legend">
+  <span><span class="sw" style="background:#5cb874"></span>condensation when supersaturated</span>
+  <span><span class="sw" style="background:#f2b134"></span>small→large particle growth</span>
+  <span><span class="sw" style="background:#5aa9e6"></span>re-evaporation when subsaturated</span>
+</div>
+</div>
+
+<!-- ============================================================= -->
+<h2><span class="n">2</span>Initialization — building a physically consistent starting atmosphere</h2>
+<p>Before any time-stepping, <code>setup_profile(block, param, method="pseudo-adiabat")</code> (in paddle) constructs the vertical structure. You can't start from arbitrary numbers — the column must be in <b>hydrostatic balance</b> and follow a thermodynamically sensible temperature lapse, or the model would just be correcting nonsense for the first thousand steps.</p>
+
+<div class="grid2">
+<div class="card comp"><span class="pill comp">computation</span>
+<h4>Integrate upward, cell by cell</h4>
+<p>Starting from the surface (T,P, composition), it marches up one grid cell at a time, calling <code>thermo_x.extrapolate_dz(...)</code> to find the (T,P,x) of the next cell.</p>
+</div>
+<div class="card sci"><span class="pill sci">science</span>
+<h4>A moist/pseudo-adiabat under gravity</h4>
+<p>Two constraints are enforced simultaneously: hydrostatic balance <span class="mono">dP/dz=−ρg</span> and constant entropy (adiabatic) — but corrected for latent heating whenever a species condenses. "pseudo" = condensate rains out instead of being carried along.</p>
+</div>
+</div>
+
+<div class="eq">
+  hydrostatic: &nbsp; <span class="op">d</span>P/<span class="op">d</span>z = −<span class="var">ρ</span> g &nbsp;&nbsp;→&nbsp;&nbsp; P<sub>new</sub> = P<sub>0</sub> − ½(<span class="var">ρ</span>+<span class="var">ρ₀</span>) g Δz
+  <span class="lab">discretized, trapezoidal</span>
+</div>
+<div class="eq">
+  adiabatic + latent: &nbsp; solve T so that &nbsp; s<sub>molar</sub>(T,P,x) = s<sub>target</sub> &nbsp; with effective heat capacity c<sub>p</sub><sup>eff</sup> = c<sub>p</sub><sup>dry</sup> + <span style="color:var(--amber)">c<sub>p</sub><sup>latent</sup></span>
+  <span class="lab">extrapolate_ad.cpp</span>
+</div>
+<p class="note">The code iterates (Newton-style) on temperature until the entropy of the new cell matches the target entropy. The <span class="mono">effective_cp</span> term adds the latent contribution by differentiating the saturation-vapor-pressure curve — this is what makes a <i>moist</i> adiabat bend away from the dry one inside cloud layers. Finally, the driver seeds convection by adding a tiny random vertical velocity: <code>hydro_w[kIV1] += 0.1*rand</code>.</p>
+
+<!-- ============================================================= -->
+<h2><span class="n">3</span>The main loop — one timestep, end to end</h2>
+<p>The integrator advances until <span class="mono">tlim = 5×10⁷ s</span>. Each cycle has two big phases applied in sequence (this is <b>operator splitting</b>): first <span style="color:var(--blue)">move the fluid</span> (snapy), then <span style="color:var(--amber)">react the chemistry in place</span> (kintera).</p>
+
+<div class="svgbox">
+<svg viewBox="0 0 1000 560" width="100%" role="img" aria-label="Per-timestep pipeline">
+  <defs>
+    <marker id="aF" markerWidth="11" markerHeight="11" refX="8" refY="3.5" orient="auto"><path d="M0,0 L8,3.5 L0,7 Z" fill="#9aa7b4"/></marker>
+  </defs>
+  <!-- dt -->
+  <rect x="370" y="14" width="260" height="46" rx="9" fill="#161b22" stroke="#3fb8af"/>
+  <text x="500" y="34" fill="#e6edf3" font-size="13" font-weight="700" text-anchor="middle">dt = mesh.max_time_step()</text>
+  <text x="500" y="51" fill="#9aa7b4" font-size="10.5" text-anchor="middle">CFL 0.9 — largest stable step</text>
+  <line x1="500" y1="60" x2="500" y2="84" stroke="#9aa7b4" stroke-width="1.4" marker-end="url(#aF)"/>
+
+  <!-- DYNAMICS BOX -->
+  <rect x="60" y="88" width="880" height="226" rx="13" fill="rgba(90,169,230,.05)" stroke="#5aa9e6"/>
+  <text x="84" y="110" fill="#5aa9e6" font-size="13" font-weight="700">PHASE A · DYNAMICS — for stage in RK3 (3 sub-steps): mesh.forward(dt, stage)</text>
+
+  <rect x="90" y="128" width="180" height="60" rx="9" fill="#11161d" stroke="#2b3440"/>
+  <text x="180" y="152" fill="#dfe8f0" font-size="12.5" font-weight="600" text-anchor="middle">1 · Reconstruct</text>
+  <text x="180" y="170" fill="#9aa7b4" font-size="10.5" text-anchor="middle">WENO5 → face states</text>
+
+  <rect x="300" y="128" width="180" height="60" rx="9" fill="#11161d" stroke="#2b3440"/>
+  <text x="390" y="152" fill="#dfe8f0" font-size="12.5" font-weight="600" text-anchor="middle">2 · Riemann flux</text>
+  <text x="390" y="170" fill="#9aa7b4" font-size="10.5" text-anchor="middle">HLLC at each face</text>
+
+  <rect x="510" y="128" width="180" height="60" rx="9" fill="#11161d" stroke="#2b3440"/>
+  <text x="600" y="152" fill="#dfe8f0" font-size="12.5" font-weight="600" text-anchor="middle">3 · Flux divergence</text>
+  <text x="600" y="170" fill="#9aa7b4" font-size="10.5" text-anchor="middle">∂U/∂t = −∇·F</text>
+
+  <rect x="720" y="128" width="190" height="60" rx="9" fill="#11161d" stroke="#2b3440"/>
+  <text x="815" y="152" fill="#dfe8f0" font-size="12.5" font-weight="600" text-anchor="middle">4 · Forcing</text>
+  <text x="815" y="170" fill="#9aa7b4" font-size="10.5" text-anchor="middle">gravity · cool · heat</text>
+
+  <rect x="200" y="216" width="220" height="60" rx="9" fill="#11161d" stroke="#2b3440"/>
+  <text x="310" y="240" fill="#dfe8f0" font-size="12.5" font-weight="600" text-anchor="middle">5 · Sedimentation</text>
+  <text x="310" y="258" fill="#9aa7b4" font-size="10.5" text-anchor="middle">precip falls (−20 m/s)</text>
+
+  <rect x="470" y="216" width="300" height="60" rx="9" fill="#11161d" stroke="#3fb8af"/>
+  <text x="620" y="240" fill="#dfe8f0" font-size="12.5" font-weight="600" text-anchor="middle">6 · Implicit vertical update</text>
+  <text x="620" y="258" fill="#9aa7b4" font-size="10.5" text-anchor="middle">stable against fast sound/gravity waves</text>
+
+  <line x1="270" y1="158" x2="298" y2="158" stroke="#9aa7b4" stroke-width="1.3" marker-end="url(#aF)"/>
+  <line x1="480" y1="158" x2="508" y2="158" stroke="#9aa7b4" stroke-width="1.3" marker-end="url(#aF)"/>
+  <line x1="690" y1="158" x2="718" y2="158" stroke="#9aa7b4" stroke-width="1.3" marker-end="url(#aF)"/>
+  <line x1="815" y1="188" x2="815" y2="200" stroke="#9aa7b4" stroke-width="1.3"/>
+  <path d="M815,200 L310,200 L310,214" fill="none" stroke="#9aa7b4" stroke-width="1.3" marker-end="url(#aF)"/>
+  <line x1="420" y1="246" x2="468" y2="246" stroke="#9aa7b4" stroke-width="1.3" marker-end="url(#aF)"/>
+
+  <line x1="500" y1="314" x2="500" y2="340" stroke="#9aa7b4" stroke-width="1.4" marker-end="url(#aF)"/>
+
+  <!-- CHEMISTRY BOX -->
+  <rect x="60" y="344" width="880" height="130" rx="13" fill="rgba(242,177,52,.05)" stroke="#f2b134"/>
+  <text x="84" y="366" fill="#f2b134" font-size="13" font-weight="700">PHASE B · CHEMISTRY — evolve_kinetics(...) applied in each cell</text>
+
+  <rect x="90" y="384" width="190" height="66" rx="9" fill="#11161d" stroke="#2b3440"/>
+  <text x="185" y="408" fill="#dfe8f0" font-size="12" font-weight="600" text-anchor="middle">a · Local state</text>
+  <text x="185" y="426" fill="#9aa7b4" font-size="10" text-anchor="middle">T, P, mole fractions,</text>
+  <text x="185" y="440" fill="#9aa7b4" font-size="10" text-anchor="middle">concentrations</text>
+
+  <rect x="305" y="384" width="190" height="66" rx="9" fill="#11161d" stroke="#2b3440"/>
+  <text x="400" y="408" fill="#dfe8f0" font-size="12" font-weight="600" text-anchor="middle">b · Rates + Jacobian</text>
+  <text x="400" y="426" fill="#9aa7b4" font-size="10" text-anchor="middle">nucleation/coag/evap</text>
+  <text x="400" y="440" fill="#9aa7b4" font-size="10" text-anchor="middle">∂rate/∂C, ∂rate/∂T</text>
+
+  <rect x="520" y="384" width="200" height="66" rx="9" fill="#11161d" stroke="#3fb8af"/>
+  <text x="620" y="408" fill="#dfe8f0" font-size="12" font-weight="600" text-anchor="middle">c · Implicit solve</text>
+  <text x="620" y="426" fill="#9aa7b4" font-size="10" text-anchor="middle">backward Euler</text>
+  <text x="620" y="440" fill="#9aa7b4" font-size="10" text-anchor="middle">(I/dt − S·J)Δc = S·r</text>
+
+  <rect x="745" y="384" width="165" height="66" rx="9" fill="#11161d" stroke="#2b3440"/>
+  <text x="827" y="408" fill="#dfe8f0" font-size="12" font-weight="600" text-anchor="middle">d · Apply Δρ</text>
+  <text x="827" y="426" fill="#9aa7b4" font-size="10" text-anchor="middle">update tracer</text>
+  <text x="827" y="440" fill="#9aa7b4" font-size="10" text-anchor="middle">densities</text>
+
+  <line x1="280" y1="417" x2="303" y2="417" stroke="#9aa7b4" stroke-width="1.3" marker-end="url(#aF)"/>
+  <line x1="495" y1="417" x2="518" y2="417" stroke="#9aa7b4" stroke-width="1.3" marker-end="url(#aF)"/>
+  <line x1="720" y1="417" x2="743" y2="417" stroke="#9aa7b4" stroke-width="1.3" marker-end="url(#aF)"/>
+
+  <line x1="500" y1="474" x2="500" y2="498" stroke="#9aa7b4" stroke-width="1.4" marker-end="url(#aF)"/>
+  <rect x="300" y="500" width="400" height="46" rx="9" fill="#161b22" stroke="#5cb874"/>
+  <text x="500" y="520" fill="#e6edf3" font-size="12.5" font-weight="700" text-anchor="middle">check_redo → advance time → make_outputs</text>
+  <text x="500" y="537" fill="#9aa7b4" font-size="10" text-anchor="middle">positivity / error control; write NetCDF on schedule</text>
+</svg>
+</div>
+
+<div class="callout"><span class="kicker">Why split?</span> Transport (moving air) and reactions (changing phase) act on very different timescales and are numerically easiest to solve with different methods. Splitting lets snapy use an explicit-in-horizontal shock-capturing scheme while kintera solves the stiff condensation chemistry implicitly in each cell independently.</div>
+
+<!-- ============================================================= -->
+<h2><span class="n">4</span>Phase A — the dynamical core, computation by computation</h2>
+
+<h3>Variable layout (so the indices in the code make sense)</h3>
+<p>State is stored as two tensors per block: <b>primitive</b> <span class="mono">W</span> and <b>conserved</b> <span class="mono">U</span>. The Python constants index into them:</p>
+<table>
+<tr><th>Constant</th><th>Points to</th><th>Used in driver as…</th></tr>
+<tr><td class="mono">kIDN</td><td>density ρ</td><td>profile setup</td></tr>
+<tr><td class="mono">kICY</td><td>first tracer (mass fractions of condensibles)</td><td><code>hydro_w[kICY:]</code> = all condensible loading</td></tr>
+<tr><td class="mono">kIV1</td><td>vertical velocity</td><td><code>hydro_w[kIV1]+=0.1*rand</code> seeds convection</td></tr>
+<tr><td class="mono">kIPR</td><td>pressure</td><td>passed to chemistry</td></tr>
+</table>
+
+<div class="grid2">
+<div class="card comp"><span class="pill comp">computation 1</span>
+<h4>WENO5 reconstruction</h4>
+<p>Cells store volume <i>averages</i>; fluxes need <i>values at the faces</i> between cells. WENO5 builds a 5th-order interpolation of W to each face from a 5-cell stencil.</p>
+</div>
+<div class="card sci"><span class="pill sci">why</span>
+<h4>Sharp edges without ringing</h4>
+<p>Cloud boundaries and convective fronts are near-discontinuities. The <b>weighted essentially-non-oscillatory</b> scheme automatically down-weights stencils that cross a shock, giving high accuracy in smooth regions but no spurious oscillations at edges (the <code>shock</code> flag enables the detector).</p>
+</div>
+
+<div class="card comp"><span class="pill comp">computation 2</span>
+<h4>HLLC Riemann solver</h4>
+<p>At every face the left/right states form a tiny "shock-tube" problem; HLLC computes the resulting fluxes of mass, momentum, energy, and every tracer.</p>
+</div>
+<div class="card sci"><span class="pill sci">why</span>
+<h4>The "C" resolves the contact</h4>
+<p>HLLC keeps the <b>contact discontinuity</b> wave — the surface separating air parcels of different composition. That's essential here: it stops cloudy and clear air from numerically smearing together as they advect.</p>
+</div>
+
+<div class="card comp"><span class="pill comp">computation 3 + 6</span>
+<h4>RK3 + vertically-implicit update</h4>
+<p>Time advances with a 3-stage Runge–Kutta scheme (<code>type: rk3</code>). The vertical direction is treated <b>implicitly</b> (<code>implicit-scheme: 1</code>).</p>
+</div>
+<div class="card sci"><span class="pill sci">why</span>
+<h4>Don't let sound waves set the clock</h4>
+<p>Vertical sound &amp; gravity waves are fast (~km/s) over thin 3 km cells; an explicit step would need a tiny dt. Solving the vertical acoustic terms implicitly removes that stiffness so the timestep is set by the convection (CFL 0.9), not by acoustics.</p>
+</div>
+</div>
+
+<h3>The conservation law being solved</h3>
+<div class="eq">
+  <span class="op">∂</span><span class="var">U</span>/<span class="op">∂</span>t + ∇·<span class="var">F</span>(<span class="var">U</span>) = <span style="color:var(--amber)">S<sub>grav</sub></span> + <span style="color:var(--blue)">S<sub>radiative</sub></span> + <span style="color:var(--green)">S<sub>sed</sub></span>
+  <span class="lab">compressible Euler + sources</span>
+</div>
+<p>where <span class="mono">U = (ρ, ρv, E, ρYᵢ)</span>. Steps 1–3 build the flux divergence <span class="mono">∇·F</span>; step 4 adds the source terms <span class="mono">S</span>.</p>
+
+<div class="grid3">
+<div class="card sci"><span class="pill sci">source: gravity</span>
+<h4>ρg</h4>
+<p>Momentum source in the vertical and the corresponding work term in the energy equation. Maintains hydrostatic structure and lets buoyant parcels rise.</p>
+</div>
+<div class="card sci"><span class="pill sci">source: top-cool / bot-heat</span>
+<h4>Radiative proxy</h4>
+<p>−100 W m⁻² removed near the top, +100 W m⁻² added near the bottom, each spread over 5 cells. This is the destabilizing forcing that <b>powers the convection</b> — Jupiter loses internal heat to space at the top and supplies it from the hot interior below.</p>
+</div>
+<div class="card sci"><span class="pill sci">source: sedimentation</span>
+<h4>Precip falls out</h4>
+<p>The <code>(l,p)</code>/<code>(s,p)</code> particles are given a constant settling velocity <span class="mono">−20 m/s</span>, added as an extra downward advective flux. This is what physically <b>separates</b> condensibles in the vertical and forms discrete cloud decks.</p>
+</div>
+</div>
+
+<p class="note">The <b>equation of state</b> <code>type: ideal-moist</code> ties it together: it converts between conserved and primitive variables (<code>W→T</code>, etc.). "Moist" means the molecular weight and heat capacity vary with composition (a virtual-temperature effect) and condensation contributes latent heat. Density/pressure floors and an iterative limiter (<code>max-iter:20, ftol:1e-6</code>) keep the inversion stable in near-vacuum cells aloft.</p>
+
+<!-- ============================================================= -->
+<h2><span class="n">5</span>Phase B — cloud microphysics, the heart of the science</h2>
+<p>After transport, <code>evolve_kinetics</code> updates composition in each cell. It is pure local physics: given T, P and how much of each species is present, decide how much vapor condenses, how much cloud grows into precip, and how much precip re-evaporates.</p>
+
+<h3>Step 1 — saturation from the Clausius–Clapeyron relation</h3>
+<p>Everything keys off the <b>saturation vapor pressure</b> (SVP): the maximum vapor a gas can hold at temperature T. kintera uses an integrated Clausius–Clapeyron form (<code>vapor_functions.h</code>):</p>
+<div class="eq">
+  ln p<sub>sat</sub>(T) = (1 − T<sub>r</sub>/T)·β − γ·ln(T/T<sub>r</sub>) + ln p<sub>r</sub>
+  <span class="lab">logsvp_ideal</span>
+</div>
+<p>β encodes the latent heat (L ≈ βR T<sub>r</sub>), γ the heat-capacity difference between phases. Each species has its own constants and switches at its triple point — e.g. water uses one set above 273.16 K (liquid) and another below (ice):</p>
+<table>
+<tr><th>Species</th><th>Reference (T<sub>r</sub>, p<sub>r</sub>)</th><th>Note</th></tr>
+<tr><td class="mono">H₂O</td><td>273.16 K, 611.7 Pa</td><td>liquid/ice branches</td></tr>
+<tr><td class="mono">NH₃</td><td>195.4 K, 6060 Pa</td><td>liquid/solid branches</td></tr>
+<tr><td class="mono">NH₄SH</td><td colspan="2">log₁₀(p<sub>NH₃</sub>·p<sub>H₂S</sub>) = 14.82 − 4705/T &nbsp;<span class="note">(Lewis 1969 reaction equilibrium of two vapors)</span></td></tr>
+</table>
+
+<h3>Step 2 — the three rate laws</h3>
+<div class="grid3">
+<div class="card sci"><span class="pill sci">nucleation</span>
+<h4>vapor → cloud</h4>
+<p>When the partial pressure exceeds p<sub>sat</sub> (supersaturation), vapor condenses onto particles. Driven directly by the SVP curve; for NH₄SH it fires when the <i>product</i> p<sub>NH₃</sub>·p<sub>H₂S</sub> exceeds equilibrium.</p>
+</div>
+<div class="card sci"><span class="pill sci">coagulation</span>
+<h4>cloud → precip</h4>
+<p>Small suspended particles collide and merge into larger, falling ones ("autoconversion"). Modeled as a simple first-order Arrhenius rate (<span class="mono">A = 10⁻⁴ s⁻¹</span>).</p>
+</div>
+<div class="card sci"><span class="pill sci">evaporation</span>
+<h4>precip → vapor</h4>
+<p>Falling particles entering dry air re-evaporate. <b>Diffusion-limited</b> rate set by particle size and a saturation deficit; active only when subsaturated (clamped ≥ 0).</p>
+</div>
+</div>
+<div class="eq">
+  evaporation: &nbsp; rate = <span class="var">κ</span>·η, &nbsp; <span class="var">κ</span> = 12 D v<sub>m</sub>/d², &nbsp; η = exp(ln p<sub>sat</sub> − …) − ∏ C<sup>ν</sup> &nbsp;(saturation deficit)
+  <span class="lab">evaporation.cpp</span>
+</div>
+<p class="note">κ collects the vapor diffusivity D, molar volume v<sub>m</sub>, and particle diameter d — bigger drops evaporate slower. η is how far below saturation the air is; clamping it to ≥0 means precip never "condenses" in this channel, it only evaporates.</p>
+
+<h3>Step 3 — the implicit chemistry solve</h3>
+<p>Condensation can be extremely fast compared with the fluid timestep (stiff). Solving it explicitly would blow up, so kintera linearizes the reaction system and takes a <b>backward-Euler</b> step (<code>evolve_implicit.hpp</code>):</p>
+<div class="eq">
+  ( <span style="color:var(--teal)">I</span>/Δt − <span class="var">S</span>·<span class="var">J</span> ) · Δ<span class="var">C</span> = <span class="var">S</span>·<span class="var">r</span>
+  <span class="lab">solve a linear system per cell</span>
+</div>
+<p>Here <span class="mono">S</span> is the stoichiometry matrix (which species each reaction consumes/produces), <span class="mono">r</span> the reaction rates, and <span class="mono">J = ∂r/∂C</span> the Jacobian (kintera even includes the temperature feedback ∂r/∂T from latent heating, via PyTorch autograd). Solving for Δ<span class="mono">C</span> gives the concentration change; it is converted to a density change Δρ and added back to the conserved tracers. Element mass is conserved by construction.</p>
+
+<!-- ============================================================= -->
+<h2><span class="n">6</span>Outputs &amp; what the run produces</h2>
+<div class="grid2">
+<div class="card">
+<h4>NetCDF snapshots (every 10⁵ s)</h4>
+<p><span class="mono">prim</span> = ρ, mass fractions, velocities, P. &nbsp; <span class="mono">thermo</span> = T, sound speed, γ. &nbsp; <span class="mono">uov</span> = user variable (here <code>qtol</code>, the total condensible loading). &nbsp; <span class="mono">path</span> = column-integrated condensate (kg m⁻²) for each species — the model's "cloud map".</p>
+</div>
+<div class="card">
+<h4>Restart dumps (every 2×10⁶ s)</h4>
+<p>Full state for resuming. The driver supports <code>--restart</code> to continue a run, reloading <span class="mono">block_vars</span> and the simulation clock instead of rebuilding the initial profile.</p>
+</div>
+</div>
+
+<h3>What you'd expect to see physically</h3>
+<p>As the run proceeds, bottom heating launches buoyant plumes. Where each plume cools to a species' condensation temperature, that vapor nucleates into cloud, coagulates into precip, and rains down — re-evaporating below. Because the three species saturate at different temperatures, they sort into <b>stacked cloud decks</b>, the deepest/warmest being water, then NH₄SH, then ammonia ice highest and coldest — the classic Jovian cloud structure.</p>
+
+<div class="svgbox">
+<svg viewBox="0 0 1000 300" width="100%" role="img" aria-label="Predicted cloud deck ordering">
+  <rect x="60" y="20" width="880" height="260" rx="10" fill="#0b0f14" stroke="#2b3440"/>
+  <!-- gradient bands cold(top) to hot(bottom) -->
+  <text x="80" y="44" fill="#9aa7b4" font-size="11">cold / low pressure (top)</text>
+  <text x="80" y="270" fill="#9aa7b4" font-size="11">hot / 100 bar (bottom)</text>
+
+  <rect x="300" y="60" width="600" height="42" rx="7" fill="rgba(167,139,250,.16)" stroke="#a78bfa"/>
+  <text x="320" y="86" fill="#cdb8ff" font-size="13" font-weight="600">NH₃ ice cloud — highest, coldest</text>
+
+  <rect x="300" y="135" width="600" height="42" rx="7" fill="rgba(224,122,75,.16)" stroke="#e07a4b"/>
+  <text x="320" y="161" fill="#f0a886" font-size="13" font-weight="600">NH₄SH cloud — middle deck</text>
+
+  <rect x="300" y="210" width="600" height="42" rx="7" fill="rgba(90,169,230,.16)" stroke="#5aa9e6"/>
+  <text x="320" y="236" fill="#9ccbf0" font-size="13" font-weight="600">H₂O cloud — deepest, warmest</text>
+
+  <!-- temperature arrow -->
+  <defs><linearGradient id="tg" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#5aa9e6"/><stop offset="1" stop-color="#e85d5d"/></linearGradient>
+    <marker id="aT" markerWidth="11" markerHeight="11" refX="6" refY="8" orient="auto"><path d="M0,0 L6,8 L12,0 Z" fill="#e85d5d"/></marker>
+  </defs>
+  <line x1="180" y1="55" x2="180" y2="250" stroke="url(#tg)" stroke-width="6" marker-end="url(#aT)"/>
+  <text x="150" y="160" fill="#9aa7b4" font-size="11" transform="rotate(-90 150 160)">increasing temperature →</text>
+</svg>
+<div class="note" style="padding:0 8px 6px">Schematic ordering implied by each species' saturation temperature; exact cloud-base pressures emerge from the simulation, not prescribed.</div>
+</div>
+
+<div class="callout"><span class="kicker">In one sentence</span> snapy moves the air and tracks where everything goes; kintera decides, in each parcel, what is vapor, cloud, or rain and how much heat that releases; paddle couples them; and the YAML sets the planet. Repeat ~millions of timesteps and Jupiter's cloud layers self-organize.</div>
+
+<div class="foot">
+Generated from a read-through of <span class="mono">run_jupiter_crm.py</span>, <span class="mono">jup_crm_100.yaml</span>, and the <span class="mono">snapy</span> / <span class="mono">kintera</span> / <span class="mono">paddle</span> source in <span class="mono">/Users/zyhu/Projects/scix</span>. Equations are paraphrased from the C++ implementations (<span class="mono">extrapolate_ad.cpp</span>, <span class="mono">vapor_functions.h</span>, <span class="mono">evaporation.cpp</span>, <span class="mono">evolve_implicit.hpp</span>) for readability. Cloud-deck ordering panel is illustrative.
+</div>
+
+</div>
+</body>
+</html>
