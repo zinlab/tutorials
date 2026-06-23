@@ -1,0 +1,1630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Efficiency Mandate — NVIDIA AI Performance &amp; Efficiency Engineer · Field Manual I</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;0,8..60,700;1,8..60,400;1,8..60,500&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --bg:        #eef1ec;
+  --bg-2:      #e4e8e1;
+  --bg-3:      #d7dcd2;
+  --card:      #f7f9f4;
+  --ink:       #14181a;
+  --ink-soft:  #3d4642;
+  --ink-faint: #76807a;
+  --rule:      #c6ccc0;
+  --rule-soft: #d8ddd2;
+  --rule-dark: #8d958a;
+  --green:     #1a7f46;   /* signal green — primary */
+  --green-deep:#0e5e31;
+  --green-bri: #2ea05c;
+  --slate:     #33505f;   /* slate — secondary */
+  --slate-deep:#203642;
+  --amber:     #b07d12;
+  --rose:      #a32a1f;
+  --code-bg:   #15201a;
+  --code-ink:  #d6ddd2;
+  --maxw:      1080px;
+}
+*{ box-sizing: border-box; }
+html{ scroll-behavior: smooth; }
+body{
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Source Serif 4', Georgia, serif;
+  font-size: 17px;
+  line-height: 1.62;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ============ HEADER ============ */
+header{
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: 84px 40px 50px;
+  position: relative;
+}
+.filed{
+  font-family: 'Geist Mono', ui-monospace, monospace;
+  font-size: 10.5px;
+  letter-spacing: .28em;
+  text-transform: uppercase;
+  color: var(--green);
+  margin: 0 0 28px;
+  font-weight: 600;
+  display: flex; align-items: center; gap: 12px;
+}
+.filed::before{ content: "▸"; color: var(--green); font-size: 13px; }
+.vol{
+  font-family: 'Geist Mono', monospace;
+  font-size: 11px;
+  letter-spacing: .18em;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  margin: 0 0 16px;
+  font-weight: 500;
+}
+h1{
+  font-family: 'Archivo', system-ui, sans-serif;
+  font-weight: 900;
+  font-size: clamp(52px, 9.5vw, 116px);
+  line-height: 0.9;
+  letter-spacing: -0.02em;
+  margin: 0 0 24px;
+  color: var(--ink);
+}
+h1 .acc{ color: var(--green); }
+.deck{
+  font-family: 'Source Serif 4', serif;
+  font-size: 20px;
+  font-weight: 400;
+  color: var(--ink-soft);
+  max-width: 760px;
+  line-height: 1.5;
+}
+/* readout strip */
+.readout{
+  margin-top: 40px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: var(--rule);
+  border: 1px solid var(--rule);
+}
+@media (max-width: 680px){ .readout{ grid-template-columns: repeat(2,1fr); } }
+.readout .cell{ background: var(--bg); padding: 14px 16px; }
+.readout .k{
+  font-family: 'Geist Mono', monospace;
+  font-size: 9px; letter-spacing: .2em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 6px;
+}
+.readout .v{
+  font-family: 'Archivo', sans-serif; font-weight: 700;
+  font-size: 22px; color: var(--ink); line-height: 1;
+}
+.readout .v .u{ font-size: 12px; color: var(--green); font-weight: 600; }
+
+/* ============ TOC ============ */
+.toc{
+  margin-top: 46px;
+  background: var(--card);
+  border: 1px solid var(--rule-dark);
+  padding: 30px 32px 34px;
+  position: relative;
+}
+.toc::before{
+  content: "CONTENTS";
+  position: absolute; top: -9px; left: 26px;
+  background: var(--card); padding: 0 10px;
+  font-family: 'Geist Mono', monospace; font-size: 10px;
+  letter-spacing: .3em; color: var(--green); font-weight: 600;
+}
+.toc h3{
+  font-family: 'Archivo', sans-serif; font-size: 26px; font-weight: 800;
+  margin: 0 0 3px; color: var(--ink); letter-spacing: -0.01em;
+}
+.toc .toc-sub{
+  font-family: 'Geist Mono', monospace; font-size: 10.5px;
+  color: var(--ink-faint); letter-spacing: .1em; text-transform: uppercase;
+  margin-bottom: 20px;
+}
+.toc-part{ margin-top: 15px; }
+.toc-part-name{
+  font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .22em;
+  color: var(--slate); text-transform: uppercase; font-weight: 600;
+  border-bottom: 1px solid var(--rule); padding-bottom: 5px; margin-bottom: 7px;
+}
+.toc-grid{ display: grid; grid-template-columns: repeat(2,1fr); gap: 1px 32px; }
+@media (max-width: 760px){ .toc-grid{ grid-template-columns: 1fr; } }
+.toc-grid a{
+  color: var(--ink-soft); text-decoration: none; font-size: 14.5px;
+  padding: 5px 0; display: flex; gap: 12px; align-items: baseline;
+  border-bottom: 1px dotted transparent; transition: all .14s;
+}
+.toc-grid a:hover{ color: var(--green); border-color: var(--rule); }
+.toc-grid a .n{
+  font-family: 'Geist Mono', monospace; font-size: 10.5px; color: var(--slate);
+  min-width: 26px; font-weight: 600;
+}
+
+/* ============ MAIN ============ */
+main{ max-width: var(--maxw); margin: 0 auto; padding: 56px 40px 96px; }
+.part{ margin-top: 92px; padding-top: 46px; position: relative; }
+.part::before{ content:""; position: absolute; top: 0; left: 0; right: 0; border-top: 2px solid var(--ink); }
+.part::after{ content:""; position: absolute; top: 5px; left: 0; width: 84px; border-top: 2px solid var(--green); }
+.part:first-child{ margin-top: 28px; padding-top: 28px; }
+.part-label{
+  font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .28em;
+  color: var(--green); text-transform: uppercase; margin-bottom: 14px; font-weight: 600;
+}
+.part-title{
+  font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 56px;
+  line-height: 0.96; letter-spacing: -0.02em; margin: 0 0 18px; color: var(--ink);
+}
+.part-title .acc{ color: var(--green); }
+.part-intro{ color: var(--ink-soft); font-size: 18.5px; max-width: 800px; margin-bottom: 34px; line-height: 1.5; }
+
+section.chapter{ margin-top: 52px; }
+section.chapter:first-of-type{ margin-top: 8px; }
+h2{
+  font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 33px;
+  line-height: 1.08; letter-spacing: -0.015em; margin: 0 0 15px; color: var(--ink);
+  display: flex; align-items: baseline; gap: 15px; padding-bottom: 9px;
+  border-bottom: 2px solid var(--ink);
+}
+h2 .ch-num{
+  font-family: 'Geist Mono', monospace; font-size: 13px; color: var(--green);
+  letter-spacing: .05em; font-weight: 600; flex-shrink: 0;
+}
+h3{
+  font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 22px;
+  margin: 28px 0 9px; color: var(--ink); letter-spacing: -0.01em;
+}
+h4{
+  font-family: 'Geist Mono', monospace; font-size: 10.5px; letter-spacing: .18em;
+  text-transform: uppercase; color: var(--slate); margin: 22px 0 8px; font-weight: 600;
+}
+p{ margin: 12px 0; }
+p code, li code, td code{
+  font-family: 'Geist Mono', monospace; font-size: .8em; background: var(--bg-3);
+  color: var(--green-deep); padding: 1px 6px; border-radius: 2px; border: 1px solid var(--rule);
+}
+strong{ font-weight: 700; }
+ul, ol{ padding-left: 1.3em; }
+li{ margin: 6px 0; }
+ul.tight li{ margin: 3px 0; }
+ul.dash{ list-style: none; padding-left: 0; }
+ul.dash li{ position: relative; padding-left: 22px; }
+ul.dash li::before{ content: "▸"; position: absolute; left: 0; color: var(--green); font-weight: 700; }
+ul.check{ list-style: none; padding-left: 0; }
+ul.check li{ position: relative; padding-left: 24px; }
+ul.check li::before{ content: "▪"; position: absolute; left: 2px; top: 2px; color: var(--green); }
+
+/* ============ CODE ============ */
+pre{
+  background: var(--code-bg); padding: 17px 20px; overflow-x: auto;
+  font-family: 'Geist Mono', monospace; font-size: 12.5px; line-height: 1.6;
+  color: var(--code-ink); margin: 18px 0; position: relative; border-left: 3px solid var(--green);
+}
+pre .com{ color: #6f8378; font-style: italic; }
+pre .kw{  color: #6cb38a; }
+pre .ty{  color: #8fc6c0; }
+pre .str{ color: #c9b36a; }
+pre .num{ color: #c89a64; }
+pre .fn{  color: #8db8d0; }
+pre .var{ color: #d6ddd2; }
+pre .glb{ color: #7fbf95; }
+pre .opt{ color: #c0a96a; }
+pre::before{
+  content: attr(data-lang); position: absolute; top: 5px; right: 12px;
+  font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: .18em;
+  color: #56635a; text-transform: uppercase;
+}
+
+/* ============ CALLOUTS ============ */
+.callout{ margin: 22px 0; padding: 15px 22px; border-left: 4px solid var(--slate); background: var(--bg-2); font-size: 16px; line-height: 1.55; }
+.callout.warn{ border-color: var(--amber); }
+.callout.danger{ border-color: var(--rose); }
+.callout.tip{ border-color: var(--green); }
+.callout h5{
+  margin: 0 0 6px; font-family: 'Geist Mono', monospace; font-size: 10px;
+  letter-spacing: .2em; text-transform: uppercase; color: var(--slate); font-weight: 600;
+}
+.callout.warn h5{ color: var(--amber); }
+.callout.danger h5{ color: var(--rose); }
+.callout.tip h5{ color: var(--green); }
+.callout p:first-child{ margin-top: 0; } .callout p:last-child{ margin-bottom: 0; }
+
+/* ============ TABLES ============ */
+.tbl{ width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14.5px; }
+.tbl th, .tbl td{ text-align: left; padding: 9px 14px; vertical-align: top; border-bottom: 1px solid var(--rule); }
+.tbl th{
+  font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--ink); font-weight: 600;
+  border-bottom: 2px solid var(--ink); border-top: 2px solid var(--ink); background: var(--bg-2);
+}
+.tbl td:first-child{ font-family: 'Geist Mono', monospace; font-size: 12px; color: var(--green-deep); font-weight: 500; width: 26%; }
+.tbl.wide td:first-child{ width: 20%; }
+.tbl.compare td:first-child{ font-family: 'Geist Mono', monospace; font-weight: 600; color: var(--ink); width: 22%; font-size: 11.5px; letter-spacing: .03em; }
+.tbl.compare td:nth-child(2){ color: var(--green-deep); font-family: 'Source Serif 4', serif; font-size: 14.5px; }
+.tbl.compare td:nth-child(3){ color: var(--slate-deep); font-family: 'Source Serif 4', serif; font-size: 14.5px; }
+
+/* ============ DIAGRAM ============ */
+.diagram{
+  background: var(--card); border: 1px solid var(--rule-dark); padding: 22px 24px; margin: 22px 0;
+  font-family: 'Geist Mono', monospace; font-size: 12px; line-height: 1.55; color: var(--ink-soft);
+  white-space: pre; overflow-x: auto; position: relative;
+}
+.diagram::before{
+  content: "FIG."; position: absolute; top: -9px; left: 18px; background: var(--bg); padding: 0 9px;
+  font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: .2em; color: var(--slate); font-weight: 600;
+}
+
+/* ============ READOUT PANEL (inline) ============ */
+.panel{ background: var(--card); border: 1px solid var(--rule-dark); margin: 22px 0; padding: 20px 24px; position: relative; }
+.panel::before{
+  content: attr(data-title); position: absolute; top: -9px; left: 20px; background: var(--bg); padding: 0 10px;
+  font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: .2em; color: var(--green); font-weight: 600;
+}
+.panel-grid{ display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; }
+@media (max-width: 680px){ .panel-grid{ grid-template-columns: 1fr 1fr; } }
+.panel-grid .stat .k{ font-family:'Geist Mono',monospace; font-size: 9px; letter-spacing:.16em; text-transform:uppercase; color: var(--ink-faint); margin-bottom: 4px; }
+.panel-grid .stat .v{ font-family:'Archivo',sans-serif; font-weight: 700; font-size: 17px; color: var(--ink); line-height: 1.15; }
+.panel-grid .stat .v small{ font-weight: 400; font-family:'Source Serif 4',serif; font-size: 13px; color: var(--ink-soft); }
+
+/* ============ ISSUE / WORKED CASE ============ */
+.issue{ margin: 26px 0; background: var(--card); border: 1px solid var(--ink); }
+.issue-header{
+  padding: 12px 22px; background: var(--ink); color: var(--bg);
+  font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .14em;
+  text-transform: uppercase; display: flex; align-items: center; gap: 13px;
+}
+.issue-header .tag{ background: var(--green); padding: 3px 11px; letter-spacing: .1em; font-weight: 600; font-size: 10px; color: #fff; }
+.issue-header .title{ flex: 1; font-weight: 600; letter-spacing: .08em; }
+.issue-body{ padding: 22px 26px; }
+.issue-body > h5{ margin: 16px 0 7px; font-family:'Geist Mono',monospace; font-size: 10.5px; letter-spacing:.16em; color: var(--green); text-transform: uppercase; font-weight: 600; }
+.issue-body > h5:first-child{ margin-top: 0; }
+
+/* ============ INTERVIEWER PANEL ============ */
+.iv{ margin: 28px 0; border: 1px solid var(--ink); background: var(--card); }
+.iv-head{ display: flex; flex-wrap: wrap; gap: 0; border-bottom: 1px solid var(--rule-dark); }
+.iv-name{ background: var(--slate); color: #fff; padding: 14px 22px; flex: 1; min-width: 200px; }
+.iv-name .nm{ font-family:'Archivo',sans-serif; font-weight: 800; font-size: 22px; letter-spacing: -0.01em; }
+.iv-name .rl{ font-family:'Geist Mono',monospace; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: #cfe6d8; margin-top: 3px; }
+.iv-meta{ display: flex; }
+.iv-meta .m{ padding: 14px 20px; border-left: 1px solid #46606e; color: #fff; background: var(--slate-deep); }
+.iv-meta .m .k{ font-family:'Geist Mono',monospace; font-size: 8.5px; letter-spacing: .16em; text-transform: uppercase; color: #9fc3b1; }
+.iv-meta .m .v{ font-family:'Archivo',sans-serif; font-weight: 700; font-size: 14px; margin-top: 3px; }
+.iv-body{ padding: 22px 26px; }
+.iv-body h5{ margin: 18px 0 7px; font-family:'Geist Mono',monospace; font-size: 10.5px; letter-spacing: .16em; color: var(--green); text-transform: uppercase; font-weight: 600; }
+.iv-body h5:first-child{ margin-top: 0; }
+.qa{ margin: 12px 0; padding-left: 18px; border-left: 2px solid var(--rule-dark); }
+.qa .q{ font-weight: 600; color: var(--slate-deep); }
+.qa .a{ color: var(--ink-soft); font-size: 15.5px; margin-top: 3px; }
+
+/* ============ DECISION TREE ============ */
+.tree{ background: var(--card); border: 1px solid var(--slate); padding: 24px 26px; margin: 24px 0; position: relative; }
+.tree::before{
+  content: "DECISION PATH"; position: absolute; top: -9px; left: 22px; background: var(--bg); padding: 0 11px;
+  font-family:'Geist Mono',monospace; font-size: 10px; letter-spacing: .2em; color: var(--slate); font-weight: 600;
+}
+.tree pre{ background: transparent; color: var(--ink); border: none; border-left: none; padding: 6px 0 0; font-size: 13px; line-height: 1.7; }
+.tree pre::before{ display: none; }
+.tree .q{ color: var(--green); font-weight: 700; }
+.tree .a{ color: var(--slate); font-weight: 700; }
+
+/* ============ PRINCIPLE ============ */
+.idea{ margin: 24px 0; border: 2px solid var(--green); background: var(--card); padding: 22px 28px; position: relative; }
+.idea::before{
+  content: "PRINCIPLE"; position: absolute; top: -10px; left: 22px; background: var(--bg); padding: 0 11px;
+  font-family:'Geist Mono',monospace; font-size: 10px; letter-spacing: .24em; color: var(--green); font-weight: 600;
+}
+.idea p{ margin: 6px 0; font-size: 16px; }
+
+/* ============ PULL ============ */
+.pull{
+  font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 30px; line-height: 1.08;
+  letter-spacing: -0.015em; color: var(--green); margin: 38px 0; padding: 0 0 0 26px; border-left: 4px solid var(--green);
+}
+
+/* ============ CHEAT ============ */
+.cheat{ background: var(--card); border: 1px solid var(--ink); padding: 24px 28px; margin: 24px 0; }
+.cheat h5{ margin: 0 0 14px; font-family:'Geist Mono',monospace; font-size: 11px; letter-spacing: .2em; color: var(--green); text-transform: uppercase; font-weight: 600; }
+.cheat-grid{ display: grid; grid-template-columns: 1fr 1.5fr; gap: 6px 22px; font-size: 13px; }
+.cheat-grid .cmd{ font-family:'Geist Mono',monospace; color: var(--green-deep); font-weight: 500; }
+.cheat-grid .desc{ color: var(--ink-soft); font-size: 14.5px; }
+@media (max-width: 680px){ .cheat-grid{ grid-template-columns: 1fr; gap: 2px 18px; } .cheat-grid .desc{ margin-bottom: 10px; } }
+
+/* ============ TWO-COL ============ */
+.twocol{ display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 22px 0; }
+@media (max-width: 760px){ .twocol{ grid-template-columns: 1fr; } }
+.twocol .col{ background: var(--card); border: 1px solid var(--rule-dark); padding: 18px 22px; }
+.twocol .col h5{ margin: 0 0 10px; font-family:'Geist Mono',monospace; font-size: 10.5px; letter-spacing: .18em; text-transform: uppercase; color: var(--slate); font-weight: 600; }
+.twocol .col.bad h5{ color: var(--rose); } .twocol .col.good h5{ color: var(--green); }
+.twocol .col p{ margin: 8px 0; font-size: 15px; } .twocol .col p:first-child{ margin-top: 0; }
+
+/* ============ SEP ============ */
+.rule-sep{ margin: 56px 0; position: relative; height: 0; border-top: 2px solid var(--ink); }
+.rule-sep::after{
+  content: "◇ ◇ ◇"; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+  background: var(--bg); color: var(--green); padding: 0 16px; font-size: 11px; letter-spacing: .3em;
+}
+
+/* ============ FOOTER ============ */
+footer{ max-width: var(--maxw); margin: 0 auto; padding: 54px 40px 84px; border-top: 2px solid var(--ink); color: var(--ink-soft); font-size: 14px; }
+footer h4{ font-family:'Geist Mono',monospace; font-size: 11px; letter-spacing: .24em; color: var(--green); margin: 0 0 18px; font-weight: 600; }
+footer .resources{ columns: 2; column-gap: 38px; }
+@media (max-width: 680px){ footer .resources{ columns: 1; } }
+footer ul{ list-style: none; padding: 0; margin: 0; }
+footer li{ padding: 5px 0; font-size: 13.5px; break-inside: avoid; }
+footer li code{ color: var(--green-deep); background: transparent; border: none; padding: 0; font-weight: 500; }
+footer .footer-note{ margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--rule); color: var(--ink-faint); font-size: 14px; }
+</style>
+</head>
+<body>
+
+<header>
+  <p class="filed">nvidia · dgxc mars · ai efficiency · interview field manual</p>
+  <p class="vol">Volume I of IV · the role, the stack &amp; the panel</p>
+  <h1>The Efficiency<br><span class="acc">Mandate.</span></h1>
+  <p class="deck">
+    Everything you need to walk into the <em>Senior AI Performance &amp; Efficiency Engineer</em> loop and sound like you already work there: what the role actually is, how MARS and the MLOps team operate, the goodput and idle-waste concepts that are the heart of the job, the full telemetry-and-tooling landscape this team has built — and a deep, per-interviewer game plan for all five of your conversations.
+  </p>
+  <div class="readout">
+    <div class="cell"><div class="k">Manual</div><div class="v">I<span class="u"> / IV</span></div></div>
+    <div class="cell"><div class="k">Chapters</div><div class="v">30</div></div>
+    <div class="cell"><div class="k">Interviews mapped</div><div class="v">5</div></div>
+    <div class="cell"><div class="k">Focus</div><div class="v" style="font-size:15px;">Role · stack · panel</div></div>
+  </div>
+
+  <div class="toc">
+    <h3>Contents</h3>
+    <p class="toc-sub">Thirty chapters across six parts</p>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part I · The role, decoded</div>
+      <div class="toc-grid">
+        <a href="#c01"><span class="n">01</span><span>What this role actually is</span></a>
+        <a href="#c02"><span class="n">02</span><span>The mandate in one loop</span></a>
+        <a href="#c03"><span class="n">03</span><span>The metrics you will own</span></a>
+        <a href="#c04"><span class="n">04</span><span>Fleet patterns vs deep dives · level bar</span></a>
+      </div>
+    </div>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part II · The operating context</div>
+      <div class="toc-grid">
+        <a href="#c05"><span class="n">05</span><span>MARS, DGXC &amp; the hwinf-mlops org</span></a>
+        <a href="#c06"><span class="n">06</span><span>The PPP model: how work is organized</span></a>
+        <a href="#c07"><span class="n">07</span><span>The cluster fleet: clouds &amp; regions</span></a>
+        <a href="#c08"><span class="n">08</span><span>Hardware: H100 → GB200 NVL72 → GB300</span></a>
+        <a href="#c09"><span class="n">09</span><span>The customer model &amp; the daily loop</span></a>
+      </div>
+    </div>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part III · The efficiency mandate</div>
+      <div class="toc-grid">
+        <a href="#c10"><span class="n">10</span><span>Goodput: the three-layer model</span></a>
+        <a href="#c11"><span class="n">11</span><span>Runtime goodput, decomposed</span></a>
+        <a href="#c12"><span class="n">12</span><span>The startup tax</span></a>
+        <a href="#c13"><span class="n">13</span><span>Lost work &amp; the checkpoint economy</span></a>
+        <a href="#c14"><span class="n">14</span><span>Idle waste vs goodput</span></a>
+        <a href="#c15"><span class="n">15</span><span>The metric zoo: util, MFU, throughput</span></a>
+      </div>
+    </div>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part IV · The tooling &amp; data landscape</div>
+      <div class="toc-grid">
+        <a href="#c16"><span class="n">16</span><span>The observability substrate</span></a>
+        <a href="#c17"><span class="n">17</span><span>The data sources &amp; what each knows</span></a>
+        <a href="#c18"><span class="n">18</span><span>The join model: the execution backbone</span></a>
+        <a href="#c19"><span class="n">19</span><span>The team's tools, mapped</span></a>
+        <a href="#c20"><span class="n">20</span><span>The rules engine: telemetry → findings</span></a>
+        <a href="#c21"><span class="n">21</span><span>The action layer + a worked diagnosis</span></a>
+      </div>
+    </div>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part V · The five interviews</div>
+      <div class="toc-grid">
+        <a href="#c22"><span class="n">22</span><span>Reading the panel</span></a>
+        <a href="#c23"><span class="n">23</span><span>Aman Shanbhag — compute &amp; clusters</span></a>
+        <a href="#c24"><span class="n">24</span><span>Matt Nightingale — efficiency &amp; systems</span></a>
+        <a href="#c25"><span class="n">25</span><span>Greg Pauloski — parallelism &amp; observability</span></a>
+        <a href="#c26"><span class="n">26</span><span>McQueen / O'Kelly — Slurm &amp; customers</span></a>
+        <a href="#c27"><span class="n">27</span><span>Abdalla Abdulmonem — team &amp; culture</span></a>
+      </div>
+    </div>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part VI · Showing up</div>
+      <div class="toc-grid">
+        <a href="#c28"><span class="n">28</span><span>Mapping your background to the role</span></a>
+        <a href="#c29"><span class="n">29</span><span>Behavioral stories &amp; questions to ask</span></a>
+        <a href="#c30"><span class="n">30</span><span>The 48-hour prep plan + closing</span></a>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<!-- ===================== PART I ===================== -->
+<div class="part" id="p1">
+  <div class="part-label">Part I — The role, decoded</div>
+  <h2 class="part-title">What they're actually <span class="acc">hiring for.</span></h2>
+  <p class="part-intro">The job title says "Performance and Efficiency Engineer," but the posting hides what the work really is. This part translates the job description into the day-to-day reality of the MARS AI Efficiency team — the problems you'll own, the metrics you'll be judged on, and what "Senior" means on this specific team.</p>
+
+  <section class="chapter" id="c01">
+    <h2><span class="ch-num">01</span>What this role actually is</h2>
+
+    <p>Strip the recruiter language from the posting and the role resolves to one sentence: <strong>you make NVIDIA's own AI researchers' training and inference workloads run more efficiently on giant GPU clusters, by building the tooling that finds waste and the engineering that removes it.</strong></p>
+
+    <p>The posting's verbs are the giveaway. "Collaborate closely with AI/ML researchers to make their models more efficient." "Build tools, frameworks, and apply ML techniques to detect &amp; analyze efficiency bottlenecks." "Proactively monitor fleet-wide utilization patterns... and deliver scalable solutions." That is not a kernel-optimization role and it is not a cluster-admin role. It is a role that sits in the seam between the researchers who run workloads and the infrastructure those workloads run on, and is measured by how much GPU time it converts from wasted to productive.</p>
+
+    <div class="panel" data-title="THE ROLE IN NUMBERS">
+      <div class="panel-grid">
+        <div class="stat"><div class="k">Org</div><div class="v">DGXC MARS<br><small>Managed AI Research Superclusters</small></div></div>
+        <div class="stat"><div class="k">Team</div><div class="v">hwinf-mlops<br><small>Capability Systems · MLOps</small></div></div>
+        <div class="stat"><div class="k">Customers</div><div class="v">NVIDIA's own<br><small>research orgs (internal)</small></div></div>
+        <div class="stat"><div class="k">Scale</div><div class="v">~18 clusters<br><small>across 5 cloud/colo providers</small></div></div>
+        <div class="stat"><div class="k">Workloads</div><div class="v">LLM · AV · Robotics<br><small>video, sim, inference</small></div></div>
+        <div class="stat"><div class="k">Level</div><div class="v">L3 / L4<br><small>$152k–$287.5k base</small></div></div>
+      </div>
+    </div>
+
+    <h3>The three things this team is not</h3>
+
+    <ul class="dash">
+      <li><strong>Not the cluster operations team.</strong> There is a separate "HPC Cluster Engineer" function that keeps Slurm alive, drains bad nodes, and runs the control plane. You collaborate with them constantly, but your job is efficiency of <em>workloads</em>, not uptime of <em>infrastructure</em>. (The posting even links the "Senior AI and ML HPC Cluster Engineer" role as a sibling.)</li>
+      <li><strong>Not a CUDA-kernel performance team.</strong> You will read Nsight traces and reason about kernels, but the leverage here is fleet-scale: a tool that lifts goodput 5% across 18 clusters beats a hand-tuned kernel in one job. The role is performance engineering at the <em>system and fleet</em> altitude.</li>
+      <li><strong>Not a pure research team.</strong> You ship production services — dashboards, pipelines, bots, eBPF tracers, Kubernetes CronJobs. The MLOps team's repos are real software with CI, releases, and on-call. "Apply ML techniques" appears in the posting, but the spine of the job is systems and data engineering.</li>
+    </ul>
+
+    <div class="idea">
+      <p><strong>The one-line framing to carry into every interview:</strong> "This team turns wasted GPU-hours into productive ones, at fleet scale, by instrumenting how researchers' jobs actually behave and then closing the gap — sometimes with a tool, sometimes with a config fix, sometimes by walking a researcher through their own training loop." Everything else is a detail under that sentence.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c02">
+    <h2><span class="ch-num">02</span>The mandate in one loop</h2>
+
+    <p>The team operates a continuous loop. Internalize it — it's the mental model behind every repo, every dashboard, and most of the interview questions.</p>
+
+    <div class="diagram">                          ┌─────────────────────────────┐
+                          │   RESEARCHERS run jobs on   │
+                          │   MARS GPU clusters (Slurm) │
+                          └──────────────┬──────────────┘
+                                         │  Slurm + DCGM + app metrics
+                                         v
+                ┌────────────────────────────────────────────┐
+        (1)     │  INSTRUMENT  — OneLogger, DCGM, FACT,       │
+       observe  │  Heimdall, jobsinfo, WandB, eBPF traces     │
+                │  land in OpenSearch / Panoptes (gpuwa)      │
+                └──────────────────────┬─────────────────────┘
+                                       v
+                ┌────────────────────────────────────────────┐
+        (2)     │  MEASURE  — goodput (3-layer), idle waste,  │
+       quantify │  utilization; per-job / per-cluster / fleet │
+                └──────────────────────┬─────────────────────┘
+                                       v
+                ┌────────────────────────────────────────────┐
+        (3)     │  ANALYZE  — rules engine + LLM narratives;  │
+       diagnose │  attribute loss to a cause (hook, ckpt,     │
+                │  startup, straggler, OOM, bad node, NCCL)   │
+                └──────────────────────┬─────────────────────┘
+                                       v
+                ┌────────────────────────────────────────────┐
+        (4)     │  ACT  — nudge the owner (email/Slack bot),  │
+       fix      │  fix config, file a finding, trigger        │
+                │  remediation (Heimdall), or ship a tool     │
+                └──────────────────────┬─────────────────────┘
+                                       │
+                                       └──────► back to (1): did goodput rise?</div>
+
+    <p>Every tool the team has built slots into a stage of this loop. The idle-waste-toolkit and ai-efficiency-insights are stage 2–3. The dashboards are stage 2 surfaced to humans. The ppp-notify emails and the Slack bot are stage 4. Stormbreaker and the storage/NCCL benchmarks are a parallel loop for <em>infrastructure</em> health that feeds stage 4 (drain this node, this rack is slow). When an interviewer asks "how would you approach X," answering in terms of this loop — observe, measure, analyze, act, verify — is exactly the system thinking they're probing for.</p>
+
+    <p class="pull">The job is a control loop over wasted GPU-hours. Every artifact is a stage in that loop.</p>
+  </section>
+
+  <section class="chapter" id="c03">
+    <h2><span class="ch-num">03</span>The metrics you will own</h2>
+
+    <p>You will live and die by a small set of numbers. Know them cold — what they mean, how they're computed, and how they mislead. Parts III covers each in depth; here is the orientation.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Metric</th><th>What it measures</th></tr></thead>
+      <tbody>
+        <tr><td>Goodput %</td><td>Fraction of allocated GPU-time that did <em>productive</em> training work. The team's headline efficiency number. Run-time-weighted across jobs. Decomposed into loss causes (lost work, checkpoint, startup, shutdown).</td></tr>
+        <tr><td>Idle waste (GPU-hours)</td><td>GPU-time at literally 0% utilization, measured in 5-minute DCGM windows. Application-agnostic, so it works even for un-instrumented jobs. A strict lower bound on real waste.</td></tr>
+        <tr><td>GPU utilization %</td><td>Raw DCGM utilization. Coarse and misleading on its own (100% "utilization" can still be doing useless work), but the cheapest fleet-wide signal.</td></tr>
+        <tr><td>MFU / HFU</td><td>Model (Hardware) FLOP Utilization — achieved FLOP/s ÷ peak FLOP/s. The gold-standard <em>compute</em> efficiency metric for a training run. Harder to get fleet-wide; needs per-model FLOP accounting.</td></tr>
+        <tr><td>Throughput</td><td>Tokens/s (LLM), samples/s, or TFLOP/s/GPU (as the storage benchmarks report). The thing researchers actually feel.</td></tr>
+        <tr><td>Requeue / preemption rate</td><td>How often jobs die and restart. Each restart burns startup tax and risks lost work. A fleet-health and a goodput signal at once.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <h5>The metric hierarchy to articulate</h5>
+      <p>If asked "which metric matters most," the senior answer is that they form a ladder of increasing fidelity and cost. <strong>Idle waste</strong> is cheapest and works everywhere but only catches the most egregious (0%) waste. <strong>Utilization</strong> is cheap but lies. <strong>Goodput</strong> is the right business metric but needs OneLogger instrumentation. <strong>MFU</strong> is the truest compute-efficiency number but needs per-model FLOP models. You pick the highest-fidelity metric the available instrumentation supports for the scope you're working at — fleet sweeps use idle waste/util; a deep engagement with one team uses goodput and MFU.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c04">
+    <h2><span class="ch-num">04</span>Fleet patterns vs deep dives · the level bar</h2>
+
+    <p>The posting names two distinct modes of work, and you should be ready to speak to both because different interviewers care about different ones.</p>
+
+    <div class="twocol">
+      <div class="col">
+        <h5>Mode A — Fleet-wide pattern hunting</h5>
+        <p>"Proactively monitor fleet-wide utilization patterns, analyze existing inefficiency patterns, or discover new patterns, and deliver scalable solutions." This is the top-down half: scan ~18 clusters, find the systemic waste (a framework default that hurts everyone, a checkpoint anti-pattern epidemic, a class of bad nodes), and ship something that fixes it once for everyone. The rules engine's SESSION-* family, the idle-waste fleet reports, and the bi-weekly nudge emails are this mode.</p>
+      </div>
+      <div class="col">
+        <h5>Mode B — Per-customer deep dives</h5>
+        <p>"Collaborate closely with researchers to make their ML models more efficient." This is the bottom-up half: a specific team's jobs are wasting GPU-hours, and you sit with them, pull every telemetry source for their jobs, find the root cause, and walk them to a fix. The idle-waste-toolkit's per-job/per-execution CSVs and sisyphus's single-job triangulation are built for exactly this.</p>
+      </div>
+    </div>
+
+    <p>The strongest candidates show they can move between altitudes: spot a pattern in the fleet, drill into one job to understand the mechanism, then generalize the fix back to the fleet. That oscillation <em>is</em> the senior skill on this team.</p>
+
+    <h3>What "Senior / L3–L4" means here</h3>
+
+    <p>The posting lists L3 ($152k–$241.5k base) and L4 ($184k–$287.5k base), 5+ years operating large-scale compute infrastructure. Reading the "what we need" and "ways to stand out" lists, the bar resolves to:</p>
+
+    <ul class="check">
+      <li><strong>End-to-end ownership.</strong> "Investigating and resolving training &amp; inference performance end to end." You can own a problem from a fleet metric down to a kernel trace and back up to a shipped fix — without a hand-off at each layer.</li>
+      <li><strong>Distributed-training fluency.</strong> "Debugging large-scale distributed training using NCCL," Nsight Systems/Compute. You can reason about what a 512-GPU job is doing and why it's slow.</li>
+      <li><strong>Builder, not just analyst.</strong> Python/Go/Bash, cloud platforms, parallel computing. The team's output is software; you ship it.</li>
+      <li><strong>The stand-out signals are differentiators, not requirements:</strong> CUDA, NCCL, MLPerf, InfiniBand/RDMA, Lustre/GPFS, PyTorch. You don't need all of them; each one you have genuinely lets you skip a level of explanation with the relevant interviewer.</li>
+    </ul>
+
+    <div class="callout warn">
+      <h5>Where to be honest with yourself</h5>
+      <p>This role rewards breadth across the stack more than depth in any one layer. If your strength is, say, CUDA and distributed PyTorch (it is — see §28), your gap to close is the <em>operations and observability</em> altitude: Slurm at fleet scale, the telemetry data model, multi-cloud cluster realities. This manual front-loads exactly that material so the interviews land on your strengths and your prep covers the gaps.</p>
+    </div>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART II ===================== -->
+<div class="part" id="p2">
+  <div class="part-label">Part II — The operating context</div>
+  <h2 class="part-title">Where you'll be <span class="acc">standing.</span></h2>
+  <p class="part-intro">You can't reason about efficiency without knowing the machine you're making efficient. This part is the lay of the land: the MARS organization, how work and access are carved up by the PPP model, the multi-cloud cluster fleet and its hardware generations, and how researchers actually touch these systems day to day.</p>
+
+  <section class="chapter" id="c05">
+    <h2><span class="ch-num">05</span>MARS, DGXC &amp; the hwinf-mlops org</h2>
+
+    <p>The names matter because they'll be said in every interview as if you already know them.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Name</th><th>What it is</th></tr></thead>
+      <tbody>
+        <tr><td>DGXC</td><td>DGX Cloud — NVIDIA's managed GPU-cloud umbrella. The broader org context.</td></tr>
+        <tr><td>MARS</td><td>Managed AI Research Superclusters. The internal program that builds and runs world-class GPU clusters for NVIDIA's <em>own</em> ML research — distributed training, tokenization, inference, data processing, dataset generation, simulation. Your customers are internal NVIDIA research teams. ("DGXC MARS Organization" is the literal Confluence breadcrumb.)</td></tr>
+        <tr><td>CSRG / Capability Systems</td><td>The engineering group that owns the platform. The UI repos are literally "CSRG UI." Your team sits here.</td></tr>
+        <tr><td>hwinf-mlops / cs-mlops</td><td>The GitLab group your team's repos live in (<code>gitlab-master.nvidia.com/hwinf-mlops</code>). "MARS MLOps team." This is your team's identity in code.</td></tr>
+        <tr><td>AI Efficiency</td><td>The specific effort within MARS MLOps that this role joins — the goodput / idle-waste / fleet-utilization workstream.</td></tr>
+        <tr><td>AI Hub / AIHub</td><td>The internal portal researchers use to onboard to clusters, request access, and view utilization dashboards. The team builds tooling on its API.</td></tr>
+      </tbody>
+    </table>
+
+    <p>So the full sentence is: <strong>you join the AI Efficiency effort, inside the MARS MLOps team (hwinf-mlops), within Capability Systems, serving NVIDIA's internal AI researchers who train on MARS superclusters under the DGX Cloud umbrella.</strong> The Slack channels you'll see referenced — <code>#sw-mars-mlops-support</code>, <code>#aihub-support</code>, <code>#aidot-onelogger-e2e-support</code> — are the team's support surfaces.</p>
+
+    <div class="callout tip">
+      <h5>Why "internal customers" changes everything</h5>
+      <p>Because the customers are NVIDIA's own researchers, the efficiency problem is unusually tractable and unusually political at once. Tractable: you can instrument their jobs deeply, talk to them directly, and change shared infrastructure. Political: a "Cluster PIC" (person-in-charge) owns each cluster, a "PPP owner" owns each project's footprint, and you're nudging busy researchers about their own waste. The soft skills the posting emphasizes — "work effectively with teams of different backgrounds" — are real; half of Mode B (deep dives) is relationship work.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c06">
+    <h2><span class="ch-num">06</span>The PPP model: how work is organized</h2>
+
+    <p><strong>PPP = Portfolio → Program → Project.</strong> It is the three-level hierarchy that organizes everything: who gets cluster access, which Slurm account a job runs under, who owns the waste, and how efficiency is attributed. You will see PPP everywhere — it is the org's primary key.</p>
+
+    <div class="diagram">  PORTFOLIO              e.g. "coreai"  /  "av"  /  "adlr"
+     │   (a top-level research org; has a Portfolio PIC)
+     │
+     ├── PROGRAM          e.g. a major initiative within the portfolio
+     │     │   (has a Program owner)
+     │     │
+     │     └── PROJECT    e.g. "av_alpamayo_training"
+     │           │   (the unit you actually grant access to; has a Project PIC)
+     │           │
+     │           └── maps to ──► a SLURM ACCOUNT (s_account) on one or more clusters
+     │                           ──► a Helios access DL (distribution list)
+     │                           ──► NIS groups + project storage folders</div>
+
+    <p>The chain to remember: a <strong>Project</strong> maps to a Slurm <strong>account</strong> (<code>s_account</code> in the telemetry), and access is gated by membership in a <strong>Helios DL</strong> (distribution list), granted through AI Hub onboarding (which routes through SailPoint and a PIC approval). When the efficiency tooling attributes waste "by customer," it's grouping by these accounts/PPPs. When the bi-weekly nudge email picks a recipient, it resolves the Project <strong>PIC</strong> from AI Hub (<code>pic.login@nvidia.com</code>).</p>
+
+    <h3>The roles you'll interact with</h3>
+
+    <table class="tbl">
+      <thead><tr><th>Role</th><th>Owns</th></tr></thead>
+      <tbody>
+        <tr><td>Researcher / DL Engineer</td><td>Runs the actual training/inference jobs. Your ultimate customer; the person whose goodput you raise.</td></tr>
+        <tr><td>Project PIC</td><td>Person-in-charge of a project. Approves access requests; receives waste nudges; the accountable owner for a project's footprint.</td></tr>
+        <tr><td>Program / Portfolio PIC</td><td>Higher-level owners; capacity planning and cross-project priorities.</td></tr>
+        <tr><td>Cluster PIC</td><td>Person-in-charge of a specific cluster. Cares about that cluster's health and aggregate goodput (the "Cluster Health" dashboards are for them).</td></tr>
+        <tr><td>CSE (Customer Support Engineer)</td><td>Runs customer engagements. The idle-waste-toolkit is explicitly "designed for Customer Support Engineers." You'll often hand them reports or be one.</td></tr>
+        <tr><td>AdvOps / SRE</td><td>Advanced operations; keeps the data pipelines and platform alive.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="chapter" id="c07">
+    <h2><span class="ch-num">07</span>The cluster fleet: clouds &amp; regions</h2>
+
+    <p>MARS is not one datacenter. It is ~18 active GPU clusters spread across multiple cloud and colocation providers, each with its own quirks. The cluster-naming convention encodes provider + region + type, and you should be able to read it.</p>
+
+    <div class="diagram">  cluster name pattern:   <provider>-<region>-cs-<NNN>     or   cw-<region>-...
+  ──────────────────────────────────────────────────────────────────────
+  aws-iad-cs-002      AWS, us-east (IAD = Dulles), capability-system #002
+  oci-hsg-cs-001      Oracle Cloud, region hsg
+  oci-ord-cs-002      Oracle Cloud, Chicago (ORD)
+  gcp-iad-cs-001      Google Cloud, us-east
+  cw-dfw-cs-001       CoreWeave, Dallas (DFW)
+  cw-pdx-cs-001       CoreWeave, Portland (PDX)
+  nscale / nb-hel     other providers / regions (e.g. Helsinki)</div>
+
+    <p>Why this matters for efficiency work: <strong>the provider determines the networking and storage stack, and those determine the failure modes.</strong> The team maintains <em>per-provider</em> NCCL plugin containers for exactly this reason — AWS clusters use the AWS OFI NCCL plugin over EFA (Elastic Fabric Adapter); GCP clusters use the gIB plugin; others use InfiniBand directly. The aws-efa-tools repo exists because EFA driver/libfabric/aws-ofi-nccl versions drift and must be checked and upgraded per cluster.</p>
+
+    <table class="tbl compare">
+      <thead><tr><th>Provider</th><th>Network fabric</th><th>NCCL transport</th></tr></thead>
+      <tbody>
+        <tr><td>AWS</td><td>EFA (Elastic Fabric Adapter) over libfabric</td><td>aws-ofi-nccl plugin → libfabric → EFA (SRD)</td></tr>
+        <tr><td>GCP</td><td>gIB / GPUDirect-TCPX-style fabric</td><td>gIB plugin (Google's NCCL net plugin)</td></tr>
+        <tr><td>OCI / CoreWeave / colo</td><td>InfiniBand (NDR/HDR) + RoCE in places</td><td>Native NCCL IB transport (verbs/RDMA)</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout warn">
+      <h5>The multi-cloud tax is a recurring theme</h5>
+      <p>Almost every tool in the team's repos has a "cluster scoping is mandatory" caveat — Slurm reuses job IDs across clusters, storage stacks differ (Lustre on some, VAST/NFS on others), partitions differ, and the same workload can be healthy on one cluster and storage-bound on another. The tensor-loading storage benchmark literally compares "cw-dfw (Lustre)" vs "nscale (VAST)" as a first-class axis. If an interviewer asks about a performance discrepancy, "which cluster, and therefore which network/storage stack?" is always a legitimate first question.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c08">
+    <h2><span class="ch-num">08</span>Hardware: H100 → GB200 NVL72 → GB300</h2>
+
+    <p>The fleet spans several GPU generations, and Stormbreaker's platform list is the canonical enumeration: <strong>A100 80GB, H100, L40s, B200, B300, GB200, GB300.</strong> You'll be optimizing across all of them, and the generational differences drive real efficiency decisions.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Platform</th><th>What to know</th></tr></thead>
+      <tbody>
+        <tr><td>H100</td><td>Hopper, x86 hosts, 80GB HBM3, NVLink within an 8-GPU node, InfiniBand/EFA between nodes. The fleet workhorse. AV training (Alpamayo) runs here.</td></tr>
+        <tr><td>GB200 NVL72</td><td>Grace-Blackwell, <strong>ARM (aarch64) hosts</strong>, 72 Blackwell GPUs in one rack joined by a single NVLink fabric (MNNVL — multi-node NVLink). This changes everything: a "rack" is a 72-GPU NVLink domain, not 9 separate 8-GPU nodes. Topology is expressed in <em>blocks</em> and <em>trays</em> (<code>nvl72NNN-TYY</code>).</td></tr>
+        <tr><td>GB300 / B300</td><td>The next Blackwell-Ultra step. Same NVL72-style rack-scale NVLink philosophy, more memory/FLOPs.</td></tr>
+        <tr><td>B200</td><td>Blackwell, 192GB HBM3e/GPU. Big enough memory that DeepSeek-V3.2 (~642GB FP8) fits natively across 8 GPUs without CPU offload — H100 needs <code>--cpu-offload-gb</code>.</td></tr>
+        <tr><td>L40s</td><td>Ada, inference/lighter workloads. Stormbreaker only runs a reduced test set on it (NCCL AllReduce/AlltoAll + one Nemotron proxy).</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Why GB200 NVL72 deserves special attention</h3>
+
+    <p>Two of the team's most pointed pieces of work are GB200-specific, and they reveal what makes rack-scale NVLink different:</p>
+
+    <ul class="dash">
+      <li><strong>The DCGM NVLink-polling slowdown</strong> (Matt's DCGM-NVLink-Test-Harness): on GB200, <code>dcgm-exporter</code> polling certain NVLink performance counters acquires the NVIDIA driver lock at high frequency, contending with user CUDA workloads and causing a <strong>~10× slowdown on <code>cuMem*</code> driver calls</strong> (the fabric-memory APIs that MNNVL leans on). This is a pure efficiency bug born from rack-scale NVLink + telemetry colliding. (See §24 — it's a perfect interview story.)</li>
+      <li><strong>Topology-aware scheduling</strong>: because a GB200 rack is one 72-GPU NVLink domain split into trays, <em>which</em> trays your job lands on matters for performance. The slurm-utils <code>get-avail-topology</code> command shows free nodes per block precisely so jobs can be packed into NVLink-local placements. On H100 you reason about leaf switches; on GB200 you reason about blocks and trays.</li>
+    </ul>
+
+    <div class="callout tip">
+      <h5>The interview-ready hardware sound bite</h5>
+      <p>"On H100 the NVLink domain is the 8-GPU node and the fabric between nodes is IB or EFA, so topology reasoning is about switch locality and rail alignment. On GB200 NVL72 the whole 72-GPU rack is one NVLink domain over MNNVL, the hosts are ARM, and the fabric-memory <code>cuMem*</code> path becomes hot — so topology reasoning shifts to tray/block placement, and even telemetry like DCGM NVLink polling can perturb the driver lock. Same efficiency questions, different mechanism per generation." Saying this signals you actually understand the fleet.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c09">
+    <h2><span class="ch-num">09</span>The customer model &amp; the daily loop</h2>
+
+    <p>To make researchers efficient you must know exactly how they work, because your fixes live inside their workflow. Here is the researcher's daily loop, reconstructed from the team's onboarding docs and startup utilities.</p>
+
+    <div class="diagram">  1. ONBOARD (once)   AI Hub → "Onboard to a PPP" → pick cluster(s) →
+                       PIC approves → SailPoint adds you to the Helios DL →
+                       "Welcome" email with login + node info arrives (~1h)
+
+  2. SET UP (once per cluster)   mlops-startup-utilities:
+                       setup-cluster.sh   (bashrc, default Slurm account, slurm-utils on PATH)
+                       setup-credentials.sh  (GitLab SSH key, GitLab token, NGC token)
+
+  3. GET AN IMAGE     Docker is NOT available on clusters. Use Enroot:
+                       enroot import nvcr.io#nvidia/pytorch:25.08-py3   → .sqsh file
+                       (pull-image.sh wraps this to be docker-like; images live on Lustre)
+
+  4. SUBMIT A JOB     from a LOGIN node (never the head node):
+                       sbatch --nodes=8 --gpus-per-node=8 train.sbatch
+                       Pyxis injects the container:
+                       srun --container-image=....sqsh --container-mounts=/lustre:/lustre ...
+
+  5. WATCH IT         squeue / show_partitions / show_idle_nodes / get-avail-topology
+                       logs land in Loki; OneLogger emits goodput metrics; DCGM emits util
+
+  6. IT CRASHES       Slurm requeues (if --requeue); checkpoint resume; FACT attributes
+                       the failure; the cycle repeats — each requeue burns startup tax</div>
+
+    <h3>The pieces of this loop you must be able to discuss</h3>
+
+    <ul class="dash">
+      <li><strong>Enroot + Pyxis, not Docker.</strong> HPC clusters can't give users Docker (it needs root). Enroot is the rootless runtime that converts OCI images to <code>.sqsh</code> squashfs files; Pyxis is the Slurm plugin (<code>--container-image</code>) that runs them per-task. Images are pulled from NGC (<code>nvcr.io</code>) and cached on the shared filesystem. First-job image import dominates first-time cost; the storage benchmarks even <code>sbcast</code> the image to local <code>/raid</code> on every node to avoid re-reading it.</li>
+      <li><strong>Login node vs head node vs compute node.</strong> Submit from login nodes; never the head node (it runs the control plane). SSH to compute nodes is often restricted to nodes you have a job on. These rules are in the team's "best practices" and are exactly the kind of operational literacy the Slurm interviewer (§26) will check.</li>
+      <li><strong>Lustre is home base.</strong> On AWS/OCI clusters, project data lives at <code>/lustre/fsw/portfolios/&lt;portfolio&gt;/users/&lt;user&gt;</code>. Storage performance (data loading, checkpoint writes) is therefore an efficiency surface — hence the whole storage-workload-tests repo.</li>
+      <li><strong>GB200 = ARM.</strong> Containers and binaries must be aarch64 on GB200 clusters. The NCCL-plugin container builds are multi-arch (amd64 + arm64) precisely for this.</li>
+    </ul>
+
+    <div class="idea">
+      <p><strong>Efficiency fixes have to live where the researcher already is.</strong> A goodput improvement that requires the researcher to change their whole workflow won't get adopted; one that ships as a better container default, a Slurm setting, a OneLogger hook they already have, or a one-line sbatch change will. The team's tools (startup utilities, opinionated <code>setup-cluster.sh</code>, default Slurm account, container helpers) are all about reducing the friction of doing the efficient thing. Carry this principle into any "how would you roll out a fix" question.</p>
+    </div>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART III ===================== -->
+<div class="part" id="p3">
+  <div class="part-label">Part III — The efficiency mandate</div>
+  <h2 class="part-title">Goodput, all the way <span class="acc">down.</span></h2>
+  <p class="part-intro">This is the conceptual heart of the role and the territory both required interviewers live in. "Efficiency" sounds vague until you can decompose it precisely — into a layered model of goodput, a per-phase anatomy of where GPU-hours actually go, and a clear distinction from the cruder idle-waste signal. Master this part and you can hold a real conversation about the team's core metric.</p>
+
+  <section class="chapter" id="c10">
+    <h2><span class="ch-num">10</span>Goodput: the three-layer model</h2>
+
+    <p><strong>Goodput</strong> is the fraction of a resource's time spent doing <em>useful</em> work. For a training cluster, the ultimate definition is: of all the GPU-hours a job was allocated, what fraction advanced the model. The team's sisyphus tool frames this as a <strong>three-layer model</strong>, and this framing is the single most useful thing to have crisp for the interviews.</p>
+
+    <div class="diagram">  ALLOCATED GPU-TIME (what the scheduler gave the job)
+   │
+   ├── LAYER 1 — SCHEDULING goodput        source: Heimdall / jobsinfo
+   │     Did the allocation actually run, or was it lost to
+   │     queue waits, requeues, preemptions, node failures?
+   │     "Was the GPU even running the user's process?"
+   │
+   ├── LAYER 2 — RUNTIME goodput           source: OneLogger
+   │     Of the time the process ran, how much was productive
+   │     training vs startup / checkpoint / lost-work / shutdown?
+   │     "Was the running process doing training?"
+   │
+   └── LAYER 3 — PROGRAM goodput           source: DCGM / Nsight
+         Of the time it was "training," how efficiently did the
+         GPUs compute? (MFU, stalls, comm/compute overlap, stragglers)
+         "Was the training itself using the silicon well?"
+
+  TOTAL GOODPUT  ≈  Layer1 × Layer2 × Layer3   (each layer multiplies)</div>
+
+    <p>The power of this model is that it tells you <em>which team owns a given loss</em> and <em>which telemetry source to consult.</em> A job with terrible end-to-end efficiency could be losing at any layer, and the fix is completely different at each:</p>
+
+    <table class="tbl compare">
+      <thead><tr><th>Layer</th><th>Loss looks like</th><th>Owner / fix</th></tr></thead>
+      <tbody>
+        <tr><td>1 · Scheduling</td><td>Job requeues 17×; long queue waits; preempted; bad node kills it</td><td>Cluster ops + scheduler policy; Heimdall remediation; fix bad nodes</td></tr>
+        <tr><td>2 · Runtime</td><td>Process runs but 40% of time is startup + checkpoint + lost work</td><td>The researcher's training config; checkpoint cadence; dataloader</td></tr>
+        <tr><td>3 · Program</td><td>Training "runs" but MFU is 25%; stragglers; comm not overlapped</td><td>Model/parallelism tuning; NCCL config; kernel-level work</td></tr>
+      </tbody>
+    </table>
+
+    <div class="idea">
+      <p><strong>This layered model is your single best interview asset.</strong> When any interviewer hands you a vague "this job is inefficient, what do you do," you decompose: first establish which layer is losing — was the GPU running (scheduling)? was the process training (runtime)? was the training efficient (program)? — because each layer has different telemetry, a different owner, and a different fix. Naming the three layers and the data source for each instantly signals you think like this team.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c11">
+    <h2><span class="ch-num">11</span>Runtime goodput, decomposed</h2>
+
+    <p>Layer 2 — runtime goodput — is where the team's flagship instrumentation, <strong>OneLogger</strong>, operates, and it's the layer most of the tooling targets. OneLogger is an application-level library that wraps the training loop (in Megatron-LM / NeMo and friends) and emits a structured summary of where every second went. That summary lands in OpenSearch (<code>df-hwinf-dcm-e2e-app-metrics-summary-*</code>) and is the substrate for goodput dashboards and the rules engine.</p>
+
+    <h3>The time budget</h3>
+
+    <p>OneLogger partitions a run's wall-clock into accounted buckets. Runtime goodput is the productive bucket over the total:</p>
+
+    <div class="diagram">  l_run_time  (total runtime of the execution)
+   │
+   ├── d_app_startup_time ............... STARTUP   (model init, dataloader, optimizer,
+   │                                                 container load, checkpoint load)
+   ├── d_train_iterations_time_total_productive ... PRODUCTIVE TRAINING  ◄── the numerator
+   ├── d_save_checkpoint_sync_time_total ........... CHECKPOINT (synchronous portion)
+   ├── d_validation_iterations_time_total .......... VALIDATION
+   ├── d_lost_work_time .............................. LOST WORK (trained, then discarded)
+   ├── d_unsaved_work_time ........................... UNSAVED WORK (not yet checkpointed)
+   ├── d_uncategorized_time .......................... UNATTRIBUTED (a data-quality smell)
+   └── shutdown .......................................  SHUTDOWN
+
+  runtime goodput % ≈ d_train_iterations_time_total_productive / l_run_time</div>
+
+    <p>The field names look arcane but they tell a story, and the rules engine's thresholds (from <code>rules_config.yaml</code>) tell you what "bad" means in production:</p>
+
+    <table class="tbl">
+      <thead><tr><th>Bucket</th><th>"Too high" threshold &amp; meaning</th></tr></thead>
+      <tbody>
+        <tr><td>Startup</td><td><code>&gt; 30%</code> of runtime → <code>GL-STARTUP</code>. Init is eating the run. Worse on short jobs and frequently-requeued jobs (every restart re-pays it).</td></tr>
+        <tr><td>Lost work</td><td><code>&gt; 20%</code> → <code>GL-LOST-WORK</code>. Training done after the last checkpoint that got thrown away when the job ended. Pure waste; the checkpoint cadence was too sparse.</td></tr>
+        <tr><td>Checkpoint sync</td><td><code>&gt; 20%</code> → <code>GL-CHECKPOINT-OVERHEAD</code>. The synchronous part of saving is stalling training (storage too slow, or not using async save).</td></tr>
+        <tr><td>Validation</td><td><code>&gt; 15%</code> → <code>GL-VALIDATION-HEAVY</code>. Eval is too frequent or too expensive relative to training.</td></tr>
+        <tr><td>Uncategorized</td><td><code>&gt; 10%</code> → <code>GL-UNCATEGORIZED</code>. Time the instrumentation couldn't attribute — itself a signal something is off.</td></tr>
+        <tr><td>Checkpoint interval</td><td><code>&gt; 4h</code> avg → <code>GL-CKPT-INTERVAL</code>. Saving too rarely; raises lost-work risk on every failure.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>The zero-goodput failure modes</h3>
+
+    <p>The most dramatic findings are the <code>G0-*</code> family — jobs reporting <em>0%</em> goodput, often because the instrumentation itself wasn't wired correctly, not because no training happened. This distinction is crucial and a great thing to understand:</p>
+
+    <ul class="dash">
+      <li><strong><code>G0-HOOK</code></strong> — <code>on_save_checkpoint_end()</code> was never called, so productive time reads 0 even though the job trained. A wiring bug, not a training bug. Epidemic-level when a whole team copies a broken config (<code>SESSION-HOOK-EPIDEMIC</code> fires at ≥50%).</li>
+      <li><strong><code>G0-CKPT-DISABLED</code></strong> — checkpointing disabled, so <em>all</em> time is counted non-productive by the goodput definition (work that can't be saved isn't "good").</li>
+      <li><strong><code>G0-NO-TRAIN</code></strong> — genuinely zero training iterations despite &gt;10 min runtime. The job really did nothing useful (crash loop, stuck dataloader, mis-config).</li>
+      <li><strong><code>DQ-WANDB-WRONG-ENTITY</code></strong> — the run logged to the wrong WandB entity, so the monitor never saw it. A pure observability gap masquerading as zero goodput.</li>
+    </ul>
+
+    <div class="callout warn">
+      <h5>The honesty problem: instrumented ≠ measured</h5>
+      <p>Goodput is "instrumented-only" — a job contributes to the metric only if it carries the <code>e2e_metrics_enabled</code> tag and logged correctly. So a fleet goodput number is really "goodput among jobs we could see." A huge part of the team's actual work is <em>coverage</em>: getting more jobs instrumented (the Coverage / Adoption-Funnel dashboards), and catching jobs that <em>think</em> they're instrumented but aren't (wrong entity, missing hook). When you discuss goodput, acknowledging the coverage caveat is a senior tell — it's the difference between trusting a dashboard and understanding it.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c12">
+    <h2><span class="ch-num">12</span>The startup tax</h2>
+
+    <p>"Startup" sounds trivial until you realize a large job that requeues 17 times pays it 17 times, and that for short jobs it can dwarf the actual training. The team breaks startup into five sub-phases (the Goodput dashboard's "Startup Breakdown" pie), each with its own threshold and its own fix.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Startup phase</th><th>What it is · how to attack it</th></tr></thead>
+      <tbody>
+        <tr><td>Container Load</td><td>Pulling/extracting the <code>.sqsh</code> image and starting the container. Fix: pre-cache images on the cluster; <code>sbcast</code> to local <code>/raid</code>; pin image tags. First-job import dominates.</td></tr>
+        <tr><td>Model Init</td><td>Building the model and allocating parameters/optimizer on GPU. Fix: meta-device init, lazy materialization, avoiding redundant CPU→GPU copies.</td></tr>
+        <tr><td>Optimizer build</td><td>Constructing the (often distributed) optimizer state. Fix: distributed-optimizer init patterns; avoid rebuilding when resuming.</td></tr>
+        <tr><td>Dataloader Init</td><td>Building data iterators, opening dataset shards, warming the input pipeline. Fix: this is where storage and the dataset blend matter; S3/object-store stalls show up here.</td></tr>
+        <tr><td>Checkpoint Load</td><td>Reading the resume checkpoint back from storage. Fix: parallel/distributed load (<code>--ckpt-fully-parallel-load</code>); fast storage; this grows with model size and is paid on every requeue.</td></tr>
+      </tbody>
+    </table>
+
+    <p>The thresholds in production: each sub-phase fires a warning at <code>&gt;30%</code> of total startup (with a 60-second floor so trivially short phases don't alarm). So the tooling doesn't just say "startup is high" — it says "startup is high <em>and it's the checkpoint-load phase</em>," which points straight at storage.</p>
+
+    <div class="callout tip">
+      <h5>Startup is where scheduling-loss and runtime-loss compound</h5>
+      <p>This is the elegant, interview-worthy insight: a Layer-1 problem (frequent requeues/preemptions) becomes a Layer-2 cost (startup tax paid repeatedly). A job that's preempted every 30 minutes and takes 8 minutes to start up is throwing away ~25% of its life to startup alone — and the root cause is a <em>scheduling</em> decision, not a training one. This is exactly the cross-layer reasoning the three-layer model enables, and naming this compounding effect is a strong signal in any of the technical interviews.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c13">
+    <h2><span class="ch-num">13</span>Lost work &amp; the checkpoint economy</h2>
+
+    <p>Checkpointing is the single richest efficiency topic on this team because it sits at the intersection of training, storage, and failure — and the storage-workload-tests repo is entirely about getting it right. Understand the checkpoint economy and you can speak fluently to Greg (storage/observability), Aman (workload performance), and the Slurm interviewer (failure/requeue).</p>
+
+    <h3>The two kinds of wasted training</h3>
+
+    <ul class="dash">
+      <li><strong>Lost work</strong> (<code>d_lost_work_time</code>): training that happened <em>after</em> the last successful checkpoint and was discarded when the job ended/crashed. It's gone forever. The cure is checkpointing more often — but that costs checkpoint overhead.</li>
+      <li><strong>Unsaved work</strong> (<code>d_unsaved_work_time</code>): training that's been done but not yet persisted — at risk of becoming lost work if the job dies now.</li>
+    </ul>
+
+    <p>So there's a genuine optimization: checkpoint too rarely and you risk large lost-work on failure; checkpoint too often and you pay checkpoint overhead and stall training. The right interval depends on the failure rate (Layer 1!) and the checkpoint cost (storage). On a flaky cluster you checkpoint more; on fast storage you can afford to.</p>
+
+    <h3>How modern distributed checkpointing actually works</h3>
+
+    <p>The storage benchmark exercises the production pattern — Megatron-LM's <strong>asynchronous distributed checkpoint</strong> — and the mechanism is worth knowing precisely:</p>
+
+    <div class="diagram">  At a checkpoint iteration:
+   1. PAUSE training; sync gradients + distributed optimizer state
+   2. COPY tensors GPU → CPU (pinned) ........... "GPU→CPU preload" phase
+   3. RESUME training immediately  ◄── this is why it's "async"
+   4. BACKGROUND writer threads flush CPU buffers → storage
+      (Megatron default: 2 writer threads/GPU → 256 GPUs writes 512 files)
+
+  Two timing signals in the logs:
+   • save-checkpoint .......... time to serialize + hand off to background (small if healthy)
+   • finalize-async-save ...... time spent WAITING for the PREVIOUS async save to flush
+                                ◄── THIS reflects real storage write bandwidth
+
+  Key rule:  a checkpoint must finish writing before the next one starts.
+             If storage can't keep up, training BLOCKS at finalize-async-save,
+             and step-time spikes every SAVE_INTERVAL iterations.</div>
+
+    <p>The diagnostic signatures the team's parser looks for are textbook efficiency reasoning:</p>
+
+    <table class="tbl compare">
+      <thead><tr><th>Signal</th><th>Healthy</th><th>Degraded</th></tr></thead>
+      <tbody>
+        <tr><td>save-checkpoint time</td><td>Small, constant across saves</td><td>Growing — serialization/staging slow</td></tr>
+        <tr><td>finalize-async-save</td><td>~0 — writer drained before next save</td><td>Rising → storage write BW is the bottleneck</td></tr>
+        <tr><td>Per-step time near save</td><td>Flat through SAVE_INTERVAL boundaries</td><td>Spikes every SAVE_INTERVAL → writes blocking training</td></tr>
+        <tr><td>Per-rank GPU→CPU σ</td><td>Low, uniform across ranks</td><td>One rank's σ explodes → single bad node/PCIe link</td></tr>
+      </tbody>
+    </table>
+
+    <p>And the sizing math is concrete: a 56B-param checkpoint stores FP32 grad-weights + FP32 Adam variance + FP32 Adam momentum + BF16 weights = 56.5B × (4+4+4+2) ≈ <strong>737 GiB per checkpoint</strong>. At 256 GPUs that's 512 files of ~1.44 GiB each, written in parallel — which is exactly why you benchmark <em>parallel</em> filesystems (Lustre) differently from per-thread-stream ones (VAST/NFS).</p>
+
+    <div class="callout danger">
+      <h5>The silent-corruption trap (a great war story to know)</h5>
+      <p>One subtle failure: a job gets its kill signal mid-checkpoint, the save is interrupted, and on the next requeue the resume code finds a malformed checkpoint and silently starts over — losing not just unsaved work but a whole prior checkpoint. The lesson the field has learned: the signal-to-kill warning window must exceed the actual checkpoint write time, and resume code should fail loudly on a bad checkpoint rather than silently restart. This is the kind of cross-cutting (Slurm signal × storage × training) reasoning that marks a senior efficiency engineer.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c14">
+    <h2><span class="ch-num">14</span>Idle waste vs goodput</h2>
+
+    <p>The team maintains two different waste signals, and confusing them is a rookie error. Knowing exactly why both exist — and why neither subsumes the other — is a strong signal of efficiency-domain maturity. (Matt Nightingale is literally the "GPU Idle Waste PIC," so this distinction is load-bearing for that interview.)</p>
+
+    <div class="twocol">
+      <div class="col">
+        <h5>Idle waste</h5>
+        <p><strong>GPU-time at 0% utilization,</strong> measured in 5-minute DCGM windows (<code>gpu_util_zero_usage_summary_5m</code>). <em>Not</em> application-aware — it needs no instrumentation, so it works on every job on every cluster, including jobs that don't use OneLogger. It is a <strong>strict lower bound</strong> on real waste: a GPU at 5% util still counts as "productive" here. Cheap, universal, conservative.</p>
+      </div>
+      <div class="col">
+        <h5>Goodput loss</h5>
+        <p><strong>Allocated GPU-time not spent on productive training,</strong> from OneLogger's time budget. Application-aware and far more precise — it knows the difference between checkpoint, startup, and lost work. But it only exists for <em>instrumented</em> jobs, and it's a fuller accounting (a busy-but-useless GPU shows as goodput loss but <em>not</em> as idle waste).</p>
+      </div>
+    </div>
+
+    <p>The team explicitly rejects the naive metric <code>100 − util%</code> as "waste" because <strong>it over-counts</strong>: most training legitimately cycles through low-util phases (checkpoint, data loading) that aren't really waste. So idle waste deliberately counts only the unambiguous 0% case, accepting that it misses partial waste, in exchange for being trustworthy and instrumentation-free.</p>
+
+    <div class="diagram">  REAL WASTE  (unknowable exactly)
+   ├── IDLE WASTE (0% util) ........... captured cheaply, everywhere — LOWER BOUND
+   ├── low-util-but-not-idle ......... missed by idle-waste; caught by goodput if instrumented
+   └── busy-but-useless .............. missed by idle-waste; caught by goodput (lost work, etc.)
+
+  idle waste  ⊂  goodput loss  ⊂  real waste        (each a tighter-but-costlier estimate)</div>
+
+    <div class="idea">
+      <p><strong>The two metrics are complementary tools for different jobs, not competitors.</strong> Use idle waste for fleet-wide sweeps and un-instrumented workloads — it's the only signal that works everywhere, and the bi-weekly nudge emails run on it. Use goodput for instrumented deep-dives where you need to attribute the loss to a cause. A great answer to "how do you measure cluster waste" walks both: "idle waste gives me a trustworthy floor across the whole fleet with zero instrumentation; goodput gives me the precise breakdown wherever OneLogger is wired up; I reconcile the two and chase coverage to shrink the gap."</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c15">
+    <h2><span class="ch-num">15</span>The metric zoo: util, MFU, throughput</h2>
+
+    <p>Beyond goodput and idle waste, you'll be asked about the classic performance metrics. The senior skill is knowing what each one <em>can't</em> tell you.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Metric</th><th>Definition &amp; the lie it tells</th></tr></thead>
+      <tbody>
+        <tr><td>GPU utilization (DCGM <code>GPU_UTIL</code>)</td><td>% of time at least one kernel was running. <strong>The lie:</strong> a memory-bound kernel doing almost no FLOPs shows ~100% util. "Utilization" ≠ "useful." Good for catching idle GPUs, useless for judging compute efficiency.</td></tr>
+        <tr><td>SM activity / occupancy</td><td>How busy the streaming multiprocessors are. Finer than util but still doesn't tell you if the math is useful work or, e.g., recomputation.</td></tr>
+        <tr><td>MFU (Model FLOP Utilization)</td><td>Achieved model FLOP/s ÷ peak GPU FLOP/s. <strong>The truth metric for training compute efficiency.</strong> 35–50% is good for large LLMs; below ~25% something is wrong (comm not overlapped, small batch, bad parallelism). <strong>The catch:</strong> needs a per-model analytical FLOP count, so it's hard to get fleet-wide.</td></tr>
+        <tr><td>HFU (Hardware FLOP Utilization)</td><td>Like MFU but counts <em>all</em> FLOPs including activation recomputation. HFU ≥ MFU; the gap tells you how much you're paying for recompute.</td></tr>
+        <tr><td>Throughput (tokens/s, samples/s, TFLOP/s/GPU)</td><td>What researchers feel. The storage data-loading benchmark reports TFLOP/s/GPU and the rule of thumb is "you want a flat line" — variance means something is stalling.</td></tr>
+        <tr><td>Tokens-per-GPU-per-second / MBU</td><td>For inference: Memory Bandwidth Utilization matters more than FLOP utilization, because decode is memory-bound. Different regime from training.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Putting the ladder together</h3>
+
+    <p>The metrics nest, and a senior engineer climbs the ladder only as far as the question requires:</p>
+
+    <div class="tree">
+<pre><span class="q">Q: What scope and instrumentation do I have?</span>
+   │
+   ├─ <span class="a">Whole fleet, mixed instrumentation</span>
+   │     → idle waste (0% util) + raw utilization
+   │       cheap, universal; finds the egregious cases
+   │
+   ├─ <span class="a">A team's jobs, OneLogger-instrumented</span>
+   │     → goodput decomposition (startup / lost-work / ckpt / shutdown)
+   │       attributes the loss to a fixable cause
+   │
+   └─ <span class="a">One job, need true compute efficiency</span>
+         → MFU / HFU + Nsight trace
+           is the silicon doing useful math? comm overlapped? stragglers?</pre>
+    </div>
+
+    <p class="pull">Every efficiency metric is a lens with a blind spot. Seniority is knowing which lens the question needs — and naming the blind spot before someone else does.</p>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART IV ===================== -->
+<div class="part" id="p4">
+  <div class="part-label">Part IV — The tooling &amp; data landscape</div>
+  <h2 class="part-title">The stack they <span class="acc">built.</span></h2>
+  <p class="part-intro">"System thinking" — the phrase from the Matt Nightingale interview — means being able to see how the team's telemetry sources, pipelines, and tools compose into a coherent platform. This part maps that platform: the data substrate, the seven sources and what each uniquely knows, the join model that fuses them, and every tool in the repos placed in the loop from §02. It ends with one job diagnosed end-to-end.</p>
+
+  <section class="chapter" id="c16">
+    <h2><span class="ch-num">16</span>The observability substrate</h2>
+
+    <p>Everything the efficiency team does sits on a shared data substrate. Knowing its shape lets you answer "where would that data live and how would you query it" — a question the system-thinking and observability interviewers will absolutely ask.</p>
+
+    <div class="diagram">  RESEARCHERS' JOBS on MARS Slurm clusters
+        │   emit: Slurm accounting, DCGM GPU metrics, OneLogger app metrics,
+        │         FACT failure records, container/app logs
+        v
+  ┌──────────────────────────────────────────────────────────────┐
+  │  NV PARK  — Kubernetes ETL jobs                               │
+  │  transform raw telemetry → typed, indexed documents          │
+  └───────────────────────────────┬──────────────────────────────┘
+                                  v
+  ┌──────────────────────────────────────────────────────────────┐
+  │  PANOPTES / OpenSearch + Elasticsearch  @ gpuwa.nvidia.com    │
+  │  the searchable data lake. Indexes named df-<domain>-...-*    │
+  │  (some on /opensearch, some on /elasticsearch — auto-routed)  │
+  └───────────────────────────────┬──────────────────────────────┘
+                                  v
+  ┌──────────────────────────────────────────────────────────────┐
+  │  CONSUMERS                                                    │
+  │  • dashboards (Streamlit, Grafana)   • rules engine          │
+  │  • investigation toolkits            • Slack bot / MCP        │
+  │  • nudge-email CronJobs              • sisyphus triangulation │
+  └──────────────────────────────────────────────────────────────┘
+
+  Sibling systems queried directly (not through the lake):
+   • Heimdall API  (who killed the job + remediation)
+   • AI Hub API    (PPP catalog, allocations, dashboards)
+   • Loki          (slurmctld + application logs)
+   • WandB API     (training curves, run state)</div>
+
+    <p>The one-sentence version to have ready: <strong>"Raw telemetry from Slurm, DCGM, and the apps is ETL'd by Kubernetes jobs on NV Park into OpenSearch/Elasticsearch indexes at <code>gpuwa.nvidia.com</code> — that's the data lake every efficiency tool reads — while Heimdall, AI Hub, Loki, and WandB are queried directly as sibling APIs for remediation, scoping, logs, and training curves."</strong> Saying that shows you grasp the platform, not just one tool.</p>
+
+    <div class="callout tip">
+      <h5>Why this architecture, not a database</h5>
+      <p>The choice of OpenSearch/Elasticsearch (not a relational warehouse) is deliberate and worth being able to defend: the data is high-volume, semi-structured, append-mostly time-series keyed by job and time, and the access pattern is "aggregate waste over this scope and window" — exactly what an inverted-index search engine with aggregations is built for. The toolkit even auto-routes per index between the <code>/opensearch</code> and <code>/elasticsearch</code> endpoints because the lake spans both engines. If asked "how would you store fleet telemetry," the answer "time-partitioned indexes with ILM (hot/warm/cold) and aggregation queries, scoped by cluster+account+window" is the house style.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c17">
+    <h2><span class="ch-num">17</span>The data sources &amp; what each knows</h2>
+
+    <p>The single most useful artifact for the observability interviews is a crisp mental table of <em>which source answers which question.</em> The team's tools (sisyphus, idle-waste-toolkit) are explicitly built around fusing exactly these sources, so knowing the division of labor is knowing the team's worldview.</p>
+
+    <table class="tbl wide">
+      <thead><tr><th>Source</th><th>Answers · index / endpoint</th></tr></thead>
+      <tbody>
+        <tr><td>OneLogger</td><td><strong>"Was the running process doing training, and where did the time go?"</strong> Runtime goodput, time budget, iterations, checkpoint counts, WandB linkage. → <code>df-hwinf-dcm-e2e-app-metrics-summary-*</code></td></tr>
+        <tr><td>GPU Utilization (DCGM)</td><td><strong>"Was the GPU doing anything at all?"</strong> Zero-utilization GPU-hours in 5-min windows (idle waste); util mean/max per execution. Application-agnostic. → <code>df-hwinf-draco-metrics-gpu-utilization-summary-*</code> (<code>gpu_util_zero_usage_summary_5m</code>)</td></tr>
+        <tr><td>FACT</td><td><strong>"Why did it fail?"</strong> Failure attribution: symptoms (<code>s_symptoms</code>), outcome/category, hardware cause, bad nodes (<code>s_epilog_bad_nodes</code>), XID correlation. → <code>df-aidot-fact-job-*</code></td></tr>
+        <tr><td>jobsinfo-done</td><td><strong>"What did Slurm actually run?"</strong> One row per execution (per requeue cycle): submit/start/finish, pend/run seconds, GPU/host counts, partition, QoS, Slurm state, exit code, signal. The <em>execution backbone</em>. → <code>df-hwinf-draco-metrics-jobsinfo-done-*</code></td></tr>
+        <tr><td>Heimdall</td><td><strong>"Who killed the job, and what remediation fired?"</strong> Per-execution scheduling events + remediation engine. Queried via per-cluster API (Bearer SAK), not the lake.</td></tr>
+        <tr><td>AI Job Insights</td><td><strong>"What kind of workload is this?"</strong> Workload class/type, framework, AI-generated reasoning. Per-submission classification. → <code>df-hwinf-cs-scheduling-metrics-ai-job-insights-*</code></td></tr>
+        <tr><td>WandB</td><td><strong>"What did the training curves and run state look like?"</strong> Run crashed/finished/running, iteration-time variance (straggler detection), summary-key completeness. → WandB API.</td></tr>
+        <tr><td>Loki</td><td><strong>"What did the logs say?"</strong> slurmctld logs + application logs (the latter only on some clusters today). The eBPF write-tracer streams here. → Loki.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="idea">
+      <p><strong>The senior move is triangulation, not single-source trust.</strong> Any one source can lie or be missing: OneLogger says 0% goodput, but was it really idle, or was the <em>hook</em> not wired (cross-check DCGM util — if the GPU was busy, it trained, the metric is wrong)? FACT says "node failure," but Heimdall says "user cancelled" — which is right? sisyphus's whole reason to exist is "three-way data discrepancy detection across Heimdall, OneLogger, and FACT." When an interviewer gives you a confusing signal, reaching for a second source to confirm or refute it is exactly the instinct they want to see.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c18">
+    <h2><span class="ch-num">18</span>The join model: the execution backbone</h2>
+
+    <p>Fusing those sources correctly is a real data-engineering problem, and the idle-waste-toolkit's join model is the canonical pattern. If the observability interviewer asks "how would you combine these," this is the answer.</p>
+
+    <h3>jobsinfo-done is the backbone</h3>
+
+    <p>The insight: <strong><code>jobsinfo-done</code> has exactly one row per Slurm execution — i.e., per requeue cycle — so it is the spine onto which every other source is grafted.</strong> A job that requeued 17 times has 17 backbone rows; everything else layers onto those rows.</p>
+
+    <div class="diagram">  BACKBONE: jobsinfo-done       key = (s_jobid, s_cluster, ts_start_time)
+   one row per execution (requeue cycle)
+        │
+        ├──◄ FACT          joins on ts_slurmdb_start_time  (±300s clock-skew tolerance)
+        │                  one record per execution → failure attribution
+        │
+        ├──◄ OneLogger     joins on ts_start_time          (±300s tolerance)
+        │                  one record per execution → goodput breakdown
+        │
+        ├──◄ GPU Util       JOB-level (not per-execution) → waste totals repeat
+        │                  across every execution row of the same job
+        │
+        └──◄ AI Job Insights  PER-SUBMISSION → classification repeats unchanged
+                              across all executions of the job
+
+  Two output granularities:
+   • per-JOB CSV ......... multi-execution data folded into agg_* columns (customer hand-off)
+   • per-EXECUTION CSV ... one row per requeue cycle (drill-down / triage)</div>
+
+    <p>Two non-obvious rules make this robust, and both are great details to cite:</p>
+
+    <ul class="dash">
+      <li><strong>Cluster scoping is mandatory.</strong> Slurm reuses job IDs across clusters, so the join key must include <code>s_cluster</code> — otherwise job 3301425 on AWS collides with job 3301425 on OCI. Cross-cluster collisions stay distinct via a <code>multi_terms</code> aggregation keyed on <code>(s_cluster, s_jobid)</code>.</li>
+      <li><strong>Clock-skew tolerance.</strong> Different subsystems timestamp the same execution slightly differently, so the time-based joins allow ±300s. Without it, a FACT record and its OneLogger twin would fail to match over a few seconds of drift.</li>
+    </ul>
+
+    <div class="callout warn">
+      <h5>Graceful degradation is the design requirement, not a nice-to-have</h5>
+      <p>At fleet scale, sources are routinely partial: FACT lags 24h for new clusters, OneLogger only exists for instrumented jobs, AI Insights coverage is spotty. The toolkits are explicitly built so that <em>missing enrichment just leaves blank columns</em> while the Slurm-side backbone facts always render. sisyphus lists "graceful degradation when data sources are unavailable" as a headline feature. If you propose a fusion design in an interview, stating "the backbone always renders; enrichments are best-effort and annotated when missing" signals you've actually thought about production data, not a clean-room demo.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c19">
+    <h2><span class="ch-num">19</span>The team's tools, mapped</h2>
+
+    <p>You should be able to name every repo and place it in the loop from §02. This is the "system thinking" payload — seeing the toolset as a coherent platform, not a pile of scripts. Here is the whole landscape, grouped by what it does in the loop.</p>
+
+    <table class="tbl wide">
+      <thead><tr><th>Loop stage</th><th>Tools &amp; what they do</th></tr></thead>
+      <tbody>
+        <tr><td>Instrument</td><td><strong>OneLogger</strong> (app goodput metrics), <strong>write-tracer</strong> (Abdalla — eBPF write-syscall tracer, streams to Loki/Prometheus, Slurm SPANK plugin auto-registers each task), DCGM exporters, FACT collectors.</td></tr>
+        <tr><td>Measure / surface</td><td><strong>ai-efficiency-dashboard</strong> (Streamlit goodput dashboards on NV Park), <strong>sisyphus</strong> (Matt — single-job three-layer triangulation across Heimdall/OneLogger/FACT/DCGM, 18 clusters), the GPU Idle Waste Grafana dashboards.</td></tr>
+        <tr><td>Analyze / diagnose</td><td><strong>ai-efficiency-insights</strong> (110-rule engine + LLM narratives + rules knowledge graph), <strong>idle-waste-toolkit</strong> (Matt — 5-source join → per-job/per-execution CSVs for CSEs).</td></tr>
+        <tr><td>Act / remediate</td><td><strong>idle-waste-emails / ppp-notify</strong> (Matt — bi-weekly nudge emails to PPP PICs, K8s CronJob), <strong>ai-efficiency-actions</strong> (Slack ReAct bot over the OneLogger MCP), <strong>Heimdall</strong> (remediation engine).</td></tr>
+        <tr><td>Validate infra (parallel loop)</td><td><strong>stormbreaker</strong> (run real ML workloads on every node/rack to find bad HW), <strong>mlops-tests</strong> &amp; <strong>cluster-workload-testing</strong> (Greg — standardized Slurm benchmark suite: dcgm/hpl/hybrid-ep/kernel-launch/nccl/nemotron/nvloom/nvshmem/sdl), <strong>GB200-Acceptance</strong> (platform bring-up validation), <strong>DCGM-NVLink-Test-Harness</strong> (Matt — the telemetry-perf bug), <strong>storage-workload-tests</strong> (data-loading / checkpoint / tensor-loading benchmarks).</td></tr>
+        <tr><td>Rank / report</td><td><strong>cluster-ranking</strong> (Greg — scrapes per-cluster scores into an OpenSearch index + dashboard, weekly CI).</td></tr>
+        <tr><td>Access / platform</td><td><strong>aihub-cli</strong> (Matt — SSH cluster picker), <strong>aihub-ui</strong>, <strong>mlops-startup-utilities</strong> (onboarding + slurm-utils), <strong>aws-efa-tools</strong> &amp; <strong>nccl-tests</strong> (per-CSP NCCL plugin containers), <strong>lepton</strong> (K8s-for-AI wrapper), <strong>mlopsworkshop</strong> (training).</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <h5>The authorship map (so you can connect with each interviewer)</h5>
+      <p><strong>Matt Nightingale</strong> authored the idle-waste tooling, sisyphus, the DCGM-NVLink harness, and aihub-cli — he <em>is</em> the efficiency/observability tooling. <strong>Greg Pauloski</strong> authored cluster-ranking, cluster-workload-testing, and mlops-tests — the benchmarking/observability-for-workloads side. <strong>Abdalla Abdulmonem</strong> authored write-tracer (eBPF + Go + Slurm SPANK). <strong>Maxime Hugues</strong> owns stormbreaker, storage-workload-tests, and nccl-tests (storage/networking). Knowing who built what lets you ask each interviewer a question that lands ("I was looking at how sisyphus does the three-way discrepancy detection...").</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c20">
+    <h2><span class="ch-num">20</span>The rules engine: telemetry → findings</h2>
+
+    <p>ai-efficiency-insights is the team's most sophisticated analysis artifact, and understanding its shape demonstrates exactly the "build tools to detect &amp; analyze bottlenecks" skill the posting asks for. It is a <strong>deterministic rule engine with an LLM narrative layer</strong> — and that hybrid design is a deliberate, defensible architecture choice.</p>
+
+    <h3>The pipeline</h3>
+
+    <div class="diagram">  SP1  job_selector      ES query → Job objects (scoped by cluster/user/window)
+  SP3  fact_fetcher      enrich with FACT (failure attribution)        [needs nvdataflow]
+  SP4  log_fetcher       enrich with Loki / write-tracer / SSH logs    [needs ssh_host]
+  SP5  wandb_fetcher     enrich with WandB (curves, run state)         [needs WANDB key]
+  SP5.5 trend_analyzer   batch-level SESSION-* analysis (≥3 jobs)
+  SP6a synthesizer       RULE-BASED conclusion (deterministic)
+  SP6b agent             LLM narrative (advisory, non-deterministic)
+
+  Output → df-mars-ai-efficiency-insights-* (idempotent upserts; hot 90d/warm 1y/cold 3y)</div>
+
+    <h3>The 110 rules, by family</h3>
+
+    <p>The rules are grouped into families, each keyed to a data source and a question. You don't need all 110, but knowing the families and a flagship rule from each is powerful:</p>
+
+    <table class="tbl">
+      <thead><tr><th>Family</th><th>What it catches · flagship rule</th></tr></thead>
+      <tbody>
+        <tr><td>G0 — zero goodput</td><td>Training is 0% productive. <code>G0-HOOK</code> (checkpoint-end hook never called — a wiring bug, not a training bug).</td></tr>
+        <tr><td>GL — low goodput</td><td>Overhead too high. <code>GL-LOST-WORK</code> (&gt;20% trained-then-discarded), <code>GL-STARTUP</code> (&gt;30% in init), <code>GL-CHECKPOINT-OVERHEAD</code>.</td></tr>
+        <tr><td>DQ — data quality</td><td>The measurement itself is suspect. <code>DQ-WANDB-WRONG-ENTITY</code> (logged to wrong WandB entity → invisible), <code>DQ-NEGATIVE-DURATION</code>.</td></tr>
+        <tr><td>CS — cross-source</td><td>OneLogger vs FACT disagreements. <code>CS-NODE-FAILURE</code> (FACT flags a bad node), <code>CS-GPU-COUNT-MISMATCH</code>, <code>CS-XID-CORRELATED</code>.</td></tr>
+        <tr><td>LOG — log-based</td><td>Patterns in raw logs. <code>LOG-CRASH-CUDA-OOM</code>, <code>LOG-CRASH-NCCL-TIMEOUT</code>, <code>LOG-NO-CKPT-CONFIRMED</code>.</td></tr>
+        <tr><td>WB — WandB-based</td><td>Training-curve signals. <code>WB-ITER-VARIANCE</code> (iteration-time CV &gt; threshold → straggler nodes), <code>WB-RUN-CRASHED</code>.</td></tr>
+        <tr><td>STUCK — stuck-job</td><td>"Is my training hanging?" <code>STUCK-INSUFFICIENT-PROGRESS</code> (&lt;5% of target after 2h), <code>STUCK-NEVER-FINISHED</code>.</td></tr>
+        <tr><td>SESSION — batch trends</td><td>Fleet/cohort patterns (≥3 jobs). <code>SESSION-HOOK-EPIDEMIC</code> (≥50% hook-miss), <code>SESSION-ZERO-GOODPUT-CLUSTER</code>, <code>SESSION-REQUEUE-STORM</code>.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Why deterministic rules + LLM narrative (not pure LLM)</h3>
+
+    <div class="twocol">
+      <div class="col good">
+        <h5>Rules layer — deterministic</h5>
+        <p>Findings, thresholds, recommendations, and aggregates are produced by code with explicit thresholds in <code>rules_config.yaml</code>. They are reproducible, auditable, testable (576 offline tests), and trustworthy enough to drive automated action. A threshold change is a config diff, not a prompt tweak.</p>
+      </div>
+      <div class="col bad">
+        <h5>LLM layer — advisory only</h5>
+        <p>The agent writes a human-readable <em>narrative</em> synthesizing the deterministic findings. It is explicitly non-deterministic (~3.4% numeric hallucination rate, tracked), so it never decides anything — "to diff two reports, compare the findings table, not the narrative." The LLM is a communication layer, not a decision layer.</p>
+      </div>
+    </div>
+
+    <div class="idea">
+      <p><strong>This split is a model answer to "how would you use ML/LLMs in efficiency tooling."</strong> The deterministic engine owns correctness and action; the LLM owns explanation and triage prioritization. You get auditability where it matters and natural-language reach where it helps. The posting literally says "apply ML techniques" — and the team's answer is the disciplined one: rules for the decisions, LLM for the prose, with the hallucination rate measured and the boundary explicit. If you're asked, advocate exactly this boundary.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c21">
+    <h2><span class="ch-num">21</span>The action layer + a worked diagnosis</h2>
+
+    <p>Detection is worthless without action, and the team's "act" stage has three escalating modes. Then we'll run one job end-to-end to show the whole loop firing.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Action mode</th><th>Mechanism</th></tr></thead>
+      <tbody>
+        <tr><td>Nudge (async, broad)</td><td><strong>ppp-notify</strong> emails each Project PIC their idle-waste GPU-hours bi-weekly with a deep link to a pre-filtered Grafana view. Low-friction social pressure; runs as a K8s CronJob.</td></tr>
+        <tr><td>Answer (interactive)</td><td><strong>ai-efficiency-actions</strong> Slack bot: a researcher asks "why did my job waste GPUs," the ReAct agent queries the OneLogger MCP and replies in-thread. Self-serve diagnosis.</td></tr>
+        <tr><td>Remediate (automated)</td><td><strong>Heimdall</strong> remediation engine acts on scheduling-layer failures (e.g., drain a bad node, requeue). CRITICAL findings publish to a topic (<code>mars.insights.critical.v1</code>) for downstream automated investigation (ATLAS).</td></tr>
+      </tbody>
+    </table>
+
+    <div class="issue">
+      <div class="issue-header">
+        <span class="tag">worked case</span>
+        <span class="title">A 512-GPU job reporting 0% goodput</span>
+      </div>
+      <div class="issue-body">
+        <h5>The alert</h5>
+        <p>The Goodput dashboard shows a 512×H100 job on <code>gcp-iad-cs-001</code> at <strong>0.0% goodput</strong>, 4.2h runtime. The fleet rule <code>G0-HOOK</code> fired CRITICAL. Naively this reads as "512 GPUs did nothing for 4 hours" — ~2,150 GPU-hours of pure waste. Is that real?</p>
+        <h5>Step 1 — which layer is losing? (the three-layer test)</h5>
+        <p>Check <strong>Layer 1 (scheduling)</strong> via jobsinfo-done: the execution ran 4.2h, exit code 0, no requeue — so the GPU <em>was</em> allocated and the process ran. Not a scheduling loss. Check <strong>Layer 3 (program)</strong> via DCGM util: GPUs showed high utilization the whole time — so they were <em>busy</em>. That's the tell: busy GPUs + 0% goodput means the <em>measurement</em> is wrong, not the work.</p>
+        <h5>Step 2 — confirm the hook hypothesis (OneLogger fields)</h5>
+        <p>The OneLogger record shows <code>d_train_iterations_time_total_productive = 0</code> but <code>b_is_save_checkpoint_enabled = True</code> and <code>l_save_checkpoint_count = 0</code>. Translation: checkpointing was <em>enabled</em> but zero checkpoints were recorded, and productive time is zero — the classic signature of <code>on_save_checkpoint_end()</code> never being called. The training happened; the instrumentation hook wasn't wired, so OneLogger couldn't attribute any time as productive.</p>
+        <h5>Step 3 — cross-source confirmation (don't trust one signal)</h5>
+        <p>Pull WandB for the run: the training-loss curve is descending normally and iteration metrics are present → training was genuinely progressing. Pull FACT: no failure, no bad nodes. So three sources agree the work was real and only OneLogger's productive-time accounting is broken. The 0% is an <em>observability</em> defect, not 2,150 wasted GPU-hours.</p>
+        <h5>Step 4 — is it systemic? (escalate the scope)</h5>
+        <p>Run the cluster scope: <code>SESSION-HOOK-EPIDEMIC</code> fires — &gt;50% of this team's checkpoint-enabled jobs show the same hook-miss. So it's not one job; the whole team copied a training config with a broken/old OneLogger version that doesn't populate the hook flags (<code>DQ-NO-WANDB-TAG</code> / version check confirms).</p>
+        <h5>Step 5 — act, at the right altitude</h5>
+        <p>The fix is not per-job. Identify the OneLogger version / config snippet the team shares, push the corrected hook wiring (or a version bump) into their template, and verify next-run goodput rises from 0% to its true value. One template fix recovers visibility for the whole team — and the <em>true</em> goodput then reveals whatever the real (now measurable) inefficiency is, which is the next investigation.</p>
+        <h5>The lesson</h5>
+        <p>The headline number (0% goodput) was a coverage bug masquerading as catastrophic waste. The three-layer test (was it scheduled? was it busy? was it measured?) separated "the work was bad" from "the measurement was bad" in two queries — and the right fix was a fleet-level template change, not a per-job patch. That oscillation between one job and the cohort is the whole role in miniature.</p>
+      </div>
+    </div>
+
+    <p class="pull">Every good diagnosis starts by asking which layer is lying — the scheduler, the runtime, or the silicon — and ends by fixing it at the broadest altitude that still works.</p>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART V ===================== -->
+<div class="part" id="p5">
+  <div class="part-label">Part V — The five interviews</div>
+  <h2 class="part-title">The panel, one by <span class="acc">one.</span></h2>
+  <p class="part-intro">Five conversations, five distinct lenses. This part profiles each interviewer by the work they evidently own (from the team's repos and your stated topics — not invented biography), the questions they're likely to probe, how to answer with substance, and exactly where your real background connects. The two "required" interviewers — Matt and Greg — get the most depth.</p>
+
+  <section class="chapter" id="c22">
+    <h2><span class="ch-num">22</span>Reading the panel</h2>
+
+    <p>The five interviews are designed to triangulate you across the role's surface area. Mapping them to the job's pillars shows what each is really testing — and reveals the throughlines that should recur across all five.</p>
+
+    <table class="tbl wide">
+      <thead><tr><th>Interview</th><th>Tests · maps to</th></tr></thead>
+      <tbody>
+        <tr><td>Aman Shanbhag</td><td>Compute, clusters, ML-workload performance → the "investigate &amp; resolve training/inference performance end-to-end" pillar. The breadth check.</td></tr>
+        <tr><td>Matt Nightingale ★required</td><td>ML efficiency &amp; system thinking → the <em>core mandate</em>. Goodput, idle waste, the observability platform. The "do you think like this team" check.</td></tr>
+        <tr><td>Greg Pauloski ★required</td><td>Parallelism, observability for ML workloads, performance modeling → the deepest technical check on distributed training and measurement.</td></tr>
+        <tr><td>McQueen / O'Kelly</td><td>Slurm, systems &amp; customers → the operations-literacy and customer-empathy check. Can you run on real clusters and work with researchers.</td></tr>
+        <tr><td>Abdalla Abdulmonem</td><td>Team &amp; culture fit → collaboration, ownership, how you handle ambiguity and disagreement.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>The throughlines to repeat across all five</h3>
+
+    <p>Panels compare notes. A few signatures should show up in <em>every</em> conversation so the panel converges on a coherent picture of you:</p>
+
+    <ul class="check">
+      <li><strong>The three-layer goodput reflex</strong> (§10) — decompose any performance question into scheduling / runtime / program before diving in. This is the team's native language.</li>
+      <li><strong>Fleet ↔ deep-dive oscillation</strong> (§04) — show you can find a pattern across the fleet, drill into one job's mechanism, and generalize the fix back.</li>
+      <li><strong>Measure before you optimize</strong> — name the metric and its blind spot first; never propose a fix without saying how you'd verify it moved the number.</li>
+      <li><strong>Triangulate, don't trust one source</strong> (§17) — confirm a signal against a second data source before acting.</li>
+      <li><strong>Fix at the right altitude</strong> — prefer the broadest fix that works (a template, a default, a config) over a per-job patch.</li>
+    </ul>
+
+    <div class="callout tip">
+      <h5>A note on honesty</h5>
+      <p>This manual arms you with the team's vocabulary and mechanisms so you can have a real conversation — not so you can bluff. When you hit the edge of what you know, the senior move is to reason from first principles out loud and say what you'd measure to find out. Interviewers on a team like this can tell the difference between someone who memorized "<code>finalize-async-save</code>" and someone who understands why storage write bandwidth gates checkpoint cadence. Aim to be the second. Where your real experience is the strongest answer, lead with it (Part VI maps exactly where).</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c23">
+    <h2><span class="ch-num">23</span>Aman Shanbhag — compute &amp; clusters</h2>
+
+    <div class="iv">
+      <div class="iv-head">
+        <div class="iv-name"><div class="nm">Aman Shanbhag</div><div class="rl">compute · clusters · ML-workload performance</div></div>
+        <div class="iv-meta">
+          <div class="m"><div class="k">Length</div><div class="v">60 min</div></div>
+          <div class="m"><div class="k">Weight</div><div class="v">Breadth</div></div>
+        </div>
+      </div>
+      <div class="iv-body">
+        <h5>What this conversation is really about</h5>
+        <p>This is the "can you reason about a GPU cluster and the workloads on it, end to end" interview. Expect a blend of compute fundamentals (GPU architecture, the memory hierarchy, what makes a kernel fast), cluster understanding (how nodes/racks/networks compose, how a job is placed), and ML-workload performance (what a training/inference job is doing and where it stalls). It rewards range and the ability to connect layers.</p>
+
+        <h5>Likely questions &amp; how to attack them</h5>
+        <div class="qa"><div class="q">"Walk me through what happens, performance-wise, when a multi-node training job runs."</div><div class="a">Use the three-layer frame: scheduler places the job (topology matters — switch locality on H100, tray/block on GB200), the process starts (startup tax), then each step is compute (GEMMs on tensor cores) interleaved with communication (NCCL all-reduce of gradients). Name the overlap: good performance hides comm behind compute. End on how you'd measure it — Nsight Systems timeline to see the compute/comm overlap, MFU for the compute efficiency.</div></div>
+        <div class="qa"><div class="q">"A job is slower on cluster A than cluster B. How do you find out why?"</div><div class="a">First question: which clusters, therefore which network/storage stacks (§07)? Then control variables — same container, same model, same GPU count? Then bisect by layer: is it compute (per-step GPU time differs → driver/clock/thermal/bad node), comm (NCCL bandwidth differs → fabric, plugin version, topology), or I/O (dataloader/checkpoint differs → storage)? Reach for the team's benchmarks: run nccl-tests to isolate the network, the GEMM test to isolate compute, the storage benchmark to isolate I/O.</div></div>
+        <div class="qa"><div class="q">"What limits inference throughput vs training?"</div><div class="a">Training is compute-bound (FLOP-heavy, large batches) — MFU is the metric. Inference decode is memory-bandwidth-bound (one token at a time, weights streamed every step) — MBU/tokens-per-second is the metric, and batching/KV-cache management dominate. Different regime, different bottleneck, different fix.</div></div>
+        <div class="qa"><div class="q">"How do you know a GPU is being used well?"</div><div class="a">Climb the metric ladder (§15): utilization says "busy or not" but lies about useful work; SM activity is finer; MFU/HFU is the truth for compute. Mention that 100% util can still be a memory-bound kernel doing little math — the distinction that separates real understanding from dashboard-watching.</div></div>
+
+        <h5>Where your background lands</h5>
+        <p>This is a strong interview for you. Your <strong>124× CUDA speedup on LeNet-5</strong> is a concrete "I found and removed a compute bottleneck" story — be ready to say what the bottleneck was (memory access pattern? occupancy? kernel launch overhead?) and how you measured it. Your <strong>GPU C++ MHD solver at LBNL</strong> shows HPC-grade compute reasoning. Your <strong>400× distributed throughput on Ray/Kubernetes</strong> shows you understand multi-node scaling and where it breaks. Lead with these — they're exactly the "investigate &amp; resolve performance end-to-end" evidence the role wants.</p>
+
+        <h5>Prep checklist for Aman</h5>
+        <ul class="dash">
+          <li>Be able to draw the GPU memory hierarchy (registers → shared/L1 → L2 → HBM) and say which your 124× win exploited.</li>
+          <li>Be able to explain NCCL all-reduce at a mechanism level (ring vs tree, bandwidth-optimal) — see Manual III when built, but have the one-paragraph version ready.</li>
+          <li>Have a crisp "how I'd debug a slow job" decision tree (compute / comm / I/O bisection).</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="chapter" id="c24">
+    <h2><span class="ch-num">24</span>Matt Nightingale — efficiency &amp; systems <span style="font-size:13px;color:var(--green);">★ required</span></h2>
+
+    <div class="iv">
+      <div class="iv-head">
+        <div class="iv-name"><div class="nm">Matt Nightingale</div><div class="rl">ML efficiency · system thinking · required</div></div>
+        <div class="iv-meta">
+          <div class="m"><div class="k">Length</div><div class="v">60 min</div></div>
+          <div class="m"><div class="k">Owns</div><div class="v">Idle-waste PIC</div></div>
+        </div>
+      </div>
+      <div class="iv-body">
+        <h5>Who you're talking to</h5>
+        <p>From the repos, Matt is the center of gravity for efficiency tooling: he is the <strong>"GPU Idle Waste PIC in MARS"</strong> and authored <strong>idle-waste-toolkit</strong>, <strong>idle-waste-emails</strong>, <strong>sisyphus</strong>, the <strong>DCGM-NVLink-Test-Harness</strong>, and <strong>aihub-cli</strong>. This is the most important interview to internalize the manual for, because his work <em>is</em> the role. He will care less about whether you know one fact and more about whether you <em>think in systems</em> — whether you can see how telemetry, metrics, and action compose.</p>
+
+        <h5>What "system thinking" means here, concretely</h5>
+        <p>It's the ability to reason about the whole loop (§02) and the whole data platform (§16–§19), not a single tool. When he poses a problem, structure your answer as: what signal would I look at, where does that data live, how do I confirm it across sources, what's the root cause, and at what altitude do I fix it. That is literally how his tools are built.</p>
+
+        <h5>Likely questions &amp; how to attack them</h5>
+        <div class="qa"><div class="q">"How would you measure wasted GPU time across the fleet?"</div><div class="a">This is his home question. Walk both metrics (§14): idle waste (0% util, 5-min DCGM windows) is the trustworthy, instrumentation-free floor that works on every job — perfect for fleet sweeps — and you explicitly reject naive <code>100−util%</code> because it over-counts low-util phases. Goodput gives the precise breakdown wherever OneLogger is wired. Then mention coverage as the real lever: a fleet number is "waste among jobs we can see," so chasing instrumentation coverage is half the battle. This answer mirrors his own toolkit's design and will land hard.</div></div>
+        <div class="qa"><div class="q">"You see a job at 0% goodput. Walk me through it."</div><div class="a">Run the §21 worked case live: which layer is lying (scheduled? busy? measured?), cross-check DCGM util and WandB to separate "work was bad" from "measurement was bad," recognize the <code>G0-HOOK</code> signature, escalate to the cohort (SESSION-HOOK-EPIDEMIC), fix the shared template. Naming the hook-miss as a <em>coverage bug, not catastrophic waste</em> is the insight that shows you've actually thought about his domain.</div></div>
+        <div class="qa"><div class="q">"How do you combine all these telemetry sources without them lying to you?"</div><div class="a">The triangulation answer (§17–§18): jobsinfo-done as the execution backbone, FACT/OneLogger joined per-execution with clock-skew tolerance, cluster-scoped keys, graceful degradation when sources are partial, and three-way discrepancy detection (the exact sisyphus feature) to catch when Heimdall, OneLogger, and FACT disagree.</div></div>
+        <div class="qa"><div class="q">"Tell me about a time telemetry itself caused a performance problem."</div><div class="a">If you can discuss the DCGM-NVLink story (below) as a <em>concept</em>, it's the perfect on-topic answer — observability perturbing the system it observes. Then connect to your own experience of measurement overhead (profiler perturbation, instrumentation cost) if you have it.</div></div>
+
+        <h5>The DCGM-NVLink war story (know this cold — it's his repo)</h5>
+        <p>On GB200, <code>dcgm-exporter</code> polling NVLink performance counters made <code>nv-hostengine</code> saturate a CPU core and acquire the NVIDIA driver lock at high frequency, contending with user CUDA workloads and causing a <strong>~10× slowdown on <code>cuMem*</code> fabric-memory calls</strong>. The investigation: a 5-config A/B harness (DCGM stopped / full / no-NVLink / no-PPCNT / no-PPCNT+PPRM) measuring both <code>cuMemCreate</code>/<code>cuMemSetAccess</code> latency and the hot-thread %CPU. Initial culprit looked like the 12 <code>PPCNT_*</code> metrics; a follow-up flamegraph (by Felix Abecassis) refined it to the <code>COUNT_*</code> subset. The fix is surgical — drop the offending metrics, recover ~95% of the latency, keep the rest of the NVLink telemetry that stability monitoring needs. <strong>The lesson to articulate: telemetry is not free; the observer can perturb the observed, and the engineering is finding the minimal set of signals that preserves monitoring without taxing the workload.</strong> That tension — visibility vs overhead — is the soul of his job.</p>
+
+        <h5>Where your background lands</h5>
+        <p>Your instinct for measurement and systems from <strong>UCX/GPU-comms infrastructure</strong> and <strong>distributed-query engineering (Velox/Presto)</strong> maps well — both are about understanding where time goes in a distributed system. Frame your debugging stories as "I found which layer was losing and confirmed it before acting." If you've ever dealt with profiler/instrumentation overhead distorting a measurement, that's a direct rhyme with the DCGM story. Show the oscillation: a fleet-level pattern you found, drilled into, and fixed once.</p>
+
+        <h5>A question to ask him</h5>
+        <p>"In sisyphus, when Heimdall, OneLogger, and FACT disagree about why a job died, how do you decide which to believe — is there a precedence, or is it case-by-case?" It's specific to his work, shows you read the design, and invites a real conversation.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="chapter" id="c25">
+    <h2><span class="ch-num">25</span>Greg Pauloski — parallelism &amp; observability <span style="font-size:13px;color:var(--green);">★ required</span></h2>
+
+    <div class="iv">
+      <div class="iv-head">
+        <div class="iv-name"><div class="nm">Greg Pauloski</div><div class="rl">parallelism · observability · performance modeling · required</div></div>
+        <div class="iv-meta">
+          <div class="m"><div class="k">Length</div><div class="v">60 min</div></div>
+          <div class="m"><div class="k">Owns</div><div class="v">Benchmarks · ranking</div></div>
+        </div>
+      </div>
+      <div class="iv-body">
+        <h5>Who you're talking to</h5>
+        <p>From the repos, Greg owns the <strong>benchmarking and performance-measurement</strong> side: <strong>cluster-workload-testing</strong> (standardized Slurm workloads — rack-pairwise NCCL all-gather, single-rack all-to-all, GEMM, NCCL loopback, Nemotron proxies), <strong>mlops-tests</strong> (the diagnostic/benchmark catalog: dcgm, hpl, hybrid-ep, kernel-launch, nccl-tests, nemotron5, nvloom for MNNVL fabric, nvshmem, sdl), and <strong>cluster-ranking</strong> (scoring clusters into an index). His topics — parallelism, observability for ML workloads, performance modeling — are the deepest technical interview. He'll want to see that you can reason quantitatively about distributed training, not just describe it.</p>
+
+        <h5>The three pillars he'll probe</h5>
+
+        <h4>1 · Parallelism</h4>
+        <p>Be fluent in the parallelism dimensions and when each is used. Data parallel (replicate model, all-reduce gradients — communication is the gradient all-reduce). Tensor parallel (split each layer across GPUs — heavy intra-layer comm, kept inside an NVLink domain). Pipeline parallel (split layers into stages across nodes — bubble overhead is the cost). Expert parallel (route tokens to experts — all-to-all comm, exactly the single-rack-alltoall test). Sequence/context parallel (split the sequence dimension for long context). The storage-checkpoint benchmark even shows the practical mapping: 56B needs <code>TP=4</code> on Blackwell, <code>TP=8</code> on H100, then data parallelism across nodes.</p>
+        <div class="qa"><div class="q">"You have a model that doesn't fit on one GPU. How do you parallelize it, and what's the cost of each choice?"</div><div class="a">Walk the hierarchy by communication locality: TP first (but keep it within the NVLink domain — 8 on H100, within the rack on GB200 — because it's the most comm-intensive), then PP across nodes (cheap comm but pipeline bubbles), then DP on top (gradient all-reduce, overlappable). Tie each to the fabric: TP wants NVLink, DP all-reduce tolerates IB/EFA. Mention that GB200 NVL72's 72-GPU NVLink domain changes the calculus — you can do much larger TP/EP inside one rack than on H100.</div></div>
+
+        <h4>2 · Observability for ML workloads</h4>
+        <p>This overlaps Matt but from the <em>workload-measurement</em> angle: how do you instrument and benchmark a training job to know it's healthy. His tools are the answer — standardized, repeatable Slurm benchmarks that isolate one subsystem at a time (nccl-tests for the network, GEMM for compute, nvloom for the MNNVL fabric, storage tests for I/O). The philosophy from mlops-tests: diagnostics answer "is it broken" (binary), micro-benchmarks answer "how fast is this component" (isolate a subsystem), workloads answer "how does it handle my real job" (whole stack).</p>
+        <div class="qa"><div class="q">"How would you tell if a cluster is performing to spec?"</div><div class="a">Layered benchmarking, exactly his repo's structure: per-node diagnostics (dcgm, sdl) to find broken hardware; micro-benchmarks (nccl all-reduce/all-to-all, GEMM, nvloom, kernel-launch) to measure each subsystem against a baseline; then a real workload (Nemotron proxy) for the whole-stack number. Compare against established baselines per platform — and stormbreaker runs the real-workload version on every node/rack to find the underperformers.</div></div>
+
+        <h4>3 · Performance modeling</h4>
+        <p>This is the quantitative core. Be ready to reason with an analytical model rather than just measuring. Roofline (is this kernel compute-bound or memory-bound — ridge point = peak FLOP/s ÷ peak BW). MFU as achieved-FLOPs ÷ peak-FLOPs with the per-model FLOP count (6 × params × tokens for a dense transformer forward+backward, roughly). Scaling efficiency (how throughput grows with GPU count and where comm overhead bends the curve). Amdahl/communication-bound reasoning for "why doesn't 2× the GPUs give 2× the throughput."</p>
+        <div class="qa"><div class="q">"You add more GPUs and throughput doesn't scale linearly. Model why."</div><div class="a">Decompose per-step time into compute (scales down with more GPUs if you shard) + communication (often grows or stays fixed — all-reduce volume per step). At some point comm dominates and adding GPUs stops helping; that's the scaling knee. Quantify: if a step is 80% compute / 20% comm at N GPUs, doubling to 2N halves compute but the all-reduce may not halve, so efficiency drops. Then name the mitigations: overlap comm with compute, increase per-GPU batch, use a more bandwidth-optimal collective, keep TP within NVLink.</div></div>
+
+        <h5>Where your background lands — this is your interview to win</h5>
+        <p>Greg's domain is the closest to your demonstrated strengths. Your <strong>400× throughput improvement with distributed PyTorch + Ray on Kubernetes</strong> is a performance-modeling-and-scaling story — be ready to explain <em>where</em> the speedup came from (better parallelism? removed a serialization bottleneck? overlapped comm?) and how you measured scaling efficiency. Your <strong>UCX / GPU-to-GPU communications</strong> work is directly relevant to the NCCL/collectives and fabric-bandwidth topics — you understand RDMA, one-sided transfers, and why communication is the scaling bottleneck. Your <strong>124× CUDA</strong> work is the roofline/compute-efficiency story. Speak quantitatively: ratios, where the bottleneck was, how you proved it. He'll respect numbers and mechanisms over narrative.</p>
+
+        <h5>A question to ask him</h5>
+        <p>"With nvloom measuring the MNNVL fabric on GB200, how different are the bandwidth characteristics you're seeing rack-scale vs the old 8-GPU-node NVLink model — does it change how you'd advise people to set TP/EP?" Specific, on his tooling, and opens a genuinely interesting discussion.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="chapter" id="c26">
+    <h2><span class="ch-num">26</span>McQueen / O'Kelly — Slurm &amp; customers</h2>
+
+    <div class="iv">
+      <div class="iv-head">
+        <div class="iv-name"><div class="nm">Robert McQueen / Devin O'Kelly</div><div class="rl">Slurm · systems · customers</div></div>
+        <div class="iv-meta">
+          <div class="m"><div class="k">Length</div><div class="v">60 min</div></div>
+          <div class="m"><div class="k">Weight</div><div class="v">Ops + empathy</div></div>
+        </div>
+      </div>
+      <div class="iv-body">
+        <h5>What this conversation is really about</h5>
+        <p>Two things at once: <strong>operational literacy</strong> (can you actually function on a real Slurm cluster, not just talk about one) and <strong>customer empathy</strong> (can you work <em>with</em> researchers, who are this team's customers, rather than lecturing them). The "systems and customers" framing is the tell — this is where the role's collaboration and support dimension is tested. The good news: you have Slurm cluster access already, so the operational half can be genuine.</p>
+
+        <h5>The Slurm half — what to know cold</h5>
+        <ul class="dash">
+          <li><strong>The submission model:</strong> <code>sbatch</code> (batch script) vs <code>srun</code> (run a step / interactive) vs <code>salloc</code> (grab an allocation). Submit from <em>login</em> nodes, never the head node. <code>squeue</code>/<code>sinfo</code>/<code>sacct</code> for state.</li>
+          <li><strong>Partitions &amp; QoS:</strong> from the team's real <code>show_partitions</code> output — <code>batch</code>, <code>batch_large</code>, <code>batch_short</code>, <code>interactive</code>, <code>backfill</code>, <code>high_prio</code>, <code>cpu</code> variants, each with time limits. QoS and partition gate priority and limits.</li>
+          <li><strong>Accounts &amp; fairshare:</strong> jobs run under a Slurm account (= the PPP project). Fairshare scheduling balances usage across accounts; <code>--account</code> selects which project's allocation/priority you draw on.</li>
+          <li><strong>Reservations:</strong> nodes set aside for a purpose (acceptance testing, a customer, draining). Stormbreaker and the workload tests run in reservations.</li>
+          <li><strong>Requeue &amp; preemption:</strong> <code>--requeue</code>, preemption by higher-priority jobs, and the state machine (PENDING → RUNNING → COMPLETED/FAILED/REQUEUED/PREEMPTED/NODE_FAIL/TIMEOUT). This connects straight to Layer-1 goodput loss.</li>
+          <li><strong>Topology:</strong> Slurm topology plugins make placement network-aware; the team's <code>get-avail-topology</code> shows free nodes per block (GB200 rack-awareness). Topology-aware placement is an efficiency lever.</li>
+          <li><strong>Containers in Slurm:</strong> Enroot + Pyxis (<code>--container-image</code>, <code>--container-mounts</code>) — not Docker. Know why (rootless).</li>
+        </ul>
+
+        <h5>Likely questions &amp; how to attack them</h5>
+        <div class="qa"><div class="q">"A researcher says their job has been pending for hours. How do you help?"</div><div class="a">Diagnose, don't guess: <code>squeue --start</code> for the estimated start and reason; check the partition's limits and the account's fairshare; check whether the requested resources (GPU count, time, topology constraint) are satisfiable on free nodes (<code>show_idle_nodes</code> / <code>get-avail-topology</code>). Then the customer move: explain <em>why</em> in plain terms and offer the trade-off (a shorter partition, fewer nodes, off-peak submission). This shows both Slurm fluency and empathy.</div></div>
+        <div class="qa"><div class="q">"A job keeps getting requeued. Walk me through it."</div><div class="a">This is Layer-1 goodput. Pull jobsinfo-done for the requeue history and the Slurm state/reason; pull FACT for whether it's a bad node (<code>s_epilog_bad_nodes</code>, XID) vs preemption vs OOM; if it's a bad node, that's a drain-and-remediate (Heimdall); if it's preemption, that's a priority/partition conversation; if it's OOM/app crash, that's back to the researcher's config. And note the compounding cost: every requeue re-pays startup tax (§12).</div></div>
+        <div class="qa"><div class="q">"How do you balance one team's urgent job against fair access for everyone?"</div><div class="a">This is the customer/systems judgment question. Talk fairshare and QoS as the mechanism, reservations for genuinely special cases, and the human part: transparency about the trade-offs, and finding the efficiency win that makes the conflict smaller (if their job weren't wasting 40% to startup, it wouldn't need as much of the contested capacity). Efficiency work <em>is</em> a way to defuse capacity fights.</div></div>
+
+        <h5>The customer half — the mindset to project</h5>
+        <p>The researchers are busy experts who don't want a lecture about their wasted GPUs. The team's whole action design reflects this — gentle bi-weekly nudges, a self-serve Slack bot, fixes that ship as better defaults. Project that you'd <em>meet researchers where they are</em>: make the efficient path the easy path, explain in their terms, and bring data, not blame. A line like "my job is to make the right thing the default so the researcher never has to think about it" captures the team's customer philosophy exactly.</p>
+
+        <h5>Where your background lands</h5>
+        <p>You have real Slurm cluster access and run GPU workloads on it — so speak from genuine experience about submitting jobs, hitting queue waits, and managing containers. Your distributed-systems and infrastructure background (Kubernetes, Ray, multi-node) translates: a scheduler is a scheduler, and you understand resource contention and placement. If you've supported other engineers/users on shared infrastructure, that's your customer-empathy evidence — lead with a story where you helped someone unblock <em>and</em> fixed the underlying issue so it wouldn't recur.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="chapter" id="c27">
+    <h2><span class="ch-num">27</span>Abdalla Abdulmonem — team &amp; culture</h2>
+
+    <div class="iv">
+      <div class="iv-head">
+        <div class="iv-name"><div class="nm">Abdalla Abdulmonem</div><div class="rl">team fit · culture fit</div></div>
+        <div class="iv-meta">
+          <div class="m"><div class="k">Length</div><div class="v">60 min</div></div>
+          <div class="m"><div class="k">Weight</div><div class="v">Behavioral</div></div>
+        </div>
+      </div>
+      <div class="iv-body">
+        <h5>What this conversation is really about</h5>
+        <p>This is the behavioral / values interview, but don't mistake "culture fit" for "soft." From the repos, Abdalla authored <strong>write-tracer</strong> — a Go + eBPF write-syscall tracer with a Slurm SPANK plugin that streams to Loki/Prometheus. That is serious low-level systems engineering (kernel BTF, eBPF programs, syscall tracing, careful overhead benchmarking showing ~0% amortized cost on bursty AI write patterns). So while the interview's stated purpose is fit, it's being run by a builder who values craft. Project both: you're easy to work with <em>and</em> you care about doing things right.</p>
+
+        <h5>What this team's culture evidently values (from the repos)</h5>
+        <ul class="check">
+          <li><strong>Ownership end-to-end.</strong> These are small teams shipping real services with CI, releases, on-call, and deploys to NV Park/OpenShift. People own things from idea to production. Show you take a problem and carry it all the way.</li>
+          <li><strong>Pragmatism over polish.</strong> The idle-waste-toolkit is "stdlib-only, no infra to deploy" precisely so CSEs can run it anywhere. The culture ships the useful thing, then iterates ("Contributing: coming soon").</li>
+          <li><strong>Rigor where it counts.</strong> The DCGM harness has a 5-config controlled experiment; write-tracer has an overhead benchmark; the rules engine has 576 tests and a measured hallucination rate. Claims are backed by measurement.</li>
+          <li><strong>Collaboration across roles.</strong> The work constantly touches researchers, cluster ops, SREs, and other teams. "Work effectively with teams of different backgrounds" is in the posting for a reason.</li>
+          <li><strong>Low ego, high curiosity.</strong> The DCGM investigation credits a colleague's flamegraph for correcting the initial hypothesis — being wrong and updating is normal and fine.</li>
+        </ul>
+
+        <h5>The behavioral questions to have stories for</h5>
+        <div class="qa"><div class="q">"Tell me about a hard technical problem you owned end to end."</div><div class="a">Pick one of your headline wins (400× scaling, 124× CUDA, the LBNL solver, pydisort) and tell it as a STAR arc with <em>measurement</em> at the center: the situation, what you measured to find the bottleneck, the fix, the verified result, and what you'd do differently. The measurement spine is what resonates with this team.</div></div>
+        <div class="qa"><div class="q">"Tell me about a time you were wrong, or disagreed with someone."</div><div class="a">Show the update-on-evidence value: you had a hypothesis, data (or a colleague) showed it was wrong, you changed course without drama. Mirrors the DCGM PPCNT→COUNT correction. Avoid stories where you were right all along.</div></div>
+        <div class="qa"><div class="q">"How do you work with someone (a researcher) who doesn't want your help?"</div><div class="a">The customer-empathy answer (§26): bring data not blame, make the efficient path the easy path, find the win that's in their interest (their job finishes faster), and respect that they're the expert on their workload. Never "I told them they were wrong."</div></div>
+        <div class="qa"><div class="q">"Why this role / why NVIDIA / why efficiency?"</div><div class="a">Be genuine and specific: you've spent your career on GPU performance and distributed systems (the 124×, the 400×, UCX comms, the HPC solver), and this role is that craft applied at fleet scale to the most demanding workloads in the world. Efficiency is where your systems instinct and your love of measurement meet leverage.</div></div>
+
+        <h5>How to show up</h5>
+        <p>Warm, direct, curious, and concrete. Have two or three crisp stories ready (not rambling). Ask real questions about how the team works (below). And let your genuine enthusiasm for the <em>technical</em> problem show — this is a builder interviewing a builder; shared excitement about a hard systems problem is itself a strong fit signal.</p>
+
+        <h5>A question to ask him</h5>
+        <p>"write-tracer uses eBPF to trace writes with near-zero overhead on bursty checkpoint patterns — was the motivation mostly storage-bottleneck visibility for goodput, or something broader? And how does the team decide when a problem is worth a kernel-level tool vs a quick script?" Shows you read his work and care about the craft/pragmatism trade-off the team lives.</p>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART VI ===================== -->
+<div class="part" id="p6">
+  <div class="part-label">Part VI — Showing up</div>
+  <h2 class="part-title">Making it <span class="acc">land.</span></h2>
+  <p class="part-intro">You have the role, the org, the concepts, the stack, and the per-interviewer plan. This final part turns that into performance: how your actual background maps to what they need, the behavioral stories worth preparing, the questions that make you memorable, and a concrete plan for the last 48 hours.</p>
+
+  <section class="chapter" id="c28">
+    <h2><span class="ch-num">28</span>Mapping your background to the role</h2>
+
+    <p>Your experience is unusually well-matched to this role's <em>technical</em> core — the gap to manage is operational/observability breadth (which this manual front-loaded). Here is the explicit map from what you've done to what they need, so you can reach for the right story instantly.</p>
+
+    <table class="tbl wide">
+      <thead><tr><th>Your work</th><th>Maps to · use it with</th></tr></thead>
+      <tbody>
+        <tr><td>400× throughput — distributed PyTorch + Ray on Kubernetes</td><td>Performance modeling, parallelism, scaling efficiency. <strong>Greg's</strong> core. Know <em>where</em> the speedup came from and how you measured scaling. Also proves multi-node ownership for <strong>Aman</strong>.</td></tr>
+        <tr><td>124× CUDA speedup (LeNet-5)</td><td>Compute efficiency, roofline, kernel bottleneck-finding. <strong>Aman</strong> and <strong>Greg</strong>. Be ready to name the bottleneck (memory pattern? occupancy? launch overhead?) and the measurement.</td></tr>
+        <tr><td>UCX / GPU-to-GPU communications infrastructure</td><td>NCCL, collectives, RDMA, fabric bandwidth, why comm is the scaling bottleneck. <strong>Greg</strong> (parallelism/networking) and <strong>Aman</strong>. A genuine differentiator — most candidates don't understand the transport layer.</td></tr>
+        <tr><td>Distributed-query engineering (Velox / Presto, cuDF / RAPIDS)</td><td>Distributed-systems reasoning, where time goes in a multi-node system, data-at-scale. <strong>Matt's</strong> system thinking; the observability data model.</td></tr>
+        <tr><td>GPU C++ MHD solver at LBNL</td><td>HPC-grade compute, numerical workloads, Slurm-style environments. <strong>Aman</strong>, <strong>McQueen/O'Kelly</strong> (real HPC fluency).</td></tr>
+        <tr><td>pydisort (pybind11, ~239K downloads)</td><td>Shipping real software others depend on; Python/C++ boundary; ownership. <strong>Abdalla</strong> (craft + end-to-end ownership).</td></tr>
+        <tr><td>Slurm cluster access + RTX 5090 + day-to-day GPU work</td><td>Operational literacy — you run jobs, manage containers, hit queue waits for real. <strong>McQueen/O'Kelly</strong>. Speak from genuine experience, not theory.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="idea">
+      <p><strong>Your story is "deep GPU-performance and distributed-systems engineer moving into fleet-scale efficiency."</strong> The 124× and 400× prove you can find and remove bottlenecks at both the kernel and the distributed-system level — the exact two ends of the three-layer model. The UCX/comms work proves you understand the networking layer most people hand-wave. What you're adding is the fleet altitude and the observability platform — and you've now studied exactly that. Frame the transition as natural: "I've optimized individual workloads deeply; this role is that instinct applied across a fleet, with the tooling to find the patterns at scale."</p>
+    </div>
+
+    <h3>The gap, named honestly</h3>
+    <p>What you have less of: years operating <em>production observability platforms</em> and <em>multi-cloud Slurm fleets</em> at this scale, and the specific internal stack (OneLogger/FACT/Heimdall). Don't pretend otherwise. Instead: show you've understood the <em>concepts</em> fast (this manual), reason fluently about them, and have the underlying systems instinct to ramp quickly. "I haven't run OneLogger, but the three-layer goodput model is how I already think about where time goes — here's how I'd apply it" is a strong, honest move.</p>
+  </section>
+
+  <section class="chapter" id="c29">
+    <h2><span class="ch-num">29</span>Behavioral stories &amp; questions to ask</h2>
+
+    <h3>Prepare four stories, STAR-structured, measurement at the center</h3>
+
+    <p>Most interviews (especially Abdalla's, but threads run through all five) will pull on behavioral stories. Prepare four flexible ones you can adapt:</p>
+
+    <table class="tbl">
+      <thead><tr><th>Story</th><th>Demonstrates · which interviews</th></tr></thead>
+      <tbody>
+        <tr><td>The deep optimization (124× or 400×)</td><td>End-to-end ownership, measurement-driven debugging, quantified impact. Aman, Greg, Abdalla.</td></tr>
+        <tr><td>The distributed-systems debug</td><td>Triangulating across a system to find where time/correctness was lost; reasoning under partial information. Matt, Greg.</td></tr>
+        <tr><td>The "I was wrong / changed course" story</td><td>Update-on-evidence, low ego, collaboration. Abdalla (and it humanizes you everywhere).</td></tr>
+        <tr><td>The "helped someone + fixed the root cause" story</td><td>Customer empathy + systemic thinking (don't just unblock, prevent recurrence). McQueen/O'Kelly, Abdalla.</td></tr>
+      </tbody>
+    </table>
+
+    <p>For each, lead with the <strong>situation and the metric</strong>, make the <strong>measurement</strong> the hinge of the story (what you looked at to find the cause), state the <strong>verified result</strong> with a number, and end with a reflection. This team's entire culture is measurement-backed claims — stories built that way resonate.</p>
+
+    <h3>Questions to ask (pick per interviewer)</h3>
+
+    <p>Great questions signal seniority and genuine interest. Beyond the per-interviewer ones in Part V:</p>
+
+    <ul class="dash">
+      <li><strong>On the mandate:</strong> "What's the single biggest source of wasted GPU-hours across the fleet right now — is it a few catastrophic jobs, or broad low-grade inefficiency?"</li>
+      <li><strong>On impact:</strong> "When the team ships an efficiency win, how do you measure that it actually moved fleet goodput — what's the attribution story?"</li>
+      <li><strong>On the frontier:</strong> "As GB200 NVL72 and rack-scale NVLink roll out, what efficiency problems are new that didn't exist on H100?"</li>
+      <li><strong>On coverage:</strong> "How much of the fleet is OneLogger-instrumented today, and is closing that coverage gap a bigger lever than analyzing the jobs you can already see?"</li>
+      <li><strong>On the role:</strong> "Six months in, what would tell you this hire was a great decision?"</li>
+    </ul>
+
+    <div class="callout tip">
+      <h5>The meta-signal of your questions</h5>
+      <p>Notice every question above is framed in the team's own terms — fleet goodput, attribution, coverage, rack-scale. Asking questions in their vocabulary does more than gather information; it demonstrates that you already think like a member of the team. That's the quiet thing that tips a panel from "qualified" to "one of us."</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c30">
+    <h2><span class="ch-num">30</span>The 48-hour prep plan + closing</h2>
+
+    <h3>The final-stretch plan</h3>
+
+    <table class="tbl">
+      <thead><tr><th>When</th><th>Do</th></tr></thead>
+      <tbody>
+        <tr><td>T-48h</td><td>Re-read Parts III &amp; IV until the three-layer model, the goodput decomposition, the data sources, and the join model are reflexive. These are the load-bearing concepts across all five interviews.</td></tr>
+        <tr><td>T-36h</td><td>Drill the two required interviews (Matt §24, Greg §25). Be able to run the 0%-goodput diagnosis out loud and reason quantitatively about parallelism/scaling. Re-read the DCGM-NVLink story.</td></tr>
+        <tr><td>T-24h</td><td>Write out your four STAR stories with the numbers. Map each to interviewers (§29). Rehearse the 124× and 400× until you can state the bottleneck and the measurement in two sentences each.</td></tr>
+        <tr><td>T-12h</td><td>Refresh the operational layer for McQueen/O'Kelly (§26): Slurm submission model, partitions/QoS, requeue state machine, Enroot/Pyxis. Skim the upcoming Manuals II–III topics so nothing is a cold surprise.</td></tr>
+        <tr><td>T-2h</td><td>Light review only: the throughlines (§22), your questions per interviewer, the one-line role framing (§01). Then stop — you're ready. Rest beats cramming.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>The five things to be, in every room</h3>
+    <ul class="check">
+      <li><strong>Structured</strong> — decompose with the three-layer model before diving in.</li>
+      <li><strong>Quantitative</strong> — numbers, ratios, where the bottleneck was, how you proved it.</li>
+      <li><strong>Measurement-first</strong> — name the metric and its blind spot; verify every fix.</li>
+      <li><strong>Honest</strong> — reason from first principles at the edge of your knowledge; don't bluff.</li>
+      <li><strong>Collaborative</strong> — bring data not blame; make the efficient path the easy path.</li>
+    </ul>
+
+    <div class="idea">
+      <p><strong>The through-line of this whole manual:</strong> this team turns wasted GPU-hours into productive ones, at fleet scale, by instrumenting how jobs really behave and closing the gap at the right altitude. You already do the hard technical half of that — you find and remove bottlenecks, you understand the compute and the comm and the distributed system. What you've added here is the team's language, its metrics, its platform, and its way of thinking. Walk in able to decompose a performance problem into scheduling, runtime, and program; able to name what you'd measure and how you'd verify the fix; and able to connect your real wins to their real problems. That's not bluffing — that's being ready.</p>
+    </div>
+
+    <p class="pull">You optimize workloads for a living. This role is that instinct, aimed at a fleet. Go show them you already speak the language.</p>
+
+    <h3>What's in the rest of the series</h3>
+    <p>This is Manual I of IV — the orientation, the concepts, and the panel. The remaining volumes go deep on the technical mechanisms each interview will probe:</p>
+    <ul class="dash">
+      <li><strong>Manual II — Clusters, Slurm &amp; the Operations Layer:</strong> Slurm internals (scheduling, fairshare, topology plugins, the state machine), the multi-cloud fabric (InfiniBand/RoCE/EFA, the NCCL plugins), storage systems (Lustre vs GPFS vs VAST/NFS), Enroot/Pyxis, and the customer/operations craft. For Aman &amp; McQueen/O'Kelly.</li>
+      <li><strong>Manual III — ML Workload Performance, Parallelism &amp; Profiling:</strong> the parallelism dimensions in depth (DP/TP/PP/EP/SP), NCCL collectives &amp; algorithms, Nsight Systems/Compute methodology, roofline &amp; MFU performance modeling, and distributed-training debugging end-to-end. For Aman &amp; Greg.</li>
+      <li><strong>Manual IV — Efficiency, Goodput &amp; Observability, deep:</strong> the OneLogger field model in full, the rules engine internals, the data-engineering of the telemetry lake, eBPF/DCGM instrumentation mechanics, and fleet-scale analysis patterns. For Matt &amp; Greg.</li>
+    </ul>
+    <p>Say the word and I'll build them next.</p>
+  </section>
+</div>
+
+</main>
+
+<footer>
+  <h4>sources &amp; further study</h4>
+  <div class="resources">
+    <ul>
+      <li><strong>The team's own tooling</strong> (your ground truth)</li>
+      <li><code>ai-efficiency-insights</code> — the 110-rule goodput engine</li>
+      <li><code>idle-waste-toolkit</code> — 5-source join, per-job/execution CSVs</li>
+      <li><code>sisyphus</code> — three-layer goodput triangulation</li>
+      <li><code>DCGM-NVLink-Test-Harness</code> — telemetry-perf investigation</li>
+      <li><code>storage-workload-tests</code> — checkpoint &amp; data-loading I/O</li>
+      <li><code>stormbreaker</code> · <code>mlops-tests</code> · <code>cluster-workload-testing</code> — validation/benchmarks</li>
+      <li><code>write-tracer</code> — eBPF write-syscall tracing</li>
+      <li><code>mlops-startup-utilities</code> — onboarding &amp; slurm-utils</li>
+      <li><strong>External references</strong></li>
+      <li>Megatron-LM &amp; NeMo docs — distributed training, async dist-checkpoint</li>
+      <li>NCCL user guide — collectives, algorithms, tuning, env vars</li>
+      <li>NVIDIA Nsight Systems &amp; Nsight Compute docs — profiling methodology</li>
+      <li>DCGM &amp; dcgm-exporter docs — GPU telemetry fields</li>
+      <li>Slurm documentation — scheduling, QoS, topology, SPANK plugins</li>
+      <li>Enroot &amp; Pyxis docs — rootless containers on Slurm</li>
+      <li>GB200 NVL72 / MNNVL architecture briefs — rack-scale NVLink</li>
+      <li>aws-ofi-nccl &amp; libfabric/EFA docs — AWS fabric; GCP gIB plugin docs</li>
+      <li>Lustre &amp; GPFS administration guides — parallel filesystems for AI</li>
+      <li>"Reducing Activation Recomputation" &amp; MFU/HFU literature — perf modeling</li>
+    </ul>
+  </div>
+  <p class="footer-note">Manual I of IV in the NVIDIA AI Performance &amp; Efficiency interview field-manual series. Built from the MARS MLOps team's own repositories and the role's job description. Treat the internal-tooling specifics as the team's evident practice, not official documentation — and verify any fast-moving detail (versions, current fleet specifics) against primary sources. Prepare deeply, reason honestly, and connect your real work to their real problems.</p>
+</footer>
+
+</body>
+</html>
