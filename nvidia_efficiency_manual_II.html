@@ -1,0 +1,1883 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Cluster &amp; the Scheduler — NVIDIA AI Performance &amp; Efficiency Engineer · Field Manual II</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;0,8..60,700;1,8..60,400;1,8..60,500&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --bg:        #eef1ec;
+  --bg-2:      #e4e8e1;
+  --bg-3:      #d7dcd2;
+  --card:      #f7f9f4;
+  --ink:       #14181a;
+  --ink-soft:  #3d4642;
+  --ink-faint: #76807a;
+  --rule:      #c6ccc0;
+  --rule-soft: #d8ddd2;
+  --rule-dark: #8d958a;
+  --green:     #1a7f46;
+  --green-deep:#0e5e31;
+  --green-bri: #2ea05c;
+  --slate:     #33505f;
+  --slate-deep:#203642;
+  --amber:     #b07d12;
+  --rose:      #a32a1f;
+  --code-bg:   #15201a;
+  --code-ink:  #d6ddd2;
+  --maxw:      1080px;
+}
+*{ box-sizing: border-box; }
+html{ scroll-behavior: smooth; }
+body{
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Source Serif 4', Georgia, serif;
+  font-size: 17px;
+  line-height: 1.62;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ============ HEADER ============ */
+header{ max-width: var(--maxw); margin: 0 auto; padding: 84px 40px 50px; position: relative; }
+.filed{
+  font-family: 'Geist Mono', ui-monospace, monospace; font-size: 10.5px; letter-spacing: .28em;
+  text-transform: uppercase; color: var(--green); margin: 0 0 28px; font-weight: 600;
+  display: flex; align-items: center; gap: 12px;
+}
+.filed::before{ content: "▸"; color: var(--green); font-size: 13px; }
+.vol{
+  font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .18em;
+  color: var(--ink-faint); text-transform: uppercase; margin: 0 0 16px; font-weight: 500;
+}
+h1{
+  font-family: 'Archivo', system-ui, sans-serif; font-weight: 900;
+  font-size: clamp(50px, 9vw, 110px); line-height: 0.9; letter-spacing: -0.02em; margin: 0 0 24px; color: var(--ink);
+}
+h1 .acc{ color: var(--green); }
+.deck{ font-family: 'Source Serif 4', serif; font-size: 20px; font-weight: 400; color: var(--ink-soft); max-width: 770px; line-height: 1.5; }
+.readout{ margin-top: 40px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--rule); border: 1px solid var(--rule); }
+@media (max-width: 680px){ .readout{ grid-template-columns: repeat(2,1fr); } }
+.readout .cell{ background: var(--bg); padding: 14px 16px; }
+.readout .k{ font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 6px; }
+.readout .v{ font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 22px; color: var(--ink); line-height: 1; }
+.readout .v .u{ font-size: 12px; color: var(--green); font-weight: 600; }
+
+/* ============ TOC ============ */
+.toc{ margin-top: 46px; background: var(--card); border: 1px solid var(--rule-dark); padding: 30px 32px 34px; position: relative; }
+.toc::before{ content: "CONTENTS"; position: absolute; top: -9px; left: 26px; background: var(--card); padding: 0 10px; font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .3em; color: var(--green); font-weight: 600; }
+.toc h3{ font-family: 'Archivo', sans-serif; font-size: 26px; font-weight: 800; margin: 0 0 3px; color: var(--ink); letter-spacing: -0.01em; }
+.toc .toc-sub{ font-family: 'Geist Mono', monospace; font-size: 10.5px; color: var(--ink-faint); letter-spacing: .1em; text-transform: uppercase; margin-bottom: 20px; }
+.toc-part{ margin-top: 15px; }
+.toc-part-name{ font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .22em; color: var(--slate); text-transform: uppercase; font-weight: 600; border-bottom: 1px solid var(--rule); padding-bottom: 5px; margin-bottom: 7px; }
+.toc-grid{ display: grid; grid-template-columns: repeat(2,1fr); gap: 1px 32px; }
+@media (max-width: 760px){ .toc-grid{ grid-template-columns: 1fr; } }
+.toc-grid a{ color: var(--ink-soft); text-decoration: none; font-size: 14.5px; padding: 5px 0; display: flex; gap: 12px; align-items: baseline; border-bottom: 1px dotted transparent; transition: all .14s; }
+.toc-grid a:hover{ color: var(--green); border-color: var(--rule); }
+.toc-grid a .n{ font-family: 'Geist Mono', monospace; font-size: 10.5px; color: var(--slate); min-width: 26px; font-weight: 600; }
+
+/* ============ MAIN ============ */
+main{ max-width: var(--maxw); margin: 0 auto; padding: 56px 40px 96px; }
+.part{ margin-top: 92px; padding-top: 46px; position: relative; }
+.part::before{ content:""; position: absolute; top: 0; left: 0; right: 0; border-top: 2px solid var(--ink); }
+.part::after{ content:""; position: absolute; top: 5px; left: 0; width: 84px; border-top: 2px solid var(--green); }
+.part:first-child{ margin-top: 28px; padding-top: 28px; }
+.part-label{ font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .28em; color: var(--green); text-transform: uppercase; margin-bottom: 14px; font-weight: 600; }
+.part-title{ font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 54px; line-height: 0.96; letter-spacing: -0.02em; margin: 0 0 18px; color: var(--ink); }
+.part-title .acc{ color: var(--green); }
+.part-intro{ color: var(--ink-soft); font-size: 18.5px; max-width: 800px; margin-bottom: 34px; line-height: 1.5; }
+
+section.chapter{ margin-top: 52px; }
+section.chapter:first-of-type{ margin-top: 8px; }
+h2{ font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 33px; line-height: 1.08; letter-spacing: -0.015em; margin: 0 0 15px; color: var(--ink); display: flex; align-items: baseline; gap: 15px; padding-bottom: 9px; border-bottom: 2px solid var(--ink); }
+h2 .ch-num{ font-family: 'Geist Mono', monospace; font-size: 13px; color: var(--green); letter-spacing: .05em; font-weight: 600; flex-shrink: 0; }
+h3{ font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 22px; margin: 28px 0 9px; color: var(--ink); letter-spacing: -0.01em; }
+h4{ font-family: 'Geist Mono', monospace; font-size: 10.5px; letter-spacing: .18em; text-transform: uppercase; color: var(--slate); margin: 22px 0 8px; font-weight: 600; }
+p{ margin: 12px 0; }
+p code, li code, td code{ font-family: 'Geist Mono', monospace; font-size: .8em; background: var(--bg-3); color: var(--green-deep); padding: 1px 6px; border-radius: 2px; border: 1px solid var(--rule); }
+strong{ font-weight: 700; }
+ul, ol{ padding-left: 1.3em; }
+li{ margin: 6px 0; }
+ul.tight li{ margin: 3px 0; }
+ul.dash{ list-style: none; padding-left: 0; }
+ul.dash li{ position: relative; padding-left: 22px; }
+ul.dash li::before{ content: "▸"; position: absolute; left: 0; color: var(--green); font-weight: 700; }
+ul.check{ list-style: none; padding-left: 0; }
+ul.check li{ position: relative; padding-left: 24px; }
+ul.check li::before{ content: "▪"; position: absolute; left: 2px; top: 2px; color: var(--green); }
+
+/* ============ CODE ============ */
+pre{ background: var(--code-bg); padding: 17px 20px; overflow-x: auto; font-family: 'Geist Mono', monospace; font-size: 12.5px; line-height: 1.6; color: var(--code-ink); margin: 18px 0; position: relative; border-left: 3px solid var(--green); }
+pre .com{ color: #6f8378; font-style: italic; }
+pre .kw{  color: #6cb38a; }
+pre .ty{  color: #8fc6c0; }
+pre .str{ color: #c9b36a; }
+pre .num{ color: #c89a64; }
+pre .fn{  color: #8db8d0; }
+pre .var{ color: #d6ddd2; }
+pre .glb{ color: #7fbf95; }
+pre .opt{ color: #c0a96a; }
+pre::before{ content: attr(data-lang); position: absolute; top: 5px; right: 12px; font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: .18em; color: #56635a; text-transform: uppercase; }
+
+/* ============ CALLOUTS ============ */
+.callout{ margin: 22px 0; padding: 15px 22px; border-left: 4px solid var(--slate); background: var(--bg-2); font-size: 16px; line-height: 1.55; }
+.callout.warn{ border-color: var(--amber); }
+.callout.danger{ border-color: var(--rose); }
+.callout.tip{ border-color: var(--green); }
+.callout h5{ margin: 0 0 6px; font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--slate); font-weight: 600; }
+.callout.warn h5{ color: var(--amber); }
+.callout.danger h5{ color: var(--rose); }
+.callout.tip h5{ color: var(--green); }
+.callout p:first-child{ margin-top: 0; } .callout p:last-child{ margin-bottom: 0; }
+
+/* ============ TABLES ============ */
+.tbl{ width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14.5px; }
+.tbl th, .tbl td{ text-align: left; padding: 9px 14px; vertical-align: top; border-bottom: 1px solid var(--rule); }
+.tbl th{ font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink); font-weight: 600; border-bottom: 2px solid var(--ink); border-top: 2px solid var(--ink); background: var(--bg-2); }
+.tbl td:first-child{ font-family: 'Geist Mono', monospace; font-size: 12px; color: var(--green-deep); font-weight: 500; width: 26%; }
+.tbl.wide td:first-child{ width: 20%; }
+.tbl.compare td:first-child{ font-family: 'Geist Mono', monospace; font-weight: 600; color: var(--ink); width: 22%; font-size: 11.5px; letter-spacing: .03em; }
+.tbl.compare td:nth-child(2){ color: var(--green-deep); font-family: 'Source Serif 4', serif; font-size: 14.5px; }
+.tbl.compare td:nth-child(3){ color: var(--slate-deep); font-family: 'Source Serif 4', serif; font-size: 14.5px; }
+
+/* ============ DIAGRAM ============ */
+.diagram{ background: var(--card); border: 1px solid var(--rule-dark); padding: 22px 24px; margin: 22px 0; font-family: 'Geist Mono', monospace; font-size: 12px; line-height: 1.55; color: var(--ink-soft); white-space: pre; overflow-x: auto; position: relative; }
+.diagram::before{ content: "FIG."; position: absolute; top: -9px; left: 18px; background: var(--bg); padding: 0 9px; font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: .2em; color: var(--slate); font-weight: 600; }
+
+/* ============ READOUT PANEL ============ */
+.panel{ background: var(--card); border: 1px solid var(--rule-dark); margin: 22px 0; padding: 20px 24px; position: relative; }
+.panel::before{ content: attr(data-title); position: absolute; top: -9px; left: 20px; background: var(--bg); padding: 0 10px; font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: .2em; color: var(--green); font-weight: 600; }
+.panel-grid{ display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; }
+@media (max-width: 680px){ .panel-grid{ grid-template-columns: 1fr 1fr; } }
+.panel-grid .stat .k{ font-family:'Geist Mono',monospace; font-size: 9px; letter-spacing:.16em; text-transform:uppercase; color: var(--ink-faint); margin-bottom: 4px; }
+.panel-grid .stat .v{ font-family:'Archivo',sans-serif; font-weight: 700; font-size: 17px; color: var(--ink); line-height: 1.15; }
+.panel-grid .stat .v small{ font-weight: 400; font-family:'Source Serif 4',serif; font-size: 13px; color: var(--ink-soft); }
+
+/* ============ ISSUE / WORKED CASE ============ */
+.issue{ margin: 26px 0; background: var(--card); border: 1px solid var(--ink); }
+.issue-header{ padding: 12px 22px; background: var(--ink); color: var(--bg); font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; display: flex; align-items: center; gap: 13px; }
+.issue-header .tag{ background: var(--green); padding: 3px 11px; letter-spacing: .1em; font-weight: 600; font-size: 10px; color: #fff; }
+.issue-header .title{ flex: 1; font-weight: 600; letter-spacing: .08em; }
+.issue-body{ padding: 22px 26px; }
+.issue-body > h5{ margin: 16px 0 7px; font-family:'Geist Mono',monospace; font-size: 10.5px; letter-spacing:.16em; color: var(--green); text-transform: uppercase; font-weight: 600; }
+.issue-body > h5:first-child{ margin-top: 0; }
+
+/* ============ DECISION TREE ============ */
+.tree{ background: var(--card); border: 1px solid var(--slate); padding: 24px 26px; margin: 24px 0; position: relative; }
+.tree::before{ content: "DECISION PATH"; position: absolute; top: -9px; left: 22px; background: var(--bg); padding: 0 11px; font-family:'Geist Mono',monospace; font-size: 10px; letter-spacing: .2em; color: var(--slate); font-weight: 600; }
+.tree pre{ background: transparent; color: var(--ink); border: none; border-left: none; padding: 6px 0 0; font-size: 13px; line-height: 1.7; }
+.tree pre::before{ display: none; }
+.tree .q{ color: var(--green); font-weight: 700; }
+.tree .a{ color: var(--slate); font-weight: 700; }
+
+/* ============ PRINCIPLE ============ */
+.idea{ margin: 24px 0; border: 2px solid var(--green); background: var(--card); padding: 22px 28px; position: relative; }
+.idea::before{ content: "PRINCIPLE"; position: absolute; top: -10px; left: 22px; background: var(--bg); padding: 0 11px; font-family:'Geist Mono',monospace; font-size: 10px; letter-spacing: .24em; color: var(--green); font-weight: 600; }
+.idea p{ margin: 6px 0; font-size: 16px; }
+
+/* ============ PULL ============ */
+.pull{ font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 30px; line-height: 1.08; letter-spacing: -0.015em; color: var(--green); margin: 38px 0; padding: 0 0 0 26px; border-left: 4px solid var(--green); }
+
+/* ============ CHEAT ============ */
+.cheat{ background: var(--card); border: 1px solid var(--ink); padding: 24px 28px; margin: 24px 0; }
+.cheat h5{ margin: 0 0 14px; font-family:'Geist Mono',monospace; font-size: 11px; letter-spacing: .2em; color: var(--green); text-transform: uppercase; font-weight: 600; }
+.cheat-grid{ display: grid; grid-template-columns: 1fr 1.5fr; gap: 6px 22px; font-size: 13px; }
+.cheat-grid .cmd{ font-family:'Geist Mono',monospace; color: var(--green-deep); font-weight: 500; }
+.cheat-grid .desc{ color: var(--ink-soft); font-size: 14.5px; }
+@media (max-width: 680px){ .cheat-grid{ grid-template-columns: 1fr; gap: 2px 18px; } .cheat-grid .desc{ margin-bottom: 10px; } }
+
+/* ============ TWO-COL ============ */
+.twocol{ display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 22px 0; }
+@media (max-width: 760px){ .twocol{ grid-template-columns: 1fr; } }
+.twocol .col{ background: var(--card); border: 1px solid var(--rule-dark); padding: 18px 22px; }
+.twocol .col h5{ margin: 0 0 10px; font-family:'Geist Mono',monospace; font-size: 10.5px; letter-spacing: .18em; text-transform: uppercase; color: var(--slate); font-weight: 600; }
+.twocol .col.bad h5{ color: var(--rose); } .twocol .col.good h5{ color: var(--green); }
+.twocol .col p{ margin: 8px 0; font-size: 15px; } .twocol .col p:first-child{ margin-top: 0; }
+
+/* ============ SEP ============ */
+.rule-sep{ margin: 56px 0; position: relative; height: 0; border-top: 2px solid var(--ink); }
+.rule-sep::after{ content: "◇ ◇ ◇"; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); background: var(--bg); color: var(--green); padding: 0 16px; font-size: 11px; letter-spacing: .3em; }
+
+/* ============ FOOTER ============ */
+footer{ max-width: var(--maxw); margin: 0 auto; padding: 54px 40px 84px; border-top: 2px solid var(--ink); color: var(--ink-soft); font-size: 14px; }
+footer h4{ font-family:'Geist Mono',monospace; font-size: 11px; letter-spacing: .24em; color: var(--green); margin: 0 0 18px; font-weight: 600; }
+footer .resources{ columns: 2; column-gap: 38px; }
+@media (max-width: 680px){ footer .resources{ columns: 1; } }
+footer ul{ list-style: none; padding: 0; margin: 0; }
+footer li{ padding: 5px 0; font-size: 13.5px; break-inside: avoid; }
+footer li code{ color: var(--green-deep); background: transparent; border: none; padding: 0; font-weight: 500; }
+footer .footer-note{ margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--rule); color: var(--ink-faint); font-size: 14px; }
+</style>
+</head>
+<body>
+
+<header>
+  <p class="filed">nvidia · dgxc mars · ai efficiency · interview field manual</p>
+  <p class="vol">Volume II of IV · clusters, Slurm &amp; the operations layer</p>
+  <h1>The Cluster &amp;<br>the <span class="acc">Scheduler.</span></h1>
+  <p class="deck">
+    The machine you'll be making efficient, from the silicon up: how a GPU supercluster is physically built, how Slurm schedules and binds work onto it, how containers and distributed launches actually run, how the multi-cloud fabric and storage tiers behave — and the operations and customer craft that keeps ~18 clusters serving researchers. The deep companion for the compute/clusters and Slurm/customers interviews.
+  </p>
+  <div class="readout">
+    <div class="cell"><div class="k">Manual</div><div class="v">II<span class="u"> / IV</span></div></div>
+    <div class="cell"><div class="k">Chapters</div><div class="v">41</div></div>
+    <div class="cell"><div class="k">Interviews</div><div class="v" style="font-size:14px;">Aman · McQueen/O'Kelly</div></div>
+    <div class="cell"><div class="k">Focus</div><div class="v" style="font-size:14px;">Slurm · fabric · storage</div></div>
+  </div>
+
+  <div class="toc">
+    <h3>Contents</h3>
+    <p class="toc-sub">Forty-one chapters across eight parts</p>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part I · The cluster, physically</div>
+      <div class="toc-grid">
+        <a href="#c01"><span class="n">01</span><span>Anatomy of a MARS cluster</span></a>
+        <a href="#c02"><span class="n">02</span><span>Inside a GPU node</span></a>
+        <a href="#c03"><span class="n">03</span><span>The network is the computer</span></a>
+        <a href="#c04"><span class="n">04</span><span>GB200 NVL72: the rack as a node</span></a>
+        <a href="#c05"><span class="n">05</span><span>Login / head / compute / data nodes</span></a>
+      </div>
+    </div>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part II · Slurm, the scheduler</div>
+      <div class="toc-grid">
+        <a href="#c06"><span class="n">06</span><span>Slurm's architecture</span></a>
+        <a href="#c07"><span class="n">07</span><span>The job lifecycle &amp; state machine</span></a>
+        <a href="#c08"><span class="n">08</span><span>sbatch / srun / salloc</span></a>
+        <a href="#c09"><span class="n">09</span><span>Partitions, QoS &amp; limits</span></a>
+        <a href="#c10"><span class="n">10</span><span>Fairshare &amp; multifactor priority</span></a>
+        <a href="#c11"><span class="n">11</span><span>Reservations</span></a>
+        <a href="#c12"><span class="n">12</span><span>Topology-aware scheduling</span></a>
+        <a href="#c13"><span class="n">13</span><span>Accounting: sacct &amp; sreport</span></a>
+      </div>
+    </div>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part III · Running real workloads</div>
+      <div class="toc-grid">
+        <a href="#c14"><span class="n">14</span><span>Containers on HPC: Enroot</span></a>
+        <a href="#c15"><span class="n">15</span><span>Pyxis: containers in Slurm</span></a>
+        <a href="#c16"><span class="n">16</span><span>The distributed launch</span></a>
+        <a href="#c17"><span class="n">17</span><span>A multi-node sbatch, dissected</span></a>
+        <a href="#c18"><span class="n">18</span><span>SPANK plugins &amp; the task lifecycle</span></a>
+        <a href="#c19"><span class="n">19</span><span>GRES, cgroups &amp; GPU binding</span></a>
+      </div>
+    </div>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part IV · The network fabric</div>
+      <div class="toc-grid">
+        <a href="#c20"><span class="n">20</span><span>InfiniBand: verbs &amp; RDMA</span></a>
+        <a href="#c21"><span class="n">21</span><span>RoCE: Ethernet as fabric</span></a>
+        <a href="#c22"><span class="n">22</span><span>AWS EFA &amp; libfabric</span></a>
+        <a href="#c23"><span class="n">23</span><span>The NCCL plugin model</span></a>
+        <a href="#c24"><span class="n">24</span><span>Diagnosing the network</span></a>
+        <a href="#c25"><span class="n">25</span><span>EFA / version management</span></a>
+      </div>
+    </div>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part V · Storage</div>
+      <div class="toc-grid">
+        <a href="#c26"><span class="n">26</span><span>The storage tiers</span></a>
+        <a href="#c27"><span class="n">27</span><span>Lustre: parallel striping</span></a>
+        <a href="#c28"><span class="n">28</span><span>GPFS / Spectrum Scale</span></a>
+        <a href="#c29"><span class="n">29</span><span>VAST / NFS: scale-out NAS</span></a>
+        <a href="#c30"><span class="n">30</span><span>The AI I/O patterns</span></a>
+        <a href="#c31"><span class="n">31</span><span>Diagnosing storage</span></a>
+      </div>
+    </div>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part VI · Operating the fleet</div>
+      <div class="toc-grid">
+        <a href="#c32"><span class="n">32</span><span>Health &amp; validation: stormbreaker</span></a>
+        <a href="#c33"><span class="n">33</span><span>XID codes &amp; bad-node detection</span></a>
+        <a href="#c34"><span class="n">34</span><span>Draining &amp; remediation</span></a>
+        <a href="#c35"><span class="n">35</span><span>Acceptance: bringing up a cluster</span></a>
+        <a href="#c36"><span class="n">36</span><span>Multi-cloud operations</span></a>
+      </div>
+    </div>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part VII · The customer craft</div>
+      <div class="toc-grid">
+        <a href="#c37"><span class="n">37</span><span>Onboarding researchers</span></a>
+        <a href="#c38"><span class="n">38</span><span>Support triage</span></a>
+        <a href="#c39"><span class="n">39</span><span>The empathy layer</span></a>
+      </div>
+    </div>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part VIII · Reference</div>
+      <div class="toc-grid">
+        <a href="#c40"><span class="n">40</span><span>Cheatsheets &amp; decision trees</span></a>
+        <a href="#c41"><span class="n">41</span><span>Interview tie-in + closing</span></a>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<!-- ===================== PART I ===================== -->
+<div class="part" id="p1">
+  <div class="part-label">Part I — The cluster, physically</div>
+  <h2 class="part-title">What a supercluster is <span class="acc">made of.</span></h2>
+  <p class="part-intro">You can't reason about scheduling, networking, or efficiency without a concrete physical model of the machine. This part builds that model from the bottom up: a single GPU node, the network that fuses thousands of them, the GB200 rack that rewrites the rules, and the node taxonomy you operate within.</p>
+
+  <section class="chapter" id="c01">
+    <h2><span class="ch-num">01</span>Anatomy of a MARS cluster</h2>
+
+    <p>A MARS GPU cluster is a few thousand GPUs organized into a strict hierarchy, plus a small control plane that schedules work onto them and a storage system that feeds them. Every performance question eventually resolves to "where in this hierarchy is the bottleneck."</p>
+
+    <div class="diagram">  CLUSTER  (e.g. aws-iad-cs-002 — one provider, one region)
+   │
+   ├── CONTROL PLANE
+   │     ├── head node(s) ........ runs slurmctld (the scheduler brain) + slurmdbd
+   │     ├── login nodes ......... where users SSH in and submit jobs
+   │     └── data-mover nodes .... high-bandwidth transfer / data-copier hosts
+   │
+   ├── COMPUTE  (the GPUs — the product)
+   │     └── racks
+   │           └── nodes (H100: 8 GPUs/node ;  GB200: a 72-GPU NVLink rack)
+   │                 └── GPUs + NICs + CPUs + local NVMe (/raid)
+   │
+   ├── NETWORK
+   │     ├── compute fabric ...... IB / RoCE / EFA — the GPU-to-GPU data plane
+   │     └── mgmt/ethernet ....... control, storage, and out-of-band
+   │
+   └── STORAGE
+         ├── parallel FS .......... Lustre / GPFS (/lustre, /home, scratch)
+         ├── scale-out NAS ........ VAST / NFS (some clusters)
+         └── object store ......... S3 / SwiftStack (datasets, images)</div>
+
+    <p>The numbers that orient you (from the team's real <code>show_partitions</code> output and Stormbreaker's platform list): a single cluster can hold ~1,800+ nodes; the fleet is ~18 active clusters across AWS, OCI, GCP, CoreWeave, and others. Each cluster is independent — its own Slurm controller, its own storage, its own network stack — which is exactly why "cluster scoping is mandatory" recurs through every tool (job IDs, partitions, and storage all reset per cluster).</p>
+
+    <div class="idea">
+      <p><strong>The mental model to carry into every interview: a cluster is a tree of locality.</strong> GPUs inside a node share NVLink (fastest); nodes inside a rack/leaf share a switch (fast); racks connect through spine switches (slower); clusters connect across the WAN (slowest, rarely used for a single job). Every scheduling and efficiency decision is about keeping a job's communication as low in this tree as possible. When you hear "topology-aware," this tree is what it means.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c02">
+    <h2><span class="ch-num">02</span>Inside a GPU node</h2>
+
+    <p>The 8-GPU node (HGX H100 / H200) is the fleet's fundamental compute brick. Knowing its internal topology is what lets you reason about why a kernel, a checkpoint copy, or a collective is fast or slow.</p>
+
+    <div class="diagram">  ONE HGX H100 NODE
+  ┌─────────────────────────────────────────────────────────────┐
+  │   CPU socket 0          NVSwitch fabric          CPU socket 1 │
+  │   (NUMA node 0)      ┌──────────────────┐      (NUMA node 1)  │
+  │      │               │  all 8 GPUs are  │           │        │
+  │   GPU0 GPU1 GPU2 GPU3│  fully connected │ GPU4 GPU5 GPU6 GPU7 │
+  │     \  |   |  /      │  via NVLink +    │   \  |   |  /        │
+  │      NVSwitch ◄──────┤  NVSwitch (900   │──► NVSwitch          │
+  │                      │  GB/s/GPU aggreg)│                      │
+  │   NIC0  NIC1         └──────────────────┘        NIC2  NIC3   │
+  │   (one IB/EFA rail per GPU-pair, "rail-aligned")              │
+  │   local NVMe /raid   ── PCIe ──   GPUs                        │
+  └─────────────────────────────────────────────────────────────┘</div>
+
+    <p>The pieces and why each matters for efficiency:</p>
+
+    <table class="tbl">
+      <thead><tr><th>Component</th><th>Why you care</th></tr></thead>
+      <tbody>
+        <tr><td>NVLink + NVSwitch</td><td>All 8 GPUs talk at full NVLink bandwidth (hundreds of GB/s per GPU) through on-board NVSwitches. This is why tensor-parallel groups are kept <em>within</em> a node — TP is the most communication-intensive parallelism and wants the fattest link.</td></tr>
+        <tr><td>NICs / rails</td><td>Multiple network adapters per node (often one rail per GPU or GPU-pair). "Rail-aligned" topology means GPU<em>n</em> on node A talks to GPU<em>n</em> on node B over a dedicated rail, avoiding cross-rail switch hops. Misalignment silently halves effective bandwidth.</td></tr>
+        <tr><td>NUMA</td><td>The two CPU sockets are separate NUMA domains; each owns half the GPUs and NICs. Pinning a process to the NUMA node local to its GPU and NIC avoids cross-socket QPI/UPI traffic — a real and often-missed dataloader/host-copy penalty.</td></tr>
+        <tr><td>PCIe</td><td>The path between CPU/host memory, NVMe, and the GPUs. The GPU→CPU staging phase of async checkpointing (Manual I §13) rides PCIe; a bad PCIe link shows up as one rank's stall.</td></tr>
+        <tr><td>local NVMe (/raid)</td><td>Fast node-local scratch. The team <code>sbcast</code>s container images here so every node reads the image locally instead of hammering the shared filesystem at job start.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <h5>The one command that reveals it all</h5>
+      <p><code>nvidia-smi topo -m</code> prints the connectivity matrix — which GPUs are NVLink-connected (<code>NV#</code>), which share a PCIe switch (<code>PIX/PXB</code>), which cross a NUMA node (<code>SYS</code>), and which NIC is affine to which GPU. When the storage benchmark says "cross-reference a stalled rank with <code>nvidia-smi topo</code>," this is the tool. Being able to read this matrix and say "GPU3's checkpoint stall is because its affine NIC/PCIe path is degraded" is exactly the node-level fluency the compute interviewer is checking.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c03">
+    <h2><span class="ch-num">03</span>The network is the computer</h2>
+
+    <p>At scale, the interconnect <em>is</em> the supercomputer — a 1,000-GPU training job spends a large fraction of every step moving gradients and activations. The fabric topology determines how fast that movement is, and it's the single biggest performance differentiator between clusters.</p>
+
+    <h3>The fat-tree (Clos) topology</h3>
+
+    <p>GPU clusters are almost universally wired as a <strong>fat-tree</strong> (a folded-Clos network): leaf switches connect to nodes, spine switches connect leaves, and bandwidth is provisioned so the network is non-blocking (or near it) — every node can talk to every other at full rate, in principle.</p>
+
+    <div class="diagram">          ┌──── SPINE switches ────┐         (core; connects all leaves)
+          │      │       │       │   │
+       ┌──┴──┐┌──┴──┐ ┌──┴──┐ ┌──┴──┐
+       │LEAF ││LEAF │ │LEAF │ │LEAF │              (one leaf per rack-ish group)
+       └──┬──┘└──┬──┘ └──┬──┘ └──┬──┘
+        nodes  nodes   nodes   nodes
+
+  Locality ladder (latency/​bandwidth, best → worst):
+   1. intra-node  ............ NVLink/NVSwitch  (no network at all)
+   2. intra-leaf  ............ one switch hop    (same rack group)
+   3. leaf→spine→leaf ........ three hops        (different rack groups)
+   4. cross-cluster / WAN .... avoid for a single job</div>
+
+    <p>Two concepts the network interviewer (Aman) and the ops interviewer (McQueen/O'Kelly) both expect:</p>
+
+    <ul class="dash">
+      <li><strong>Oversubscription.</strong> A "non-blocking" fabric is expensive; many clusters oversubscribe at the spine (e.g., 2:1), meaning cross-leaf traffic can contend. A job placed across many leaves can hit this; a job packed into one leaf won't. This is <em>why</em> topology-aware scheduling matters (§12).</li>
+      <li><strong>Rails &amp; rail-alignment.</strong> Each GPU has a dedicated NIC/rail to the fabric. NCCL is rail-aware: GPU<em>n</em> ↔ GPU<em>n</em> traffic stays on rail <em>n</em>, so a collective is really N parallel rail-local transfers. Break rail alignment (wrong NIC binding, mismatched plugin) and you funnel everything through fewer paths.</li>
+    </ul>
+
+    <div class="callout warn">
+      <h5>SHARP: in-network reduction (an IB superpower)</h5>
+      <p>NVIDIA's InfiniBand switches support <strong>SHARP</strong> (Scalable Hierarchical Aggregation and Reduction Protocol) — the switch itself performs the sum for an all-reduce, so gradient data is reduced <em>in the network</em> rather than shuttled around a ring among GPUs. This can roughly halve all-reduce traffic and latency for large jobs. It exists on IB fabrics (OCI/CoreWeave-style) but not on EFA — one concrete reason the same job performs differently across providers. Knowing SHARP exists and is fabric-specific is a strong networking signal.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c04">
+    <h2><span class="ch-num">04</span>GB200 NVL72: the rack as a node</h2>
+
+    <p>The GB200 NVL72 is the most important architectural shift in the fleet, and it deserves its own chapter because it inverts the locality model from §02–§03. Two of the team's most pointed pieces of work (the DCGM-NVLink harness, the topology utilities) exist because of it.</p>
+
+    <div class="diagram">  H100 WORLD                          GB200 NVL72 WORLD
+  ──────────                          ─────────────────
+  NVLink domain = 8 GPUs (one node)   NVLink domain = 72 GPUs (one RACK)
+  inter-node = IB/EFA                 intra-rack = MNNVL (multi-node NVLink)
+  hosts = x86                         hosts = ARM (aarch64)
+  placement unit = node               placement unit = TRAY within a BLOCK
+  topology reasoning = leaf switch    topology reasoning = which trays are free
+
+  A GB200 NVL72 rack:
+   ┌───────────────────────────────────────────────┐
+   │  18 compute trays × 4 Blackwell GPUs = 72 GPUs │
+   │  9 NVSwitch trays  → one flat NVLink fabric     │
+   │  all 72 GPUs talk at full NVLink BW, rack-wide  │
+   │  Grace (ARM) CPUs paired with the GPUs          │
+   └───────────────────────────────────────────────┘
+   node naming:  nvl72NNN-TYY   (rack NNN, tray YY)</div>
+
+    <p>What changes, concretely, for your work:</p>
+
+    <table class="tbl">
+      <thead><tr><th>Dimension</th><th>The GB200 difference</th></tr></thead>
+      <tbody>
+        <tr><td>Parallelism mapping</td><td>You can run tensor-parallel or expert-parallel groups <em>across 72 GPUs</em> at NVLink speed — impossible on H100, where TP was capped at 8. This unlocks larger TP/EP and changes the optimal parallelism layout.</td></tr>
+        <tr><td>Placement</td><td>Which trays your job lands on matters. The slurm-utils <code>get-avail-topology</code> shows free nodes <em>per block</em> precisely so jobs pack into NVLink-local trays. Scattered tray placement can leave a job spanning blocks.</td></tr>
+        <tr><td>Architecture (ARM)</td><td>Containers and binaries must be <strong>aarch64</strong>. The NCCL-plugin containers are built multi-arch for exactly this; a stray x86 image simply won't run.</td></tr>
+        <tr><td>The fabric-memory path</td><td>MNNVL uses CUDA fabric-memory APIs (<code>cuMemCreate(FABRIC)</code>, <code>cuMemSetAccess</code>, <code>cuMemImportFromShareableHandle</code>). These become hot — and the DCGM-NVLink bug (Manual I §24) showed that telemetry polling can contend on the driver lock and slow these <code>cuMem*</code> calls ~10×.</td></tr>
+        <tr><td>nvloom / nvshmem</td><td>New benchmarks exist specifically to measure the MNNVL fabric (<code>nvloom</code>) and the NVSHMEM one-sided model (<code>nvshmem</code>) at rack scale — they didn't matter when NVLink stopped at 8 GPUs.</td></tr>
+      </tbody>
+    </table>
+
+    <p class="pull">On H100 the node is the unit of NVLink locality. On GB200 the rack is. Every placement, parallelism, and telemetry decision shifts accordingly.</p>
+  </section>
+
+  <section class="chapter" id="c05">
+    <h2><span class="ch-num">05</span>Login / head / compute / data nodes</h2>
+
+    <p>Operating literacy starts with knowing which node does what — and which you're allowed to touch. The team's "best practices" doc is explicit about this, and the Slurm/customers interviewer will absolutely check it.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Node type</th><th>Role &amp; rules</th></tr></thead>
+      <tbody>
+        <tr><td>Login node</td><td>Where you SSH in, edit code, and <strong>submit jobs from</strong>. Shared, modest resources. The correct place for <code>sbatch</code>/<code>srun</code>. Not for heavy compute.</td></tr>
+        <tr><td>Head / controller node</td><td>Runs <code>slurmctld</code> (the scheduler) and <code>slurmdbd</code> (accounting DB). <strong>Never submit jobs from here</strong> — it's the control plane; loading it can destabilize the whole cluster. The team's rule #3: "Do NOT submit jobs from the head node."</td></tr>
+        <tr><td>Compute node</td><td>The GPU workers where jobs actually run. <strong>SSH to a compute node is usually only allowed if you have a job running on it</strong> (some clusters block it entirely). You reach them via Slurm, not directly.</td></tr>
+        <tr><td>Data / data-mover node</td><td>High-bandwidth hosts for staging large datasets and pulling logs. On data-intensive clusters there may be an explicit login node for this. sisyphus even uses "data copier nodes" for SCP-ing execution logs.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout danger">
+      <h5>The classic onboarding mistakes (and what they signal)</h5>
+      <p>Running a build or a <code>python train.py</code> directly on a login node (instead of <code>srun</code>-ing onto a compute node), or worse on the head node, is the canonical new-user error — it degrades a shared resource and, on the head node, the scheduler itself. The team's fix is to make the right thing easy: <code>setup-cluster.sh</code> sets a default account, puts <code>slurm-utils</code> on your PATH, and provides a "dev box" pattern (<code>srun --pty ... /bin/bash</code>) so even interactive work lands on a compute node. If asked "what would you tell a new researcher first," the answer is this node taxonomy plus "submit from login, compute via Slurm, never touch the head node."</p>
+    </div>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART II ===================== -->
+<div class="part" id="p2">
+  <div class="part-label">Part II — Slurm, the scheduler</div>
+  <h2 class="part-title">How work gets <span class="acc">placed.</span></h2>
+  <p class="part-intro">Slurm is the operating system of the cluster — it decides which job runs where and when, binds GPUs to processes, and accounts for every GPU-second. This is the operations interview's core territory, and the layer where scheduling-goodput (Manual I, Layer 1) is won or lost. We build Slurm from its architecture up to fairshare, topology, and accounting.</p>
+
+  <section class="chapter" id="c06">
+    <h2><span class="ch-num">06</span>Slurm's architecture</h2>
+
+    <p>Slurm (Simple Linux Utility for Resource Management) is three daemons and a database. Knowing the pieces lets you reason about where a scheduling problem lives.</p>
+
+    <div class="diagram">  ┌────────────────────────────────────────────────────────────┐
+  │  HEAD NODE                                                  │
+  │   slurmctld   ── the brain: holds the queue, makes          │
+  │      │          scheduling decisions, tracks node state     │
+  │      │                                                      │
+  │   slurmdbd  ──► MySQL  ── accounting: every job's usage,     │
+  │                            associations, fairshare, limits  │
+  └──────┬─────────────────────────────────────────────────────┘
+         │  RPC (controls + heartbeats)
+   ┌─────┴───────┬───────────────┬───────────────┐
+   v             v               v               v
+  slurmd        slurmd          slurmd          slurmd      ── one per compute node:
+  (node 1)      (node 2)        (node 3)        (node N)       launches & supervises
+                                                               the job's tasks locally
+
+  USER on a login node:
+    sbatch / srun / squeue / sacct  ── talk to slurmctld (and slurmdbd for history)</div>
+
+    <table class="tbl">
+      <thead><tr><th>Component</th><th>Job</th></tr></thead>
+      <tbody>
+        <tr><td>slurmctld</td><td>The controller. Maintains the pending queue, runs the scheduling loop (priority + backfill), tracks every node's state, and dispatches jobs. Single point of coordination — which is why you never load the head node.</td></tr>
+        <tr><td>slurmd</td><td>The per-node agent. Receives "run this step" from the controller, sets up cgroups, binds GPUs, launches the user's tasks, and reports back. One <code>slurmd</code> per compute node.</td></tr>
+        <tr><td>slurmstepd</td><td>A per-step shepherd that <code>slurmd</code> spawns to actually manage a running job step's processes.</td></tr>
+        <tr><td>slurmdbd + MySQL</td><td>The accounting database. Stores associations (user↔account↔partition), usage history (for fairshare), and enforces limits. <code>sacct</code>/<code>sacctmgr</code>/<code>sreport</code> read it.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <h5>Two scheduling loops, one big lever</h5>
+      <p>slurmctld runs two passes: the <strong>main scheduler</strong> (strict priority order — start the highest-priority job that fits) and <strong>backfill</strong> (start lower-priority jobs in the gaps, but only if they finish before they'd delay a higher-priority job — which is why accurate <code>--time</code> limits matter; a job that lies about its runtime breaks backfill for everyone). When a researcher's small job "jumps ahead" of a big pending one, that's backfill working as designed. Understanding backfill is a senior Slurm tell.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c07">
+    <h2><span class="ch-num">07</span>The job lifecycle &amp; state machine</h2>
+
+    <p>Every job moves through a state machine, and the terminal states are exactly the vocabulary of scheduling-layer goodput loss (Manual I §10). Reading these states is the first move in any "my job died/won't start" investigation.</p>
+
+    <div class="diagram">                    submit (sbatch)
+                         │
+                         v
+   ┌──────────► PENDING ──────────────────────────┐
+   │            (reason: Priority / Resources /    │
+   │             QOSMaxJobs / ReqNodeNotAvail …)   │
+   │                 │ scheduler picks it          │
+   │                 v                             │
+   │            CONFIGURING ──► RUNNING             │
+   │                                │              │
+   requeue ◄──┬─────────┬──────────┼──────┬────────┤
+   │          │         │          │      │        │
+   v          v         v          v      v        v
+ COMPLETED  FAILED  TIMEOUT  NODE_FAIL  PREEMPTED  CANCELLED
+ (exit 0)  (exit≠0)  (hit    (hardware  (higher-   (scancel /
+                     --time)  died)      prio job)  OOM kill)</div>
+
+    <table class="tbl">
+      <thead><tr><th>State</th><th>What it means · efficiency angle</th></tr></thead>
+      <tbody>
+        <tr><td>PENDING</td><td>Waiting. The <code>REASON</code> field is gold: <code>Priority</code> (others ahead), <code>Resources</code> (nothing free yet), <code>QOSMax*</code> (you hit a limit), <code>ReqNodeNotAvail</code> (a constraint can't be met, e.g. a topology request). Diagnose with <code>squeue --start</code>.</td></tr>
+        <tr><td>RUNNING</td><td>Executing. This is where runtime-goodput (Layer 2) accrues.</td></tr>
+        <tr><td>COMPLETED</td><td>Exit code 0. Clean.</td></tr>
+        <tr><td>FAILED</td><td>Non-zero exit. App crash, OOM, bad config — back to the researcher (or FACT for attribution).</td></tr>
+        <tr><td>TIMEOUT</td><td>Hit <code>--time</code>. Often means the job under-estimated, or genuinely needs checkpoint-resume to continue. A lost-work risk if checkpointing was sparse.</td></tr>
+        <tr><td>NODE_FAIL</td><td>Hardware died under the job. A pure scheduling-layer loss; triggers FACT bad-node attribution and Heimdall remediation. With <code>--requeue</code>, Slurm re-queues automatically.</td></tr>
+        <tr><td>PREEMPTED</td><td>A higher-priority job took the nodes. Scheduling-layer loss; re-pays startup tax on requeue.</td></tr>
+        <tr><td>REQUEUED</td><td>Back to PENDING for another cycle. jobsinfo-done records one row per cycle — the execution backbone (Manual I §18).</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout warn">
+      <h5>The requeue/startup compounding loop</h5>
+      <p>A job on a flaky cluster cycles RUNNING → NODE_FAIL → REQUEUED → CONFIGURING → RUNNING repeatedly. Each cycle re-pays the full startup tax (container load, model init, checkpoint load — Manual I §12) and risks lost work back to the last checkpoint. So a Layer-1 problem (bad nodes causing requeues) manifests as a Layer-2 cost (repeated startup) and a Layer-1+2 cost (lost work). When you see a high requeue count in jobsinfo-done, you've found a goodput sink — and the fix splits between ops (drain the bad nodes) and the researcher (checkpoint more often so each failure costs less).</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c08">
+    <h2><span class="ch-num">08</span>sbatch / srun / salloc</h2>
+
+    <p>Three ways to ask Slurm for resources, and knowing when to use each is basic operational fluency.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Command</th><th>Use</th></tr></thead>
+      <tbody>
+        <tr><td>sbatch</td><td>Submit a <em>batch script</em> to the queue and return immediately. The script's <code>#SBATCH</code> directives request resources; the body runs when scheduled. The normal way to run training jobs.</td></tr>
+        <tr><td>srun</td><td>Launch a <em>job step</em> — either standalone (blocks until it runs) or, more importantly, <em>inside</em> an sbatch script to spawn the parallel tasks across the allocated nodes. <code>srun</code> is what actually starts your N processes on N nodes.</td></tr>
+        <tr><td>salloc</td><td>Grab an allocation for <em>interactive</em> use — you get a shell with nodes reserved, then run <code>srun</code> commands by hand. Good for debugging and the "dev box" pattern.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>The sbatch + srun pattern</h3>
+
+<pre data-lang="BASH"><span class="com">#!/bin/bash</span>
+<span class="com">#SBATCH --job-name=nemotron-pretrain</span>
+<span class="com">#SBATCH --account=av_alpamayo_training   # the PPP project → Slurm account</span>
+<span class="com">#SBATCH --partition=batch                # which queue (see §09)</span>
+<span class="com">#SBATCH --nodes=8                        # 8 nodes...</span>
+<span class="com">#SBATCH --gpus-per-node=8                # ...× 8 GPUs = 64 GPUs</span>
+<span class="com">#SBATCH --ntasks-per-node=8              # one task PER GPU (the convention)</span>
+<span class="com">#SBATCH --time=04:00:00                  # walltime (honest = good backfill)</span>
+<span class="com">#SBATCH --requeue                        # auto-requeue on node failure</span>
+<span class="com">#SBATCH --output=%x_%j.out               # %x=jobname %j=jobid</span>
+
+<span class="com"># The body runs ONCE on the first node. srun fans out the real work:</span>
+<span class="fn">srun</span> --container-image=./pytorch.sqsh \
+     --container-mounts=/lustre:/lustre \
+     python train.py --config nemotron5.yaml</pre>
+
+    <p>The key mental model: <strong>the sbatch body executes once on the first allocated node; <code>srun</code> is what replicates your command across all tasks/nodes.</strong> A common bug is putting the training command outside <code>srun</code> — then it runs on one node only, and the other 7 sit idle (a goodput catastrophe that looks like a slow job).</p>
+
+    <div class="callout tip">
+      <h5>The rule the storage tests encode: ntasks-per-node == gpus-per-node</h5>
+      <p>The convention across the team's scripts is one task (one process) per GPU, so <code>--ntasks-per-node</code> must equal <code>--gpus-per-node</code>. The storage benchmark's parameter table literally notes "<code>--ntasks-per-node</code> must match <code>--gpus-per-node</code>." Each task then binds to its GPU via <code>LOCAL_RANK</code>. Getting this mismatched gives you too few or too many processes per GPU — either idle GPUs or oversubscription.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c09">
+    <h2><span class="ch-num">09</span>Partitions, QoS &amp; limits</h2>
+
+    <p>Partitions and QoS are how a cluster carves its nodes into queues with different rules. The team's real <code>show_partitions</code> output is the perfect concrete example.</p>
+
+    <h3>Partitions: queues over node sets</h3>
+
+    <p>A partition is a named set of nodes plus policy (time limits, priority, access). From the team's actual cluster:</p>
+
+<pre data-lang="text">Partition          Nodes   State        Time limit    GPUs/Node
+batch*             up      4:00:00       (default)      8
+batch_large        up      4:00:00                      8
+batch_large_long   up      14-00:00:0    (14 days)      8
+batch_short        up      2:00:00                      8
+interactive        up      4:00:00                      8
+backfill           up      7-00:00:00                   8
+high_prio          up      7-00:00:00                   8
+cpu                up      1-00:00:00    (CPU-only)      0
+cpu_long           up      7-00:00:00                   0</pre>
+
+    <p>Reading this: <code>batch</code> is the default (the <code>*</code>), capped at 4h. Need longer? <code>batch_large_long</code> (14 days). Just iterating? <code>batch_short</code> (2h, schedules fast because it's easy to backfill). The storage-benchmark troubleshooting advice — "job stuck in Priority? try <code>--partition=batch_short</code>" — is exactly using a faster-scheduling queue. Different partitions can also map to different <em>hardware</em> (an H100 partition vs a GB200 partition).</p>
+
+    <h3>QoS: policy modifiers</h3>
+
+    <p>Quality of Service (<code>--qos=</code>) layers limits and priority on top of partitions: max jobs per user, max GPUs per account, a priority boost, preemption rights. QoS is how the cluster enforces "team A gets at most N GPUs" and "these jobs may preempt those." A <code>QOSMaxJobsPerUserLimit</code> reason in <code>squeue</code> means you hit a QoS cap, not a resource shortage — a completely different fix (wait/ask for more quota vs nothing-is-free).</p>
+
+    <div class="callout warn">
+      <h5>"My job won't start" → read the reason, then the limit</h5>
+      <p>The single most common support question. The decision tree: <code>squeue --start</code> shows the estimated start and the <code>REASON</code>. <code>Resources</code> → genuinely nothing free, check <code>show_idle_nodes</code>. <code>Priority</code> → others ahead, fairshare conversation or a shorter partition. <code>QOSMax*</code>/<code>AssocMax*</code> → a limit, check quota with <code>sacctmgr</code>. <code>ReqNodeNotAvail</code> → an unsatisfiable constraint (often a topology or feature request that no free node matches). Naming this tree is exactly the operational competence the Slurm interviewer wants.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c10">
+    <h2><span class="ch-num">10</span>Fairshare &amp; multifactor priority</h2>
+
+    <p>How does Slurm order the pending queue? Through a <strong>multifactor priority</strong> score, of which <strong>fairshare</strong> is usually the dominant term. This is the mechanism behind every "why is my job behind theirs" question and the lever behind fair access — squarely in the systems/customers interview.</p>
+
+    <h3>The priority formula</h3>
+
+    <div class="diagram">  Priority = (PriorityWeightAge       × age_factor)         # how long it's waited
+           + (PriorityWeightFairshare × fairshare_factor)   # are you under/over your share?
+           + (PriorityWeightQOS       × qos_factor)         # QoS priority boost
+           + (PriorityWeightPartition × partition_factor)   # partition priority
+           + (PriorityWeightJobSize   × size_factor)        # bigger / smaller jobs
+           − (nice / penalties)
+
+  fairshare_factor: high when you've used LESS than your allocated share recently,
+                    low when you've used MORE. Decays over time (half-life).</div>
+
+    <p>The crucial term is fairshare. Each account (PPP project) has an allocated <strong>share</strong> of the cluster. Slurm tracks recent usage with a decaying half-life and computes a fairshare factor: <strong>use less than your share and your priority rises; burn through your share and it drops, letting others catch up.</strong> It's not a hard quota — an over-share account can still run when the cluster is idle — it's a dynamic priority that balances usage across teams over time.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Command</th><th>Shows</th></tr></thead>
+      <tbody>
+        <tr><td>sshare -A acct</td><td>An account's allocated share vs its recent usage and resulting fairshare factor — the "why is my priority low" answer.</td></tr>
+        <tr><td>sprio -j jobid</td><td>The full priority breakdown for a pending job (age/fairshare/QoS/partition components).</td></tr>
+        <tr><td>scontrol show job jobid</td><td>Everything Slurm knows about a job, including its current priority and pending reason.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="idea">
+      <p><strong>Fairshare reframes capacity fights as a self-correcting system.</strong> When a researcher complains their jobs are behind another team's, the honest, mechanism-grounded answer is: "Your account has used more than its share recently, so fairshare lowered your priority to let others catch up — it'll recover as your usage decays." Then the efficiency angle, which is your superpower here: "If your jobs weren't wasting 40% of their GPU-hours to startup and lost work, you'd accomplish the same science with less of your share, and you'd sit higher in the queue." Efficiency work directly buys queue priority. That connection — fairshare × efficiency — is a standout answer for the systems/customers interview.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c11">
+    <h2><span class="ch-num">11</span>Reservations</h2>
+
+    <p>A <strong>reservation</strong> sets aside specific nodes for a specific purpose, time window, or set of users — bypassing the normal queue. They're how the team does acceptance testing, customer guarantees, and maintenance.</p>
+
+    <ul class="dash">
+      <li><strong>Validation/acceptance:</strong> Stormbreaker and the cluster-workload tests "run on nodes that are part of your main Slurm pool <em>or a reservation</em>." A new cluster's bring-up testing runs in a reservation so it doesn't fight production jobs.</li>
+      <li><strong>Customer guarantees:</strong> a team with a deadline can get a reservation guaranteeing N GPUs for a window — capacity carved out of fairshare.</li>
+      <li><strong>Maintenance/draining:</strong> reservations mark nodes as off-limits while they're being repaired or updated.</li>
+    </ul>
+
+<pre data-lang="BASH"><span class="com"># Use a reservation (the team's configs set this via env/config.sh)</span>
+$ sbatch --reservation=my_reservation train.sbatch
+<span class="com"># Admin view: what reservations exist and which nodes they hold</span>
+$ scontrol show reservations</pre>
+
+    <div class="callout tip">
+      <h5>Reservations are the "break glass" for fair scheduling</h5>
+      <p>Because reservations bypass fairshare, they're powerful and slightly dangerous — every node in a reservation is a node the general queue can't use. The judgment question an interviewer might pose: "When do you give a team a reservation vs telling them to wait in the queue?" The senior answer balances genuine business need (a hard external deadline, a coordinated multi-team run, acceptance testing) against the cost to everyone else, and prefers time-boxed reservations with a clear end. It's a fairness-vs-urgency trade, and naming it as such is the point.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c12">
+    <h2><span class="ch-num">12</span>Topology-aware scheduling</h2>
+
+    <p>This is where scheduling meets the network (§03) and the GB200 rack (§04), and it's a genuine efficiency lever — the same job runs faster when its nodes are network-close. The Slurm interviewer and the compute interviewer both care.</p>
+
+    <h3>How Slurm knows the topology</h3>
+
+    <p>Slurm's <code>topology/tree</code> plugin reads a description of the switch hierarchy (which nodes hang off which leaf, which leaves off which spine) and tries to allocate a job's nodes <strong>under as few switches as possible</strong> — minimizing the spine hops the job's collectives must cross. On a fat-tree with any oversubscription, this directly reduces communication contention.</p>
+
+    <div class="diagram">  Job needs 16 nodes. Two placements:
+  ──────────────────────────────────────────────
+  BAD (topology-blind):  4 nodes on leaf A, 4 on B, 4 on C, 4 on D
+                         → every all-reduce crosses the spine → contention
+
+  GOOD (topology-aware): 16 nodes all under leaf A (if they fit)
+                         → all-reduce stays leaf-local → full bandwidth
+
+  Slurm with topology/tree prefers the GOOD packing automatically.</div>
+
+    <h3>The GB200 block/tray case</h3>
+
+    <p>On GB200 NVL72 the unit is the tray within a block (a rack's NVLink domain). The team's <code>get-avail-topology</code> exists precisely to surface free capacity <em>per block</em> so jobs pack into NVLink-local trays:</p>
+
+<pre data-lang="text">$ slurm-utils/get-avail-topology
+Blocks with Available Nodes
+Block Name   # Available Nodes   Node List
+block001     15                  nvl72011-T01, nvl72011-T02, ... T18
+block021     18                  nvl72037-T01 ... T18   ← a whole block free
+block017     1                   nvl72032-T13           ← nearly full, avoid</pre>
+
+    <p>A researcher running a rack-scale job wants their nodes inside <em>one</em> block (one NVLink fabric), so they'd target a block with enough free trays (block021's 18, not block017's 1). This is the GB200 analog of "pack under one leaf," and being able to read this output is concrete GB200 operational fluency.</p>
+
+    <div class="callout warn">
+      <h5>Topology constraints can also strand a job</h5>
+      <p>Requesting tight topology (e.g., "all my nodes in one block/leaf") makes a job harder to schedule — if no single block has enough free trays, the job sits PENDING with <code>ReqNodeNotAvail</code> even though the cluster has free GPUs scattered elsewhere. So topology is a trade: tighter placement = better runtime performance but worse schedulability. The senior move is to know when a workload genuinely needs the locality (large TP/EP spanning the rack) versus when it can tolerate spread (pure data-parallel with overlappable all-reduce).</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c13">
+    <h2><span class="ch-num">13</span>Accounting: sacct &amp; sreport</h2>
+
+    <p>Slurm's accounting database is the raw material under the whole efficiency program — <code>jobsinfo-done</code> (the execution backbone, Manual I §18) is fundamentally a transformed view of Slurm accounting. Knowing the native tools shows you understand where the telemetry comes from.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Command</th><th>Answers</th></tr></thead>
+      <tbody>
+        <tr><td>sacct -j jobid</td><td>Per-job/per-step accounting: state, exit code, elapsed, requested vs used resources. The native view of one job's history (including each requeue cycle as a row).</td></tr>
+        <tr><td>sacctmgr show assoc user=$USER</td><td>Your associations — which accounts/partitions you can use and your limits. The storage-test troubleshooting uses exactly this for "Invalid account" errors.</td></tr>
+        <tr><td>sreport cluster utilization</td><td>Aggregate cluster utilization over a window — the native, coarse precursor to the fleet dashboards.</td></tr>
+        <tr><td>scontrol show job / node</td><td>Live state (not historical) of a running job or a node, straight from slurmctld.</td></tr>
+      </tbody>
+    </table>
+
+<pre data-lang="BASH"><span class="com"># A job's full accounting, including requeue cycles and per-step detail</span>
+$ sacct -j 3301425 --format=JobID,State,ExitCode,Elapsed,NNodes,ReqGRES,Start,End
+
+<span class="com"># Diagnose "Invalid account" — what can this user actually charge to?</span>
+$ sacctmgr show assoc user=$USER format=Account%30,Partition%20,QOS%30</pre>
+
+    <div class="idea">
+      <p><strong>The efficiency platform is built on top of Slurm accounting, not beside it.</strong> <code>sacct</code>'s per-execution rows, the account/association model, and the GRES (GPU) usage are exactly the fields that NV Park's ETL transforms into the <code>jobsinfo-done</code> index. When you explain the data pipeline (Manual I §16–§18) you can now say: "It starts as Slurm accounting — one row per execution keyed by job, cluster, and start time — which is enriched with DCGM utilization and joined to OneLogger and FACT." Tracing the telemetry back to its Slurm origin is the kind of end-to-end understanding that marks a senior systems engineer.</p>
+    </div>
+
+    <p class="pull">Every fleet efficiency number has a Slurm accounting row underneath it. Know the row and you understand the number.</p>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART III ===================== -->
+<div class="part" id="p3">
+  <div class="part-label">Part III — Running real workloads</div>
+  <h2 class="part-title">From sbatch to <span class="acc">running.</span></h2>
+  <p class="part-intro">Slurm allocates nodes, but a training job is a containerized, GPU-bound, multi-process distributed program. This part covers the machinery that turns an allocation into running ranks: rootless containers (Enroot), the Slurm container plugin (Pyxis), the distributed launch, and how GPUs actually get bound to processes.</p>
+
+  <section class="chapter" id="c14">
+    <h2><span class="ch-num">14</span>Containers on HPC: Enroot</h2>
+
+    <p>Every job on these clusters runs in a container, but <strong>Docker is not available</strong> — and knowing <em>why</em> is a litmus test for HPC literacy. The team's best-practices doc states it flatly: "Docker is not available on clusters. We use Enroot."</p>
+
+    <h3>Why not Docker</h3>
+
+    <ul class="dash">
+      <li>Docker needs a root daemon (<code>dockerd</code>) and grants effectively-root capabilities — unacceptable on a shared multi-tenant cluster where users must not have root.</li>
+      <li>Docker's networking/namespacing model fights Slurm's resource control (cgroups, GPU binding) and the HPC fabric (it wants the host's IB/EFA devices directly, not a bridge).</li>
+      <li>HPC needs the container to <em>inherit</em> the host's high-performance devices (GPUs, the IB/EFA NICs, the parallel filesystem mounts) with near-zero overhead, not isolate them.</li>
+    </ul>
+
+    <h3>What Enroot does</h3>
+
+    <p><strong>Enroot</strong> is NVIDIA's rootless, unprivileged container runtime built for exactly this. It converts an OCI image into a flat <strong>squashfs <code>.sqsh</code></strong> file and runs it as the user, with the GPUs and host fabric passed straight through.</p>
+
+<pre data-lang="BASH"><span class="com"># Import an image from NGC → a .sqsh file (this is the slow, one-time step)</span>
+$ enroot import nvcr.io#nvidia/pytorch:25.08-py3
+<span class="com"># produces nvidia+pytorch+25.08-py3.sqsh  (squashfs: a single compressed file)</span>
+
+<span class="com"># The team's pull-image.sh wraps this to be docker-like and place it on Lustre</span>
+$ ./pull-image.sh nvcr.io#nvidia/nemo:24.12-rc0
+<span class="com"># auto-picks a data_path (lustre/projects) and names it nemo_24.12-rc0.sqsh</span></pre>
+
+    <table class="tbl">
+      <thead><tr><th>Property</th><th>Enroot vs Docker</th></tr></thead>
+      <tbody>
+        <tr><td>Privilege</td><td>Fully unprivileged (runs as you). Docker needs a root daemon.</td></tr>
+        <tr><td>Image format</td><td>A single <code>.sqsh</code> squashfs file on the shared FS. Docker uses a layered local store.</td></tr>
+        <tr><td>Device access</td><td>GPUs + IB/EFA NICs passed through natively, full performance. Docker isolates by default.</td></tr>
+        <tr><td>Integration</td><td>Designed to be launched by Slurm via Pyxis (§15). Docker is daemon-centric.</td></tr>
+        <tr><td>State</td><td>Read-only image + writable overlay; artifacts in mounted <code>/home</code> or <code>/lustre</code> persist after exit.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <h5>The ARM gotcha and the /raid trick</h5>
+      <p>Two operational facts worth knowing: (1) GB200 clusters are ARM, so you must import an <strong>aarch64</strong> image — an x86 <code>.sqsh</code> simply won't run there (the multi-arch NCCL-plugin containers exist for this). (2) At job start, reading a multi-GB <code>.sqsh</code> from the shared filesystem on every node at once hammers storage; the storage benchmark's mitigation is to <code>sbcast</code> the image to node-local <code>/raid</code> first, so each node reads it locally. This is a startup-tax (container-load) optimization in action — connecting Manual I §12 to the storage layer.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c15">
+    <h2><span class="ch-num">15</span>Pyxis: containers in Slurm</h2>
+
+    <p>Enroot runs a container; <strong>Pyxis</strong> is the SPANK plugin that lets Slurm run it <em>per task</em> with a clean <code>srun</code> flag. Together they're how every job on the fleet executes.</p>
+
+<pre data-lang="BASH"><span class="com"># Pyxis adds --container-* flags to srun:</span>
+$ srun \
+    --container-image=/lustre/.../pytorch-25.08.sqsh \
+    --container-mounts=/lustre:/lustre,/home:/home \
+    --container-workdir=/workspace \
+    python train.py
+
+<span class="com"># What happens per task, on every allocated node:
+#   1. Pyxis asks Enroot to instantiate the .sqsh container for THIS task
+#   2. mounts the requested host paths (Lustre, home) into it
+#   3. injects the GPUs Slurm bound to this task (via GRES, §19)
+#   4. runs the command as you, inside the container</span></pre>
+
+    <table class="tbl">
+      <thead><tr><th>Flag</th><th>Effect</th></tr></thead>
+      <tbody>
+        <tr><td>--container-image</td><td>The <code>.sqsh</code> (or an NGC URL Pyxis imports on the fly) to run.</td></tr>
+        <tr><td>--container-mounts</td><td>Host→container bind mounts. Almost always includes <code>/lustre</code> (your data/checkpoints) and often <code>/home</code>.</td></tr>
+        <tr><td>--container-workdir</td><td>Working directory inside the container.</td></tr>
+        <tr><td>--container-name</td><td>Reuse a named container across steps (avoids re-instantiating).</td></tr>
+        <tr><td>--container-mount-home</td><td>Convenience to mount your home dir (the "dev box" pattern uses it).</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout warn">
+      <h5>The mount you'll forget, and the failure it causes</h5>
+      <p>If you don't mount the filesystem your data and checkpoints live on, the container can't see them — and you get cryptic "file not found" or a job that writes checkpoints into the ephemeral container overlay (lost on exit). The tensor-loading benchmark's troubleshooting — "Mount path not found in container? both <code>/lustre</code> and <code>/scratch</code> should be mounted; check symlinks" — is exactly this class of bug. When a researcher's job "can't find its data" or "loses its checkpoints," a missing or wrong <code>--container-mounts</code> is the first thing to check.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c16">
+    <h2><span class="ch-num">16</span>The distributed launch</h2>
+
+    <p>A 64-GPU training job is 64 processes that must find each other, agree on ranks, and form NCCL communicators. How they bootstrap is a frequent confusion and a real interview topic (it sits between Slurm and the application).</p>
+
+    <h3>The rank coordinate system</h3>
+
+    <p>Every process needs three numbers and a rendezvous point:</p>
+
+    <table class="tbl">
+      <thead><tr><th>Variable</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td>WORLD_SIZE</td><td>Total processes across all nodes (e.g., 64).</td></tr>
+        <tr><td>RANK</td><td>This process's global index (0…WORLD_SIZE-1).</td></tr>
+        <tr><td>LOCAL_RANK</td><td>This process's index <em>within its node</em> (0…7) — determines which GPU it binds to.</td></tr>
+        <tr><td>MASTER_ADDR / MASTER_PORT</td><td>The rendezvous host:port (rank 0) where everyone meets to bootstrap.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Two launch styles</h3>
+
+    <div class="twocol">
+      <div class="col">
+        <h5>srun-native (one task per GPU)</h5>
+        <p>Slurm's <code>srun --ntasks-per-node=8</code> launches 8 processes per node directly, and Slurm sets <code>SLURM_PROCID</code>→RANK, <code>SLURM_LOCALID</code>→LOCAL_RANK. The app reads these. Clean, Slurm-native, no extra launcher. The team's storage scripts derive <code>MASTER_ADDR</code> from the Slurm nodelist.</p>
+      </div>
+      <div class="col">
+        <h5>torchrun (one task per node)</h5>
+        <p><code>srun --ntasks-per-node=1</code> launches one <code>torchrun</code> per node, and <em>torchrun</em> spawns the 8 local workers and sets the rank env. Common in PyTorch-land. Either works; mixing them (torchrun under 8 tasks) double-spawns and breaks.</p>
+      </div>
+    </div>
+
+<pre data-lang="BASH"><span class="com"># Deriving the rendezvous from Slurm (the common pattern)</span>
+<span class="kw">export</span> MASTER_ADDR=$(scontrol show hostnames $SLURM_JOB_NODELIST | head -n1)
+<span class="kw">export</span> MASTER_PORT=29500
+<span class="kw">export</span> WORLD_SIZE=$SLURM_NTASKS
+<span class="com"># with one-task-per-GPU srun, the app maps SLURM_PROCID→RANK, SLURM_LOCALID→LOCAL_RANK</span>
+srun python train.py</pre>
+
+    <div class="callout danger">
+      <h5>The "hang at init" classic — and why it's a NCCL/launch question</h5>
+      <p>A distributed job that hangs at startup with no error is usually a rendezvous or NCCL-bootstrap failure: wrong <code>MASTER_ADDR</code> (not reachable from all nodes), a firewalled port, a NIC-selection mismatch (NCCL trying an interface that can't route — fixed with <code>NCCL_SOCKET_IFNAME</code>/<code>NCCL_IB_HCA</code>), or a rank-count mismatch (WORLD_SIZE ≠ actual processes). The storage scripts expose exactly these knobs (<code>NCCL_IB_HCA</code>, <code>NCCL_SOCKET_IFNAME</code>, <code>UCX_NET_DEVICES</code>) because they're the usual culprits. When the rules engine fires <code>LOG-CRASH-NCCL-TIMEOUT</code>, this launch/bootstrap layer is where you look first.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c17">
+    <h2><span class="ch-num">17</span>A multi-node sbatch, dissected</h2>
+
+    <p>Putting Parts II–III together: here is a realistic multi-node training script with every line annotated for what it does and where it can go wrong. This is the artifact a researcher actually hands you when something's broken.</p>
+
+<pre data-lang="BASH"><span class="com">#!/bin/bash</span>
+<span class="com">#SBATCH --job-name=nemotron5-56b</span>
+<span class="com">#SBATCH --account=coreai_nvfm_llm        # PPP → Slurm account (charges fairshare)</span>
+<span class="com">#SBATCH --partition=batch                # queue + node set + time policy (§09)</span>
+<span class="com">#SBATCH --nodes=8                         # 8 nodes</span>
+<span class="com">#SBATCH --gpus-per-node=8                 # 64 GPUs total</span>
+<span class="com">#SBATCH --ntasks-per-node=8               # one task per GPU (MUST match gpus-per-node)</span>
+<span class="com">#SBATCH --time=04:00:00                   # honest walltime → good backfill (§06)</span>
+<span class="com">#SBATCH --requeue                         # auto-requeue on NODE_FAIL (§07)</span>
+<span class="com">#SBATCH --exclusive                       # whole nodes, no sharing</span>
+<span class="com">#SBATCH --output=%x_%j.out</span>
+
+<span class="com"># --- rendezvous for distributed init (§16) ---</span>
+<span class="kw">export</span> MASTER_ADDR=$(scontrol show hostnames $SLURM_JOB_NODELIST | head -n1)
+<span class="kw">export</span> MASTER_PORT=29500
+
+<span class="com"># --- network tuning: pick the right fabric devices (§20-§23) ---</span>
+<span class="kw">export</span> NCCL_IB_HCA=mlx5            <span class="com"># which IB HCAs NCCL may use (ibstat to list)</span>
+<span class="kw">export</span> NCCL_SOCKET_IFNAME=eth0     <span class="com"># control-plane interface for bootstrap</span>
+<span class="com"># export NCCL_IB_DISABLE=1         # set on clusters with NO IB/RoCE</span>
+
+<span class="com"># --- stage the container to node-local NVMe to cut startup tax (§14) ---</span>
+sbcast ./pytorch-25.08.sqsh /raid/img.sqsh
+
+<span class="com"># --- the ACTUAL distributed launch: srun fans out across all 64 tasks ---</span>
+srun --container-image=/raid/img.sqsh \
+     --container-mounts=/lustre:/lustre \
+     bash -c 'python train.py \
+                --tensor-model-parallel-size 4 \
+                --pipeline-model-parallel-size 2 \
+                --save /lustre/ckpts/$SLURM_JOB_ID \
+                --async-save --ckpt-fully-parallel-save'</pre>
+
+    <p>The failure-mode map for this exact script — the things you check when it misbehaves:</p>
+
+    <table class="tbl">
+      <thead><tr><th>Symptom</th><th>Likely line / cause</th></tr></thead>
+      <tbody>
+        <tr><td>7 of 8 nodes idle</td><td>Training command not under <code>srun</code> — ran once on node 0 only (§08).</td></tr>
+        <tr><td>Hangs at init</td><td><code>MASTER_ADDR</code> unreachable, port blocked, or wrong NCCL interface (§16).</td></tr>
+        <tr><td>Can't find data / loses checkpoints</td><td>Missing <code>--container-mounts /lustre</code> (§15).</td></tr>
+        <tr><td>Slow checkpoints / step spikes</td><td>Storage write BW — investigate the parallel FS (§31), not the script.</td></tr>
+        <tr><td>"Invalid account"</td><td><code>--account</code> not one of your associations — <code>sacctmgr show assoc</code> (§13).</td></tr>
+        <tr><td>Pending forever</td><td>Resources/Priority/QoS/topology — <code>squeue --start</code> (§07, §09).</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="chapter" id="c18">
+    <h2><span class="ch-num">18</span>SPANK plugins &amp; the task lifecycle</h2>
+
+    <p>SPANK (Slurm Plug-in Architecture for Node and job Kontrol) lets code hook into the job/task lifecycle at well-defined points. It's how Pyxis works, and it's how Abdalla's <strong>write-tracer</strong> attaches to jobs — so understanding SPANK connects the operations layer to the efficiency tooling (and gives you something specific to discuss with the culture interviewer).</p>
+
+    <div class="diagram">  SPANK hook points (a plugin can run code at each):
+   slurm_spank_init ............ controller/allocator startup
+   slurm_spank_init_post_opt ... after option parsing
+   ── per node ──
+   slurm_spank_user_init ....... before the user's task starts (still privileged)
+   slurm_spank_task_init ....... in the task's context, just before exec
+   slurm_spank_task_exit ....... after the task finishes
+
+  Pyxis uses these hooks to instantiate the Enroot container per task.
+  write-tracer's SPANK plugin uses task_init / task_exit to:
+    • POST the task's PID to the tracer's REST API on start  → begin tracing
+    • DELETE the PID on exit                                 → stop tracing</div>
+
+    <p>The write-tracer integration is a clean illustration: its SPANK plugin (built against Slurm dev headers + libcurl, producing <code>slurm_write_tracer.so</code>, registered in <code>plugstack.conf</code>) automatically registers every Slurm task's PID with the eBPF tracer at <code>task_init</code> and unregisters at <code>task_exit</code>. So write tracing turns on and off exactly with the job — no researcher action required. That "instrumentation that attaches itself to the workload transparently" pattern is the team's recurring design value (make the right thing automatic).</p>
+
+    <div class="callout tip">
+      <h5>Why this matters beyond trivia</h5>
+      <p>SPANK is the mechanism behind "the platform observes jobs without the researcher doing anything." Pyxis (containers), write-tracer (I/O tracing), and in principle any future instrumentation all ride it. When an interviewer asks "how would you instrument all jobs on a cluster transparently," SPANK <code>task_init</code> hooks are a legitimate, fleet-native answer — you attach at task launch, with no change to anyone's training code. That's a strong systems-thinking response.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c19">
+    <h2><span class="ch-num">19</span>GRES, cgroups &amp; GPU binding</h2>
+
+    <p>The final mechanism: how Slurm actually gives a task <em>its</em> GPUs and stops it from touching others'. This is the enforcement layer under <code>--gpus-per-node</code>, and it's where "my job sees the wrong GPUs" bugs live.</p>
+
+    <h3>GRES — Generic RESources</h3>
+
+    <p>GPUs are modeled as <strong>GRES</strong> (generic resources). The cluster config declares each node's GPUs (<code>Gres=gpu:8</code>), and a job requests them (<code>--gpus-per-node=8</code> or the older <code>--gres=gpu:8</code>). Slurm tracks GPU allocation cluster-wide just like it tracks CPUs and memory.</p>
+
+    <h3>cgroups — the enforcement</h3>
+
+    <p>Slurm uses Linux <strong>cgroups</strong> to actually confine a task to its allocated GPUs, CPUs, and memory. The cgroup/devices controller exposes only the granted GPUs to the task — so even if two jobs share a node, neither can see or touch the other's GPUs. cgroups also bind CPU cores (for NUMA locality, §02) and cap memory.</p>
+
+    <div class="diagram">  Node with 8 GPUs, two 4-GPU jobs sharing it:
+   ┌──────────────────────────────────────────────┐
+   │  Job A cgroup: devices = GPU0-3, cores 0-47   │  ← A sees only GPU0-3
+   │  Job B cgroup: devices = GPU4-7, cores 48-95  │  ← B sees only GPU4-7
+   └──────────────────────────────────────────────┘
+  Inside Job A, CUDA_VISIBLE_DEVICES / the device list shows 4 GPUs (0-3),
+  and LOCAL_RANK (§16) picks which of those 4 each task uses.</div>
+
+    <table class="tbl">
+      <thead><tr><th>Mechanism</th><th>Role</th></tr></thead>
+      <tbody>
+        <tr><td>GRES (gpu)</td><td>The accounting/allocation model — how many GPUs each node has and a job requests.</td></tr>
+        <tr><td>cgroups (devices)</td><td>The enforcement — confines a task to exactly its GPUs; isolates co-located jobs.</td></tr>
+        <tr><td>cgroups (cpuset)</td><td>Binds CPU cores, enabling NUMA-local placement relative to the task's GPUs/NICs.</td></tr>
+        <tr><td>CUDA_VISIBLE_DEVICES</td><td>What the app sees — within the cgroup, the GPUs are renumbered 0…N; LOCAL_RANK selects one.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout warn">
+      <h5>"My job sees the wrong GPU" — the binding bug</h5>
+      <p>When ranks collide on GPUs or a task uses the wrong device, it's almost always a binding mismatch: the app reading a hard-coded device index instead of <code>LOCAL_RANK</code>, a manually-set <code>CUDA_VISIBLE_DEVICES</code> fighting the cgroup, or a launcher mismatch (§16) so rank↔GPU mapping is off. The fix is to let Slurm's cgroup binding own device assignment and map rank→GPU via <code>LOCAL_RANK</code>, never a hard-coded index. This is the kind of low-level "how does a GPU actually get attached to a process" detail that separates someone who's truly operated these clusters from someone who's only read about them.</p>
+    </div>
+
+    <p class="pull">GRES counts the GPUs, cgroups fence them, LOCAL_RANK picks one. That chain is how 64 processes land on exactly 64 GPUs without stepping on each other.</p>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART IV ===================== -->
+<div class="part" id="p4">
+  <div class="part-label">Part IV — The network fabric</div>
+  <h2 class="part-title">Moving the <span class="acc">gradients.</span></h2>
+  <p class="part-intro">At scale the interconnect decides performance, and it's the single biggest difference between clusters — which is exactly why the team maintains per-provider NCCL plugins and an EFA-version tool. This part covers the fabrics (InfiniBand, RoCE, EFA), the NCCL transport abstraction that hides them, and how to diagnose the network when a job is comm-bound. (The collective <em>algorithms</em> are Manual III; here it's the wire.)</p>
+
+  <section class="chapter" id="c20">
+    <h2><span class="ch-num">20</span>InfiniBand: verbs &amp; RDMA</h2>
+
+    <p>InfiniBand (IB) is the gold-standard HPC fabric and the baseline most clusters (OCI, CoreWeave, on-prem) use. Its defining feature is <strong>RDMA</strong> — Remote Direct Memory Access — and understanding RDMA is understanding why GPU clusters are fast.</p>
+
+    <h3>RDMA: the kernel-bypass idea</h3>
+
+    <div class="diagram">  CLASSIC TCP send:                    RDMA send:
+   app → copy to kernel buffer          app posts a work request to the NIC
+   → TCP/IP stack (CPU)                 → NIC reads app memory DIRECTLY (DMA)
+   → NIC → wire                         → wire → remote NIC writes remote
+   → remote: NIC → kernel → copy          memory DIRECTLY, no remote CPU
+   → app                                → done. CPU never touched the data.
+
+  RDMA wins: zero-copy, kernel-bypass, near-zero CPU, very low latency.
+  With GPUDirect RDMA, the NIC reads/writes GPU memory directly (no GPU→CPU bounce).</div>
+
+    <table class="tbl">
+      <thead><tr><th>Concept</th><th>What it is</th></tr></thead>
+      <tbody>
+        <tr><td>Verbs</td><td>The low-level RDMA API (libibverbs). NCCL/UCX/libfabric sit on top; you rarely call it directly, but it's the substrate.</td></tr>
+        <tr><td>Queue Pair (QP)</td><td>The connection abstraction — a send queue + receive queue between two endpoints. A collective sets up many QPs.</td></tr>
+        <tr><td>GPUDirect RDMA</td><td>The NIC DMAs straight to/from GPU HBM, bypassing the CPU and host memory entirely. Essential for GPU-to-GPU bandwidth.</td></tr>
+        <tr><td>SHARP</td><td>In-network reduction on the IB switch (§03) — the switch sums all-reduce data. IB-only; a real differentiator vs EFA.</td></tr>
+        <tr><td>HCA</td><td>Host Channel Adapter — the IB NIC. <code>ibstat</code> lists them; <code>NCCL_IB_HCA</code> selects which NCCL uses.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <h5>Your UCX background is directly relevant here</h5>
+      <p>This is exactly the layer your prior UCX / GPU-to-GPU communications work lives in — UCX is a verbs/RDMA-level transport library, the same stratum as the NCCL net plugins. You already understand queue pairs, registered memory, one-sided transfers, and GPUDirect. For the compute/network interviewer, this is a place to go deep with genuine authority: "I've worked at the verbs/UCX layer, so I understand what NCCL is doing underneath — registering GPU buffers, posting RDMA writes over QPs, and why rail alignment and memory registration cost matter."</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c21">
+    <h2><span class="ch-num">21</span>RoCE: Ethernet as fabric</h2>
+
+    <p><strong>RoCE</strong> (RDMA over Converged Ethernet) brings RDMA semantics to Ethernet hardware — you get verbs/RDMA, but the wire is Ethernet, not IB. Some cloud GPU fabrics use it. The catch is that Ethernet wasn't built to be lossless, and RDMA hates packet loss.</p>
+
+    <table class="tbl compare">
+      <thead><tr><th>Dimension</th><th>InfiniBand</th><th>RoCE (v2)</th></tr></thead>
+      <tbody>
+        <tr><td>Wire</td><td>Native IB fabric + switches</td><td>Standard Ethernet (with RDMA NICs)</td></tr>
+        <tr><td>Losslessness</td><td>Credit-based flow control, lossless by design</td><td>Needs PFC / ECN tuning to approximate losslessness</td></tr>
+        <tr><td>In-network reduction</td><td>SHARP available</td><td>Generally not</td></tr>
+        <tr><td>Failure mode</td><td>Rare; congestion is managed in-fabric</td><td>Mis-tuned PFC → head-of-line blocking, pause storms, or drops → NCCL stalls</td></tr>
+        <tr><td>Ecosystem</td><td>The HPC default; mature tooling</td><td>Common in hyperscale Ethernet DCs</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout warn">
+      <h5>Why RoCE makes for subtle, cluster-specific bugs</h5>
+      <p>RoCE's performance hinges on the switch fabric being correctly configured for losslessness (Priority Flow Control, ECN). When it's slightly off, you don't get a clean failure — you get intermittent NCCL slowdowns or timeouts that only appear under heavy all-reduce load, and only on that cluster. This is precisely the "same job, different cluster, mysteriously slower" pattern (Manual I §07): the fabric type and its tuning are a hidden variable. Knowing RoCE's fragility explains a whole class of provider-specific performance tickets.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c22">
+    <h2><span class="ch-num">22</span>AWS EFA &amp; libfabric</h2>
+
+    <p>AWS doesn't offer InfiniBand — it has <strong>EFA</strong> (Elastic Fabric Adapter), its own RDMA-capable interconnect. EFA behaves differently enough that the team maintains a dedicated NCCL plugin and a version-management tool (aws-efa-tools) just for it. Knowing EFA's quirks is concrete multi-cloud fluency.</p>
+
+    <h3>What EFA is</h3>
+
+    <div class="diagram">  EFA stack on AWS GPU instances:
+   ┌─────────────────────────────────────────────┐
+   │  NCCL                                         │
+   │    └── aws-ofi-nccl  (NCCL→libfabric plugin)  │  ← the bridge the team builds
+   │          └── libfabric  (the OFI API)         │
+   │                └── EFA device (SRD transport) │  ← AWS's RDMA-ish transport
+   └─────────────────────────────────────────────┘
+  SRD = Scalable Reliable Datagram: reliable delivery WITHOUT strict ordering,
+  with multi-path spraying across the network for high aggregate bandwidth.</div>
+
+    <table class="tbl">
+      <thead><tr><th>Piece</th><th>Role</th></tr></thead>
+      <tbody>
+        <tr><td>EFA device</td><td>The AWS network adapter exposing RDMA-style semantics. Kernel-bypass via the EFA driver.</td></tr>
+        <tr><td>SRD</td><td>EFA's transport: <em>reliable but unordered</em> datagrams, sprayed across many paths. Great aggregate bandwidth, but unordered delivery means software (libfabric/NCCL) handles reassembly — a different model from IB's ordered RC.</td></tr>
+        <tr><td>libfabric (OFI)</td><td>The OpenFabrics Interfaces API that abstracts EFA (and other providers). NCCL talks to it via the plugin.</td></tr>
+        <tr><td>aws-ofi-nccl</td><td>The plugin mapping NCCL's network ops onto libfabric/EFA. The team builds container images bundling specific aws-ofi-nccl + EFA-installer versions.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Why EFA ≠ InfiniBand (and why it matters)</h3>
+    <ul class="dash">
+      <li><strong>No SHARP</strong> — no in-network reduction, so large all-reduces move more data than on an IB+SHARP fabric. The same job can be more comm-bound on AWS.</li>
+      <li><strong>SRD's unordered model</strong> means performance depends heavily on the libfabric/plugin version handling multi-path well — hence the obsessive version management (§25).</li>
+      <li><strong>Tuning knobs differ</strong> — EFA uses libfabric/OFI environment variables, not the IB ones. A config tuned for IB won't transfer.</li>
+    </ul>
+
+    <div class="callout tip">
+      <h5>The one-line EFA framing for an interview</h5>
+      <p>"EFA gives you RDMA-class GPU networking on AWS via libfabric and the aws-ofi-nccl plugin, but its transport is SRD — reliable, unordered, multi-path-sprayed — and it lacks IB's SHARP in-network reduction. So on AWS, all-reduce-heavy training is more sensitive to plugin/libfabric versions and can be more communication-bound than on an IB cluster, which is exactly why there's a per-provider NCCL plugin and a version tool." That sentence demonstrates you actually understand the multi-cloud fabric reality the team lives in."</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c23">
+    <h2><span class="ch-num">23</span>The NCCL plugin model</h2>
+
+    <p>How does one training job run unchanged on IB, RoCE, and EFA clusters? Through NCCL's <strong>network plugin abstraction</strong> — the design that lets the application stay fabric-agnostic while the team swaps the transport per provider. Understanding this is understanding why the team's repos are structured the way they are.</p>
+
+    <div class="diagram">  TRAINING APP (PyTorch / Megatron) — fabric-agnostic
+        │  calls collectives: all_reduce, all_gather, reduce_scatter, all_to_all
+        v
+  NCCL  — picks algorithm (ring/tree), splits across rails, drives the transport
+        │  loads a NET PLUGIN at runtime (NCCL_NET_PLUGIN):
+        ├──► default IB transport ........ verbs/RDMA   (OCI, CoreWeave, on-prem)
+        ├──► aws-ofi-nccl ................ libfabric/EFA (AWS)
+        └──► gIB plugin .................. Google fabric (GCP)
+        v
+  THE WIRE (IB / RoCE / EFA / gIB)</div>
+
+    <p>The team's repos map directly onto this picture:</p>
+
+    <table class="tbl">
+      <thead><tr><th>Repo</th><th>What it provides</th></tr></thead>
+      <tbody>
+        <tr><td>nccl-tests (the team's)</td><td>Per-CSP PyTorch container images bundling the right NCCL plugin: a GCP/gIB variant and an AWS/aws-ofi-nccl variant, built multi-arch (amd64 + arm64). Tagged like <code>nccl-tests-aws:25.08-...</code>.</td></tr>
+        <tr><td>aws-efa-tools</td><td>Scripts to check and upgrade the EFA-installer / libfabric / aws-ofi-nccl / driver versions on a node (§25).</td></tr>
+        <tr><td>gIB plugin (in lepton / gb200-acceptance)</td><td>The Google NCCL net plugin, packaged for GCP clusters.</td></tr>
+      </tbody>
+    </table>
+
+    <p>So "build per-CSP NCCL container images" — a core team activity — is really "ship the correct net plugin + version combination for each provider's fabric so the researcher's collectives Just Work." The application never changes; the plugin layer absorbs the multi-cloud difference. That's the abstraction doing its job.</p>
+
+    <div class="idea">
+      <p><strong>The NCCL net plugin is the seam where the multi-cloud fabric problem gets solved.</strong> It's why a Nemotron training script is portable across AWS, GCP, OCI, and GB200 — the collective calls are identical; only the plugin underneath differs. When you discuss "how does the team handle running across five providers," the answer is this layered abstraction: app → NCCL → per-provider net plugin → fabric, with the team owning the plugin/container layer and a version tool to keep it healthy.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c24">
+    <h2><span class="ch-num">24</span>Diagnosing the network</h2>
+
+    <p>When a job is comm-bound or a collective hangs, you need to isolate the network from compute and I/O. The team's benchmarks and standard IB tools give you a ladder.</p>
+
+    <h3>The bandwidth ladder — isolate, then measure</h3>
+
+    <div class="tree">
+<pre><span class="q">Q: Is the network the bottleneck?</span>
+   │
+   ├─ <span class="a">Step 1 — measure raw collective BW</span>
+   │     nccl-tests: all_reduce_perf -b 8 -e 8G -f 2 -g 8
+   │     → busbw (GB/s) vs the fabric's known peak. Low? network is suspect.
+   │
+   ├─ <span class="a">Step 2 — isolate the topology level</span>
+   │     single-node (loopback) vs single-rack (all-to-all) vs rack-pairwise
+   │     (the team's cluster-workload-testing has exactly these tiers)
+   │     → intra-node fine but inter-node bad → fabric/rail/plugin problem
+   │
+   ├─ <span class="a">Step 3 — check the fabric health directly</span>
+   │     ibstat / ibstatus    → are all HCA ports Active, at full width/speed?
+   │     ibdiagnet            → fabric-wide errors, bad links, congestion
+   │     → a port at reduced width (4x not 8x) or symbol errors = a bad link
+   │
+   └─ <span class="a">Step 4 — check NCCL's own view</span>
+         NCCL_DEBUG=INFO → which transport/rails/algorithm did it pick?
+         → wrong NIC selected, IB disabled, falling back to TCP = misconfig</pre>
+    </div>
+
+    <table class="tbl">
+      <thead><tr><th>Tool</th><th>Reveals</th></tr></thead>
+      <tbody>
+        <tr><td>nccl-tests (all_reduce_perf etc.)</td><td>Achieved bus bandwidth for each collective vs theoretical peak. The team's mlops-tests/nccl-tests wrap these. The primary "is the network fast" measurement.</td></tr>
+        <tr><td>NCCL_DEBUG=INFO</td><td>NCCL's chosen rings/trees, transports, and rail mapping at init. Shows if it's using IB/EFA or silently fell back to slow sockets.</td></tr>
+        <tr><td>ibstat / ibstatus</td><td>Per-HCA port state, link width (4x/8x), and rate. A degraded link shows here.</td></tr>
+        <tr><td>ibdiagnet</td><td>Fabric-wide diagnostic — bad cables, symbol errors, congestion hot spots.</td></tr>
+        <tr><td>nvloom / nvshmem (GB200)</td><td>MNNVL fabric bandwidth and the NVSHMEM one-sided model at rack scale.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout danger">
+      <h5>The silent fallback to TCP</h5>
+      <p>A nasty failure: NCCL can't initialize the fast transport (wrong <code>NCCL_IB_HCA</code>, EFA not set up, a missing plugin) and <em>silently falls back to TCP sockets</em> — the job runs, but at a fraction of the bandwidth. There's no error, just mysterious slowness and low busbw. <code>NCCL_DEBUG=INFO</code> reveals it (you'll see "NET/Socket" instead of "NET/IB" or "NET/OFI"). When a job is inexplicably comm-bound, confirming NCCL is actually on the fast fabric is an early, high-value check — and it ties back to why the team pins plugin versions so carefully.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c25">
+    <h2><span class="ch-num">25</span>EFA / version management</h2>
+
+    <p>The aws-efa-tools repo seems mundane — two shell scripts — but it encodes a real operational truth: <strong>on EFA, the exact combination of driver, libfabric, aws-ofi-nccl, and NCCL versions determines whether your network performs.</strong> Version drift is a genuine source of fleet inefficiency.</p>
+
+<pre data-lang="BASH"><span class="com"># check-efa-version.sh — prints the installed stack as a table</span>
+$ ./check-efa-version.sh
+  EFA installer ...... 1.43.2
+  libfabric .......... 1.22.0
+  aws-ofi-nccl ....... 1.17.0
+  NVIDIA driver ...... 560.xx
+  CUDA toolkit ....... 12.6
+<span class="com"># run inside your container image to verify what's actually deployed</span>
+
+<span class="com"># upgrade-efa-1.47.0.sh — moves a container to a known-good combination</span>
+<span class="com">#   removes conflicting IB packages + prior MPI installs,</span>
+<span class="com">#   configures Open MPI + NCCL env in /etc/environment</span></pre>
+
+    <p>Why this is a real efficiency lever, not just hygiene:</p>
+    <ul class="dash">
+      <li><strong>Version mismatches silently degrade bandwidth</strong> — an old aws-ofi-nccl with a new NCCL may not negotiate multi-path SRD well, leaving throughput on the table with no error.</li>
+      <li><strong>Conflicting IB packages</strong> on an EFA system can break the fast path entirely (the upgrade script explicitly removes them).</li>
+      <li><strong>The known-good matrix is per-cluster</strong> — the team's nccl-tests repo publishes exact tested combinations (e.g., "AWS 25.08 = EFA-installer 1.43.2 + aws-ofi-nccl 1.17.0"), so a cluster can be pinned to a validated stack.</li>
+    </ul>
+
+    <div class="idea">
+      <p><strong>"Version management" is efficiency work wearing boring clothes.</strong> A subtly wrong EFA/libfabric/NCCL combination doesn't crash — it quietly costs every job on the cluster some fraction of network bandwidth, which shows up as lower MFU and slower steps fleet-wide. Catching and fixing it is exactly the "discover a systemic inefficiency pattern and ship a scalable fix" mandate (Manual I §04). If asked for an example of non-obvious fleet waste, "a stale network-plugin version silently capping all-reduce bandwidth across a whole cluster" is a sophisticated answer.</p>
+    </div>
+
+    <p class="pull">The network either performs or it doesn't, and on EFA the difference is often a version number, not a cable.</p>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART V ===================== -->
+<div class="part" id="p5">
+  <div class="part-label">Part V — Storage</div>
+  <h2 class="part-title">Feeding the <span class="acc">GPUs.</span></h2>
+  <p class="part-intro">Storage is the other half of the efficiency story — a GPU starved of data or blocked on a checkpoint write is wasted just as surely as an idle one. The whole storage-workload-tests repo exists because storage performance varies wildly across clusters and filesystems. This part covers the tiers, the parallel and scale-out filesystems, the AI I/O patterns, and how to diagnose a storage bottleneck. ("Understanding of fast, distributed storage systems like Lustre and GPFS" is literally a stand-out item in the JD.)</p>
+
+  <section class="chapter" id="c26">
+    <h2><span class="ch-num">26</span>The storage tiers</h2>
+
+    <p>A MARS cluster exposes several storage tiers with very different performance and purpose. Knowing which is which prevents a whole class of "why is my job slow" problems.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Tier</th><th>What it's for</th></tr></thead>
+      <tbody>
+        <tr><td>Home (<code>/home</code>)</td><td>Small, per-user, backed up. Configs, code, dotfiles. <em>Not</em> for training data or checkpoints — it's not provisioned for parallel bandwidth.</td></tr>
+        <tr><td>Parallel scratch / project (<code>/lustre/fsw/portfolios/...</code>)</td><td>The workhorse: a high-bandwidth parallel filesystem (Lustre/GPFS) for datasets, checkpoints, and outputs. Per-PPP project folders live here. This is where training I/O belongs.</td></tr>
+        <tr><td>Node-local NVMe (<code>/raid</code>)</td><td>Fast, ephemeral, per-node. For staging container images (<code>sbcast</code>) and local scratch. Lost when the job ends.</td></tr>
+        <tr><td>Object store (S3 / SwiftStack / PBSS)</td><td>Cheap, massive, high-latency. Source datasets, archives, container images. Pulled to the parallel FS or streamed; not directly fast-random-access.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="diagram">  Data's journey for a training run:
+   object store (S3/SwiftStack)          ── source dataset / image (cold)
+        │  rclone / pull-image.sh
+        v
+   parallel FS (/lustre)                  ── staged dataset + checkpoints (warm, fast)
+        │  dataloader reads / checkpoint writes
+        v
+   node-local /raid                       ── container image, local scratch (hot)
+        │  PCIe
+        v
+   GPU HBM                                ── the actual compute</div>
+
+    <div class="callout warn">
+      <h5>The tier-mismatch waste</h5>
+      <p>Two classic mistakes the team's docs implicitly guard against: (1) running training I/O against <code>/home</code> instead of <code>/lustre</code> — home isn't built for parallel bandwidth, so the dataloader starves the GPUs; (2) reading a dataset directly from the object store every epoch instead of staging it to the parallel FS first — object stores have high per-request latency that murders random-access dataloading. Both show up as low GPU utilization that looks like a compute problem but is really a storage-tier problem. "Which tier is this I/O hitting?" is a legitimate early question for any starved-GPU ticket.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c27">
+    <h2><span class="ch-num">27</span>Lustre: parallel striping</h2>
+
+    <p><strong>Lustre</strong> is the dominant parallel filesystem on the fleet (the <code>/lustre/fsw/portfolios/...</code> paths are everywhere). Its architecture — separating metadata from data and striping files across many servers — is what gives it the aggregate bandwidth a 256-GPU checkpoint write needs.</p>
+
+    <div class="diagram">  LUSTRE architecture:
+   ┌──────────────┐     ┌─────────────────────────────────────────┐
+   │  MDS / MDT   │     │  OSS 1   OSS 2   OSS 3   ...   OSS N      │
+   │  (metadata:  │     │  OST     OST     OST          OST        │
+   │  names,      │     │   │       │       │            │         │
+   │  dirs, layout)│    └───┼───────┼───────┼────────────┼─────────┘
+   └──────────────┘        └───────┴───────┴────────────┘
+                           one big file is STRIPED across many OSTs:
+                           stripe 0 → OST1, stripe 1 → OST2, stripe 2 → OST3 ...
+
+  256-GPU checkpoint: 512 files written in PARALLEL across all OSSs/OSTs
+  → aggregate bandwidth = sum of all the OSTs. THIS is why Lustre suits AI.</div>
+
+    <table class="tbl">
+      <thead><tr><th>Component</th><th>Role</th></tr></thead>
+      <tbody>
+        <tr><td>MDS / MDT</td><td>Metadata Server/Target — owns the namespace (filenames, directories, where each file's stripes live). Metadata-heavy workloads (millions of tiny files) stress the MDS.</td></tr>
+        <tr><td>OSS / OST</td><td>Object Storage Server/Target — hold the actual file data. More OSTs = more parallel bandwidth. A file's data is striped across several.</td></tr>
+        <tr><td>Striping</td><td>A file is split into stripes spread over multiple OSTs, so reads/writes hit many disks in parallel. <code>lfs setstripe</code> / <code>lfs getstripe</code> control and inspect it.</td></tr>
+        <tr><td>Client</td><td>The compute node mounts Lustre and talks to MDS (for metadata) + OSSs (for data) directly, often over the same RDMA fabric.</td></tr>
+      </tbody>
+    </table>
+
+<pre data-lang="BASH"><span class="com"># Inspect/control striping and check your quota (the team's tests use these)</span>
+$ lfs getstripe /lustre/.../checkpoint_dir   <span class="com"># how is this file/dir striped?</span>
+$ lfs setstripe -c 8 mydir                    <span class="com"># stripe new files across 8 OSTs</span>
+$ lfs quota -u $USER /home                     <span class="com"># Lustre quota check</span></pre>
+
+    <div class="callout tip">
+      <h5>Why Lustre suits the distributed-checkpoint pattern perfectly</h5>
+      <p>Recall (Manual I §13) that Megatron's async checkpoint has every rank write its own shard simultaneously — 256 GPUs → 512 files at once. Lustre's striping is built for exactly this: many writers hitting many OSTs in parallel saturates aggregate bandwidth. This is why the tensor-loading benchmark shows Lustre clusters loading a 642GB model in ~40s while the same on a per-stream NAS is far slower. When checkpoint writes are the bottleneck, the question "how is this striped, and how many OSTs are we hitting?" is the Lustre-native diagnosis.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c28">
+    <h2><span class="ch-num">28</span>GPFS / Spectrum Scale</h2>
+
+    <p><strong>GPFS</strong> (IBM Spectrum Scale) is the other major parallel filesystem in the AI/HPC world, and the JD names it alongside Lustre. It solves the same problem — high aggregate bandwidth via parallel access — with a different architecture, and knowing the contrast shows breadth.</p>
+
+    <table class="tbl compare">
+      <thead><tr><th>Dimension</th><th>Lustre</th><th>GPFS / Spectrum Scale</th></tr></thead>
+      <tbody>
+        <tr><td>Metadata</td><td>Dedicated MDS/MDT (can be a bottleneck for tiny-file workloads)</td><td>Distributed metadata across nodes (often handles metadata-heavy loads more gracefully)</td></tr>
+        <tr><td>Architecture</td><td>Object-based: MDS + OSS/OST split</td><td>Block-based: shared-disk / NSD model, distributed lock manager</td></tr>
+        <tr><td>Data layout</td><td>Explicit striping (<code>lfs setstripe</code>)</td><td>Wide striping + configurable block size, more automatic</td></tr>
+        <tr><td>Origin / feel</td><td>Open-source, HPC-native, very high peak BW</td><td>Commercial (IBM), strong consistency &amp; enterprise features</td></tr>
+        <tr><td>Where you meet it</td><td>Most MARS clusters' <code>/lustre</code></td><td>Some enterprise/on-prem GPU clusters; common in HPC centers</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <h5>The interview-ready contrast</h5>
+      <p>"Both Lustre and GPFS give you parallel aggregate bandwidth for AI workloads; the practical difference is the metadata model. Lustre concentrates metadata on the MDS, which can bottleneck on workloads with millions of small files (some dataloaders), while GPFS distributes metadata. For big striped checkpoint writes both perform well; for tiny-file-heavy dataloading the metadata architecture starts to matter." That's enough to show genuine familiarity without overclaiming — and the metadata-bottleneck insight is the kind of thing only someone who's thought about real workloads says.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c29">
+    <h2><span class="ch-num">29</span>VAST / NFS: scale-out NAS</h2>
+
+    <p>Not every cluster uses a parallel filesystem. Some use scale-out NAS — <strong>VAST</strong> or NFS-based storage — and the tensor-loading benchmark makes the performance difference a first-class comparison ("cw-dfw (Lustre)" vs "nscale (VAST)"). Understanding why they differ is the key to a whole class of cross-cluster storage tickets.</p>
+
+    <h3>The fundamental difference: parallel striping vs per-stream</h3>
+
+    <div class="diagram">  LUSTRE (parallel FS):              VAST / NFS (scale-out NAS):
+   one file striped across N OSTs      one file served over a network stream
+   → N disks in parallel per file      → throughput tied to stream/thread count
+   → a single big read saturates        → a single-threaded reader gets ONE stream
+     aggregate bandwidth                  → need MANY threads to fill bandwidth
+
+  Consequence (from the storage benchmark):
+   SGLang single-threaded load of a 642GB model:
+     Lustre  ~40s   (striping fills BW even single-threaded-ish)
+     VAST    slower  (one network stream per thread → single-thread is limited)
+   Multi-threaded loading helps VAST a lot more than it helps Lustre.</div>
+
+    <p>The storage benchmark's own "common causes of slow loading" list names the NAS-specific culprits directly: read-ahead misconfiguration (<code>expanding_readahead_mmap_enable</code> on VAST/NFS), and "NFS uses 1 network stream per thread vs Lustre's parallel striping." So the same model-loading code can be healthy on Lustre and degraded on VAST purely because of how the filesystem delivers bandwidth.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Property</th><th>Scale-out NAS (VAST/NFS) implication</th></tr></thead>
+      <tbody>
+        <tr><td>Bandwidth model</td><td>Per-stream/per-thread — single-threaded readers are limited; concurrency is required to fill the pipe.</td></tr>
+        <tr><td>Read-ahead</td><td>Kernel/client read-ahead settings matter a lot; misconfiguration is a top cause of slow loads.</td></tr>
+        <tr><td>Tuning surface</td><td>Mount options, thread counts, NFS client params — different from Lustre's striping knobs.</td></tr>
+        <tr><td>Where it shows</td><td>Model/checkpoint loading and large sequential reads — exactly what the tensor-loading test measures.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="idea">
+      <p><strong>"Same job, slower on cluster X" is very often a storage-architecture difference, not a regression.</strong> When a researcher reports model loading or checkpointing is slow on one cluster, the storage type is a prime suspect: a single-threaded loader that flies on Lustre's striping can crawl on a per-stream NAS. The fix might be "use the multi-threaded loader," "fix the read-ahead setting," or "stage to faster storage" — not "the cluster is broken." Knowing this turns a confusing cross-cluster ticket into a quick diagnosis, and it's a direct application of the JD's "fast distributed storage" stand-out skill.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c30">
+    <h2><span class="ch-num">30</span>The AI I/O patterns</h2>
+
+    <p>Storage matters because of three specific I/O patterns in AI workloads, each stressing the filesystem differently. The storage-workload-tests repo has a benchmark for each — and each maps to a goodput loss cause (Manual I §11–§13).</p>
+
+    <table class="tbl">
+      <thead><tr><th>Pattern</th><th>Profile · goodput link</th></tr></thead>
+      <tbody>
+        <tr><td>Data loading (training)</td><td>Sustained, often random-ish reads of dataset shards, every step. Must keep up with GPU compute or the GPUs starve. Benchmark: Nemotron-5 8B proxy reading real data, reporting <strong>TFLOP/s/GPU</strong> — "you want a flat line." A dip = the dataloader stalled. → startup (dataloader init) + in-step stalls.</td></tr>
+        <tr><td>Checkpoint writing</td><td>Bursty, massive parallel writes (512 files for 256 GPUs, ~737 GiB for 56B). Must drain before the next save or training blocks. Benchmark: Nemotron-5 56B with async dist-checkpoint, watching <code>finalize-async-save</code>. → checkpoint overhead + lost-work risk.</td></tr>
+        <tr><td>Tensor / model loading (inference + resume)</td><td>Large sequential reads of safetensors shards (642GB / 163 shards for DeepSeek-V3.2). Gates model startup. Benchmark: SGLang/vLLM load time, with health thresholds (&lt;5min healthy, &gt;30min broken). → startup (checkpoint load).</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Why "flat line good" is the universal storage health signal</h3>
+
+    <p>Across all three benchmarks the team's interpretation rule is the same: <strong>healthy storage produces flat, low-variance timing; bottlenecked storage produces spikes and upward drift.</strong> Data-loading TFLOP/s should be a flat line; per-step time shouldn't spike at <code>SAVE_INTERVAL</code> boundaries; <code>finalize-async-save</code> should stay near zero, not drift up. Variance <em>is</em> the diagnosis — it means the storage couldn't keep up with the GPU's steady demand at some moment.</p>
+
+    <div class="diagram">  Healthy:   TFLOP/s ████████████████████████  (flat)
+             ckpt    ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁  (finalize ≈ 0)
+
+  Degraded:  TFLOP/s ███▆██▅███▃██▇███▄████▆██  (dips = dataloader stalls)
+             ckpt    ▁▁▁▂▁▁▁▃▁▁▁▅▁▁▁▆▁▁▁█▁▁▁█  (finalize drifting up = backpressure)</div>
+  </section>
+
+  <section class="chapter" id="c31">
+    <h2><span class="ch-num">31</span>Diagnosing storage</h2>
+
+    <p>The storage-workload-tests playbook plus standard tools give you a clean isolation procedure for "is storage the bottleneck."</p>
+
+    <div class="tree">
+<pre><span class="q">Q: Are the GPUs starved or blocked by storage?</span>
+   │
+   ├─ <span class="a">Symptom: low GPU util + dataloader-shaped dips</span>
+   │     → run the data-loading benchmark FROM that storage mount
+   │       (TFLOP/s/GPU flat = storage fine, dips = read bottleneck)
+   │     → check tier (§26): is the data on /lustre or accidentally /home or S3?
+   │     → check read-ahead / mount opts on VAST/NFS (§29)
+   │
+   ├─ <span class="a">Symptom: per-step spikes every SAVE_INTERVAL</span>
+   │     → checkpoint writes blocking training
+   │       grep "finalize-async-save" in the log → rising = write-BW bound
+   │     → check Lustre striping (§27); is one OST a hot spot?
+   │     → use --async-save + --ckpt-fully-parallel-save if not already
+   │
+   ├─ <span class="a">Symptom: one rank's GPU→CPU stage σ explodes</span>
+   │     → NOT a filesystem issue — a single node/PCIe link
+   │       cross-ref SLURM_NODELIST + nvidia-smi topo (§02)
+   │
+   └─ <span class="a">Symptom: model load > 30 min</span>
+         → storage degraded (tensor-loading test flags it)
+           check read-ahead, NFS thread count, contention from other jobs</pre>
+    </div>
+
+    <table class="tbl">
+      <thead><tr><th>Tool / signal</th><th>Use</th></tr></thead>
+      <tbody>
+        <tr><td><code>df -h .</code> / <code>lfs quota</code> / <code>quota -s</code></td><td>Free space and quota — a full or over-quota filesystem causes mid-run write failures (the storage tests check this before submitting).</td></tr>
+        <tr><td><code>lfs getstripe</code></td><td>Is a checkpoint dir striped across enough OSTs? Under-striping serializes a parallel write.</td></tr>
+        <tr><td><code>finalize-async-save</code> in logs</td><td>The definitive checkpoint-write-bandwidth signal (Manual I §13). Rising = storage backpressure.</td></tr>
+        <tr><td>data-loading TFLOP/s flat-line test</td><td>Run from the target mount to isolate read throughput from compute.</td></tr>
+        <tr><td>I/O contention check</td><td>Too many concurrent jobs saturating shared storage BW — a top "common cause." Correlate with other jobs on the cluster.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout danger">
+      <h5>The benchmark-from-the-mount trick</h5>
+      <p>The cleverest move in the storage repo: every benchmark is designed to run <em>from</em> the storage you want to test (<code>cd /path/to/storage/mount</code> first, clone the repo there, write checkpoints there). This isolates the variable — you're measuring <em>that</em> filesystem, not the cluster's default. When you need to prove whether a researcher's slowness is storage, running the standardized data-loading or checkpoint benchmark directly on their mount gives a clean, comparable number against the published baselines (Lustre ~40s, etc.). That's how you turn "it feels slow" into "this mount delivers 2× less than the Lustre baseline, here's the read-ahead fix."</p>
+    </div>
+
+    <p class="pull">Storage health is variance. A flat line means the filesystem is keeping up; a spike is the moment it didn't.</p>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART VI ===================== -->
+<div class="part" id="p6">
+  <div class="part-label">Part VI — Operating the fleet</div>
+  <h2 class="part-title">Keeping it <span class="acc">healthy.</span></h2>
+  <p class="part-intro">Hardware at this scale breaks constantly — a GPU throws an XID, a NIC degrades, a node falls over mid-job. A huge fraction of "wasted GPU-hours" traces to bad hardware that should have been caught and drained. This part is the fleet-health craft: validating nodes, reading the failure vocabulary, draining and remediating, and bringing a new cluster online.</p>
+
+  <section class="chapter" id="c32">
+    <h2><span class="ch-num">32</span>Health &amp; validation: stormbreaker</h2>
+
+    <p>The premise of <strong>stormbreaker</strong> is simple and powerful: <strong>find underperforming hardware by running real ML workloads on every node or every rack, and flag the ones that come back slow or broken.</strong> Synthetic tests miss things; real workloads surface them.</p>
+
+    <div class="diagram">  stormbreaker sweep:
+   for each healthy node (or rack) in the Slurm pool / reservation:
+      run a representative workload  (NCCL AllReduce / AlltoAll / Loopback,
+                                      Nemotron5 proxy 8B/56B, AV training, Cosmos)
+      measure performance
+      → node performs to baseline → OK
+      → node underperforms / fails → FLAG as suspect hardware
+
+  Only nodes in a healthy state (not DRAINED/DOWN) are selected.
+  Platforms: A100 / H100 / L40s / B200 / B300 / GB200 / GB300
+  (L40s runs a reduced set — NCCL AllReduce/AlltoAll + one Nemotron proxy)</div>
+
+    <p>Why "run real workloads" beats pure micro-benchmarks: a node can pass a basic GPU diagnostic but still be 10% slow under a real training step because of a marginal NVLink lane, a thermal issue, or a degraded NIC. Stormbreaker catches the <em>performance</em> outliers, not just the dead nodes — and performance outliers are exactly the silent fleet waste (a job that lands on a 10%-slow node drags its whole collective down to that node's pace, because every all-reduce waits for the slowest rank).</p>
+
+    <div class="callout tip">
+      <h5>The straggler-amplification insight</h5>
+      <p>This is the single most important reason node-level health matters for efficiency, and a great point to make: <strong>in synchronous distributed training, one slow GPU slows the entire job.</strong> Every step has an all-reduce barrier — all ranks wait for the slowest. So a single marginal node in a 512-GPU job doesn't waste 1/512 of the throughput; it caps <em>all 512</em> GPUs at its degraded speed. Finding and draining that one node (stormbreaker's job, confirmed by the <code>WB-ITER-VARIANCE</code> straggler rule from Manual I) can lift the whole job's goodput. That asymmetry — one bad node, fleet-wide cost — is why so much ops effort goes into health validation.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c33">
+    <h2><span class="ch-num">33</span>XID codes &amp; bad-node detection</h2>
+
+    <p>When a GPU misbehaves, the driver logs an <strong>XID</strong> — a numeric error code that is the canonical vocabulary of GPU failure. FACT correlates XIDs to job disruptions (<code>CS-XID-CORRELATED</code>), and reading them is core ops fluency.</p>
+
+    <table class="tbl">
+      <thead><tr><th>XID (class)</th><th>Meaning · response</th></tr></thead>
+      <tbody>
+        <tr><td>XID 13 / 31</td><td>GPU memory / illegal-address errors — often app bugs (out-of-bounds), but can be failing memory. Correlate: one app vs one GPU across apps.</td></tr>
+        <tr><td>XID 48 / 63 / 64</td><td>Double-bit ECC errors / row-remapping — genuine hardware memory faults. Drain the node; the GPU needs attention.</td></tr>
+        <tr><td>XID 79</td><td>GPU "fallen off the bus" — the GPU stopped responding (PCIe/power/thermal). Hard hardware failure; drain immediately.</td></tr>
+        <tr><td>XID 94 / 95</td><td>Contained/uncontained ECC errors — newer-arch memory error signaling.</td></tr>
+        <tr><td>XID 119 / 120 (GSP)</td><td>GPU System Processor errors — firmware/driver-level; often need a reset or driver action.</td></tr>
+        <tr><td>NVLink errors (e.g. 145)</td><td>NVLink/fabric faults — especially relevant on GB200's rack-scale NVLink. A degraded link starves the whole NVLink domain.</td></tr>
+      </tbody>
+    </table>
+
+    <p>The diagnostic flow: an XID appears in the node's <code>dmesg</code> / syslog, FACT captures it and (where it can) links it to the job disruption it caused, attaching it to that execution's failure attribution (<code>hw_cause</code>, <code>s_epilog_bad_nodes</code>). The key skill is distinguishing <strong>app-caused</strong> XIDs (an illegal memory access from a buggy kernel — same XID follows the <em>app</em> across nodes) from <strong>hardware</strong> XIDs (ECC/bus/NVLink faults — the XID follows the <em>node</em> across apps). One is a researcher conversation; the other is a drain.</p>
+
+    <div class="callout warn">
+      <h5>How the team's tools surface this</h5>
+      <p>The <code>sdl</code> test in mlops-tests ("detect random hardware and systematic defects") and the <code>dcgm</code> diagnostic catch many of these proactively; FACT's XID parser correlates them after the fact; <code>nvidia-smi -q</code> shows ECC error counts and remapped rows per GPU. When investigating a job that keeps dying with NODE_FAIL, pulling the XID from FACT (or the node's logs) tells you in one number whether it's hardware (drain it) or the app (fix it) — turning a vague "the cluster is flaky" into a precise, actionable attribution.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c34">
+    <h2><span class="ch-num">34</span>Draining &amp; remediation</h2>
+
+    <p>Once a node is identified as bad, it must be taken out of rotation without killing the jobs on it abruptly, repaired or reset, and returned. This is the <strong>Heimdall</strong> remediation loop in Slurm terms.</p>
+
+    <div class="diagram">  Node states in the drain/remediation cycle:
+   IDLE/ALLOCATED ──(mark suspect)──► DRAINING ──► DRAINED ──► (repair/reset) ──► IDLE
+                                         │             │
+                                   finishes current  no new jobs
+                                   jobs, then stops  scheduled here
+
+  scontrol update NodeName=node123 State=DRAIN Reason="XID 79 - fell off bus"
+   → node finishes its current job, then accepts no new work (DRAINED)
+   → ops/Heimdall repairs, resets, or RMAs; then State=RESUME returns it</div>
+
+    <table class="tbl">
+      <thead><tr><th>Action</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td><code>scontrol update ... State=DRAIN</code></td><td>Mark a node to stop taking new jobs (it finishes current work first). The graceful "take it out" move, with a <code>Reason</code> for the audit trail.</td></tr>
+        <tr><td><code>State=DOWN</code></td><td>Hard-mark a node as unusable (kills/requeues its jobs). For a node that's actively breaking things.</td></tr>
+        <tr><td><code>State=RESUME</code></td><td>Return a repaired node to service.</td></tr>
+        <tr><td>Heimdall remediation</td><td>The automated layer: detects who/what killed a job, and drives remediation (drain, reset, requeue) without a human in the loop for known patterns. The "act" stage for scheduling-layer failures (Manual I §10, §21).</td></tr>
+        <tr><td>mlops-startup-utilities <code>slurm-utils</code></td><td>Includes a "resume drained nodes" script — the team automates returning fixed nodes to the pool.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="idea">
+      <p><strong>Draining is where ops efficiency and researcher efficiency meet.</strong> Every hour a bad node stays in rotation, it either fails more jobs (requeue/lost-work waste) or silently drags down every collective it joins (straggler waste). But draining too aggressively shrinks capacity and lengthens queues (fairshare pressure). The craft is fast, accurate detection (stormbreaker + FACT + DCGM) feeding decisive-but-targeted draining (Heimdall), with a tight repair-and-resume loop so capacity comes back quickly. When an interviewer asks "how do you keep the fleet efficient," this detect→drain→remediate→resume loop is the operational half of the answer (the other half being the workload-level goodput work from Manual I).</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c35">
+    <h2><span class="ch-num">35</span>Acceptance: bringing up a cluster</h2>
+
+    <p>Before a new cluster (or a new hardware generation like GB200) serves researchers, it must be validated end-to-end. The <strong>GB200-Acceptance</strong> repo is this process, and it's a microcosm of the whole stack working.</p>
+
+    <h3>What acceptance testing covers</h3>
+
+    <ul class="dash">
+      <li><strong>Compute correctness &amp; performance</strong> — run the model workloads (Nemotron-H, Nemotron5-Proxy/FP4, Nemotron-6, DeepSeek-V3, Cosmos/Imaginaire) and check they hit expected throughput.</li>
+      <li><strong>Network</strong> — NCCL tests, nvbandwidth, cross-rack sweeps, nvshmem, and (GB200) the MNNVL fabric via nvloom; confirm the fabric delivers spec bandwidth.</li>
+      <li><strong>System integration</strong> — IMEX (the GB200 inter-node memory export daemon for fabric memory), the gIB/EFA plugins, kernel benchmarks, Prometheus/O11y query plumbing with mTLS.</li>
+      <li><strong>Per-node health</strong> — the diagnostic suite (dcgm, sdl) across every node, then stormbreaker's real-workload sweep.</li>
+    </ul>
+
+    <div class="diagram">  New-cluster bring-up pipeline (conceptual):
+   1. per-node diagnostics ........ dcgm + sdl on every node → drain the dead
+   2. micro-benchmarks ............ nccl-tests, GEMM, nvbandwidth, nvloom, kernel-launch
+                                    → each subsystem vs platform baseline
+   3. real-workload sweep ......... stormbreaker: Nemotron/AV/Cosmos on every node/rack
+                                    → flag performance outliers
+   4. acceptance workloads ........ full Nemotron / DeepSeek runs at scale
+                                    → end-to-end throughput meets spec?
+   5. integration ................. IMEX, plugins, telemetry (O11y/Prometheus), storage
+   → cluster declared production-ready; researchers onboarded (Part VII)</div>
+
+    <div class="callout tip">
+      <h5>Acceptance is the layered-benchmarking philosophy at cluster scale</h5>
+      <p>Notice this is the same diagnostic → micro-benchmark → workload ladder from mlops-tests (Manual I §25, Greg's domain), applied to a whole new cluster: first "is anything broken" (diagnostics), then "is each component fast" (micro-benchmarks), then "does my real job run well" (workloads). The GB200-specific additions (IMEX for fabric memory, nvloom for MNNVL, the ARM container builds) are exactly the new-hardware surface area from §04. Being able to describe how you'd validate a new GPU cluster end-to-end — and why each layer exists — is a strong systems answer for both the compute and the Slurm/ops interviewers.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c36">
+    <h2><span class="ch-num">36</span>Multi-cloud operations</h2>
+
+    <p>Operating ~18 clusters across AWS, OCI, GCP, CoreWeave, and others means the "same" operational task differs per provider. This chapter consolidates the per-provider reality that threads through the whole manual — it's the context that makes "cluster scoping is mandatory" more than a slogan.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Axis</th><th>How it varies by provider</th></tr></thead>
+      <tbody>
+        <tr><td>Network fabric</td><td>AWS = EFA/libfabric/aws-ofi-nccl; GCP = gIB; OCI/CoreWeave = InfiniBand (+ SHARP). Different plugins, tuning, and failure modes (§20–§25).</td></tr>
+        <tr><td>Storage</td><td>Lustre on most; VAST/NFS on some (nscale). Different bandwidth models and tuning (§27–§29).</td></tr>
+        <tr><td>Architecture</td><td>x86 on H100; ARM (aarch64) on GB200. Containers must match (§04, §14).</td></tr>
+        <tr><td>Job IDs &amp; partitions</td><td>Reused across clusters; reset per cluster. Every query and join must be cluster-scoped (Manual I §18).</td></tr>
+        <tr><td>Onboarding / access</td><td>Same AI Hub / PPP / Helios flow, but some clusters are "MARS on Lepton" (K8s-wrapped) with SSH-key management (§37).</td></tr>
+        <tr><td>Topology</td><td>Leaf/spine on H100 clusters; block/tray on GB200 (§04, §12).</td></tr>
+      </tbody>
+    </table>
+
+    <div class="diagram">  The same researcher job, three clusters, three realities:
+   aws-iad-cs-002    x86 · EFA+aws-ofi-nccl · Lustre · leaf/spine · no SHARP
+   oci-hsg-cs-001    x86 · InfiniBand+SHARP · Lustre · leaf/spine · in-net reduce
+   nvl72-gb200       ARM · MNNVL+IB · Lustre · block/tray · cuMem* fabric path
+
+  → "why is my job different here?" almost always reduces to one of these axes.</div>
+
+    <div class="idea">
+      <p><strong>The multi-cloud tax is the recurring theme of fleet operations, and the team's tooling is largely a response to it.</strong> Per-CSP NCCL container images (absorb the fabric difference), aws-efa-tools (manage the EFA stack), multi-arch builds (handle ARM), cluster-scoped telemetry keys (handle ID reuse), and per-cluster storage benchmarks (handle Lustre-vs-VAST) — each exists because "one fleet" is really "many different machines wearing a common interface." When an interviewer asks how you'd reason about a fleet of heterogeneous clusters, the answer is: identify the axes that vary (fabric, storage, arch, topology), build abstractions that absorb each, and always scope by cluster because nothing is truly uniform underneath.</p>
+    </div>
+
+    <p class="pull">"One fleet" is a convenient fiction. Underneath, every provider is a different machine — and operations is the art of making them look the same to the researcher.</p>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART VII ===================== -->
+<div class="part" id="p7">
+  <div class="part-label">Part VII — The customer craft</div>
+  <h2 class="part-title">Serving the <span class="acc">researcher.</span></h2>
+  <p class="part-intro">The "systems <em>and</em> customers" framing is the tell: half of operating this fleet is working <em>with</em> the researchers who run on it. They're busy experts who don't want a lecture about their wasted GPUs. This part is the customer-facing craft — onboarding, triage, and the empathy that makes efficiency advice land. It's the most likely territory for the McQueen/O'Kelly interview to test what kind of colleague you'll be.</p>
+
+  <section class="chapter" id="c37">
+    <h2><span class="ch-num">37</span>Onboarding researchers</h2>
+
+    <p>A researcher's first contact with the cluster is onboarding, and a smooth one prevents a week of support tickets. You should know the flow end-to-end because you'll guide people through it and debug it when it stalls.</p>
+
+    <div class="diagram">  THE ONBOARDING FLOW (from the team's Confluence):
+   1. Request cluster access in AI Hub  ("Onboard to a PPP")
+        → pick the PPP(s) + cluster(s); confirm a Unix account exists
+   2. SailPoint adds you to the appropriate DL (distribution list)
+   3. Project PIC approves the request
+   4. A cluster admin grants access
+   5. "Welcome" email arrives (~1h after approval) with LOGIN + NODE info
+   6. Use the welcome email to log in and start working
+   (MARS-on-Lepton clusters: also add an SSH key in AI Hub)
+   (Storage access: join the project's Helios access DL via dlrequest)</div>
+
+    <table class="tbl">
+      <thead><tr><th>Step / concept</th><th>What to know</th></tr></thead>
+      <tbody>
+        <tr><td>AI Hub</td><td>The portal. "Onboard to a PPP" wizard: prerequisites (Unix account, policy ack) → describe your work → pick PPP + clusters → submit. Status is trackable in the Onboarding tab.</td></tr>
+        <tr><td>PPP selection</td><td>You must pick the <em>correct</em> Project (PPP) — it determines which DLs, NIS groups, and project folders you get. Wrong PPP = wrong access. If unsure, ask the PIC.</td></tr>
+        <tr><td>SailPoint + Helios DLs</td><td>Access is membership in distribution lists. SailPoint provisions them; storage access is a separate Helios DL you join via <code>dlrequest</code> ("Join Perpetually").</td></tr>
+        <tr><td>The welcome email</td><td>The gate — you cannot access the cluster until it arrives (~1h post-approval). It carries login + node info. A frequent "I can't get in" ticket is simply "it hasn't arrived yet" or "approval is pending."</td></tr>
+        <tr><td>Prerequisites</td><td>A Unix account (set Data Center = Santa Clara if requesting one), and the shell must be <code>bash</code>. Both are common first-time blockers.</td></tr>
+        <tr><td>MARS on Lepton</td><td>Some clusters are Lepton-managed (K8s-wrapped); they need an SSH key uploaded in AI Hub and may use NVPark/MyPods for node access.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <h5>The "make the right thing easy" tools you'll point people to</h5>
+      <p>Once onboarded, the team's <code>mlops-startup-utilities</code> is what gets a researcher productive fast: <code>setup-cluster.sh</code> (default Slurm account so they don't need <code>--account</code> every time, <code>slurm-utils</code> like <code>show_partitions</code> on PATH) and <code>setup-credentials.sh</code> (GitLab SSH key, GitLab token, NGC token — the three credentials needed to pull images and clone). Knowing these exist and pointing a stuck newcomer to them is exactly the low-friction support the team values — you're not just answering the ticket, you're handing them the tool that prevents the next five.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c38">
+    <h2><span class="ch-num">38</span>Support triage</h2>
+
+    <p>The bulk of customer interaction is triage: a researcher says their job is broken, slow, stuck, or pending, and you diagnose fast. Here are the four canonical tickets as decision trees — these are the operational reflexes the Slurm/customers interviewer is checking, and they tie every layer of this manual together.</p>
+
+    <div class="tree">
+<pre><span class="q">"My job won't start / is stuck pending"</span>
+   │  squeue --start  → read the REASON
+   ├─ <span class="a">Resources</span>   → nothing free; show_idle_nodes / get-avail-topology; try batch_short
+   ├─ <span class="a">Priority</span>    → others ahead; sshare/sprio; fairshare conversation (§10)
+   ├─ <span class="a">QOSMax* / AssocMax*</span> → hit a limit; sacctmgr show assoc; quota ask
+   └─ <span class="a">ReqNodeNotAvail</span> → unsatisfiable constraint (topology/feature); relax it (§12)</pre>
+    </div>
+
+    <div class="tree">
+<pre><span class="q">"My job is slow"</span>
+   │  isolate the layer (the three-layer reflex, Manual I §10)
+   ├─ <span class="a">low GPU util, dataloader dips</span>  → storage read bottleneck / wrong tier (§26,§30,§31)
+   ├─ <span class="a">step spikes at SAVE_INTERVAL</span>   → checkpoint write BW; finalize-async-save (§31)
+   ├─ <span class="a">low busbw, comm-bound</span>          → network: nccl-tests, NCCL_DEBUG, fabric (§24)
+   │                                      check NCCL didn't fall back to TCP!
+   ├─ <span class="a">one rank lagging (straggler)</span>   → bad node; nvidia-smi topo, WB-ITER-VARIANCE (§32)
+   └─ <span class="a">low MFU, all ranks even</span>        → parallelism/model config → Manual III</pre>
+    </div>
+
+    <div class="tree">
+<pre><span class="q">"My job keeps dying / requeueing"</span>
+   │  sacct -j <id> (states/exit) + FACT attribution
+   ├─ <span class="a">NODE_FAIL + XID (ECC/bus/NVLink)</span> → hardware; drain the node (§33,§34)
+   ├─ <span class="a">PREEMPTED</span>                       → higher-prio job; QoS/partition conversation
+   ├─ <span class="a">FAILED + CUDA OOM in log</span>        → app: batch size / parallelism (researcher)
+   ├─ <span class="a">FAILED + NCCL timeout</span>           → launch/fabric (§16,§24)
+   └─ <span class="a">TIMEOUT</span>                         → underestimated --time, or needs ckpt-resume</pre>
+    </div>
+
+    <div class="tree">
+<pre><span class="q">"My job is broken / errors immediately"</span>
+   ├─ <span class="a">Invalid account</span>     → sacctmgr show assoc (§13)
+   ├─ <span class="a">can't find data / lost ckpt</span> → --container-mounts missing /lustre (§15)
+   ├─ <span class="a">container won't run</span>   → arch mismatch (x86 image on GB200 ARM) (§14)
+   ├─ <span class="a">7/8 nodes idle</span>       → training cmd not under srun (§08)
+   └─ <span class="a">hang at init</span>          → MASTER_ADDR / port / NCCL interface (§16)</pre>
+    </div>
+
+    <div class="callout tip">
+      <h5>The self-serve layer behind triage</h5>
+      <p>Much of this is increasingly self-serve, which is the scalable answer: the <strong>ai-efficiency-actions Slack bot</strong> lets a researcher ask "why did my job waste GPUs" and get a goodput diagnosis without a human; the <strong>idle-waste-toolkit</strong> lets a CSE generate a full per-job report in one command. So "support" isn't only answering tickets — it's building the tools that answer them at scale, and reserving human triage for the genuinely novel. When asked how you'd handle support load, "diagnose the common cases into self-serve tooling, escalate only the novel" is the senior, leverage-minded answer.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c39">
+    <h2><span class="ch-num">39</span>The empathy layer</h2>
+
+    <p>This is the soft-skill core of the role, and it's genuinely load-bearing — the JD emphasizes "excellent communication and collaboration... with teams of different backgrounds," and the whole action-layer design (gentle nudges, self-serve bots, better defaults) reflects a deliberate philosophy about how to change busy experts' behavior.</p>
+
+    <h3>The principles the team's tooling encodes</h3>
+
+    <table class="tbl">
+      <thead><tr><th>Principle</th><th>How the team lives it</th></tr></thead>
+      <tbody>
+        <tr><td>Make the efficient path the easy path</td><td>Fixes ship as better container defaults, a default Slurm account, opinionated setup scripts, corrected OneLogger templates — so doing the efficient thing requires no extra effort from the researcher.</td></tr>
+        <tr><td>Bring data, not blame</td><td>The nudge emails show a researcher <em>their</em> idle-waste GPU-hours with a deep link to the evidence; the investigation reports attribute waste to a mechanism, not a person's competence.</td></tr>
+        <tr><td>Nudge, don't mandate</td><td>Bi-weekly emails and a self-serve bot — social, low-pressure, informational. Not "stop wasting GPUs or else." People change when shown a clear, in-their-interest win.</td></tr>
+        <tr><td>Respect their expertise</td><td>The researcher knows their workload better than you do. You bring the systems/fleet view; they bring the science. The win is at the intersection, found together.</td></tr>
+        <tr><td>Frame it as their benefit</td><td>"Fix this and your job finishes faster and climbs the queue (fairshare)" beats "you're wasting shared resources." Self-interest is more motivating than guilt.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="idea">
+      <p><strong>The hardest part of efficiency work isn't finding the waste — it's getting a busy researcher to act on it.</strong> A perfectly correct finding that lands as criticism gets ignored; the same finding framed as "here's an easy change that makes your training finish 20% sooner" gets adopted. This is why the team invests so heavily in the <em>delivery</em> of efficiency — the nudges, the self-serve tools, the defaults. For the customers interview, the line that captures it: "My job is to make the right thing the default, and when I do need to ask a researcher to change something, to bring them data about their own job and a fix that's clearly in their interest — never to lecture them about shared resources." That's the team's culture, stated.</p>
+    </div>
+
+    <h3>A worked support interaction</h3>
+
+    <div class="issue">
+      <div class="issue-header">
+        <span class="tag">worked case</span>
+        <span class="title">"My pretraining is too slow and I'm out of GPU quota"</span>
+      </div>
+      <div class="issue-body">
+        <h5>The ask</h5>
+        <p>A researcher pings <code>#sw-mars-mlops-support</code>: their Nemotron pretraining is slow, they've burned their fairshare, and they want more GPUs. The naive response is "you're over your share, wait." The better response treats it as an efficiency opportunity.</p>
+        <h5>Diagnose first (don't moralize)</h5>
+        <p>Pull their jobs (idle-waste-toolkit / sisyphus): goodput is 48%, with 22% lost to startup and 18% to lost work across frequent requeues. Cross-check: the requeues trace to two nodes throwing NVLink XIDs (drain candidates, §33), and the lost work is because checkpoints are every 6h on a cluster that's failing them every ~2h.</p>
+        <h5>Bring data + an in-their-interest fix</h5>
+        <p>Reply with the evidence and three concrete, easy wins: (1) "Two nodes are bad — I'm getting them drained, which stops the requeue-storm." (2) "Your checkpoint interval (6h) is longer than your mean-time-to-failure (~2h), so every failure throws away ~4h of training — drop <code>SAVE_INTERVAL</code> so each failure costs less." (3) "Startup's at 22%; staging the image to <code>/raid</code> and fixing the dataloader init will cut it." Net framing: "These get your effective throughput up ~40% — you'll finish this run within your current share, faster, without needing more quota."</p>
+        <h5>The outcome and the lesson</h5>
+        <p>The researcher gets <em>more science per GPU-hour</em>, the cluster reclaims wasted capacity, and the capacity fight dissolves — without anyone being told they did something wrong. That's the whole role: the systems view (bad nodes, checkpoint economics, startup tax) delivered as the researcher's own win. The quota request was a symptom; efficiency was the cure.</p>
+      </div>
+    </div>
+
+    <p class="pull">Finding the waste is the easy half. Making someone want to fix it — by handing them their own faster run — is the craft.</p>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART VIII ===================== -->
+<div class="part" id="p8">
+  <div class="part-label">Part VIII — Reference</div>
+  <h2 class="part-title">The fast <span class="acc">path.</span></h2>
+  <p class="part-intro">A condensed operational reference for the night before, and an explicit mapping of this volume's material to the two interviews it serves.</p>
+
+  <section class="chapter" id="c40">
+    <h2><span class="ch-num">40</span>Cheatsheets &amp; decision trees</h2>
+
+    <div class="cheat">
+      <h5>Slurm — the commands you'll actually use</h5>
+      <div class="cheat-grid">
+        <div class="cmd">sbatch script.sh</div><div class="desc">Submit a batch job to the queue.</div>
+        <div class="cmd">srun --container-image=... cmd</div><div class="desc">Launch tasks across the allocation (in-script) or interactively.</div>
+        <div class="cmd">salloc --nodes=2 --gpus-per-node=8</div><div class="desc">Grab an interactive allocation (dev box).</div>
+        <div class="cmd">squeue --me / squeue --start</div><div class="desc">My jobs / estimated start time + pending REASON.</div>
+        <div class="cmd">scontrol show job &lt;id&gt;</div><div class="desc">Full live detail of a job (priority, reason, nodes).</div>
+        <div class="cmd">sacct -j &lt;id&gt; --format=...</div><div class="desc">Historical accounting, one row per execution/step.</div>
+        <div class="cmd">sacctmgr show assoc user=$USER</div><div class="desc">Your accounts/partitions/limits ("Invalid account" fix).</div>
+        <div class="cmd">sshare -A &lt;acct&gt; / sprio -j &lt;id&gt;</div><div class="desc">Fairshare standing / priority breakdown.</div>
+        <div class="cmd">scontrol update Node=&lt;n&gt; State=DRAIN</div><div class="desc">Take a bad node out of rotation (with Reason).</div>
+        <div class="cmd">show_partitions / show_idle_nodes</div><div class="desc">Team slurm-utils: queues + free nodes.</div>
+        <div class="cmd">get-avail-topology</div><div class="desc">GB200: free trays per block (NVLink-local placement).</div>
+      </div>
+    </div>
+
+    <div class="cheat">
+      <h5>Network &amp; storage diagnosis</h5>
+      <div class="cheat-grid">
+        <div class="cmd">nvidia-smi topo -m</div><div class="desc">Node GPU/NIC/NUMA connectivity matrix.</div>
+        <div class="cmd">all_reduce_perf -b 8 -e 8G -f 2 -g 8</div><div class="desc">NCCL bus bandwidth vs fabric peak.</div>
+        <div class="cmd">NCCL_DEBUG=INFO</div><div class="desc">Which transport/rails NCCL chose (catch TCP fallback!).</div>
+        <div class="cmd">ibstat / ibstatus / ibdiagnet</div><div class="desc">IB port state, link width/speed, fabric errors.</div>
+        <div class="cmd">check-efa-version.sh</div><div class="desc">EFA/libfabric/aws-ofi-nccl/driver versions (AWS).</div>
+        <div class="cmd">lfs getstripe / lfs quota -u $USER</div><div class="desc">Lustre striping + quota.</div>
+        <div class="cmd">df -h . / quota -s</div><div class="desc">Free space / quota (pre-flight before big writes).</div>
+        <div class="cmd">grep finalize-async-save *.out</div><div class="desc">Checkpoint write-BW signal (rising = storage bound).</div>
+        <div class="cmd">nvidia-smi -q | grep -A2 ECC</div><div class="desc">ECC error / remapped-row counts (bad-GPU check).</div>
+      </div>
+    </div>
+
+    <div class="cheat">
+      <h5>The fleet-health loop</h5>
+      <div class="cheat-grid">
+        <div class="cmd">stormbreaker</div><div class="desc">Real-workload sweep over every node/rack → flag slow HW.</div>
+        <div class="cmd">mlops-tests (dcgm/sdl/nccl/...)</div><div class="desc">Diagnostic → micro-bench → workload ladder.</div>
+        <div class="cmd">FACT XID correlation</div><div class="desc">Map a GPU error code to the job it disrupted.</div>
+        <div class="cmd">Heimdall</div><div class="desc">Detect who/what killed a job → automated remediation.</div>
+        <div class="cmd">resume-drained-nodes (slurm-utils)</div><div class="desc">Return repaired nodes to the pool.</div>
+      </div>
+    </div>
+
+    <div class="callout tip">
+      <h5>The master decision tree (memorize this shape)</h5>
+      <p>Any cluster/job problem resolves through one question: <strong>which layer?</strong> Won't start → <em>scheduler</em> (squeue reason → resources/priority/QoS/topology). Slow → isolate <em>compute vs comm vs I/O</em> (MFU / nccl-tests busbw / finalize-async-save). Keeps dying → <em>scheduling-layer failure</em> (sacct + FACT → hardware-drain vs preemption vs app-OOM). Broken on submit → <em>config</em> (account / mounts / arch / srun / rendezvous). Naming the layer first, every time, is the operational discipline both interviewers are checking.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c41">
+    <h2><span class="ch-num">41</span>Interview tie-in + closing</h2>
+
+    <p>This volume serves two interviews directly. Here's how to deploy it.</p>
+
+    <h3>Aman Shanbhag — compute &amp; clusters</h3>
+    <ul class="dash">
+      <li><strong>Lead with the locality tree (§01–§04).</strong> A cluster is a tree of locality (NVLink → leaf → spine → WAN); efficiency is keeping a job's communication low in that tree. Show you grasp how GB200 NVL72 inverts it (rack = NVLink domain, §04).</li>
+      <li><strong>Bring your UCX/comms authority to the fabric (§20–§23).</strong> You've worked at the verbs/RDMA layer — go deep on what NCCL does underneath, why rail-alignment and SHARP matter, and why EFA differs from IB. This is a genuine differentiator.</li>
+      <li><strong>Have the "slow on cluster A vs B" decision tree ready (§24, §29, §38).</strong> Which fabric? which storage? then isolate compute/comm/I/O. It demonstrates exactly the "investigate performance end-to-end" mandate.</li>
+      <li><strong>Connect to your wins:</strong> the 124× CUDA (node-level compute, §02), the 400× distributed scaling (the network is the bottleneck, §03/§20).</li>
+    </ul>
+
+    <h3>McQueen / O'Kelly — Slurm, systems &amp; customers</h3>
+    <ul class="dash">
+      <li><strong>Demonstrate real Slurm fluency (Part II).</strong> The state machine, backfill, fairshare, partitions/QoS, topology — and speak from your actual cluster experience, not theory. The requeue→startup→lost-work compounding (§07) shows you connect Slurm to efficiency.</li>
+      <li><strong>Show the node taxonomy + container literacy (§05, §14–§19).</strong> Submit from login, compute via Slurm, never the head node; Enroot/Pyxis not Docker; GRES/cgroups/LOCAL_RANK binding. This is the "have you really operated these clusters" check.</li>
+      <li><strong>Run the support triage trees live (§38).</strong> "Won't start / slow / keeps dying / broken" — diagnosing fast and naming the layer is the operational core.</li>
+      <li><strong>Project the empathy layer (§39).</strong> Bring data not blame; make the efficient path the easy path; frame fixes as the researcher's own faster run. Tie efficiency to fairshare (§10) — the standout "efficiency defuses capacity fights" insight.</li>
+      <li><strong>Connect to your experience:</strong> you run GPU jobs on a real Slurm cluster; you've supported others on shared infrastructure (customer empathy); your distributed-systems background means a scheduler and resource contention are familiar ground.</li>
+    </ul>
+
+    <div class="idea">
+      <p><strong>The throughline that unifies both interviews:</strong> you understand the machine from the silicon to the scheduler to the storage to the network — and you can turn that understanding into a fast diagnosis and a researcher-friendly fix. Every problem reduces to "which layer of the locality/scheduling/storage/fabric stack is losing," and every fix gets delivered in a way a busy researcher will actually adopt. That combination — deep systems fluency plus customer craft — is precisely what "Slurm, systems, and customers" is testing, and what "compute, clusters, and ML-workload performance" rewards.</p>
+    </div>
+
+    <h3>Where this sits in the series</h3>
+    <p>Manual I gave you the role, the efficiency concepts, and the panel. This Manual II gave you the machine and how to operate it. Two volumes remain:</p>
+    <ul class="dash">
+      <li><strong>Manual III — ML Workload Performance, Parallelism &amp; Profiling:</strong> the parallelism dimensions in depth (DP/TP/PP/EP/SP and their communication costs), NCCL collective <em>algorithms</em> (ring vs tree, the bandwidth math), Nsight Systems/Compute methodology, roofline &amp; MFU performance modeling, and distributed-training debugging — the deep technical core for Aman &amp; Greg.</li>
+      <li><strong>Manual IV — Efficiency, Goodput &amp; Observability, deep:</strong> the OneLogger field model in full, the rules-engine internals, the telemetry data-engineering, eBPF/DCGM instrumentation mechanics, and fleet-scale analysis patterns — for Matt &amp; Greg.</li>
+    </ul>
+    <p>Say the word and I'll build the next one.</p>
+
+    <p class="pull">You now know the machine from silicon to scheduler. Next we make it fast.</p>
+  </section>
+</div>
+
+</main>
+
+<footer>
+  <h4>sources &amp; further study</h4>
+  <div class="resources">
+    <ul>
+      <li><strong>The team's tooling (ground truth)</strong></li>
+      <li><code>mlops-startup-utilities</code> — onboarding + slurm-utils</li>
+      <li><code>stormbreaker</code> — real-workload node/rack health sweep</li>
+      <li><code>mlops-tests</code> · <code>cluster-workload-testing</code> — the benchmark ladder</li>
+      <li><code>nccl-tests</code> (per-CSP) · <code>aws-efa-tools</code> — fabric plugins &amp; versions</li>
+      <li><code>storage-workload-tests</code> — data-loading / checkpoint / tensor-loading</li>
+      <li><code>GB200-Acceptance</code> — cluster bring-up validation</li>
+      <li><code>write-tracer</code> — SPANK task-lifecycle instrumentation</li>
+      <li>Confluence — Onboarding to Clusters (the PPP/Helios flow)</li>
+      <li><strong>External references</strong></li>
+      <li>Slurm documentation — scheduling, fairshare, QoS, topology, SPANK</li>
+      <li>Enroot &amp; Pyxis docs — rootless containers on Slurm</li>
+      <li>NVIDIA NCCL user guide — net plugins, env vars, tuning</li>
+      <li>aws-ofi-nccl &amp; libfabric/EFA docs — the AWS fabric stack</li>
+      <li>InfiniBand / RDMA &amp; UCX docs — verbs, QPs, GPUDirect, SHARP</li>
+      <li>Lustre manual (<code>lfs</code>, striping, OST/MDS) · IBM Spectrum Scale (GPFS) docs</li>
+      <li>VAST / NFS tuning — read-ahead, thread counts</li>
+      <li>NVIDIA XID error codes reference · DCGM diagnostics</li>
+      <li>GB200 NVL72 / MNNVL / IMEX architecture briefs</li>
+      <li>Megatron-LM distributed checkpoint docs — async / fully-parallel save</li>
+    </ul>
+  </div>
+  <p class="footer-note">Manual II of IV in the NVIDIA AI Performance &amp; Efficiency interview field-manual series. Built from the MARS MLOps team's own repositories and the role's job description. Treat the internal-tooling specifics (partitions, indexes, version pins, node names) as the team's evident practice, not official documentation — and verify fast-moving details (driver/plugin versions, current fleet topology, exact XID semantics for a given arch) against primary sources. Operate the machine, diagnose the layer, deliver the fix where the researcher already is.</p>
+</footer>
+
+</body>
+</html>
