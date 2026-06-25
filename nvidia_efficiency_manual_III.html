@@ -1,0 +1,1774 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Speed at Scale — NVIDIA AI Performance &amp; Efficiency Engineer · Field Manual III</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;0,8..60,700;1,8..60,400;1,8..60,500&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --bg:        #eef1ec;
+  --bg-2:      #e4e8e1;
+  --bg-3:      #d7dcd2;
+  --card:      #f7f9f4;
+  --ink:       #14181a;
+  --ink-soft:  #3d4642;
+  --ink-faint: #76807a;
+  --rule:      #c6ccc0;
+  --rule-soft: #d8ddd2;
+  --rule-dark: #8d958a;
+  --green:     #1a7f46;
+  --green-deep:#0e5e31;
+  --green-bri: #2ea05c;
+  --slate:     #33505f;
+  --slate-deep:#203642;
+  --amber:     #b07d12;
+  --rose:      #a32a1f;
+  --code-bg:   #15201a;
+  --code-ink:  #d6ddd2;
+  --maxw:      1080px;
+}
+*{ box-sizing: border-box; }
+html{ scroll-behavior: smooth; }
+body{
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Source Serif 4', Georgia, serif;
+  font-size: 17px;
+  line-height: 1.62;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ============ HEADER ============ */
+header{ max-width: var(--maxw); margin: 0 auto; padding: 84px 40px 50px; position: relative; }
+.filed{
+  font-family: 'Geist Mono', ui-monospace, monospace; font-size: 10.5px; letter-spacing: .28em;
+  text-transform: uppercase; color: var(--green); margin: 0 0 28px; font-weight: 600;
+  display: flex; align-items: center; gap: 12px;
+}
+.filed::before{ content: "▸"; color: var(--green); font-size: 13px; }
+.vol{
+  font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .18em;
+  color: var(--ink-faint); text-transform: uppercase; margin: 0 0 16px; font-weight: 500;
+}
+h1{
+  font-family: 'Archivo', system-ui, sans-serif; font-weight: 900;
+  font-size: clamp(54px, 9.5vw, 122px); line-height: 0.9; letter-spacing: -0.02em; margin: 0 0 24px; color: var(--ink);
+}
+h1 .acc{ color: var(--green); }
+.deck{ font-family: 'Source Serif 4', serif; font-size: 20px; font-weight: 400; color: var(--ink-soft); max-width: 770px; line-height: 1.5; }
+.readout{ margin-top: 40px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--rule); border: 1px solid var(--rule); }
+@media (max-width: 680px){ .readout{ grid-template-columns: repeat(2,1fr); } }
+.readout .cell{ background: var(--bg); padding: 14px 16px; }
+.readout .k{ font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 6px; }
+.readout .v{ font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 22px; color: var(--ink); line-height: 1; }
+.readout .v .u{ font-size: 12px; color: var(--green); font-weight: 600; }
+
+/* ============ TOC ============ */
+.toc{ margin-top: 46px; background: var(--card); border: 1px solid var(--rule-dark); padding: 30px 32px 34px; position: relative; }
+.toc::before{ content: "CONTENTS"; position: absolute; top: -9px; left: 26px; background: var(--card); padding: 0 10px; font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .3em; color: var(--green); font-weight: 600; }
+.toc h3{ font-family: 'Archivo', sans-serif; font-size: 26px; font-weight: 800; margin: 0 0 3px; color: var(--ink); letter-spacing: -0.01em; }
+.toc .toc-sub{ font-family: 'Geist Mono', monospace; font-size: 10.5px; color: var(--ink-faint); letter-spacing: .1em; text-transform: uppercase; margin-bottom: 20px; }
+.toc-part{ margin-top: 15px; }
+.toc-part-name{ font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .22em; color: var(--slate); text-transform: uppercase; font-weight: 600; border-bottom: 1px solid var(--rule); padding-bottom: 5px; margin-bottom: 7px; }
+.toc-grid{ display: grid; grid-template-columns: repeat(2,1fr); gap: 1px 32px; }
+@media (max-width: 760px){ .toc-grid{ grid-template-columns: 1fr; } }
+.toc-grid a{ color: var(--ink-soft); text-decoration: none; font-size: 14.5px; padding: 5px 0; display: flex; gap: 12px; align-items: baseline; border-bottom: 1px dotted transparent; transition: all .14s; }
+.toc-grid a:hover{ color: var(--green); border-color: var(--rule); }
+.toc-grid a .n{ font-family: 'Geist Mono', monospace; font-size: 10.5px; color: var(--slate); min-width: 26px; font-weight: 600; }
+
+/* ============ MAIN ============ */
+main{ max-width: var(--maxw); margin: 0 auto; padding: 56px 40px 96px; }
+.part{ margin-top: 92px; padding-top: 46px; position: relative; }
+.part::before{ content:""; position: absolute; top: 0; left: 0; right: 0; border-top: 2px solid var(--ink); }
+.part::after{ content:""; position: absolute; top: 5px; left: 0; width: 84px; border-top: 2px solid var(--green); }
+.part:first-child{ margin-top: 28px; padding-top: 28px; }
+.part-label{ font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .28em; color: var(--green); text-transform: uppercase; margin-bottom: 14px; font-weight: 600; }
+.part-title{ font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 54px; line-height: 0.96; letter-spacing: -0.02em; margin: 0 0 18px; color: var(--ink); }
+.part-title .acc{ color: var(--green); }
+.part-intro{ color: var(--ink-soft); font-size: 18.5px; max-width: 800px; margin-bottom: 34px; line-height: 1.5; }
+
+section.chapter{ margin-top: 52px; }
+section.chapter:first-of-type{ margin-top: 8px; }
+h2{ font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 33px; line-height: 1.08; letter-spacing: -0.015em; margin: 0 0 15px; color: var(--ink); display: flex; align-items: baseline; gap: 15px; padding-bottom: 9px; border-bottom: 2px solid var(--ink); }
+h2 .ch-num{ font-family: 'Geist Mono', monospace; font-size: 13px; color: var(--green); letter-spacing: .05em; font-weight: 600; flex-shrink: 0; }
+h3{ font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 22px; margin: 28px 0 9px; color: var(--ink); letter-spacing: -0.01em; }
+h4{ font-family: 'Geist Mono', monospace; font-size: 10.5px; letter-spacing: .18em; text-transform: uppercase; color: var(--slate); margin: 22px 0 8px; font-weight: 600; }
+p{ margin: 12px 0; }
+p code, li code, td code{ font-family: 'Geist Mono', monospace; font-size: .8em; background: var(--bg-3); color: var(--green-deep); padding: 1px 6px; border-radius: 2px; border: 1px solid var(--rule); }
+strong{ font-weight: 700; }
+ul, ol{ padding-left: 1.3em; }
+li{ margin: 6px 0; }
+ul.tight li{ margin: 3px 0; }
+ul.dash{ list-style: none; padding-left: 0; }
+ul.dash li{ position: relative; padding-left: 22px; }
+ul.dash li::before{ content: "▸"; position: absolute; left: 0; color: var(--green); font-weight: 700; }
+ul.check{ list-style: none; padding-left: 0; }
+ul.check li{ position: relative; padding-left: 24px; }
+ul.check li::before{ content: "▪"; position: absolute; left: 2px; top: 2px; color: var(--green); }
+
+/* ============ CODE ============ */
+pre{ background: var(--code-bg); padding: 17px 20px; overflow-x: auto; font-family: 'Geist Mono', monospace; font-size: 12.5px; line-height: 1.6; color: var(--code-ink); margin: 18px 0; position: relative; border-left: 3px solid var(--green); }
+pre .com{ color: #6f8378; font-style: italic; }
+pre .kw{  color: #6cb38a; }
+pre .ty{  color: #8fc6c0; }
+pre .str{ color: #c9b36a; }
+pre .num{ color: #c89a64; }
+pre .fn{  color: #8db8d0; }
+pre .var{ color: #d6ddd2; }
+pre .glb{ color: #7fbf95; }
+pre .opt{ color: #c0a96a; }
+pre::before{ content: attr(data-lang); position: absolute; top: 5px; right: 12px; font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: .18em; color: #56635a; text-transform: uppercase; }
+
+/* ============ CALLOUTS ============ */
+.callout{ margin: 22px 0; padding: 15px 22px; border-left: 4px solid var(--slate); background: var(--bg-2); font-size: 16px; line-height: 1.55; }
+.callout.warn{ border-color: var(--amber); }
+.callout.danger{ border-color: var(--rose); }
+.callout.tip{ border-color: var(--green); }
+.callout h5{ margin: 0 0 6px; font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--slate); font-weight: 600; }
+.callout.warn h5{ color: var(--amber); }
+.callout.danger h5{ color: var(--rose); }
+.callout.tip h5{ color: var(--green); }
+.callout p:first-child{ margin-top: 0; } .callout p:last-child{ margin-bottom: 0; }
+
+/* ============ TABLES ============ */
+.tbl{ width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14.5px; }
+.tbl th, .tbl td{ text-align: left; padding: 9px 14px; vertical-align: top; border-bottom: 1px solid var(--rule); }
+.tbl th{ font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink); font-weight: 600; border-bottom: 2px solid var(--ink); border-top: 2px solid var(--ink); background: var(--bg-2); }
+.tbl td:first-child{ font-family: 'Geist Mono', monospace; font-size: 12px; color: var(--green-deep); font-weight: 500; width: 26%; }
+.tbl.wide td:first-child{ width: 20%; }
+.tbl.compare td:first-child{ font-family: 'Geist Mono', monospace; font-weight: 600; color: var(--ink); width: 22%; font-size: 11.5px; letter-spacing: .03em; }
+.tbl.compare td:nth-child(2){ color: var(--green-deep); font-family: 'Source Serif 4', serif; font-size: 14.5px; }
+.tbl.compare td:nth-child(3){ color: var(--slate-deep); font-family: 'Source Serif 4', serif; font-size: 14.5px; }
+
+/* ============ DIAGRAM ============ */
+.diagram{ background: var(--card); border: 1px solid var(--rule-dark); padding: 22px 24px; margin: 22px 0; font-family: 'Geist Mono', monospace; font-size: 12px; line-height: 1.55; color: var(--ink-soft); white-space: pre; overflow-x: auto; position: relative; }
+.diagram::before{ content: "FIG."; position: absolute; top: -9px; left: 18px; background: var(--bg); padding: 0 9px; font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: .2em; color: var(--slate); font-weight: 600; }
+
+/* ============ READOUT PANEL ============ */
+.panel{ background: var(--card); border: 1px solid var(--rule-dark); margin: 22px 0; padding: 20px 24px; position: relative; }
+.panel::before{ content: attr(data-title); position: absolute; top: -9px; left: 20px; background: var(--bg); padding: 0 10px; font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: .2em; color: var(--green); font-weight: 600; }
+.panel-grid{ display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; }
+@media (max-width: 680px){ .panel-grid{ grid-template-columns: 1fr 1fr; } }
+.panel-grid .stat .k{ font-family:'Geist Mono',monospace; font-size: 9px; letter-spacing:.16em; text-transform:uppercase; color: var(--ink-faint); margin-bottom: 4px; }
+.panel-grid .stat .v{ font-family:'Archivo',sans-serif; font-weight: 700; font-size: 17px; color: var(--ink); line-height: 1.15; }
+.panel-grid .stat .v small{ font-weight: 400; font-family:'Source Serif 4',serif; font-size: 13px; color: var(--ink-soft); }
+
+/* ============ ISSUE / WORKED CASE ============ */
+.issue{ margin: 26px 0; background: var(--card); border: 1px solid var(--ink); }
+.issue-header{ padding: 12px 22px; background: var(--ink); color: var(--bg); font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; display: flex; align-items: center; gap: 13px; }
+.issue-header .tag{ background: var(--green); padding: 3px 11px; letter-spacing: .1em; font-weight: 600; font-size: 10px; color: #fff; }
+.issue-header .title{ flex: 1; font-weight: 600; letter-spacing: .08em; }
+.issue-body{ padding: 22px 26px; }
+.issue-body > h5{ margin: 16px 0 7px; font-family:'Geist Mono',monospace; font-size: 10.5px; letter-spacing:.16em; color: var(--green); text-transform: uppercase; font-weight: 600; }
+.issue-body > h5:first-child{ margin-top: 0; }
+
+/* ============ DECISION TREE ============ */
+.tree{ background: var(--card); border: 1px solid var(--slate); padding: 24px 26px; margin: 24px 0; position: relative; }
+.tree::before{ content: "DECISION PATH"; position: absolute; top: -9px; left: 22px; background: var(--bg); padding: 0 11px; font-family:'Geist Mono',monospace; font-size: 10px; letter-spacing: .2em; color: var(--slate); font-weight: 600; }
+.tree pre{ background: transparent; color: var(--ink); border: none; border-left: none; padding: 6px 0 0; font-size: 13px; line-height: 1.7; }
+.tree pre::before{ display: none; }
+.tree .q{ color: var(--green); font-weight: 700; }
+.tree .a{ color: var(--slate); font-weight: 700; }
+
+/* ============ PRINCIPLE ============ */
+.idea{ margin: 24px 0; border: 2px solid var(--green); background: var(--card); padding: 22px 28px; position: relative; }
+.idea::before{ content: "PRINCIPLE"; position: absolute; top: -10px; left: 22px; background: var(--bg); padding: 0 11px; font-family:'Geist Mono',monospace; font-size: 10px; letter-spacing: .24em; color: var(--green); font-weight: 600; }
+.idea p{ margin: 6px 0; font-size: 16px; }
+
+/* ============ PULL ============ */
+.pull{ font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 30px; line-height: 1.08; letter-spacing: -0.015em; color: var(--green); margin: 38px 0; padding: 0 0 0 26px; border-left: 4px solid var(--green); }
+
+/* ============ CHEAT ============ */
+.cheat{ background: var(--card); border: 1px solid var(--ink); padding: 24px 28px; margin: 24px 0; }
+.cheat h5{ margin: 0 0 14px; font-family:'Geist Mono',monospace; font-size: 11px; letter-spacing: .2em; color: var(--green); text-transform: uppercase; font-weight: 600; }
+.cheat-grid{ display: grid; grid-template-columns: 1fr 1.5fr; gap: 6px 22px; font-size: 13px; }
+.cheat-grid .cmd{ font-family:'Geist Mono',monospace; color: var(--green-deep); font-weight: 500; }
+.cheat-grid .desc{ color: var(--ink-soft); font-size: 14.5px; }
+@media (max-width: 680px){ .cheat-grid{ grid-template-columns: 1fr; gap: 2px 18px; } .cheat-grid .desc{ margin-bottom: 10px; } }
+
+/* ============ TWO-COL ============ */
+.twocol{ display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 22px 0; }
+@media (max-width: 760px){ .twocol{ grid-template-columns: 1fr; } }
+.twocol .col{ background: var(--card); border: 1px solid var(--rule-dark); padding: 18px 22px; }
+.twocol .col h5{ margin: 0 0 10px; font-family:'Geist Mono',monospace; font-size: 10.5px; letter-spacing: .18em; text-transform: uppercase; color: var(--slate); font-weight: 600; }
+.twocol .col.bad h5{ color: var(--rose); } .twocol .col.good h5{ color: var(--green); }
+.twocol .col p{ margin: 8px 0; font-size: 15px; } .twocol .col p:first-child{ margin-top: 0; }
+
+/* ============ SEP ============ */
+.rule-sep{ margin: 56px 0; position: relative; height: 0; border-top: 2px solid var(--ink); }
+.rule-sep::after{ content: "◇ ◇ ◇"; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); background: var(--bg); color: var(--green); padding: 0 16px; font-size: 11px; letter-spacing: .3em; }
+
+/* ============ FOOTER ============ */
+footer{ max-width: var(--maxw); margin: 0 auto; padding: 54px 40px 84px; border-top: 2px solid var(--ink); color: var(--ink-soft); font-size: 14px; }
+footer h4{ font-family:'Geist Mono',monospace; font-size: 11px; letter-spacing: .24em; color: var(--green); margin: 0 0 18px; font-weight: 600; }
+footer .resources{ columns: 2; column-gap: 38px; }
+@media (max-width: 680px){ footer .resources{ columns: 1; } }
+footer ul{ list-style: none; padding: 0; margin: 0; }
+footer li{ padding: 5px 0; font-size: 13.5px; break-inside: avoid; }
+footer li code{ color: var(--green-deep); background: transparent; border: none; padding: 0; font-weight: 500; }
+footer .footer-note{ margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--rule); color: var(--ink-faint); font-size: 14px; }
+</style>
+</head>
+<body>
+
+<header>
+  <p class="filed">nvidia · dgxc mars · ai efficiency · interview field manual</p>
+  <p class="vol">Volume III of IV · parallelism, profiling &amp; performance modeling</p>
+  <h1>Speed at<br><span class="acc">Scale.</span></h1>
+  <p class="deck">
+    The quantitative core: how a training step actually spends its time, the parallelism dimensions that split a model across thousands of GPUs and what each one costs in communication, the NCCL collectives on the wire, profiling with Nsight Systems and Nsight Compute, and the performance models — roofline, MFU, scaling efficiency — that let you predict and explain a workload's speed before and after you run it. The deep companion for the parallelism/observability/performance-modeling and ML-workload-performance interviews.
+  </p>
+  <div class="readout">
+    <div class="cell"><div class="k">Manual</div><div class="v">III<span class="u"> / IV</span></div></div>
+    <div class="cell"><div class="k">Chapters</div><div class="v">40</div></div>
+    <div class="cell"><div class="k">Interviews</div><div class="v" style="font-size:15px;">Aman · Greg</div></div>
+    <div class="cell"><div class="k">Focus</div><div class="v" style="font-size:14px;">parallelism · NCCL · profiling</div></div>
+  </div>
+
+  <div class="toc">
+    <h3>Contents</h3>
+    <p class="toc-sub">Forty chapters across eight parts</p>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part I · The training step, anatomized</div>
+      <div class="toc-grid">
+        <a href="#c01"><span class="n">01</span><span>Anatomy of a training step</span></a>
+        <a href="#c02"><span class="n">02</span><span>The compute: GEMMs &amp; tensor cores</span></a>
+        <a href="#c03"><span class="n">03</span><span>The memory: what lives in HBM</span></a>
+        <a href="#c04"><span class="n">04</span><span>The roofline model</span></a>
+        <a href="#c05"><span class="n">05</span><span>Arithmetic intensity</span></a>
+      </div>
+    </div>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part II · Parallelism dimensions</div>
+      <div class="toc-grid">
+        <a href="#c06"><span class="n">06</span><span>The three walls</span></a>
+        <a href="#c07"><span class="n">07</span><span>Data parallelism &amp; ZeRO/FSDP</span></a>
+        <a href="#c08"><span class="n">08</span><span>Tensor parallelism</span></a>
+        <a href="#c09"><span class="n">09</span><span>Pipeline parallelism &amp; the bubble</span></a>
+        <a href="#c10"><span class="n">10</span><span>Expert parallelism &amp; MoE</span></a>
+        <a href="#c11"><span class="n">11</span><span>Sequence / context parallelism</span></a>
+        <a href="#c12"><span class="n">12</span><span>Composing nD parallelism</span></a>
+      </div>
+    </div>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part III · The collective layer</div>
+      <div class="toc-grid">
+        <a href="#c13"><span class="n">13</span><span>The collectives</span></a>
+        <a href="#c14"><span class="n">14</span><span>Ring vs tree &amp; the bandwidth math</span></a>
+        <a href="#c15"><span class="n">15</span><span>Mapping collectives to topology</span></a>
+        <a href="#c16"><span class="n">16</span><span>NCCL tuning &amp; environment</span></a>
+        <a href="#c17"><span class="n">17</span><span>Overlapping comm &amp; compute</span></a>
+      </div>
+    </div>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part IV · Profiling: Nsight Systems</div>
+      <div class="toc-grid">
+        <a href="#c18"><span class="n">18</span><span>The profiling mindset</span></a>
+        <a href="#c19"><span class="n">19</span><span>Nsight Systems: the timeline</span></a>
+        <a href="#c20"><span class="n">20</span><span>Reading a distributed timeline</span></a>
+        <a href="#c21"><span class="n">21</span><span>NVTX &amp; CPU/GPU correlation</span></a>
+        <a href="#c22"><span class="n">22</span><span>Common findings</span></a>
+      </div>
+    </div>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part V · Profiling: Nsight Compute</div>
+      <div class="toc-grid">
+        <a href="#c23"><span class="n">23</span><span>When to go kernel-level</span></a>
+        <a href="#c24"><span class="n">24</span><span>The sections: compute, memory, occupancy</span></a>
+        <a href="#c25"><span class="n">25</span><span>The memory hierarchy, kernel view</span></a>
+        <a href="#c26"><span class="n">26</span><span>Occupancy, warps &amp; launch overhead</span></a>
+        <a href="#c27"><span class="n">27</span><span>A worked kernel optimization</span></a>
+      </div>
+    </div>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part VI · Performance modeling</div>
+      <div class="toc-grid">
+        <a href="#c28"><span class="n">28</span><span>MFU &amp; HFU, computed</span></a>
+        <a href="#c29"><span class="n">29</span><span>The transformer FLOP model</span></a>
+        <a href="#c30"><span class="n">30</span><span>Scaling efficiency &amp; the comm knee</span></a>
+        <a href="#c31"><span class="n">31</span><span>Modeling a parallelism strategy</span></a>
+        <a href="#c32"><span class="n">32</span><span>Communication-bound analysis</span></a>
+      </div>
+    </div>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part VII · Debugging distributed training</div>
+      <div class="toc-grid">
+        <a href="#c33"><span class="n">33</span><span>The systematic approach</span></a>
+        <a href="#c34"><span class="n">34</span><span>The comm-bound job</span></a>
+        <a href="#c35"><span class="n">35</span><span>The straggler</span></a>
+        <a href="#c36"><span class="n">36</span><span>The memory wall</span></a>
+        <a href="#c37"><span class="n">37</span><span>NCCL hangs &amp; timeouts</span></a>
+      </div>
+    </div>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part VIII · Reference</div>
+      <div class="toc-grid">
+        <a href="#c38"><span class="n">38</span><span>Cheatsheets &amp; decision trees</span></a>
+        <a href="#c39"><span class="n">39</span><span>A worked end-to-end case</span></a>
+        <a href="#c40"><span class="n">40</span><span>Interview tie-in + closing</span></a>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<!-- ===================== PART I ===================== -->
+<div class="part" id="p1">
+  <div class="part-label">Part I — The training step, anatomized</div>
+  <h2 class="part-title">Where the time <span class="acc">goes.</span></h2>
+  <p class="part-intro">Performance work begins with knowing exactly what a training step does and what bounds it. This part dissects a single forward+backward+optimizer step into its compute, memory, and communication, then arms you with the roofline model — the one framework that tells you whether a piece of work is limited by math or by memory traffic. Everything later in this volume hangs off these fundamentals.</p>
+
+  <section class="chapter" id="c01">
+    <h2><span class="ch-num">01</span>Anatomy of a training step</h2>
+
+    <p>A training iteration is the same four phases every time. Knowing them lets you place any performance problem, and lets you talk about "where the step's time goes" — the language Greg's performance-modeling interview runs on.</p>
+
+    <div class="diagram">  ONE TRAINING STEP (per micro-batch, per GPU):
+   ┌────────────────────────────────────────────────────────────────┐
+   │ 1. FORWARD     x → layer1 → layer2 → ... → loss                  │
+   │    compute: GEMMs + attention + activations                     │
+   │    stores: activations (kept for backward) → eats HBM           │
+   │                                                                  │
+   │ 2. BACKWARD    dLoss → ... → dlayer2 → dlayer1                   │
+   │    compute: ~2× forward FLOPs (grad wrt weights + wrt inputs)    │
+   │    reads: saved activations; produces: gradients                │
+   │                                                                  │
+   │ 3. COMMUNICATION  sync gradients/activations across GPUs        │
+   │    data-parallel: all-reduce gradients (overlappable w/ #2)     │
+   │    tensor/expert-parallel: collectives INSIDE fwd/bwd           │
+   │                                                                  │
+   │ 4. OPTIMIZER   w ← w − lr · m̂/(√v̂+ε)   (Adam)                   │
+   │    reads/writes: weights + optimizer state (m, v)               │
+   └────────────────────────────────────────────────────────────────┘
+   step time = max(compute, communication) IF perfectly overlapped
+             = compute + exposed_communication  in reality</div>
+
+    <p>The single most important relationship in this whole volume is in that last line: <strong>step time is compute plus whatever communication you failed to hide behind compute.</strong> A well-tuned job overlaps the gradient all-reduce with the backward pass so comm is nearly free; a poorly-tuned one exposes it and every step waits on the network. Most distributed-training performance work is about shrinking the <em>exposed</em> communication.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Phase</th><th>Bounded by · the efficiency lever</th></tr></thead>
+      <tbody>
+        <tr><td>Forward</td><td>Compute (big GEMMs) for large models; memory bandwidth for small ones. Lever: precision, kernel fusion, batch size.</td></tr>
+        <tr><td>Backward</td><td>~2× forward FLOPs. The biggest compute chunk. Lever: activation recomputation trades compute for memory.</td></tr>
+        <tr><td>Communication</td><td>Network bandwidth/latency. Lever: overlap with compute, collective algorithm, topology (Manual II §03), SHARP.</td></tr>
+        <tr><td>Optimizer</td><td>Memory bandwidth (streaming weights + state). Usually small, but distributed-optimizer comm can add up. Lever: ZeRO sharding, fused optimizers.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <h5>The forward:backward:optimizer ratio to carry</h5>
+      <p>Rule of thumb: forward ≈ 1 unit of compute, backward ≈ 2 units, so a step is ~3× the forward FLOPs (the basis of the "6 × params × tokens" FLOP estimate in §29 — 2 for the multiply-accumulate, ×3 for fwd+bwd). The optimizer is cheap in FLOPs but can be memory-heavy. When someone asks "where does a training step spend its time," leading with "roughly a third forward, two-thirds backward, plus communication you hopefully overlapped, plus a thin optimizer" shows you think structurally about the step.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c02">
+    <h2><span class="ch-num">02</span>The compute: GEMMs &amp; tensor cores</h2>
+
+    <p>Almost all the FLOPs in a transformer are matrix multiplies (GEMMs), and they run on <strong>tensor cores</strong>. Understanding this layer is what lets you reason about MFU and why precision matters — core to both interviews.</p>
+
+    <h3>It's GEMMs all the way down</h3>
+
+    <p>A transformer layer is: QKV projections (GEMM), attention scores (GEMM), attention output (GEMM), the output projection (GEMM), and the MLP's two big GEMMs. The non-GEMM parts (softmax, layernorm, activation functions, the attention <em>itself</em> if not fused) are memory-bound glue. So <strong>the compute efficiency of training is essentially the efficiency of its GEMMs on the tensor cores.</strong></p>
+
+    <table class="tbl">
+      <thead><tr><th>Concept</th><th>What it is</th></tr></thead>
+      <tbody>
+        <tr><td>Tensor core</td><td>A hardware unit that does a small matrix multiply-accumulate (e.g., a tile of D = A×B + C) in one operation. Where the FLOPs come from — orders of magnitude more throughput than the general CUDA cores for matmul.</td></tr>
+        <tr><td>Precision</td><td>Tensor cores run at different rates by precision: FP8 &gt; BF16/FP16 &gt; TF32 &gt; FP32. Lower precision = more FLOP/s, but numerical care needed. Blackwell adds FP4 for inference.</td></tr>
+        <tr><td>Mixed precision</td><td>Compute in BF16/FP8, keep an FP32 master copy of weights + FP32 accumulation for stability. The standard training recipe.</td></tr>
+        <tr><td>GEMM shape</td><td>Tensor cores want dimensions that are multiples of the tile size (often 8/16/64). A GEMM with awkward dimensions wastes the cores ("wave quantization"). Why model dims are chosen as nice multiples.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="diagram">  Tensor-core throughput scales as you drop precision (illustrative, Hopper→Blackwell):
+   FP32  ▏▏                 baseline
+   TF32  ▏▏▏▏               ~4-8×
+   BF16  ▏▏▏▏▏▏▏▏           ~2× TF32
+   FP8   ▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏   ~2× BF16   ← Hopper/Blackwell training
+   FP4   ▏▏▏▏▏▏...×2 again   ← Blackwell, inference (Nemotron NVFP4)
+  Each step down ~doubles peak FLOP/s — IF the numerics hold and the GEMM fills the cores.</div>
+
+    <div class="callout warn">
+      <h5>Why "100% GPU utilization" can still be slow compute</h5>
+      <p>This is the §15-of-Manual-I point made concrete: DCGM "utilization" only says a kernel was running. A GEMM running in FP32 with poorly-shaped dimensions can show 100% util while delivering a fraction of the tensor cores' BF16/FP8 peak. The truth metric is MFU (§28) — achieved vs peak FLOP/s — and the levers are precision (use BF16/FP8), GEMM shape (nice multiples), and fusion (don't bounce to HBM between ops). When the compute interviewer asks "this job is at 100% util but slow, what's wrong," the answer lives here: utilization ≠ FLOP efficiency.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c03">
+    <h2><span class="ch-num">03</span>The memory: what lives in HBM</h2>
+
+    <p>GPU memory (HBM) is the hard constraint that forces parallelism in the first place. Knowing the four things that consume it — and their relative sizes — is what lets you reason about OOM, choose a parallelism strategy, and explain why a model "doesn't fit."</p>
+
+    <div class="diagram">  WHAT'S IN A GPU's HBM during training (for N parameters):
+   ┌─────────────────────────────────────────────────────────────┐
+   │ 1. PARAMETERS .............. N × 2 bytes (BF16)               │
+   │ 2. GRADIENTS ............... N × 2 bytes (BF16) [or FP32]     │
+   │ 3. OPTIMIZER STATE (Adam) .. N × (4+4+4) = 12 bytes           │
+   │    └ FP32 master weights + FP32 momentum + FP32 variance      │
+   │ 4. ACTIVATIONS ............. depends on batch × seq × layers  │
+   │    └ the wildcard — grows with batch and sequence length      │
+   └─────────────────────────────────────────────────────────────┘
+   Params+grads+optimizer for Adam ≈ 2+2+12 = 16 bytes/param (model states)
+   → a 7B model needs ~112 GB just for model states, before activations!
+   → this is WHY you shard (ZeRO/FSDP §07) and parallelize (§08-§12)</div>
+
+    <p>This 16-bytes-per-parameter figure is the same math behind the checkpoint sizing in Manual I §13 (the 56B → 737 GiB checkpoint stores exactly these FP32 states). Two consequences shape everything:</p>
+
+    <table class="tbl">
+      <thead><tr><th>Consumer</th><th>Behavior &amp; how parallelism attacks it</th></tr></thead>
+      <tbody>
+        <tr><td>Model states (params+grad+opt)</td><td>Fixed per parameter (~16 B/param for Adam BF16). <strong>ZeRO/FSDP</strong> shards these across data-parallel ranks; <strong>tensor/pipeline parallel</strong> splits the parameters themselves across GPUs.</td></tr>
+        <tr><td>Activations</td><td>Scales with batch × sequence × hidden × layers. The knob you can actually turn at runtime. <strong>Activation recomputation</strong> (checkpointing) drops most of them and recomputes in backward — trading compute (HFU rises) for memory.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <h5>The memory-pressure decision the role faces constantly</h5>
+      <p>"This model OOMs" has a decision tree: (1) reduce activations — smaller micro-batch, activation recomputation, sequence/context parallel (§11); (2) shard model states — ZeRO stages / FSDP (§07); (3) split the model — tensor (§08) or pipeline (§09) parallel. Each has a different cost (recompute = more FLOPs; sharding/TP = more communication; pipeline = bubble). The senior skill, and exactly what Greg probes with "the model doesn't fit, what do you do," is choosing the cheapest option for the situation — which requires knowing both the memory math here and the communication costs in Part II.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c04">
+    <h2><span class="ch-num">04</span>The roofline model</h2>
+
+    <p>The roofline is the single most useful mental model in performance engineering, and a likely topic in Greg's performance-modeling interview. It answers one question for any kernel or workload: <strong>are you limited by compute (FLOP/s) or by memory bandwidth (bytes/s)?</strong> — because the fix is completely different for each.</p>
+
+    <div class="diagram">  ROOFLINE:  achievable FLOP/s vs arithmetic intensity (FLOPs per byte moved)
+
+   FLOP/s
+   peak ┤            ___________________  ← compute-bound roof (peak FLOP/s)
+        │           /
+        │          /  ← the "ridge point": AI where you transition
+        │         /
+        │        /  ← memory-bound roof (slope = peak memory bandwidth)
+        │       /
+        │      /
+        └─────┴──────────────────────────► arithmetic intensity (FLOP/byte)
+              ↑ridge
+   LEFT of ridge  = MEMORY-BOUND  → fix: move fewer bytes (fusion, precision, caching)
+   RIGHT of ridge = COMPUTE-BOUND → fix: do math faster (tensor cores, better GEMM)
+
+   ridge point = peak_FLOP/s ÷ peak_bandwidth   (the AI you must exceed to be compute-bound)</div>
+
+    <p>How to use it in practice: estimate a kernel's arithmetic intensity (FLOPs done ÷ bytes moved to/from HBM), find which side of the ridge it's on, and that tells you the ceiling and the fix.</p>
+
+    <table class="tbl compare">
+      <thead><tr><th>If the work is…</th><th>Symptom</th><th>The fix</th></tr></thead>
+      <tbody>
+        <tr><td>Memory-bound</td><td>Low arithmetic intensity; HBM bandwidth saturated; tensor cores idle-ish</td><td>Move fewer bytes: fuse ops (avoid HBM round-trips), lower precision, increase data reuse, larger tiles</td></tr>
+        <tr><td>Compute-bound</td><td>High arithmetic intensity; tensor cores saturated; near peak FLOP/s</td><td>Do math faster: tensor cores, lower precision, better GEMM shapes — or you're already near the roof</td></tr>
+        <tr><td>Latency-bound</td><td>Neither roof saturated; small kernels, launch overhead dominates</td><td>Fuse kernels, use CUDA graphs, bigger batches — reduce the number of launches (§26)</td></tr>
+      </tbody>
+    </table>
+
+    <div class="idea">
+      <p><strong>Roofline turns "it's slow" into a falsifiable hypothesis.</strong> Instead of guessing, you measure the kernel's FLOPs and bytes (Nsight Compute gives both, §24), place it on the roofline, and now you know whether to attack compute or memory — and whether you're even close to the achievable ceiling. This is the model behind the whole "measure before you optimize" discipline. Being able to sketch the roofline and say "this attention kernel is memory-bound at low intensity, so fusing it (FlashAttention-style) to keep the scores in SRAM is the win, not faster math" is a standout performance-modeling answer.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c05">
+    <h2><span class="ch-num">05</span>Arithmetic intensity</h2>
+
+    <p>Where transformers actually sit on the roofline depends on arithmetic intensity, and it's worth knowing the canonical cases because they explain why FlashAttention exists, why batch size matters, and why inference decode is a different regime.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Operation</th><th>Intensity &amp; roofline position</th></tr></thead>
+      <tbody>
+        <tr><td>Big GEMM (MLP, large batch)</td><td>High AI — reuses each loaded value across many multiply-accumulates. Compute-bound. This is where MFU comes from; tensor cores fill up.</td></tr>
+        <tr><td>Attention (naive)</td><td>Low-ish AI — the N×N scores matrix gets written to and read from HBM. Memory-bound. <strong>FlashAttention</strong> fixes this by keeping scores in on-chip SRAM and never materializing them in HBM, raising AI and making it compute-bound.</td></tr>
+        <tr><td>LayerNorm / softmax / activations</td><td>Very low AI — elementwise, one or two FLOPs per byte. Pure memory-bound glue. Fuse them into neighbors to avoid the HBM round-trip.</td></tr>
+        <tr><td>Small-batch / single-token decode</td><td>Low AI — you load the whole weight matrix to multiply by a tiny activation. Memory-bandwidth-bound. This is why <strong>inference decode is memory-bound</strong> (MBU, not MFU, is the metric) and why batching helps inference so much.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="diagram">  Same model, two regimes:
+   TRAINING (big batches)     → GEMMs have high AI → COMPUTE-bound → optimize FLOP/s (MFU)
+   INFERENCE DECODE (1 token) → load weights for tiny matmul → MEMORY-bound → optimize BW (MBU)
+
+   batch size is the knob that moves you right (more reuse) on the roofline:
+     batch=1   ▏ low AI, memory-bound
+     batch=8   ▏▏▏ rising AI
+     batch=64  ▏▏▏▏▏▏▏ high AI, compute-bound (training regime)</div>
+
+    <div class="callout tip">
+      <h5>The two-regime insight Aman will want</h5>
+      <p>"Why is inference optimized so differently from training?" — because they sit on opposite sides of the roofline. Training runs big batched GEMMs (compute-bound, maximize FLOP/s via tensor cores and precision); inference decode multiplies huge weight matrices by a single token's activation (memory-bound, maximize bandwidth utilization via batching, KV-cache management, and quantization). Same hardware, same model, opposite bottleneck — and naming arithmetic intensity as the reason is the kind of first-principles answer that lands. It also explains why the team's storage tensor-loading benchmark cares about <em>loading</em> bandwidth: inference is bandwidth-sensitive end to end.</p>
+    </div>
+
+    <p class="pull">Every performance question starts the same way: which side of the roofline am I on? Math, or memory? The answer dictates the fix.</p>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART II ===================== -->
+<div class="part" id="p2">
+  <div class="part-label">Part II — Parallelism dimensions</div>
+  <h2 class="part-title">Splitting the <span class="acc">model.</span></h2>
+  <p class="part-intro">This is the heart of Greg's interview. A frontier model can't fit or train fast enough on one GPU, so you split it — and there are several independent ways to split, each trading memory for a different communication pattern. Master the dimensions (data, tensor, pipeline, expert, sequence) and how they compose, and you can answer the canonical question — "this model doesn't fit / is too slow, how do you parallelize it?" — like someone who's done it.</p>
+
+  <section class="chapter" id="c06">
+    <h2><span class="ch-num">06</span>The three walls</h2>
+
+    <p>You parallelize because one GPU hits one of three walls. Naming which wall a workload hits tells you which parallelism dimension to reach for first.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Wall</th><th>What it is · which parallelism addresses it</th></tr></thead>
+      <tbody>
+        <tr><td>Memory wall</td><td>The model + states + activations don't fit in one GPU's HBM (§03). Addressed by sharding states (ZeRO/FSDP) and splitting the model (tensor/pipeline). The most common reason to go multi-GPU.</td></tr>
+        <tr><td>Compute wall</td><td>It fits, but one GPU's FLOP/s means training takes months. Addressed by data parallelism — more GPUs each process different data, so total throughput scales.</td></tr>
+        <tr><td>Time / convergence wall</td><td>You need a target token budget in a fixed wall-clock, so you need a large global batch processed fast. Addressed by combining data parallelism (scale-out) with the model-parallel dims (so each replica fits).</td></tr>
+      </tbody>
+    </table>
+
+    <div class="diagram">  THE DECISION at a glance:
+   "doesn't fit on 1 GPU"      → memory wall  → shard (ZeRO/FSDP) or split (TP/PP)
+   "fits but too slow"          → compute wall → data parallel (more replicas)
+   "need it done by <date>"     → time wall    → DP × (TP/PP/EP) at scale
+
+  In practice big training uses ALL of them at once (§12): each replica is
+  made to FIT with TP+PP(+EP), then DP replicates for THROUGHPUT.</div>
+
+    <div class="idea">
+      <p><strong>Parallelism is memory-vs-communication arbitrage.</strong> Every dimension buys you something (more memory headroom, or more throughput) and charges you in communication (a different collective, at a different frequency, over a different part of the fabric). The art — and the thing Greg is testing — is matching the dimension to the wall <em>and</em> the hardware topology, so the communication it adds lands on the fastest link available (TP on NVLink, DP all-reduce on IB/EFA, overlapped with compute). Hold this framing and every specific dimension below becomes an instance of it.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c07">
+    <h2><span class="ch-num">07</span>Data parallelism &amp; ZeRO/FSDP</h2>
+
+    <p><strong>Data parallelism (DP)</strong> is the foundation: replicate the model on every GPU, give each a different slice of the batch, and average the gradients so all replicas stay in sync. Its communication is the gradient <strong>all-reduce</strong>, and its evolution (DDP → ZeRO → FSDP) is the story of fixing DP's memory cost.</p>
+
+    <h3>Classic DDP</h3>
+
+    <div class="diagram">  DDP: every GPU has a FULL copy of the model
+   GPU0: model + batch_shard_0 ─┐
+   GPU1: model + batch_shard_1 ─┤ each does fwd+bwd on its own data
+   GPU2: model + batch_shard_2 ─┤ → produces local gradients
+   GPU3: model + batch_shard_3 ─┘
+        │
+        all-reduce(gradients)  ← average grads across all GPUs (the DP comm)
+        │
+   every GPU applies the SAME averaged gradient → replicas stay identical
+
+   comm per step: all-reduce of the full gradient (≈ 2× model size on the wire, §14)
+   KEY: overlap this all-reduce with the backward pass → comm becomes ~free (§17)</div>
+
+    <p>DDP's flaw: every GPU stores the full params + grads + optimizer state (16 B/param), so it wastes memory replicating identical states. ZeRO and FSDP fix exactly this.</p>
+
+    <h3>ZeRO / FSDP — shard the redundant states</h3>
+
+    <table class="tbl">
+      <thead><tr><th>Stage</th><th>What it shards across DP ranks</th></tr></thead>
+      <tbody>
+        <tr><td>ZeRO-1</td><td>Optimizer state (the 12 B/param). Biggest single win; little extra comm.</td></tr>
+        <tr><td>ZeRO-2</td><td>+ gradients. Each rank only holds the grads for its shard after reduce-scatter.</td></tr>
+        <tr><td>ZeRO-3 / FSDP</td><td>+ parameters. No GPU holds the full model — each holds a shard and <strong>all-gathers</strong> the layers it needs just-in-time for forward/backward, then frees them. Maximum memory saving, most communication.</td></tr>
+      </tbody>
+    </table>
+
+    <p><strong>FSDP</strong> (Fully Sharded Data Parallel) is PyTorch's implementation of the ZeRO-3 idea: parameters live sharded; before a layer runs, its full weights are all-gathered, used, and discarded; gradients are reduce-scattered back to shards. It converts DP's "replicate everything" into "shard everything, gather on demand" — trading communication (all-gather per layer) for a massive memory reduction.</p>
+
+    <div class="callout warn">
+      <h5>The DP communication-vs-memory trade, stated</h5>
+      <p>DDP: minimal comm (one overlapped all-reduce), maximal memory (full replica). ZeRO-3/FSDP: minimal memory (full shard), more comm (all-gather params every layer, reduce-scatter grads). The right point depends on whether you're memory-bound (go FSDP/ZeRO-3) or comm-bound (stay DDP/ZeRO-1). This is a frequent interview probe — "DDP vs FSDP, when would you use each?" — and the answer is the trade: FSDP when the model states don't fit; lighter ZeRO stages when they do and you want to keep communication low. Your 400× distributed-PyTorch experience is exactly this territory — be ready to say which sharding regime you used and why.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c08">
+    <h2><span class="ch-num">08</span>Tensor parallelism</h2>
+
+    <p><strong>Tensor parallelism (TP)</strong> splits each layer's <em>weight matrices</em> across GPUs, so the GPUs cooperatively compute a single layer. It's the most communication-intensive dimension — which is exactly why it's pinned to the fastest link (NVLink within a node on H100; within the rack on GB200, §04 of Manual II).</p>
+
+    <div class="diagram">  TP on an MLP (Y = GeLU(X·A)·B), split across 2 GPUs:
+   ┌────────────────────────────────────────────────────────┐
+   │ A is split COLUMN-wise:  A = [A1 | A2]                   │
+   │   GPU0: Y1 = GeLU(X·A1)     GPU1: Y2 = GeLU(X·A2)        │
+   │   (no comm needed yet — each has part of the hidden dim) │
+   │                                                          │
+   │ B is split ROW-wise:     B = [B1 ; B2]                   │
+   │   GPU0: Z0 = Y1·B1          GPU1: Z1 = Y2·B2             │
+   │   Z = Z0 + Z1   ← ALL-REDUCE to sum partial outputs      │
+   └────────────────────────────────────────────────────────┘
+   comm: 1 all-reduce in forward + 1 in backward, PER LAYER
+   → many collectives per step → MUST be on NVLink (intra-node/rack)</div>
+
+    <p>The Megatron-style column-then-row split is the canonical pattern: the first GEMM splits columns (no comm), the second splits rows and an all-reduce sums the partials. Attention is split by attention heads similarly. The crucial property: <strong>TP communicates inside every layer, twice (fwd+bwd), so its collective frequency is enormous</strong> — which dictates the hardware constraint.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Property</th><th>Tensor parallelism</th></tr></thead>
+      <tbody>
+        <tr><td>What it splits</td><td>The weight matrices (and activations) within each layer.</td></tr>
+        <tr><td>Memory benefit</td><td>Parameters, grads, optimizer state, and activations all divided by TP size.</td></tr>
+        <tr><td>Communication</td><td>All-reduce (or all-gather + reduce-scatter with sequence parallel) per layer, per direction. Frequent and on the critical path — hard to overlap.</td></tr>
+        <tr><td>Hardware constraint</td><td><strong>Must stay within the NVLink domain.</strong> TP=8 on H100 (one node); on GB200 NVL72 you can go much larger because the whole 72-GPU rack is one NVLink domain. TP across IB/EFA is a performance disaster.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <h5>The number to know: why TP rarely exceeds 8 (on H100)</h5>
+      <p>The storage-checkpoint benchmark's own config encodes it: 56B uses <code>TP=4</code> on Blackwell, <code>TP=8</code> on H100. The reason is purely topological — TP's per-layer all-reduces only stay fast inside NVLink, which spans 8 GPUs on an H100 node. Push TP across nodes and every layer's collective crosses IB/EFA, exploding step time. The GB200 NVL72's headline advantage is precisely that this limit jumps to the whole rack (72 GPUs), so much larger TP/EP becomes viable on NVLink. Connecting "TP size" to "the NVLink-domain size" is a strong topology-aware answer for Greg.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c09">
+    <h2><span class="ch-num">09</span>Pipeline parallelism &amp; the bubble</h2>
+
+    <p><strong>Pipeline parallelism (PP)</strong> splits the model's <em>layers</em> into stages, each on a different GPU (or node), and streams micro-batches through like an assembly line. Its communication is cheap (just activations between adjacent stages), but it introduces a unique cost — the <strong>pipeline bubble</strong> — and understanding the bubble is the key PP insight.</p>
+
+    <div class="diagram">  PP with 4 stages (S0..S3), naive schedule, 4 micro-batches (mb):
+   time ─────────────────────────────────────────────────►
+   S0:  F1 F2 F3 F4 ......................... B4 B3 B2 B1
+   S1:     F1 F2 F3 F4 ................. B4 B3 B2 B1
+   S2:        F1 F2 F3 F4 ......... B4 B3 B2 B1
+   S3:           F1 F2 F3 F4 .. B4 B3 B2 B1
+        └─bubble─┘            └────fill────┘  └─bubble─┘
+   ░ = BUBBLE: stages idle while the pipe fills and drains.
+   bubble fraction ≈ (P − 1) / (M + P − 1)   for P stages, M micro-batches
+   → more micro-batches (M) per pipeline flush amortizes the bubble away</div>
+
+    <p>The bubble is the price of the pipeline: with P stages, the first and last stages sit idle during fill and drain. The fix is more micro-batches per step (larger M), so the steady-state region dominates and the bubble fraction shrinks. Advanced schedules (interleaved / 1F1B — one-forward-one-backward) reduce it further by interleaving forward and backward micro-batches.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Property</th><th>Pipeline parallelism</th></tr></thead>
+      <tbody>
+        <tr><td>What it splits</td><td>The layers, into sequential stages across GPUs/nodes.</td></tr>
+        <tr><td>Communication</td><td>Cheap — only the activations (and their gradients) passed point-to-point between adjacent stages. Tolerates slower links (IB/EFA), so PP spans <em>nodes</em>.</td></tr>
+        <tr><td>The cost</td><td>The bubble — idle time during fill/drain. Amortized by more micro-batches; minimized by interleaved/1F1B schedules.</td></tr>
+        <tr><td>Memory benefit</td><td>Each stage holds only its layers' params + a window of activations.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <h5>The TP-vs-PP placement rule</h5>
+      <p>The complementary insight that ties §08 and §09 together, and a great thing to state: <strong>TP communicates a lot but cheaply-per-message and must stay on NVLink, so put TP <em>inside</em> a node/rack; PP communicates little and tolerates slow links, so put PP <em>across</em> nodes.</strong> A typical layout is TP within the 8-GPU node (NVLink) and PP across nodes (IB/EFA), with DP on top. This mapping of "which dimension to which level of the locality tree" (Manual II §01) is exactly the systems-aware parallelism reasoning Greg wants — it shows you place parallelism by communication cost against the fabric.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c10">
+    <h2><span class="ch-num">10</span>Expert parallelism &amp; MoE</h2>
+
+    <p><strong>Mixture-of-Experts (MoE)</strong> models replace the dense MLP with many "expert" MLPs and route each token to a few of them. <strong>Expert parallelism (EP)</strong> places different experts on different GPUs — and its communication is the <strong>all-to-all</strong>, the most topology-sensitive collective. NVIDIA's own Nemotron MoE models and the team's <code>single-rack-alltoall</code> and <code>hybrid-ep</code> benchmarks make this directly relevant.</p>
+
+    <div class="diagram">  MoE layer with experts spread across GPUs (EP):
+   tokens arrive on each GPU → a ROUTER picks top-k experts per token
+        │
+   all-to-all (dispatch): send each token to the GPU holding its chosen expert
+        │
+   each GPU runs ITS experts on the tokens it received
+        │
+   all-to-all (combine): send results back to each token's original GPU
+        │
+   weighted-sum the expert outputs
+
+   comm: TWO all-to-alls per MoE layer (dispatch + combine)
+   → all-to-all stresses the FULL bisection bandwidth of the fabric
+   → on GB200 this is why nvloom (MNNVL) + single-rack-alltoall tests exist</div>
+
+    <p>Why MoE is attractive and why EP is hard, in one breath: MoE gives you far more parameters (capacity) for roughly the same FLOPs per token (since each token only hits a few experts), so it's a way to scale model quality cheaply. But routing tokens to scattered experts requires all-to-all communication, which is the collective that most stresses the network's bisection bandwidth — and it's irregular (load can be unbalanced across experts).</p>
+
+    <table class="tbl">
+      <thead><tr><th>Aspect</th><th>Expert parallelism</th></tr></thead>
+      <tbody>
+        <tr><td>What it splits</td><td>The experts (distinct MLPs) across GPUs.</td></tr>
+        <tr><td>Communication</td><td>Two all-to-alls per MoE layer (dispatch tokens, combine results). Bisection-bandwidth-bound; sensitive to topology.</td></tr>
+        <tr><td>The hard part</td><td>Load imbalance — if routing sends too many tokens to one expert, that GPU straggles (auxiliary load-balancing losses mitigate it). Capacity factors drop overflow tokens.</td></tr>
+        <tr><td>Why GB200 helps</td><td>All-to-all over the 72-GPU NVLink rack is far faster than over IB/EFA — rack-scale NVLink makes large EP practical, which is part of why the team benchmarks MNNVL all-to-all so heavily.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <h5>The collective-per-dimension summary (memorize this table)</h5>
+      <p>Each parallelism dimension has a signature collective, and naming them instantly shows fluency: <strong>DP → all-reduce</strong> (gradients, overlappable), <strong>TP → all-reduce/all-gather</strong> (per layer, on NVLink), <strong>PP → point-to-point</strong> (activations, cheap, cross-node), <strong>EP → all-to-all</strong> (token routing, bisection-bound), <strong>SP → all-gather/reduce-scatter</strong> (§11). When Greg asks about any dimension, leading with "its communication pattern is X, which means it wants hardware Y" is the structural answer that distinguishes real understanding.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c11">
+    <h2><span class="ch-num">11</span>Sequence / context parallelism</h2>
+
+    <p>Long-context training (100k+ tokens) breaks the memory model differently: activations scale with <em>sequence length</em>, so even a model that fits can OOM on a long sequence. <strong>Sequence parallelism (SP)</strong> and <strong>context parallelism (CP)</strong> split along the sequence dimension to fix this.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Technique</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td>Sequence parallelism (Megatron SP)</td><td>A companion to TP: the parts of a layer that TP <em>doesn't</em> split (layernorm, dropout — the non-GEMM regions) are split along the sequence dimension instead, so their activations are also divided by the parallel size. Converts TP's all-reduce into all-gather + reduce-scatter. Reduces activation memory with no extra net communication volume.</td></tr>
+        <tr><td>Context parallelism</td><td>Splits the <em>sequence itself</em> across GPUs for attention over very long contexts. Each GPU holds part of the sequence; attention requires communicating keys/values across GPUs (e.g., ring attention passes KV blocks around a ring). Enables contexts that no single GPU could hold.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="diagram">  Activation memory scales with SEQUENCE LENGTH:
+   short seq (2k):   activations fit          → no SP/CP needed
+   long seq (128k):  activations explode       → split the sequence
+        │
+   Sequence parallel: split layernorm/dropout activations along seq (with TP)
+   Context parallel:  split the tokens themselves; attention communicates KV
+                      (ring attention: KV blocks rotate around the GPU ring)</div>
+
+    <div class="callout tip">
+      <h5>Why this matters for the role's workloads</h5>
+      <p>MARS serves AV, robotics, and video teams (Manual I §01) — workloads with long sequences (video frames, sensor streams, long trajectories), not just text. So context/sequence parallelism isn't an exotic corner; it's how those workloads fit at all. Knowing that "activations scale with sequence length, so long-context workloads need sequence/context parallelism, which adds KV communication" rounds out your parallelism story beyond the LLM-default and connects to the actual diversity of workloads the role supports.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c12">
+    <h2><span class="ch-num">12</span>Composing nD parallelism</h2>
+
+    <p>Real frontier training uses <em>all</em> these dimensions at once — "3D/4D/5D parallelism." The skill that impresses Greg is being able to lay them out against the hardware so each dimension's communication lands on the right link. This chapter assembles the whole picture.</p>
+
+    <div class="diagram">  A typical layout for a large dense model on H100 (illustrative):
+   ┌─────────────────────────────────────────────────────────────────┐
+   │  TENSOR PARALLEL (TP=8)   ── within a node, over NVLink           │
+   │     ↑ most comm, fastest link                                     │
+   │  PIPELINE PARALLEL (PP=k) ── across nodes, over IB/EFA            │
+   │     ↑ cheap point-to-point, tolerates slower links               │
+   │  DATA PARALLEL (DP=m)     ── across the remaining GPUs            │
+   │     ↑ all-reduce, overlapped with backward                       │
+   │  [+ EXPERT PARALLEL if MoE; + SEQUENCE PARALLEL with TP]          │
+   └─────────────────────────────────────────────────────────────────┘
+   total GPUs = TP × PP × DP   (× EP, etc.)
+   each (TP×PP) group is ONE model replica that FITS;  DP replicates for THROUGHPUT
+
+   THE MAPPING RULE:
+     fastest link (NVLink)  ← most frequent/heavy comm  (TP, EP)
+     slower link (IB/EFA)   ← infrequent/cheap comm     (PP point-to-point, DP all-reduce overlapped)</div>
+
+    <table class="tbl">
+      <thead><tr><th>Dimension</th><th>Comm · placement · purpose</th></tr></thead>
+      <tbody>
+        <tr><td>Tensor (TP)</td><td>All-reduce/per-layer · within NVLink domain · fit the layer's compute across GPUs.</td></tr>
+        <tr><td>Pipeline (PP)</td><td>P2P activations · across nodes · fit the model's depth; bubble is the cost.</td></tr>
+        <tr><td>Data (DP)</td><td>All-reduce/per-step, overlapped · across replicas · throughput.</td></tr>
+        <tr><td>Expert (EP)</td><td>All-to-all · within NVLink ideally · capacity (MoE).</td></tr>
+        <tr><td>Sequence (SP/CP)</td><td>All-gather/reduce-scatter or ring-KV · with TP / across seq · long context, activation memory.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="idea">
+      <p><strong>Composing parallelism is a constrained optimization: fit each replica in memory, then maximize throughput, subject to landing each collective on the fastest adequate link.</strong> You pick TP large enough (and EP) to fit the layer within the NVLink domain, PP to fit the depth across nodes, then DP to fill the rest of the cluster for throughput — and you keep the heavy collectives (TP all-reduce, EP all-to-all) on NVLink while the cheap ones (PP P2P, DP all-reduce) ride IB/EFA overlapped with compute. This is the single most senior thing you can demonstrate in Greg's interview: not just naming the dimensions, but laying them out against the locality tree with the communication cost as the organizing principle. And it's exactly the reasoning behind why GB200 NVL72's 72-GPU NVLink domain is transformative — it dramatically widens the "fastest link" tier, so much more of your parallelism can live on NVLink.</p>
+    </div>
+
+    <p class="pull">Frontier training isn't one parallelism — it's five, stacked so each one's communication lands on exactly the link that can afford it.</p>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART III ===================== -->
+<div class="part" id="p3">
+  <div class="part-label">Part III — The collective layer</div>
+  <h2 class="part-title">Moving it on the <span class="acc">wire.</span></h2>
+  <p class="part-intro">Every parallelism dimension's cost is a collective communication, and NCCL is what executes them. This part goes one level below Manual II's fabric chapters: the collectives themselves, the ring-vs-tree algorithms and the bandwidth math that predicts their time, how NCCL maps them onto the topology, the tuning knobs, and the overlap technique that makes communication nearly free. "Debugging large-scale distributed training using NCCL" is a hard requirement in the JD — this is that knowledge.</p>
+
+  <section class="chapter" id="c13">
+    <h2><span class="ch-num">13</span>The collectives</h2>
+
+    <p>A handful of collective operations cover all of distributed training. Know what each does and which parallelism uses it — this is the vocabulary NCCL questions are asked in.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Collective</th><th>What it does · who uses it</th></tr></thead>
+      <tbody>
+        <tr><td>all-reduce</td><td>Combine (sum) a value across all ranks, every rank gets the result. <strong>DP gradient sync, TP partial-sum.</strong> The workhorse. = reduce-scatter + all-gather.</td></tr>
+        <tr><td>all-gather</td><td>Each rank contributes a shard; every rank ends with the full concatenation. <strong>FSDP gathers params; SP.</strong></td></tr>
+        <tr><td>reduce-scatter</td><td>Combine across ranks, but each rank keeps only its shard of the result. <strong>FSDP gradient reduction; the first half of all-reduce.</strong></td></tr>
+        <tr><td>all-to-all</td><td>Every rank sends a distinct chunk to every other rank (a transpose). <strong>MoE expert routing.</strong> Bisection-bandwidth-bound.</td></tr>
+        <tr><td>broadcast</td><td>One rank's data sent to all. Init, loading weights to all ranks.</td></tr>
+        <tr><td>reduce / gather</td><td>Combine/collect to a single rank. Less common in the hot loop.</td></tr>
+        <tr><td>point-to-point (send/recv)</td><td>One rank to one rank. <strong>Pipeline-parallel activation passing.</strong></td></tr>
+      </tbody>
+    </table>
+
+    <div class="diagram">  all-reduce decomposed (this identity is the key to the bandwidth math, §14):
+   all-reduce  =  reduce-scatter  +  all-gather
+   ────────────────────────────────────────────
+   [a b c d]      reduce-scatter      each rank ends with
+   [a b c d]   ───────────────────►   one fully-reduced chunk
+   [a b c d]                          then all-gather shares
+   [a b c d]                          all chunks to everyone</div>
+
+    <div class="callout tip">
+      <h5>Why "all-reduce = reduce-scatter + all-gather" matters</h5>
+      <p>This decomposition is not trivia — it's why an optimal ring all-reduce moves a specific, irreducible amount of data (§14), and why FSDP can use the two halves separately (reduce-scatter the grads, all-gather the params). When you can say "all-reduce is just a reduce-scatter followed by an all-gather, each moving (n−1)/n of the data, so all-reduce moves ~2× the buffer regardless of GPU count," you've demonstrated you understand the collective at the level the JD's "debug distributed training with NCCL" requires.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c14">
+    <h2><span class="ch-num">14</span>Ring vs tree &amp; the bandwidth math</h2>
+
+    <p>NCCL implements each collective with an <em>algorithm</em>, and the two that matter are <strong>ring</strong> (bandwidth-optimal) and <strong>tree</strong> (latency-optimal). Knowing the bandwidth math lets you predict a collective's time and explain why it scales the way it does — pure performance-modeling gold for Greg.</p>
+
+    <h3>The ring algorithm</h3>
+
+    <div class="diagram">  RING all-reduce: GPUs in a logical ring, data flows around it in chunks.
+   GPU0 → GPU1 → GPU2 → GPU3 → (back to GPU0)
+   reduce-scatter phase: (n−1) steps, each GPU sends 1/n of the buffer onward,
+                         accumulating → ends with each owning a reduced chunk
+   all-gather phase:     (n−1) steps, the reduced chunks circulate to everyone
+
+   DATA MOVED PER GPU = 2 × (n−1)/n × buffer_size
+   → as n grows, (n−1)/n → 1, so each GPU moves ≈ 2× the buffer, INDEPENDENT of n
+   → time ≈ 2 × (n−1)/n × buffer / link_bandwidth   (bandwidth-optimal!)</div>
+
+    <p>The headline result: <strong>ring all-reduce time is essentially independent of the number of GPUs</strong> (the (n−1)/n factor approaches 1), depending instead on buffer size and per-link bandwidth. This is why data-parallel training scales so well — adding GPUs doesn't increase the all-reduce <em>time</em> much, only the latency term (more hops). The cost is latency: a ring has n hops, so for small buffers latency dominates.</p>
+
+    <h3>Ring vs tree</h3>
+
+    <table class="tbl compare">
+      <thead><tr><th>Dimension</th><th>Ring</th><th>Tree</th></tr></thead>
+      <tbody>
+        <tr><td>Optimizes</td><td>Bandwidth — moves the minimal data per GPU</td><td>Latency — log(n) depth instead of n hops</td></tr>
+        <tr><td>Best for</td><td>Large messages (gradient all-reduce of big models)</td><td>Small messages / many nodes (latency-bound)</td></tr>
+        <tr><td>Hops</td><td>O(n) — latency grows with GPU count</td><td>O(log n) — latency scales gently</td></tr>
+        <tr><td>NCCL behavior</td><td>NCCL auto-selects ring vs tree (and double-binary-tree) by message size and topology</td><td>Often chosen for large-scale small-payload collectives</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <h5>The "busbw" metric the team's nccl-tests report</h5>
+      <p>nccl-tests reports <strong>bus bandwidth (busbw)</strong>, not raw algorithm bandwidth — busbw normalizes out the 2(n−1)/n factor so you can compare against the hardware's peak link bandwidth directly. A healthy all-reduce shows busbw near the fabric's peak (e.g., near NVLink or IB line rate); a low busbw means something's wrong (wrong transport, TCP fallback, a bad link — Manual II §24). When you run <code>all_reduce_perf</code> and read busbw, you're measuring exactly this algorithm's efficiency against the wire. Being able to say "busbw of 30 GB/s on a fabric that should do 100+ means NCCL probably fell back off the fast path" is precisely the NCCL-debugging fluency the JD demands.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c15">
+    <h2><span class="ch-num">15</span>Mapping collectives to topology</h2>
+
+    <p>NCCL's real cleverness is mapping a collective onto the physical topology (Manual II §02–§03) — using NVLink within a node, rails between nodes, and SHARP where available. Understanding this connects the parallelism dimensions to the fabric.</p>
+
+    <div class="diagram">  NCCL builds a HIERARCHICAL collective matching the topology:
+   ┌──────────────────────────────────────────────────────────────┐
+   │  intra-node: reduce across the 8 GPUs over NVLink/NVSwitch     │
+   │              (fast — one node becomes one "super-rank")        │
+   │  inter-node: ring/tree across nodes over IB/EFA, rail-aligned  │
+   │              (GPUn ↔ GPUn on rail n — parallel rail transfers) │
+   │  + SHARP:    the IB switch sums in-network → less data on wire │
+   └──────────────────────────────────────────────────────────────┘
+   So a 512-GPU all-reduce isn't one flat ring — it's:
+     reduce within each node (NVLink) → reduce across nodes (IB, rails, maybe SHARP)
+     → broadcast back down. Hierarchy keeps the slow links lightly loaded.</div>
+
+    <p>The practical implications you should be able to state:</p>
+    <ul class="dash">
+      <li><strong>Intra-node first.</strong> NCCL reduces within each node over NVLink before touching the slow inter-node fabric, so only one reduced copy per node crosses IB/EFA — keeping the expensive links lightly loaded.</li>
+      <li><strong>Rail alignment</strong> (Manual II §03) means the inter-node phase is N parallel rail-local transfers, not one funnel. Break it (wrong NIC binding) and bandwidth collapses.</li>
+      <li><strong>SHARP</strong> offloads the inter-node reduction into the IB switches, cutting the data that traverses the fabric — an IB-only win that makes the same all-reduce faster on an IB cluster than on EFA (Manual II §22).</li>
+    </ul>
+
+    <div class="idea">
+      <p><strong>This is where Volume II and Volume III meet.</strong> The parallelism dimensions (§06–§12) generate collectives; NCCL maps them onto the locality tree (Manual II §01); the fabric (IB/EFA, SHARP, rails) determines how fast they run. So "why is my all-reduce slow" can be answered top to bottom: is the algorithm right (ring vs tree), is NCCL using the fast transport (busbw, NCCL_DEBUG), is it rail-aligned, is SHARP available on this fabric? Being able to trace a collective from the parallelism dimension that issued it, through NCCL's algorithm and topology mapping, to the physical link — that end-to-end view is the senior systems-and-performance answer that wins both Aman's and Greg's interviews.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c16">
+    <h2><span class="ch-num">16</span>NCCL tuning &amp; environment</h2>
+
+    <p>NCCL's behavior is controlled by environment variables, and the team's scripts set exactly the ones that matter. Knowing the key knobs — and that the first move is usually <code>NCCL_DEBUG=INFO</code> — is concrete, demonstrable NCCL competence.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Variable</th><th>What it controls</th></tr></thead>
+      <tbody>
+        <tr><td>NCCL_DEBUG=INFO</td><td>Print init details: chosen transport, rings/trees, rail mapping, plugin. <strong>The first diagnostic</strong> — reveals TCP fallback, wrong NIC, missing plugin.</td></tr>
+        <tr><td>NCCL_IB_HCA</td><td>Which InfiniBand HCAs NCCL may use (e.g., <code>mlx5</code>). Wrong value → NCCL can't find the fast NICs. The storage scripts set this.</td></tr>
+        <tr><td>NCCL_SOCKET_IFNAME</td><td>Which interface for the bootstrap/control plane (e.g., <code>eth0</code>). Wrong → hangs at init (Manual II §16).</td></tr>
+        <tr><td>NCCL_IB_DISABLE=1</td><td>Force-disable IB (use on clusters with no IB/RoCE). Set wrong, you cripple a fast cluster.</td></tr>
+        <tr><td>NCCL_NET_PLUGIN</td><td>Select the net plugin (aws-ofi-nccl, gIB) — the per-CSP transport (Manual II §23).</td></tr>
+        <tr><td>NCCL_ALGO / NCCL_PROTO</td><td>Force a collective algorithm (Ring/Tree) or protocol (LL/LL128/Simple). Usually let NCCL auto-tune; override only to diagnose.</td></tr>
+        <tr><td>NCCL_P2P_LEVEL / NVLS</td><td>Control peer-to-peer and NVLink-SHARP (in-NVSwitch reduction) use within a node.</td></tr>
+        <tr><td>UCX_NET_DEVICES / UCX_TLS</td><td>For UCX-backed transports (your territory) — which devices and transport layers. The storage scripts expose these too.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout warn">
+      <h5>The tuning philosophy: auto-tune, override only to diagnose</h5>
+      <p>NCCL auto-selects algorithm, protocol, and topology mapping well in most cases — the common failures are <em>configuration</em> (wrong HCA/interface, missing plugin, version drift) not <em>algorithm choice</em>. So the workflow is: <code>NCCL_DEBUG=INFO</code> to confirm it picked the fast path and the right rails; fix the environment if not; and only force <code>NCCL_ALGO</code>/<code>NCCL_PROTO</code> as an experiment to test a hypothesis, not as a permanent fix. Stating this discipline — "I don't hand-force NCCL algorithms; I verify it's on the fast transport and fix the config, because that's where the real losses are" — signals mature NCCL operation rather than cargo-culting env vars.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c17">
+    <h2><span class="ch-num">17</span>Overlapping comm &amp; compute</h2>
+
+    <p>The single most important performance technique in distributed training: <strong>hide communication behind computation so it costs nothing.</strong> Recall from §01 that step time is compute + <em>exposed</em> communication — overlap is how you drive the exposed part toward zero.</p>
+
+    <div class="diagram">  WITHOUT overlap (exposed comm):
+   compute ████████████              ████████████
+   comm                ▓▓▓▓▓▓▓▓▓▓▓▓              ▓▓▓▓▓▓▓▓▓▓▓▓
+   step = compute + comm  (serial — comm fully exposed, slow)
+
+  WITH overlap (hidden comm):
+   compute ████████████████████████████████████████████
+   comm        ▓▓▓▓▓▓▓▓▓▓▓▓    ▓▓▓▓▓▓▓▓▓▓▓▓    ▓▓▓▓▓▓▓▓
+   step ≈ compute  (comm runs concurrently on copy engines/separate streams)</div>
+
+    <p>How overlap actually happens, per dimension:</p>
+    <table class="tbl">
+      <thead><tr><th>Dimension</th><th>How its comm overlaps</th></tr></thead>
+      <tbody>
+        <tr><td>DP all-reduce</td><td>As each layer's gradients finish in the backward pass, kick off their all-reduce <em>while</em> earlier layers are still computing. By the time backward ends, most grads are already reduced. (DDP buckets gradients for exactly this.)</td></tr>
+        <tr><td>FSDP all-gather</td><td>Prefetch the next layer's parameters (all-gather) while the current layer computes, so the weights are ready when needed.</td></tr>
+        <tr><td>PP point-to-point</td><td>While stage k computes micro-batch m, it's also sending micro-batch m−1's activations downstream — the pipeline naturally overlaps comm and compute.</td></tr>
+        <tr><td>TP all-reduce</td><td>Hardest to overlap — it's on the critical path within a layer. Mitigated by keeping it on fast NVLink (so it's short) and by techniques that fuse/split the GEMM with the communication.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="idea">
+      <p><strong>"Is the communication overlapped?" is the first question to ask of any distributed-training timeline.</strong> A job where the all-reduce shows as a gap after the backward pass (exposed comm) is leaving huge performance on the table — and you can see it directly in an Nsight Systems trace (§20): compute and NCCL kernels should be concurrent, not sequential. The fix is usually enabling/​tuning gradient bucketing (DDP), prefetch (FSDP), or confirming the comm is on a separate CUDA stream. This is exactly the kind of finding the profiling part teaches you to spot, and a textbook example of "investigate and resolve training performance end to end" — you see the exposed comm in the trace, name the mechanism, and apply the overlap fix.</p>
+    </div>
+
+    <p class="pull">Communication you can hide behind compute is free. The whole game is making the exposed sliver as thin as the fabric allows.</p>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART IV ===================== -->
+<div class="part" id="p4">
+  <div class="part-label">Part IV — Profiling: Nsight Systems</div>
+  <h2 class="part-title">Seeing the <span class="acc">timeline.</span></h2>
+  <p class="part-intro">"Debugging and optimization experience with NSight Systems and NSight Compute" is a hard requirement in the JD — these are the two tools the role names by name. Nsight Systems is the system-wide timeline profiler: it shows you how CPU, GPU, memory copies, and NCCL communication interleave over time, which is exactly where distributed-training inefficiencies (exposed comm, CPU stalls, stragglers) become visible. This part is how to drive it and what to look for.</p>
+
+  <section class="chapter" id="c18">
+    <h2><span class="ch-num">18</span>The profiling mindset</h2>
+
+    <p>Before the tools: the discipline. The team's entire culture is measurement-backed (Manual I), and profiling is that discipline applied to performance. The mindset matters as much as the mechanics.</p>
+
+    <div class="idea">
+      <p><strong>Measure, don't guess; profile before you optimize; change one thing and re-measure.</strong> The cardinal sin in performance work is optimizing what you assume is slow rather than what the profiler proves is slow. Intuitions about bottlenecks are wrong startlingly often — a job you "know" is compute-bound turns out to be stalling on the dataloader; a kernel you'd never suspect dominates the timeline. The roofline (§04) tells you what to attack <em>once you've measured</em>; the profiler tells you <em>what to measure</em>. Carrying this discipline visibly into the interview — "first I'd profile to find where the time actually goes, then form a hypothesis, then change one thing and confirm it moved the number" — is itself a strong signal, because it's how this team works.</p>
+    </div>
+
+    <h3>The two-tool division of labor</h3>
+
+    <table class="tbl compare">
+      <thead><tr><th>Question</th><th>Nsight Systems</th><th>Nsight Compute</th></tr></thead>
+      <tbody>
+        <tr><td>Scope</td><td>System-wide timeline (CPU + GPU + comm + I/O)</td><td>A single kernel, in microscopic detail</td></tr>
+        <tr><td>Answers</td><td>"Where in the step is time going? Is comm overlapped? Is the GPU starved?"</td><td>"Why is <em>this</em> kernel slow? Compute or memory bound? Occupancy?"</td></tr>
+        <tr><td>Use first</td><td>Always — find <em>where</em> the time is</td><td>Second — drill into the kernel Nsight Systems flagged</td></tr>
+        <tr><td>Overhead</td><td>Low — sample a few steps of a real run</td><td>High — replays a kernel many times; isolate one</td></tr>
+      </tbody>
+    </table>
+
+    <p>The workflow is always top-down: <strong>Nsight Systems to find where the time goes, then Nsight Compute to understand the specific kernel that dominates.</strong> Reaching for Nsight Compute first — profiling a kernel before knowing it even matters — is the classic mistake.</p>
+  </section>
+
+  <section class="chapter" id="c19">
+    <h2><span class="ch-num">19</span>Nsight Systems: the timeline</h2>
+
+    <p>Nsight Systems (<code>nsys</code>) captures a time-correlated trace of everything: CUDA kernels, memory copies, CUDA API calls, NCCL operations, CPU threads, and OS activity, all on one timeline you can zoom into.</p>
+
+<pre data-lang="BASH"><span class="com"># Capture a few training steps (not the whole run — you want a representative slice)</span>
+$ nsys profile \
+    --trace=cuda,nvtx,nccl,osrt \   <span class="com"># CUDA + NVTX ranges + NCCL + OS runtime</span>
+    --output=train_profile \
+    --capture-range=cudaProfilerApi \  <span class="com"># start/stop around a marked region</span>
+    python train.py
+
+<span class="com"># In a Slurm job, profile rank 0 (or a few ranks) to keep traces manageable:</span>
+$ srun bash -c 'if [ $SLURM_PROCID -eq 0 ]; then nsys profile -o prof_%q{SLURM_PROCID} python train.py; else python train.py; fi'</pre>
+
+    <h3>The timeline rows you read</h3>
+
+    <div class="diagram">  A few steps in the Nsight Systems timeline:
+   CPU (python) │▓▓ ░░░░░░░░░ ▓▓ ░░░░░░░░░ ▓▓   ← launches kernels, then waits
+   CUDA API     │ ▒▒▒          ▒▒▒          ▒▒▒
+   GPU (compute)│   ████████████  ████████████  ← the actual kernels (want this dense)
+   GPU (memcpy) │  ▓             ▓                ← H2D/D2H copies (dataloader, ckpt)
+   NCCL (comm)  │        ▓▓▓▓▓         ▓▓▓▓▓       ← collectives (want OVERLAPPING compute)
+                └──────────────────────────────►
+   READ IT AS:
+    • GPU-compute row dense & continuous?  → good, GPU is busy
+    • gaps in GPU-compute row?             → GPU starved — find what's blocking (CPU? copy? comm?)
+    • NCCL row concurrent with compute?    → overlap working (§17)
+    • NCCL row in the GAPS of compute?     → EXPOSED comm — the bug to fix</div>
+
+    <div class="callout tip">
+      <h5>The first thing to look at: the GPU-compute row's density</h5>
+      <p>Open the trace and look at the GPU kernel row across a few steps. <strong>Dense and continuous = the GPU is doing work; gaps = the GPU is idle and starved</strong>, and the question becomes "what's in the gap?" — a CPU stall (the launch row is busy but the GPU isn't), a memory copy (dataloader feeding too slowly), or exposed communication (NCCL in the gap). This single read — is the GPU busy, and if not, why — is 80% of what Nsight Systems is for, and it maps directly to the three-layer goodput model: you're visually inspecting Layer-3 (program) efficiency.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c20">
+    <h2><span class="ch-num">20</span>Reading a distributed timeline</h2>
+
+    <p>For distributed training, the gold is comparing the timeline across ranks and seeing how compute and communication interleave. This is where the high-value findings live, and it's exactly the "debug distributed training" skill the JD wants.</p>
+
+    <h3>The four signatures to recognize</h3>
+
+    <table class="tbl">
+      <thead><tr><th>What you see</th><th>Diagnosis</th></tr></thead>
+      <tbody>
+        <tr><td>NCCL kernels sit in the gaps between compute, not alongside it</td><td><strong>Exposed communication</strong> — overlap isn't working (§17). Step time = compute + comm. Fix: gradient bucketing/prefetch, separate stream.</td></tr>
+        <tr><td>Long NCCL kernel where all ranks wait, then resume together</td><td>The all-reduce is genuinely slow (low busbw) — wrong transport, bad link, no SHARP (Manual II §24). Or it's the barrier exposing a straggler (below).</td></tr>
+        <tr><td>One rank's compute is consistently longer; others wait at the collective</td><td><strong>Straggler</strong> (§35) — one slow GPU/node holds up the synchronous barrier. Every rank's NCCL kernel stretches to wait for the slow one.</td></tr>
+        <tr><td>GPU-compute row sparse, CPU/launch row busy, gaps everywhere</td><td><strong>CPU-bound / launch-bound</strong> — Python/host overhead between kernels, or tiny kernels with launch overhead dominating (§26). Fix: CUDA graphs, fewer/larger kernels, fix the input pipeline.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="diagram">  STRAGGLER signature across 4 ranks (the most important distributed finding):
+   rank0 compute ████████        [wait at all-reduce......]████
+   rank1 compute ████████        [wait......................]████
+   rank2 compute ████████████████ ← SLOW (bad node)         ████  ← others waited for it
+   rank3 compute ████████        [wait......................]████
+                              ↑ the collective can't complete until rank2 arrives
+   → every rank's step time is capped by rank2. ONE bad GPU, fleet-wide cost.
+   → confirm with WB-ITER-VARIANCE (Manual I), drain the node (Manual II §32-34)</div>
+
+    <div class="callout tip">
+      <h5>Why the straggler signature is the crown jewel</h5>
+      <p>It visually proves the straggler-amplification insight (Manual II §32): synchronous training means the slowest rank sets the pace, so one marginal node caps the entire job. In the timeline you see it unmistakably — three ranks finish compute and idle at the barrier while one grinds on, and then all four proceed together at the slow one's cadence. Spotting this in a trace, naming it as a hardware straggler, cross-referencing the node, and draining it is a complete end-to-end debugging story that touches profiling (this volume), the straggler rule (Manual I), and node remediation (Manual II) — the kind of cross-layer narrative that lands hard in both Aman's and Greg's interviews.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c21">
+    <h2><span class="ch-num">21</span>NVTX &amp; CPU/GPU correlation</h2>
+
+    <p>Raw kernel names are cryptic. <strong>NVTX</strong> (NVIDIA Tools Extension) lets you annotate your code with named ranges that show up as labeled bands on the timeline — turning "a sea of GEMMs" into "forward / backward / optimizer / all-reduce." This is what makes a distributed trace readable.</p>
+
+<pre data-lang="PYTHON"><span class="kw">import</span> torch.cuda.nvtx <span class="kw">as</span> nvtx
+
+<span class="kw">for</span> step <span class="kw">in</span> range(steps):
+    nvtx.range_push(<span class="str">"forward"</span>)        <span class="com"># labeled band starts</span>
+    loss = model(batch)
+    nvtx.range_pop()
+
+    nvtx.range_push(<span class="str">"backward"</span>)
+    loss.backward()                       <span class="com"># the all-reduce overlaps HERE (§17)</span>
+    nvtx.range_pop()
+
+    nvtx.range_push(<span class="str">"optimizer"</span>)
+    optimizer.step(); optimizer.zero_grad()
+    nvtx.range_pop()
+<span class="com"># Frameworks (Megatron/NeMo) already emit NVTX ranges + OneLogger phases —</span>
+<span class="com"># the same phase decomposition you see in goodput (Manual I §11).</span></pre>
+
+    <p>The other half is <strong>CPU/GPU correlation</strong>: Nsight Systems links each CPU-side CUDA API call to the GPU kernel it launched, so you can see <em>why</em> the GPU is idle. If the GPU row has a gap and the correlated CPU thread is busy in Python/dataloading, you've found a host bottleneck; if the CPU launched the kernel long before the GPU ran it, you may be launch-bound or queue-stalled.</p>
+
+    <div class="callout tip">
+      <h5>NVTX makes the timeline speak goodput</h5>
+      <p>Here's the elegant connection: the NVTX ranges (forward/backward/optimizer/comm) and the OneLogger time-budget phases (Manual I §11 — startup, productive training, checkpoint, etc.) are the <em>same decomposition</em> at different granularities. OneLogger gives you the per-job/fleet view of where time went; NVTX-annotated Nsight Systems gives you the microsecond view of a single step's phases. So when you find that "checkpoint overhead is 22% of runtime" in goodput, the NVTX trace lets you see exactly which operations within the save are slow. Being able to move between the fleet-level goodput decomposition and the kernel-level timeline — same phases, different zoom — is the full-stack observability fluency that defines this role.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c22">
+    <h2><span class="ch-num">22</span>Common findings</h2>
+
+    <p>A consolidated catalog of what Nsight Systems traces typically reveal, each with the fix — these are the patterns you'll cite when asked "how do you debug a slow training job."</p>
+
+    <table class="tbl">
+      <thead><tr><th>Finding</th><th>Signature → fix</th></tr></thead>
+      <tbody>
+        <tr><td>Exposed communication</td><td>NCCL in compute gaps → enable overlap (gradient bucketing, FSDP prefetch, separate stream) (§17).</td></tr>
+        <tr><td>GPU-starved / dataloader-bound</td><td>GPU gaps + busy memcpy/CPU + dataloader threads → more dataloader workers, prefetch, stage data to fast storage (Manual II §30), pin memory.</td></tr>
+        <tr><td>CPU/launch-bound</td><td>Sparse GPU row, busy launch row, many tiny kernels → CUDA graphs, kernel fusion, larger batch (§26).</td></tr>
+        <tr><td>Straggler</td><td>One rank's compute longer, others wait at barrier → find &amp; drain the bad node (§35, Manual II §32).</td></tr>
+        <tr><td>Slow collective (low busbw)</td><td>Long NCCL kernels, all ranks → check transport (NCCL_DEBUG), rails, SHARP, version (Manual II §24).</td></tr>
+        <tr><td>Memory-thrash / small batch</td><td>Frequent small kernels, low GPU occupancy, recompute everywhere → tune micro-batch, recomputation policy, parallelism (§36).</td></tr>
+        <tr><td>Checkpoint stalls</td><td>Periodic gaps aligned to save interval → async checkpoint, parallel save, faster storage (Manual I §13, Manual II §31).</td></tr>
+      </tbody>
+    </table>
+
+    <div class="idea">
+      <p><strong>Notice every one of these findings has a fix that lives in a different layer — and that's the point.</strong> Exposed comm is a framework-config fix; dataloader-bound is a storage/pipeline fix; straggler is a hardware-remediation fix; slow collective is a fabric fix; CPU-bound is a kernel-launch fix. Nsight Systems is the lens that tells you <em>which layer</em> to go fix — turning a vague "training is slow" into a precise, actionable hypothesis. That's why it's the first tool, and why the JD names it: it's the instrument that makes "investigate and resolve training performance end to end" tractable. The profiler points; the rest of this series tells you what to do once it points.</p>
+    </div>
+
+    <p class="pull">Nsight Systems doesn't fix anything. It tells you, unambiguously, which layer to go fix — which is the hardest part.</p>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART V ===================== -->
+<div class="part" id="p5">
+  <div class="part-label">Part V — Profiling: Nsight Compute</div>
+  <h2 class="part-title">Inside the <span class="acc">kernel.</span></h2>
+  <p class="part-intro">When Nsight Systems shows that one kernel dominates the step, Nsight Compute tells you <em>why</em> it's slow and how to fix it. This is the microscope — single-kernel detail on compute throughput, memory traffic, occupancy, and the memory hierarchy. It's also where your CUDA background (the 124× LeNet-5 win, the LBNL GPU solver) gives you genuine authority, so this part is both a refresher and an inventory of talking points for Aman.</p>
+
+  <section class="chapter" id="c23">
+    <h2><span class="ch-num">23</span>When to go kernel-level</h2>
+
+    <p>Nsight Compute (<code>ncu</code>) is expensive — it replays a kernel many times with different hardware counters enabled — so you use it surgically, only on the kernel Nsight Systems flagged. Going kernel-level prematurely is the classic mistake (§18).</p>
+
+<pre data-lang="BASH"><span class="com"># Profile ONE specific kernel a few times (not the whole app)</span>
+$ ncu --set full \                  <span class="com"># collect the full section set</span>
+      --launch-skip 200 \            <span class="com"># skip warmup iterations</span>
+      --launch-count 1 \            <span class="com"># profile one launch</span>
+      --kernel-name regex:'.*gemm.*' \  <span class="com"># target the kernel of interest</span>
+      python train.py
+
+<span class="com"># --set basic for a quick look; --set full for the detailed roofline + memory analysis</span></pre>
+
+    <table class="tbl">
+      <thead><tr><th>Use Nsight Compute when…</th><th>Don't when…</th></tr></thead>
+      <tbody>
+        <tr><td>Nsight Systems shows one kernel dominates the step time</td><td>You haven't profiled the timeline yet (find <em>where</em> first)</td></tr>
+        <tr><td>You have a custom kernel (CUDA, Triton) to optimize</td><td>The bottleneck is communication or the dataloader (system-level)</td></tr>
+        <tr><td>A GEMM/attention kernel is far below its roofline ceiling</td><td>The kernel is already near peak — diminishing returns</td></tr>
+        <tr><td>You need to know compute-bound vs memory-bound for a kernel</td><td>You can answer it from arithmetic intensity by hand (§05)</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <h5>The realistic scope for this role</h5>
+      <p>Most of this role's wins are at the system/fleet level (Nsight Systems, goodput, NCCL, storage) rather than hand-writing kernels — the leverage is higher. But the JD explicitly names Nsight Compute and "CUDA Programming" as a stand-out, and researchers <em>do</em> write custom kernels (Triton, fused ops) that you'll help optimize. So Nsight Compute fluency is the differentiator that lets you go all the way down when needed. Your 124× CUDA speedup is exactly this skill demonstrated — be ready to discuss what Nsight Compute (or its predecessor) told you about that kernel and how you used it.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c24">
+    <h2><span class="ch-num">24</span>The sections: compute, memory, occupancy</h2>
+
+    <p>Nsight Compute organizes a kernel's profile into <strong>sections</strong>. Three matter most, and reading them in order tells you the kernel's bottleneck and its roofline position directly.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Section</th><th>What it tells you</th></tr></thead>
+      <tbody>
+        <tr><td>GPU Speed of Light (SOL)</td><td>The headline: what % of peak <em>compute</em> and peak <em>memory bandwidth</em> the kernel achieved. <strong>High compute% + low memory% = compute-bound; high memory% + low compute% = memory-bound.</strong> This is the roofline (§04), read off directly.</td></tr>
+        <tr><td>Compute Workload Analysis</td><td>Which pipes are busy (tensor cores, FP32, etc.), instruction mix, and whether tensor cores are actually being used (a GEMM not hitting tensor cores is a red flag).</td></tr>
+        <tr><td>Memory Workload Analysis</td><td>Traffic at each level (L1, L2, HBM/DRAM), hit rates, and where the bytes are moving. Reveals poor caching, excessive HBM traffic, uncoalesced access.</td></tr>
+        <tr><td>Occupancy</td><td>How many warps are resident vs the max — limited by registers, shared memory, or block size. Low occupancy can mean the GPU can't hide latency (§26).</td></tr>
+        <tr><td>Scheduler / Warp State</td><td>Why warps stall — waiting on memory (long scoreboard), waiting on math pipes, or barriers. Points at the specific stall reason.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="diagram">  Reading SOL to place a kernel on the roofline (§04) in one glance:
+   ┌──────────────────────────────────────────────────────────┐
+   │  Compute (SM)  ████████████████░░░░  82%   ← compute-bound │
+   │  Memory (DRAM) ████░░░░░░░░░░░░░░░░   21%                   │
+   │  → near the compute roof; fix = faster math (precision,    │
+   │    tensor cores, GEMM shape) or you're near the ceiling    │
+   └──────────────────────────────────────────────────────────┘
+   ┌──────────────────────────────────────────────────────────┐
+   │  Compute (SM)  ████░░░░░░░░░░░░░░░░   19%                   │
+   │  Memory (DRAM) ███████████████████░  91%  ← memory-bound   │
+   │  → saturating HBM; fix = move fewer bytes (fuse, cache,    │
+   │    lower precision, coalesce, better tiling)               │
+   └──────────────────────────────────────────────────────────┘</div>
+
+    <div class="callout tip">
+      <h5>The SOL-first method</h5>
+      <p>Always read Speed-of-Light first: it immediately tells you compute-bound vs memory-bound, which dictates everything else. If compute% is high, dig into Compute Workload (are tensor cores engaged? right precision?). If memory% is high, dig into Memory Workload (where's the traffic? cache hit rates? coalescing?). If neither is high, you're latency/occupancy-bound — go to Occupancy and Warp State. This top-down read — SOL → the dominant section → the specific stall — is the disciplined Nsight Compute workflow, and describing it shows you optimize kernels methodically rather than by trial and error.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c25">
+    <h2><span class="ch-num">25</span>The memory hierarchy, kernel view</h2>
+
+    <p>Memory-bound kernels are the common case for the non-GEMM parts of a model, and fixing them means understanding the GPU memory hierarchy from a kernel's perspective. This is core CUDA knowledge — your territory — and the basis for why fusion and tiling work.</p>
+
+    <div class="diagram">  GPU MEMORY HIERARCHY (fastest/smallest → slowest/largest):
+   ┌──────────────────────────────────────────────────────────────┐
+   │ REGISTERS .......... per-thread, ~0 cycle, tiny               │
+   │ SHARED MEM / L1 .... per-block, on-chip, ~tens of cycles      │
+   │    (programmer-managed scratchpad — the key to tiling/fusion) │
+   │ L2 CACHE ........... chip-wide, ~hundreds of cycles           │
+   │ HBM (DRAM) ......... GBs, ~hundreds-of-ns, the bandwidth wall │
+   └──────────────────────────────────────────────────────────────┘
+   The optimization game: keep data in registers/shared as long as possible,
+   touch HBM as few times as possible. Every HBM round-trip is the enemy.</div>
+
+    <table class="tbl">
+      <thead><tr><th>Concept</th><th>Why it matters · the fix it motivates</th></tr></thead>
+      <tbody>
+        <tr><td>Coalescing</td><td>Adjacent threads should access adjacent memory so the hardware merges them into one wide transaction. Uncoalesced (strided/scattered) access multiplies HBM transactions. Fix: data layout, access pattern.</td></tr>
+        <tr><td>Shared-memory tiling</td><td>Load a tile of data into shared memory once, reuse it across many threads (e.g., matrix-multiply tiles). Turns repeated HBM reads into one read + many fast shared reads. The classic GEMM optimization.</td></tr>
+        <tr><td>Bank conflicts</td><td>Shared memory is banked; if threads in a warp hit the same bank, accesses serialize. Fix: pad arrays so accesses spread across banks.</td></tr>
+        <tr><td>Kernel fusion</td><td>Fuse elementwise ops (layernorm + activation) into one kernel so intermediates stay in registers/shared instead of bouncing through HBM. This is exactly what raises arithmetic intensity (§05) and is why FlashAttention is fast.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <h5>Your CUDA fundamentals are a genuine asset here</h5>
+      <p>Shared-memory tiling, coalescing, bank conflicts, fusion — this is the bread and butter of the CUDA optimization work behind your 124× speedup. When Aman probes compute, this is where you can speak from real experience: "the LeNet-5 kernel was memory-bound on uncoalesced access / underusing shared memory / launch-overhead-dominated, and the fix was X, which I confirmed by re-profiling." Most candidates for an <em>efficiency</em> role can't go this deep on kernels — it's a differentiator. The connection to make explicit: these kernel-level techniques (keep data on-chip, minimize HBM round-trips) are the micro-scale version of the macro-scale efficiency game (keep communication on the fast link, minimize exposed comm) — same instinct, different altitude.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c26">
+    <h2><span class="ch-num">26</span>Occupancy, warps &amp; launch overhead</h2>
+
+    <p>Two latency-related issues round out kernel performance: <strong>occupancy</strong> (can the GPU hide memory latency?) and <strong>launch overhead</strong> (are tiny kernels spending more time launching than running?). Both show up constantly in real training and have clean fixes.</p>
+
+    <h3>Occupancy</h3>
+
+    <p>The GPU hides memory latency by having many warps resident — while one warp waits on HBM, another runs. <strong>Occupancy</strong> is resident warps ÷ maximum, and it's capped by per-thread registers, per-block shared memory, and block size. Low occupancy means too few warps to hide latency, so the SMs stall waiting on memory. But occupancy isn't a goal in itself — a kernel can be fast at moderate occupancy if it has enough instruction-level parallelism; chasing 100% occupancy by cutting registers can backfire.</p>
+
+    <h3>Launch overhead and CUDA graphs</h3>
+
+    <div class="diagram">  Many tiny kernels (common in eager-mode PyTorch, small models):
+   CPU launch ▒  ▒  ▒  ▒  ▒  ▒  ▒  ▒   ← each launch has fixed ~µs overhead
+   GPU run    ▪  ▪  ▪  ▪  ▪  ▪  ▪  ▪   ← kernels so short, launch > runtime!
+   → GPU is starved between launches (the CPU-bound signature, §20)
+
+   FIX — CUDA graphs: record the whole sequence once, replay as ONE submission
+   CPU  ▒▒▒(record once)  → replay: ▒
+   GPU  ▪▪▪▪▪▪▪▪▪▪▪▪▪▪▪▪  ← back-to-back, no per-kernel launch gap</div>
+
+    <table class="tbl">
+      <thead><tr><th>Issue</th><th>Symptom · fix</th></tr></thead>
+      <tbody>
+        <tr><td>Low occupancy</td><td>SMs stall on memory; Warp State shows long-scoreboard stalls → reduce register/shared pressure, tune block size, increase ILP.</td></tr>
+        <tr><td>Launch overhead</td><td>Tiny kernels, CPU-bound timeline, GPU gaps → CUDA graphs, kernel fusion, larger batch, <code>torch.compile</code>.</td></tr>
+        <tr><td>Wave quantization</td><td>Grid doesn't tile evenly onto SMs, so a near-empty final wave wastes a whole pass → size dimensions to fill SM waves (multiples that map cleanly).</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <h5>The training-relevant connection: small models and eager mode</h5>
+      <p>Launch overhead is why small-model training (and the small kernels in any model) often shows up CPU-bound in Nsight Systems (§20) — the GPU finishes each tiny kernel before the CPU can launch the next. The fixes (<code>torch.compile</code>, CUDA graphs, fusion) collapse many launches into few, keeping the GPU fed. This is a frequent real finding and a clean optimization story: "the timeline was CPU-bound from launch overhead on hundreds of tiny kernels; CUDA graphs / torch.compile fused them and the GPU row went dense." It connects the kernel-level view (this chapter) back to the timeline view (§20) — the two profilers telling one story.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c27">
+    <h2><span class="ch-num">27</span>A worked kernel optimization</h2>
+
+    <p>Putting Part V together: a complete kernel-optimization narrative, the shape of the story to tell when asked "walk me through optimizing a slow kernel."</p>
+
+    <div class="issue">
+      <div class="issue-header">
+        <span class="tag">worked case</span>
+        <span class="title">A custom fused-layernorm kernel running far below roofline</span>
+      </div>
+      <div class="issue-body">
+        <h5>The trigger (from Nsight Systems)</h5>
+        <p>The timeline (§20) shows a custom layernorm kernel taking a surprising fraction of each step — more than the big GEMMs around it. That's the signal to drop into Nsight Compute on this specific kernel.</p>
+        <h5>Read Speed-of-Light first (§24)</h5>
+        <p>SOL shows Compute 14%, Memory (DRAM) 88% → unambiguously <strong>memory-bound</strong>. So the fix is about moving fewer bytes, not faster math. Place it on the roofline: low arithmetic intensity, hard against the memory roof — expected for an elementwise op.</p>
+        <h5>Memory Workload Analysis (§25)</h5>
+        <p>The kernel reads the input from HBM, writes the normalized output to HBM, and — the smell — it's a <em>separate</em> kernel from the activation that follows, so the intermediate makes another HBM round-trip. Also, the access pattern is uncoalesced for the chosen layout, inflating transactions.</p>
+        <h5>The fixes</h5>
+        <p>(1) <strong>Fuse</strong> the layernorm with the following activation (and ideally the preceding op) into one kernel, so the intermediate stays in registers/shared and never touches HBM — raising arithmetic intensity and halving HBM traffic. (2) <strong>Fix coalescing</strong> by adjusting the layout/access so adjacent threads read adjacent memory. (3) Confirm shared-memory use has no bank conflicts.</p>
+        <h5>Re-measure (the discipline)</h5>
+        <p>Re-profile: Memory% drops, the kernel time falls, and the timeline (§20) shows the step shrink. Crucially, you <em>verified</em> the fix moved the number rather than assuming it — the measurement discipline (§18) closing the loop. In the bigger picture, fusing memory-bound glue is exactly the FlashAttention insight (§05) applied to a custom kernel: keep the data on-chip, touch HBM as little as possible.</p>
+        <h5>The transferable lesson</h5>
+        <p>Memory-bound kernel → move fewer bytes → fuse to keep intermediates on-chip + coalesce access → re-measure. This is the same arc as your 124× story at whatever its specific bottleneck was, and it generalizes: the profiler localizes, the roofline classifies, fusion/tiling/coalescing fixes the memory-bound case, tensor-cores/precision/shape fixes the compute-bound case, and you always confirm by re-measuring.</p>
+      </div>
+    </div>
+
+    <p class="pull">Find the kernel with the timeline, classify it with Speed-of-Light, fix it with the hierarchy, and prove it with a re-measure. Every time.</p>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART VI ===================== -->
+<div class="part" id="p6">
+  <div class="part-label">Part VI — Performance modeling</div>
+  <h2 class="part-title">Predicting the <span class="acc">number.</span></h2>
+  <p class="part-intro">"Performance modeling for ML workloads" is named explicitly in Greg's interview. Modeling means reasoning about performance with math <em>before</em> (or instead of) running — computing MFU, estimating FLOPs, predicting scaling efficiency, and choosing a parallelism strategy analytically. This part gives you the back-of-envelope models that let you say "this job should hit ~45% MFU; it's at 28%, so something's exposed" — the quantitative fluency that separates a senior performance engineer.</p>
+
+  <section class="chapter" id="c28">
+    <h2><span class="ch-num">28</span>MFU &amp; HFU, computed</h2>
+
+    <p>MFU (Model FLOP Utilization) is the truth metric for training compute efficiency (Manual I §15), and being able to <em>compute</em> it — not just name it — is what Greg will look for.</p>
+
+    <div class="diagram">  MFU = achieved model FLOP/s ÷ peak GPU FLOP/s
+
+   achieved model FLOP/s = (model FLOPs per step) / (step time in seconds) / (num GPUs)
+   peak GPU FLOP/s       = the hardware's spec at your precision (e.g. BF16 dense)
+
+   Worked example:
+     model = 7B params, global batch tokens/step = 2M, step time = 1.0s, 64 GPUs
+     model FLOPs/step ≈ 6 × N × tokens = 6 × 7e9 × 2e6 = 8.4e16 FLOP   (§29)
+     achieved/GPU = 8.4e16 / 1.0 / 64 = 1.31e15 FLOP/s = 1.31 PFLOP/s
+     if peak BF16 ≈ 1.0 PFLOP/s/GPU (illustrative) → MFU = 131%?? → recheck:
+       (the 6ND counts fwd+bwd; verify peak figure &amp; precision — see caveats)
+     a realistic large-LLM MFU lands ~35-50%.</div>
+
+    <table class="tbl">
+      <thead><tr><th>Metric</th><th>Definition &amp; reading</th></tr></thead>
+      <tbody>
+        <tr><td>MFU</td><td>Useful model FLOPs ÷ peak. Excludes recomputation. 35–50% is good for large LLMs; &lt;25% means something is exposed (comm, small batch, bad parallelism, stalls).</td></tr>
+        <tr><td>HFU</td><td>All FLOPs the hardware did (including activation recomputation) ÷ peak. HFU ≥ MFU; the gap = the recompute tax. High HFU but low MFU = you're doing lots of FLOPs but many are recompute.</td></tr>
+        <tr><td>The diagnostic value</td><td>MFU well below the expected band is a flag to profile (Part IV): the "missing" efficiency is exposed communication, dataloader stalls, stragglers, or low-precision-not-used. MFU tells you <em>how much</em> is left on the table; the profiler tells you <em>where</em>.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <h5>Why MFU is the bridge between modeling and observability</h5>
+      <p>MFU is the number that connects Greg's two topics — performance modeling and observability. You <em>model</em> the expected MFU from the FLOP count and hardware peak; you <em>observe</em> the actual from step time; and the gap is your work. A line like "for this model and batch on H100 I'd expect ~45% MFU; if the dashboard shows 28%, that 17-point gap is exposed communication or input stalls, and I'd profile to localize it" demonstrates exactly the modeling-plus-observability loop the role is built on. Be careful with the arithmetic live (verify the 6ND convention and the peak-FLOP figure for the precision) — getting the method right matters more than a precise number, and acknowledging the caveats is itself a senior signal.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c29">
+    <h2><span class="ch-num">29</span>The transformer FLOP model</h2>
+
+    <p>To compute MFU you need the model's FLOPs, and the transformer FLOP estimate is a back-of-envelope every performance engineer should have. The canonical approximation:</p>
+
+    <div class="diagram">  DENSE TRANSFORMER, training FLOPs ≈ 6 × N × D
+   ┌──────────────────────────────────────────────────────────────┐
+   │  N = number of parameters                                     │
+   │  D = number of tokens processed                               │
+   │  6 = 2 (multiply + accumulate per FLOP-pair)                  │
+   │      × 3 (forward = 1, backward ≈ 2)                          │
+   └──────────────────────────────────────────────────────────────┘
+   per step:  FLOPs ≈ 6 × N × (tokens_per_step)
+   This IGNORES attention's quadratic term, fine when seq << model width,
+   but ADD it for long context:  attention ≈ 12 × layers × seq² × hidden  (per the
+   standard accounting) — material when sequence length is large.</div>
+
+    <p>The two pieces and when each matters:</p>
+    <ul class="dash">
+      <li><strong>The 6ND term</strong> dominates for typical configurations — it's the matmul FLOPs of the linear layers (QKV, attention output, MLP). For most training, FLOPs ≈ 6 × params × tokens is accurate enough to compute MFU and reason about scaling.</li>
+      <li><strong>The attention quadratic term</strong> (~scales with seq²) matters for long-context workloads (the AV/video/robotics jobs, §11) — at 128k tokens, attention can rival the linear FLOPs, which is also why FlashAttention and context parallelism matter for those workloads.</li>
+      <li><strong>MoE adjustment</strong>: for a sparse MoE model, count only the <em>active</em> parameters per token (the experts each token actually hits), not the total — which is why MoE gets more capacity for similar FLOPs (§10).</li>
+    </ul>
+
+    <div class="callout tip">
+      <h5>The estimate that makes you dangerous in a modeling discussion</h5>
+      <p>"FLOPs ≈ 6 × params × tokens" plus "step is ~1/3 forward, 2/3 backward" plus "MFU = achieved/peak" is a complete, composable back-of-envelope: given a model size, token rate, GPU count, and hardware peak, you can estimate the expected step time and MFU in your head — and therefore tell whether an observed number is reasonable or hiding inefficiency. This is the essence of performance modeling, and being able to do it live (with the right caveats about attention and precision) is precisely the quantitative fluency Greg is testing. It also lets you sanity-check researchers' claims: "you're reporting X tokens/s on Y GPUs, which implies Z% MFU — that's either great or suspiciously high, let's check."</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c30">
+    <h2><span class="ch-num">30</span>Scaling efficiency &amp; the comm knee</h2>
+
+    <p>"You add more GPUs and throughput doesn't scale linearly — model why" is the canonical scaling question. The answer is a model of how the compute and communication terms behave as you scale, and where they cross.</p>
+
+    <h3>Strong vs weak scaling</h3>
+
+    <table class="tbl compare">
+      <thead><tr><th>Type</th><th>Definition</th><th>Limited by</th></tr></thead>
+      <tbody>
+        <tr><td>Strong scaling</td><td>Fixed total problem, more GPUs → less work each. "Make this job finish faster."</td><td>Communication grows relative to shrinking per-GPU compute → efficiency drops (Amdahl).</td></tr>
+        <tr><td>Weak scaling</td><td>Fixed work <em>per GPU</em>, more GPUs → bigger total problem. "Train a bigger model / batch."</td><td>Scales better — per-GPU compute stays constant; only the collective's latency term grows.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>The communication knee</h3>
+
+    <div class="diagram">  Per-step time as a function of GPU count (strong scaling):
+   step time
+        │
+        │██                          per-GPU COMPUTE shrinks as you add GPUs (good)
+        │ ███
+        │   ████___
+        │        ‾‾‾▓▓▓▓▓▓▓▓▓▓▓▓▓▓   COMMUNICATION grows / stays fixed (bad)
+        │              ↑ THE KNEE: where comm overtakes compute
+        └──────────────────────────────► GPU count
+   below the knee: adding GPUs helps (compute-dominated)
+   above the knee: adding GPUs barely helps (comm-dominated) → wasted GPUs
+
+   The fix isn't "fewer GPUs" — it's pushing the knee right:
+    overlap comm (§17), bigger per-GPU batch (weak-scale), SHARP, better collective,
+    keep heavy collectives on NVLink (§12).</div>
+
+    <p>The model in words: per-step time ≈ compute(N)/GPUs + communication. As you add GPUs, the compute term shrinks but the communication term doesn't (and the collective's latency term may even grow). At some GPU count — the knee — communication dominates and adding GPUs stops helping. Quantitatively: if a step is 80% compute / 20% comm at N GPUs, doubling to 2N halves the compute but the all-reduce may not shrink, so efficiency drops toward the comm floor.</p>
+
+    <div class="idea">
+      <p><strong>This is the model behind your 400× scaling story, and the answer to Greg's scaling question.</strong> When asked "why doesn't 2× the GPUs give 2× throughput," the structured answer is: decompose per-step time into compute (scales down) and communication (doesn't), find the knee where comm overtakes compute, and name the mitigations that push the knee right — overlap comm with compute, increase per-GPU batch (move toward weak scaling), use SHARP / a more bandwidth-optimal collective, and keep the heaviest collectives on the fastest link. If your 400× came partly from improving scaling efficiency, this is the framework to explain <em>how</em> — you pushed the knee right by reducing the exposed communication. That's the performance-modeling-meets-real-experience answer that wins the interview.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c31">
+    <h2><span class="ch-num">31</span>Modeling a parallelism strategy</h2>
+
+    <p>The payoff of Parts II, III, and VI together: choosing a parallelism layout by reasoning about it on paper before burning GPU-hours. This is the synthesis Greg's interview is building toward.</p>
+
+    <h3>The modeling procedure</h3>
+
+    <div class="tree">
+<pre><span class="q">Given: model size, GPU memory, GPU count, fabric, target throughput</span>
+   │
+   ├─ <span class="a">1. MEMORY — what's the minimum parallelism to FIT?</span>
+   │     model states = ~16 B/param (§03); + activation estimate
+   │     → need TP (and/or PP, ZeRO/FSDP) so each replica fits in HBM
+   │     → TP limited to NVLink domain (8 on H100, rack on GB200, §08)
+   │
+   ├─ <span class="a">2. COMPUTE — what throughput does each replica give?</span>
+   │     model FLOPs/step (6ND, §29) ÷ achievable FLOP/s (peak × expected MFU)
+   │     → per-replica step time estimate
+   │
+   ├─ <span class="a">3. SCALE — how many DP replicas to hit the target?</span>
+   │     total GPUs = TP × PP × DP; pick DP to reach throughput
+   │     → check the comm knee (§30): does DP all-reduce stay overlapped?
+   │
+   └─ <span class="a">4. PLACE — map each dim to the fabric (§12)</span>
+         TP/EP → NVLink ; PP → cross-node P2P ; DP → IB/EFA overlapped
+         → estimate exposed comm; if too high, rebalance the dims</pre>
+    </div>
+
+    <p>Worked sketch: a 56B model on H100 (80GB). Step 1 — model states ≈ 56e9 × 16 ≈ 900 GB, far over one GPU, so you need TP to split parameters; TP=8 (NVLink) divides states to ~112 GB/group, still tight with activations → add PP across nodes to split depth. Step 2 — estimate per-replica step time from 6ND ÷ (peak × ~45% MFU). Step 3 — add DP replicas to hit throughput, checking the all-reduce stays overlapped. Step 4 — TP within the node (NVLink), PP across nodes (IB), DP on top. That's exactly the kind of layout the team's benchmark configs encode (the storage test's TP=8-on-H100 / TP=4-on-Blackwell is step 1 of this procedure).</p>
+
+    <div class="callout tip">
+      <h5>Why modeling-first is the senior move</h5>
+      <p>Researchers (and junior engineers) often pick a parallelism layout by trial and error — try a config, OOM, adjust, repeat — burning GPU-hours. Modeling it first (fit, then throughput, then placement) gets you to a near-optimal layout on paper, and the runs become <em>confirmation</em> rather than search. When Greg asks "how would you parallelize this model," walking the four-step procedure — fit it in memory with TP/PP, estimate throughput per replica, scale with DP to the target, place each dimension on the right link — demonstrates that you reason about parallelism quantitatively, which is the entire point of "performance modeling for ML workloads."</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c32">
+    <h2><span class="ch-num">32</span>Communication-bound analysis</h2>
+
+    <p>The recurring theme across this volume is that communication is what limits distributed training. This chapter consolidates the analytical view — Amdahl's law for distributed training — so you can reason about the communication ceiling directly.</p>
+
+    <div class="diagram">  Amdahl for distributed training:
+   step = compute_time + exposed_comm_time
+   speedup from more GPUs is bounded by the part that DOESN'T scale (comm)
+
+   if exposed_comm is 20% of the step and immovable:
+     even with infinite GPUs (compute → 0), step → 20% of original
+     → max speedup ≈ 5×, no matter how many GPUs you add
+
+   THEREFORE the highest-leverage work is shrinking EXPOSED comm:
+    overlap (§17) ........... move comm under compute → exposed → ~0
+    topology (§12, §15) ..... heavy collectives on NVLink → comm shorter
+    SHARP (Manual II §3) .... in-network reduce → less data on wire
+    algorithm (§14) ......... ring for big msgs → bandwidth-optimal
+    bigger batch ............ more compute per comm → comm fraction drops</div>
+
+    <table class="tbl">
+      <thead><tr><th>Lever</th><th>How it reduces the communication ceiling</th></tr></thead>
+      <tbody>
+        <tr><td>Overlap</td><td>The biggest lever — hidden comm isn't on the critical path, so it doesn't count toward the Amdahl floor (§17).</td></tr>
+        <tr><td>Topology placement</td><td>Heavy collectives (TP, EP) on NVLink are faster, so the exposed sliver is smaller (§12).</td></tr>
+        <tr><td>SHARP / in-network reduce</td><td>Less data crosses the slow fabric → shorter collectives (IB-only, Manual II §03).</td></tr>
+        <tr><td>Larger per-GPU batch</td><td>More compute per communication event → comm is a smaller fraction → move toward weak scaling (§30).</td></tr>
+        <tr><td>Better collective algorithm</td><td>Ring (bandwidth-optimal) for large gradient all-reduce; tree for small/latency-bound (§14).</td></tr>
+      </tbody>
+    </table>
+
+    <div class="idea">
+      <p><strong>The unifying thesis of this whole volume:</strong> distributed-training performance is a battle against exposed communication, fought on five fronts — overlap it, place it on the fastest link, reduce it in-network, amortize it with bigger batches, and pick the optimal algorithm. The roofline tells you whether the local compute is efficient; the Amdahl/comm analysis tells you whether the distribution is efficient; and the two together explain any training job's speed. When Aman asks "how do you make a training job faster end to end" or Greg asks "model why scaling broke," this is the complete framework: classify the local kernels (roofline, MFU), then attack the exposed communication (the five levers). Everything in Parts I–V is in service of this.</p>
+    </div>
+
+    <p class="pull">Compute efficiency is the roofline. Distribution efficiency is the war on exposed communication. Master both and no training job is a mystery.</p>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART VII ===================== -->
+<div class="part" id="p7">
+  <div class="part-label">Part VII — Debugging distributed training</div>
+  <h2 class="part-title">When it breaks or <span class="acc">crawls.</span></h2>
+  <p class="part-intro">"Investigating, and resolving, training &amp; inference performance end to end" is a core JD requirement, and "debugging large-scale distributed training using NCCL" is named explicitly. This part is the applied synthesis: a systematic method, then deep dives on the four problems you'll actually face — the comm-bound job, the straggler, the memory wall, and the NCCL hang. Each ties the concepts of this volume to a concrete diagnosis.</p>
+
+  <section class="chapter" id="c33">
+    <h2><span class="ch-num">33</span>The systematic approach</h2>
+
+    <p>The meta-skill is a repeatable method that works on any distributed-training problem. It's the same three-layer reflex from Manual I, specialized to performance.</p>
+
+    <div class="tree">
+<pre><span class="q">A distributed training job is slow / broken. The method:</span>
+   │
+   ├─ <span class="a">1. Is it slow, or is it failing?</span>  → different paths
+   │     failing/hanging → §37 (NCCL hangs), crashes → logs/FACT
+   │     slow → continue
+   │
+   ├─ <span class="a">2. WHERE is the time? (Nsight Systems, §19-22)</span>
+   │     profile a few steps → is the GPU-compute row dense or gappy?
+   │
+   ├─ <span class="a">3. Classify the gap:</span>
+   │     GPU busy but slow      → compute: MFU low? → Nsight Compute (§24), precision/GEMM
+   │     gaps + NCCL in them    → COMM-bound (§34): exposed comm or slow collective
+   │     gaps + one rank slow   → STRAGGLER (§35): bad node
+   │     gaps + busy CPU/memcpy → input-bound: dataloader/storage (Manual II §30)
+   │     OOM / can't fit        → MEMORY wall (§36)
+   │
+   ├─ <span class="a">4. Form ONE hypothesis, change ONE thing</span>
+   │
+   └─ <span class="a">5. RE-MEASURE — did the number move? (§18)</span>
+         yes → keep, find the next bottleneck | no → revert, new hypothesis</pre>
+    </div>
+
+    <div class="idea">
+      <p><strong>This is the answer to almost any "how would you debug X" question in either interview — and it's the three-layer model (Manual I §10) made operational.</strong> First separate failing from slow. Then locate the time with the timeline profiler. Then classify: compute (the silicon), communication (the distribution), input (storage/dataloader), or memory (the wall) — which is exactly Layer-3 program goodput broken into its sub-causes. Then change one thing and re-measure. Walking this method out loud, then diving into whichever branch the interviewer's scenario lands on, demonstrates structured, measurement-driven debugging — the single most valued trait on this team.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c34">
+    <h2><span class="ch-num">34</span>The comm-bound job</h2>
+
+    <p>The most common distributed-training performance problem: the GPUs are fast but the job is throttled by communication. Here's the full diagnosis path, synthesizing the collective (Part III), profiling (Part IV), and fabric (Manual II) knowledge.</p>
+
+    <div class="issue">
+      <div class="issue-header">
+        <span class="tag">worked case</span>
+        <span class="title">64-GPU training at 50% of expected throughput</span>
+      </div>
+      <div class="issue-body">
+        <h5>Symptom</h5>
+        <p>A data-parallel job's MFU is ~25% when you modeled ~45% (§28). Throughput doesn't improve when you'd expect. The "missing" 20 points are going somewhere.</p>
+        <h5>Step 1 — timeline (§20)</h5>
+        <p>Nsight Systems shows the GPU-compute row has gaps, and NCCL all-reduce kernels sit <em>in</em> those gaps — not overlapping compute. So communication is <strong>exposed</strong> (§17), and/or the collective itself is slow.</p>
+        <h5>Step 2 — is overlap working, or is the collective slow? (two sub-cases)</h5>
+        <p><strong>Sub-case A — exposed comm:</strong> the all-reduce runs fast but sequentially after backward. Fix: enable gradient bucketing / overlap so the all-reduce kicks off as gradients finish (§17). <strong>Sub-case B — slow collective:</strong> the all-reduce kernel itself is long. Run <code>all_reduce_perf</code> (Manual II §24): low busbw confirms it. Then <code>NCCL_DEBUG=INFO</code> — is NCCL on the fast transport, or did it fall back to TCP? Are the rails aligned? Is SHARP available?</p>
+        <h5>Step 3 — distinguish with the bandwidth model (§14)</h5>
+        <p>Compute the expected all-reduce time: 2 × (n−1)/n × gradient_bytes ÷ busbw. If the measured time matches a <em>low</em> busbw, it's a transport/config problem (fix the fabric, Manual II §22-25). If busbw is healthy but comm is still exposed, it's an overlap problem (fix the framework config).</p>
+        <h5>Step 4 — fix and re-measure</h5>
+        <p>Say it was sub-case B: NCCL_DEBUG showed a TCP fallback because <code>NCCL_IB_HCA</code> was unset on this cluster. Set it correctly, busbw jumps to near-line-rate, the all-reduce shrinks, MFU climbs toward 45%. Re-measure confirms (§18).</p>
+        <h5>The lesson</h5>
+        <p>"Comm-bound" splits into two fixable sub-problems: <em>exposed</em> comm (overlap it) and <em>slow</em> comm (fix the transport/topology). The bandwidth model and busbw measurement tell you which. This is the textbook "debug distributed training with NCCL" arc, and it touches everything — the collective math, the profiler, NCCL env, and the fabric.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="chapter" id="c35">
+    <h2><span class="ch-num">35</span>The straggler</h2>
+
+    <p>The most insidious distributed problem, because the job <em>works</em> — it's just slow, and the cause is one bad component dragging down everyone. This is the through-line that connects this volume to the fleet-health work (Manual II §32) and the efficiency rules (Manual I).</p>
+
+    <div class="diagram">  Why ONE straggler caps the WHOLE job (synchronous training):
+   every step ends with an all-reduce (a barrier — all ranks must arrive)
+   → the collective completes only when the SLOWEST rank arrives
+   → fast ranks finish compute, then IDLE waiting at the barrier
+   → effective step time = the slowest rank's step time
+   → a 10%-slow node makes ALL N GPUs 10% slow. one node, fleet-wide tax.</div>
+
+    <h3>The diagnosis path</h3>
+    <table class="tbl">
+      <thead><tr><th>Step</th><th>Action</th></tr></thead>
+      <tbody>
+        <tr><td>1. Detect</td><td>Per-rank iteration-time variance: the <code>WB-ITER-VARIANCE</code> rule (Manual I) flags CV &gt; threshold; or Nsight Systems shows one rank's compute consistently longer with others waiting at the barrier (§20).</td></tr>
+        <tr><td>2. Localize</td><td>Identify the slow rank → the node → cross-reference <code>SLURM_NODELIST</code> and <code>nvidia-smi topo</code> (Manual II §02). Check that node for XID errors, ECC, thermal throttling, a degraded NVLink/PCIe link (Manual II §33).</td></tr>
+        <tr><td>3. Confirm the cause</td><td>Is it hardware (this node is slow across jobs — drain it) or placement (this rank does more work — a load-imbalance, e.g. MoE expert skew §10)? FACT attribution + stormbreaker's per-node sweep distinguish them.</td></tr>
+        <tr><td>4. Fix</td><td>Hardware straggler → drain &amp; remediate the node (Manual II §34); the job rescheduled elsewhere recovers full speed. Load imbalance → rebalance (MoE capacity, better sharding).</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <h5>The straggler story is the perfect cross-volume narrative</h5>
+      <p>It's the single best "end-to-end" story you can tell because it spans the entire series: you <em>model</em> why one slow rank caps all (this volume), <em>observe</em> it via iteration-time variance (the efficiency rules, Manual I), <em>see</em> it in the Nsight timeline (this volume), <em>localize</em> it to a node via topology (Manual II), and <em>remediate</em> by draining (Manual II) — then verify the job's goodput recovers (Manual I). When either interviewer asks for an example of debugging a tricky distributed performance problem, the straggler walks every layer of the role: modeling, profiling, observability, operations, and the efficiency payoff. It's the answer that shows you see the whole system.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c36">
+    <h2><span class="ch-num">36</span>The memory wall</h2>
+
+    <p>"The model OOMs" is a daily reality, and the fix is a decision tree over the parallelism dimensions and memory levers from Parts I–II. Being able to walk it is concrete distributed-training competence.</p>
+
+    <div class="tree">
+<pre><span class="q">CUDA out of memory. The decision tree (cheapest fixes first):</span>
+   │
+   ├─ <span class="a">Reduce ACTIVATIONS (runtime knobs, no comm cost):</span>
+   │     ↓ micro-batch size              (less activation memory, maybe lower MFU)
+   │     activation recomputation/ckpt   (drop activations, recompute in bwd —
+   │                                       trades compute: HFU rises, §28)
+   │     sequence/context parallel        (long-context activation memory, §11)
+   │
+   ├─ <span class="a">Shard MODEL STATES (adds comm):</span>
+   │     ZeRO-1 → ZeRO-2 → ZeRO-3 / FSDP  (shard optimizer→grad→params, §07)
+   │       (cheapest comm first; FSDP all-gathers params per layer)
+   │
+   ├─ <span class="a">Split the MODEL (adds comm, changes layout):</span>
+   │     tensor parallel (TP)  — within NVLink, §08
+   │     pipeline parallel (PP) — across nodes, the bubble, §09
+   │
+   └─ <span class="a">Last resorts:</span>
+         CPU/NVMe offload (ZeRO-Infinity) — big slowdown, only if desperate
+         smaller model / shorter sequence — changes the science</pre>
+    </div>
+
+    <table class="tbl">
+      <thead><tr><th>Fix</th><th>Cost</th></tr></thead>
+      <tbody>
+        <tr><td>Smaller micro-batch</td><td>Free memory-wise, but may lower MFU (smaller GEMMs) — use gradient accumulation to keep the global batch.</td></tr>
+        <tr><td>Activation recomputation</td><td>~30% more FLOPs (recompute in backward), but big activation savings. The standard first lever. HFU rises above MFU.</td></tr>
+        <tr><td>ZeRO/FSDP sharding</td><td>Adds all-gather/reduce-scatter communication; ZeRO-3/FSDP the most. Free the 16 B/param model-state replication.</td></tr>
+        <tr><td>TP / PP</td><td>Adds per-layer (TP) or inter-stage (PP) communication; changes the whole parallelism layout (§12).</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <h5>The senior framing: cheapest lever that fits</h5>
+      <p>The OOM decision is a cost-ordered search: try the runtime knobs first (micro-batch, recomputation — no communication cost), then state sharding (ZeRO stages, adding the least comm first), then model splitting (TP within NVLink, PP across nodes), with offload as a last resort. Each step trades a different currency — compute (recompute), communication (sharding/TP), or pipeline bubble (PP) — so you pick the one whose currency you can most afford given the workload and hardware. "It OOMs, so I'd start with activation recomputation and a smaller micro-batch with gradient accumulation, then go to FSDP if the model states still don't fit, then TP within the node" is the methodical answer that shows you understand both the memory math (§03) and the costs of each dimension (Part II).</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c37">
+    <h2><span class="ch-num">37</span>NCCL hangs &amp; timeouts</h2>
+
+    <p>The scariest distributed failure: the job <em>hangs</em> — no error, no progress, GPUs allocated and idle. NCCL hangs are a deadlock taxonomy, and knowing the causes is exactly the "debug distributed training with NCCL" skill the JD demands. (The rules engine's <code>LOG-CRASH-NCCL-TIMEOUT</code> fires on exactly these.)</p>
+
+    <table class="tbl">
+      <thead><tr><th>Cause</th><th>Mechanism · fix</th></tr></thead>
+      <tbody>
+        <tr><td>Bootstrap failure (hang at init)</td><td>Ranks can't rendezvous: wrong <code>MASTER_ADDR</code>/port, firewalled, wrong <code>NCCL_SOCKET_IFNAME</code> (Manual II §16). Fix: correct the rendezvous + control interface.</td></tr>
+        <tr><td>Mismatched collective calls</td><td>Ranks disagree on the collective — e.g., one rank takes a different code branch and calls a different all-reduce (or a different size). The collective never completes. Fix: ensure all ranks execute identical collective sequences (a frequent bug with conditional logic in the training loop).</td></tr>
+        <tr><td>A dead/hung rank</td><td>One rank crashed or is stuck (OOM that didn't propagate, an exception on one rank), so the others wait forever at the barrier. Fix: find the rank that died (logs), make failures propagate (so all ranks exit, not hang).</td></tr>
+        <tr><td>Straggler vs hang confusion</td><td>An extreme straggler (§35) looks like a hang. The NCCL watchdog timeout (<code>NCCL_TIMEOUT</code> / the PyTorch collective timeout) eventually fires and aborts — turning a silent hang into a diagnosable error.</td></tr>
+        <tr><td>Transport stall</td><td>A flaky link or RoCE PFC misconfiguration (Manual II §21) drops packets mid-collective; NCCL stalls. Fix: the fabric (ibdiagnet, link check).</td></tr>
+      </tbody>
+    </table>
+
+    <div class="diagram">  The NCCL-hang diagnosis flow:
+   job hangs, GPUs idle
+   │
+   ├─ at the VERY start? → bootstrap (rendezvous/interface) — Manual II §16
+   │
+   ├─ after running a while? → check ALL ranks' last log line:
+   │     one rank crashed/OOM'd → others wait forever → find &amp; propagate
+   │     all stuck at same collective → mismatched call OR slow link
+   │
+   └─ enable the watchdog: NCCL_DEBUG=INFO + collective timeout
+         → converts silent hang into "rank K timed out on all-reduce" → localize</div>
+
+    <div class="idea">
+      <p><strong>The key operational insight: make hangs fail loudly.</strong> A silent hang wastes GPU-hours indefinitely (until the walltime kills it — pure scheduling-layer waste, Manual I §10). Setting a sensible NCCL/collective watchdog timeout converts a hang into an error that names the stuck rank and collective, which you can then diagnose. This connects back to the efficiency mission: a hung 512-GPU job is one of the most expensive forms of waste (every GPU idle but allocated), so the rules engine watches for NCCL timeouts and the operational best practice is to ensure failures propagate and time out rather than hang. "Make it fail fast and loud so the GPUs free up" is the efficiency-minded answer that connects distributed debugging back to the goodput mandate.</p>
+    </div>
+
+    <p class="pull">A crash you can fix. A hang just bleeds GPU-hours in silence — so the first job is to make it fail loud.</p>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART VIII ===================== -->
+<div class="part" id="p8">
+  <div class="part-label">Part VIII — Reference</div>
+  <h2 class="part-title">The performance <span class="acc">playbook.</span></h2>
+  <p class="part-intro">A condensed reference, a single worked case that exercises the whole volume end to end, and the explicit mapping to the two interviews this manual serves.</p>
+
+  <section class="chapter" id="c38">
+    <h2><span class="ch-num">38</span>Cheatsheets &amp; decision trees</h2>
+
+    <div class="cheat">
+      <h5>Profiling — the commands</h5>
+      <div class="cheat-grid">
+        <div class="cmd">nsys profile --trace=cuda,nvtx,nccl,osrt -o p python train.py</div><div class="desc">System timeline: where the time goes, is comm overlapped, is the GPU starved.</div>
+        <div class="cmd">ncu --set full --launch-skip N --launch-count 1 --kernel-name regex:'...'</div><div class="desc">One kernel in detail: compute vs memory bound, occupancy.</div>
+        <div class="cmd">nvtx.range_push/pop("forward")</div><div class="desc">Label timeline regions (forward/backward/optimizer/comm).</div>
+        <div class="cmd">all_reduce_perf -b 8 -e 8G -f 2 -g 8</div><div class="desc">NCCL busbw vs fabric peak (is the collective healthy?).</div>
+        <div class="cmd">NCCL_DEBUG=INFO</div><div class="desc">Transport/rails/algorithm NCCL chose — catch TCP fallback.</div>
+      </div>
+    </div>
+
+    <div class="cheat">
+      <h5>The metrics &amp; the roofline</h5>
+      <div class="cheat-grid">
+        <div class="cmd">FLOPs ≈ 6 × N × tokens</div><div class="desc">Dense transformer training FLOPs (2 MAC × 3 fwd+bwd).</div>
+        <div class="cmd">MFU = achieved / peak FLOP/s</div><div class="desc">Truth metric; ~35-50% good for big LLMs; &lt;25% = profile.</div>
+        <div class="cmd">HFU ≥ MFU</div><div class="desc">Gap = recomputation tax.</div>
+        <div class="cmd">ridge = peak_FLOP/s ÷ peak_BW</div><div class="desc">Above AI → compute-bound; below → memory-bound.</div>
+        <div class="cmd">ring all-reduce = 2(n−1)/n × bytes</div><div class="desc">Bandwidth-optimal; ~independent of GPU count.</div>
+        <div class="cmd">bubble ≈ (P−1)/(M+P−1)</div><div class="desc">Pipeline idle fraction; more micro-batches → smaller.</div>
+        <div class="cmd">step = compute + exposed_comm</div><div class="desc">The master equation; shrink exposed comm.</div>
+      </div>
+    </div>
+
+    <div class="cheat">
+      <h5>Parallelism → collective → link</h5>
+      <div class="cheat-grid">
+        <div class="cmd">Data (DP)</div><div class="desc">all-reduce gradients · IB/EFA, overlapped · throughput.</div>
+        <div class="cmd">Tensor (TP)</div><div class="desc">all-reduce per layer · NVLink only (TP≤8 H100) · fit the layer.</div>
+        <div class="cmd">Pipeline (PP)</div><div class="desc">P2P activations · cross-node · fit the depth; bubble cost.</div>
+        <div class="cmd">Expert (EP/MoE)</div><div class="desc">all-to-all · NVLink ideally · capacity; load-imbalance risk.</div>
+        <div class="cmd">Sequence (SP/CP)</div><div class="desc">all-gather/reduce-scatter, ring-KV · long context, activation mem.</div>
+        <div class="cmd">FSDP/ZeRO-3</div><div class="desc">all-gather params + reduce-scatter grads · shard model states.</div>
+      </div>
+    </div>
+
+    <div class="callout tip">
+      <h5>The master performance decision tree</h5>
+      <p>Slow training resolves through: <strong>profile (Nsight Systems) → is the GPU busy?</strong> If busy but slow → compute (Nsight Compute: roofline, precision, GEMM shape, MFU). If gappy → what's in the gap? NCCL → comm-bound (overlap it or fix the transport); one rank slow → straggler (drain the node); busy CPU/memcpy → input-bound (dataloader/storage); OOM → memory wall (recompute → shard → split). Then change one thing, re-measure. Every branch maps to a part of this volume — and naming the branch first is the discipline.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c39">
+    <h2><span class="ch-num">39</span>A worked end-to-end case</h2>
+
+    <p>One scenario that exercises the entire volume — the kind of end-to-end investigation the role is built around, and a complete story to have ready.</p>
+
+    <div class="issue">
+      <div class="issue-header">
+        <span class="tag">end to end</span>
+        <span class="title">"Our 128-GPU pretraining is at 22% MFU and we don't know why"</span>
+      </div>
+      <div class="issue-body">
+        <h5>1 — Model the expectation (§28-29)</h5>
+        <p>56B dense model, known token rate, 128× H100. From FLOPs ≈ 6ND and the hardware BF16 peak, the expected MFU for this config is ~42%. Observed is 22% → roughly half the compute efficiency is missing. That gap is the investigation.</p>
+        <h5>2 — Locate the time (§19-20)</h5>
+        <p>Nsight Systems on a few steps (rank 0 + a couple others). The GPU-compute row has periodic gaps. In the gaps: NCCL all-reduce kernels, and every ~N steps a longer stall aligned to the checkpoint interval. Two suspects: exposed communication and checkpoint stalls.</p>
+        <h5>3 — Classify each (§34, Manual II §31)</h5>
+        <p><em>Comm:</em> the all-reduce sits after backward, not overlapping → exposed (§17). Run <code>all_reduce_perf</code> → busbw is actually healthy, so it's an <em>overlap</em> problem, not a slow collective. <em>Checkpoint:</em> the periodic stall coincides with <code>finalize-async-save</code> drifting up in the log → checkpoint writes are blocking (storage backpressure, Manual II §31).</p>
+        <h5>4 — Check for a straggler (§35)</h5>
+        <p>Per-rank iteration variance is low and even — no straggler. Good; rules that out. (Had one rank been slow, that'd be the lead.)</p>
+        <h5>5 — Fix, cheapest first, re-measure (§18)</h5>
+        <p>(a) Enable gradient bucketing/overlap so the DP all-reduce hides behind backward (§17) → the comm gaps close, MFU climbs to ~36%. (b) Turn on <code>--async-save --ckpt-fully-parallel-save</code> and stripe the checkpoint dir across more OSTs (Manual II §27) → the periodic stalls vanish, MFU to ~41%. Each change re-measured to confirm it moved the number.</p>
+        <h5>6 — Close the loop (Manual I)</h5>
+        <p>MFU now ~41%, matching the model — the job went from 22% to 41%, nearly doubling effective throughput on the same 128 GPUs. In goodput terms (Manual I), you recovered runtime efficiency (overlap) and reduced checkpoint overhead. That's the whole role in one investigation: model the target, profile to localize, classify across layers (comm + storage), fix cheapest-first, and verify against the model — touching parallelism, NCCL, profiling, performance modeling, and storage.</p>
+      </div>
+    </div>
+
+    <div class="idea">
+      <p><strong>This is the shape of the answer to "tell me about a time you debugged a performance problem end to end."</strong> Notice it never guesses: it models an expectation, measures against it, classifies the gap into specific layers, fixes the cheapest lever first, and re-measures each time. And it's inherently cross-layer — the 22%→41% came from a communication fix <em>and</em> a storage fix, found by profiling. That combination of quantitative modeling, disciplined measurement, and full-stack range is exactly what both Aman ("ML-workload performance end to end") and Greg ("performance modeling + observability") are listening for.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c40">
+    <h2><span class="ch-num">40</span>Interview tie-in + closing</h2>
+
+    <p>How to deploy this volume across the two interviews it serves.</p>
+
+    <h3>Greg Pauloski — parallelism, observability, performance modeling</h3>
+    <ul class="dash">
+      <li><strong>Own the parallelism dimensions (Part II).</strong> Don't just name DP/TP/PP/EP/SP — give each one's communication pattern and hardware constraint, and show how they compose with the mapping rule (heaviest comm → fastest link, §12). This is the centerpiece of his interview.</li>
+      <li><strong>Do performance modeling live (Part VI).</strong> FLOPs ≈ 6ND, MFU = achieved/peak, the comm knee, the four-step strategy procedure (§31). Be willing to estimate on a whiteboard, with the right caveats (attention quadratic, precision peak). The method matters more than a precise number.</li>
+      <li><strong>Connect modeling to observability (§28).</strong> MFU is the bridge — you model the expected, observe the actual, and the gap is the work. This is precisely his "performance modeling + observability for ML workloads" pairing.</li>
+      <li><strong>Bring the 400× story as a scaling-efficiency narrative (§30):</strong> you pushed the comm knee right by reducing exposed communication. Frame it in his vocabulary.</li>
+    </ul>
+
+    <h3>Aman Shanbhag — compute &amp; ML-workload performance</h3>
+    <ul class="dash">
+      <li><strong>Show the full profiling stack (Parts IV-V).</strong> Nsight Systems first (where's the time, is comm overlapped, is the GPU starved), Nsight Compute second (why is this kernel slow). The two-tool discipline (§18) and the SOL-first method (§24).</li>
+      <li><strong>Go deep on kernels with real authority (Part V).</strong> Your CUDA background — coalescing, tiling, bank conflicts, fusion, the 124× story — is a genuine differentiator for an efficiency role. Connect it: keep data on-chip is the micro version of keep comm on the fast link.</li>
+      <li><strong>Run the debugging method (Part VII).</strong> The systematic approach (§33), then dive into whichever case he poses — comm-bound, straggler, memory wall, NCCL hang. The straggler (§35) is the best cross-layer story.</li>
+      <li><strong>Anchor on the roofline (§04-05).</strong> Every "is it slow because of compute or memory" question resolves there; it's the framework that makes you sound like you think in first principles.</li>
+    </ul>
+
+    <div class="idea">
+      <p><strong>The throughline for both:</strong> distributed-training performance is two problems — local compute efficiency (the roofline, MFU, kernels) and distribution efficiency (the war on exposed communication, the parallelism layout). You can model both quantitatively, profile both with the right tool, and debug both with a systematic, measurement-driven method. That combination — quantitative modeling, profiling fluency from the timeline down to the kernel, and the parallelism-and-collective knowledge to know what the numbers <em>mean</em> — is exactly what "parallelism, observability, and performance modeling" and "compute and ML-workload performance" are testing.</p>
+    </div>
+
+    <h3>Where this sits in the series</h3>
+    <p>Manual I gave you the role and the efficiency mandate; Manual II the machine and how to operate it; this Manual III the deep performance, parallelism, and profiling core. One volume remains:</p>
+    <ul class="dash">
+      <li><strong>Manual IV — Efficiency, Goodput &amp; Observability, deep internals:</strong> the OneLogger field model in full, the 110-rule engine's families and thresholds, the telemetry data-engineering (the 7 sources, the joins, the ETL), eBPF/DCGM instrumentation mechanics, the LLM-narrative and ReAct-agent layer, and fleet-scale analysis patterns — the deepest dive into the team's own platform, for Matt &amp; Greg.</li>
+    </ul>
+    <p>Say the word and I'll build the finale.</p>
+
+    <p class="pull">You can now model a training job's speed, profile it from the timeline to the kernel, and debug it across every layer. Volume IV turns the lens on the platform that watches it all.</p>
+  </section>
+</div>
+
+</main>
+
+<footer>
+  <h4>sources &amp; further study</h4>
+  <div class="resources">
+    <ul>
+      <li><strong>The team's tooling (ground truth)</strong></li>
+      <li><code>mlops-tests</code> · <code>cluster-workload-testing</code> — nccl/gemm/kernel-launch/nvloom/nvshmem benchmarks</li>
+      <li><code>nccl-tests</code> (per-CSP) — all_reduce/alltoall/loopback busbw</li>
+      <li><code>stormbreaker</code> — real-workload sweeps (Nemotron/AV/Cosmos)</li>
+      <li><code>storage-workload-tests</code> — data-loading TFLOP/s, checkpoint finalize</li>
+      <li>OneLogger / ai-efficiency-insights — the goodput phase decomposition</li>
+      <li><strong>External references</strong></li>
+      <li>NVIDIA Nsight Systems &amp; Nsight Compute documentation</li>
+      <li>NCCL user guide — collectives, ring/tree, env vars, tuning</li>
+      <li>Megatron-LM papers — tensor/sequence/pipeline parallelism</li>
+      <li>ZeRO (Rajbhandari et al.) &amp; PyTorch FSDP docs — sharded data parallel</li>
+      <li>GPipe / PipeDream / 1F1B — pipeline schedules &amp; the bubble</li>
+      <li>FlashAttention (Dao et al.) — IO-aware attention, the memory-bound fix</li>
+      <li>Mixture-of-Experts (GShard, Switch Transformer) — expert parallelism</li>
+      <li>"Reducing Activation Recomputation" (Korthikanti et al.) — sequence parallel</li>
+      <li>The roofline model (Williams et al.) — compute vs memory bound</li>
+      <li>MFU / PaLM &amp; Megatron-Turing reports — model FLOP utilization</li>
+      <li>Ring all-reduce (Baidu) — bandwidth-optimal collective</li>
+      <li>CUDA C++ Programming &amp; Best Practices Guides — memory hierarchy, occupancy</li>
+    </ul>
+  </div>
+  <p class="footer-note">Manual III of IV in the NVIDIA AI Performance &amp; Efficiency interview field-manual series. The performance models here (6ND, MFU, the bandwidth and bubble formulas) are standard back-of-envelope approximations — verify the exact constants, the attention term, and the hardware peak-FLOP figure for a given precision and architecture against primary sources before quoting a precise number; the method is the durable part. Profile before you optimize, classify with the roofline, attack exposed communication, and always re-measure.</p>
+</footer>
+
+</body>
+</html>
