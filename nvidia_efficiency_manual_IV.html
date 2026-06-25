@@ -1,0 +1,1588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Observatory — NVIDIA AI Performance &amp; Efficiency Engineer · Field Manual IV</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;0,8..60,700;1,8..60,400;1,8..60,500&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --bg:        #eef1ec;
+  --bg-2:      #e4e8e1;
+  --bg-3:      #d7dcd2;
+  --card:      #f7f9f4;
+  --ink:       #14181a;
+  --ink-soft:  #3d4642;
+  --ink-faint: #76807a;
+  --rule:      #c6ccc0;
+  --rule-soft: #d8ddd2;
+  --rule-dark: #8d958a;
+  --green:     #1a7f46;
+  --green-deep:#0e5e31;
+  --green-bri: #2ea05c;
+  --slate:     #33505f;
+  --slate-deep:#203642;
+  --amber:     #b07d12;
+  --rose:      #a32a1f;
+  --code-bg:   #15201a;
+  --code-ink:  #d6ddd2;
+  --maxw:      1080px;
+}
+*{ box-sizing: border-box; }
+html{ scroll-behavior: smooth; }
+body{
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Source Serif 4', Georgia, serif;
+  font-size: 17px;
+  line-height: 1.62;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ============ HEADER ============ */
+header{ max-width: var(--maxw); margin: 0 auto; padding: 84px 40px 50px; position: relative; }
+.filed{
+  font-family: 'Geist Mono', ui-monospace, monospace; font-size: 10.5px; letter-spacing: .28em;
+  text-transform: uppercase; color: var(--green); margin: 0 0 28px; font-weight: 600;
+  display: flex; align-items: center; gap: 12px;
+}
+.filed::before{ content: "▸"; color: var(--green); font-size: 13px; }
+.vol{
+  font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .18em;
+  color: var(--ink-faint); text-transform: uppercase; margin: 0 0 16px; font-weight: 500;
+}
+h1{
+  font-family: 'Archivo', system-ui, sans-serif; font-weight: 900;
+  font-size: clamp(54px, 9.5vw, 122px); line-height: 0.9; letter-spacing: -0.02em; margin: 0 0 24px; color: var(--ink);
+}
+h1 .acc{ color: var(--green); }
+.deck{ font-family: 'Source Serif 4', serif; font-size: 20px; font-weight: 400; color: var(--ink-soft); max-width: 770px; line-height: 1.5; }
+.readout{ margin-top: 40px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--rule); border: 1px solid var(--rule); }
+@media (max-width: 680px){ .readout{ grid-template-columns: repeat(2,1fr); } }
+.readout .cell{ background: var(--bg); padding: 14px 16px; }
+.readout .k{ font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 6px; }
+.readout .v{ font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 22px; color: var(--ink); line-height: 1; }
+.readout .v .u{ font-size: 12px; color: var(--green); font-weight: 600; }
+
+/* ============ TOC ============ */
+.toc{ margin-top: 46px; background: var(--card); border: 1px solid var(--rule-dark); padding: 30px 32px 34px; position: relative; }
+.toc::before{ content: "CONTENTS"; position: absolute; top: -9px; left: 26px; background: var(--card); padding: 0 10px; font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .3em; color: var(--green); font-weight: 600; }
+.toc h3{ font-family: 'Archivo', sans-serif; font-size: 26px; font-weight: 800; margin: 0 0 3px; color: var(--ink); letter-spacing: -0.01em; }
+.toc .toc-sub{ font-family: 'Geist Mono', monospace; font-size: 10.5px; color: var(--ink-faint); letter-spacing: .1em; text-transform: uppercase; margin-bottom: 20px; }
+.toc-part{ margin-top: 15px; }
+.toc-part-name{ font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .22em; color: var(--slate); text-transform: uppercase; font-weight: 600; border-bottom: 1px solid var(--rule); padding-bottom: 5px; margin-bottom: 7px; }
+.toc-grid{ display: grid; grid-template-columns: repeat(2,1fr); gap: 1px 32px; }
+@media (max-width: 760px){ .toc-grid{ grid-template-columns: 1fr; } }
+.toc-grid a{ color: var(--ink-soft); text-decoration: none; font-size: 14.5px; padding: 5px 0; display: flex; gap: 12px; align-items: baseline; border-bottom: 1px dotted transparent; transition: all .14s; }
+.toc-grid a:hover{ color: var(--green); border-color: var(--rule); }
+.toc-grid a .n{ font-family: 'Geist Mono', monospace; font-size: 10.5px; color: var(--slate); min-width: 26px; font-weight: 600; }
+
+/* ============ MAIN ============ */
+main{ max-width: var(--maxw); margin: 0 auto; padding: 56px 40px 96px; }
+.part{ margin-top: 92px; padding-top: 46px; position: relative; }
+.part::before{ content:""; position: absolute; top: 0; left: 0; right: 0; border-top: 2px solid var(--ink); }
+.part::after{ content:""; position: absolute; top: 5px; left: 0; width: 84px; border-top: 2px solid var(--green); }
+.part:first-child{ margin-top: 28px; padding-top: 28px; }
+.part-label{ font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .28em; color: var(--green); text-transform: uppercase; margin-bottom: 14px; font-weight: 600; }
+.part-title{ font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 54px; line-height: 0.96; letter-spacing: -0.02em; margin: 0 0 18px; color: var(--ink); }
+.part-title .acc{ color: var(--green); }
+.part-intro{ color: var(--ink-soft); font-size: 18.5px; max-width: 800px; margin-bottom: 34px; line-height: 1.5; }
+
+section.chapter{ margin-top: 52px; }
+section.chapter:first-of-type{ margin-top: 8px; }
+h2{ font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 33px; line-height: 1.08; letter-spacing: -0.015em; margin: 0 0 15px; color: var(--ink); display: flex; align-items: baseline; gap: 15px; padding-bottom: 9px; border-bottom: 2px solid var(--ink); }
+h2 .ch-num{ font-family: 'Geist Mono', monospace; font-size: 13px; color: var(--green); letter-spacing: .05em; font-weight: 600; flex-shrink: 0; }
+h3{ font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 22px; margin: 28px 0 9px; color: var(--ink); letter-spacing: -0.01em; }
+h4{ font-family: 'Geist Mono', monospace; font-size: 10.5px; letter-spacing: .18em; text-transform: uppercase; color: var(--slate); margin: 22px 0 8px; font-weight: 600; }
+p{ margin: 12px 0; }
+p code, li code, td code{ font-family: 'Geist Mono', monospace; font-size: .8em; background: var(--bg-3); color: var(--green-deep); padding: 1px 6px; border-radius: 2px; border: 1px solid var(--rule); }
+strong{ font-weight: 700; }
+ul, ol{ padding-left: 1.3em; }
+li{ margin: 6px 0; }
+ul.tight li{ margin: 3px 0; }
+ul.dash{ list-style: none; padding-left: 0; }
+ul.dash li{ position: relative; padding-left: 22px; }
+ul.dash li::before{ content: "▸"; position: absolute; left: 0; color: var(--green); font-weight: 700; }
+ul.check{ list-style: none; padding-left: 0; }
+ul.check li{ position: relative; padding-left: 24px; }
+ul.check li::before{ content: "▪"; position: absolute; left: 2px; top: 2px; color: var(--green); }
+
+/* ============ CODE ============ */
+pre{ background: var(--code-bg); padding: 17px 20px; overflow-x: auto; font-family: 'Geist Mono', monospace; font-size: 12.5px; line-height: 1.6; color: var(--code-ink); margin: 18px 0; position: relative; border-left: 3px solid var(--green); }
+pre .com{ color: #6f8378; font-style: italic; }
+pre .kw{  color: #6cb38a; }
+pre .ty{  color: #8fc6c0; }
+pre .str{ color: #c9b36a; }
+pre .num{ color: #c89a64; }
+pre .fn{  color: #8db8d0; }
+pre .var{ color: #d6ddd2; }
+pre .glb{ color: #7fbf95; }
+pre .opt{ color: #c0a96a; }
+pre::before{ content: attr(data-lang); position: absolute; top: 5px; right: 12px; font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: .18em; color: #56635a; text-transform: uppercase; }
+
+/* ============ CALLOUTS ============ */
+.callout{ margin: 22px 0; padding: 15px 22px; border-left: 4px solid var(--slate); background: var(--bg-2); font-size: 16px; line-height: 1.55; }
+.callout.warn{ border-color: var(--amber); }
+.callout.danger{ border-color: var(--rose); }
+.callout.tip{ border-color: var(--green); }
+.callout h5{ margin: 0 0 6px; font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--slate); font-weight: 600; }
+.callout.warn h5{ color: var(--amber); }
+.callout.danger h5{ color: var(--rose); }
+.callout.tip h5{ color: var(--green); }
+.callout p:first-child{ margin-top: 0; } .callout p:last-child{ margin-bottom: 0; }
+
+/* ============ TABLES ============ */
+.tbl{ width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14.5px; }
+.tbl th, .tbl td{ text-align: left; padding: 9px 14px; vertical-align: top; border-bottom: 1px solid var(--rule); }
+.tbl th{ font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink); font-weight: 600; border-bottom: 2px solid var(--ink); border-top: 2px solid var(--ink); background: var(--bg-2); }
+.tbl td:first-child{ font-family: 'Geist Mono', monospace; font-size: 12px; color: var(--green-deep); font-weight: 500; width: 26%; }
+.tbl.wide td:first-child{ width: 20%; }
+.tbl.compare td:first-child{ font-family: 'Geist Mono', monospace; font-weight: 600; color: var(--ink); width: 22%; font-size: 11.5px; letter-spacing: .03em; }
+.tbl.compare td:nth-child(2){ color: var(--green-deep); font-family: 'Source Serif 4', serif; font-size: 14.5px; }
+.tbl.compare td:nth-child(3){ color: var(--slate-deep); font-family: 'Source Serif 4', serif; font-size: 14.5px; }
+
+/* ============ DIAGRAM ============ */
+.diagram{ background: var(--card); border: 1px solid var(--rule-dark); padding: 22px 24px; margin: 22px 0; font-family: 'Geist Mono', monospace; font-size: 12px; line-height: 1.55; color: var(--ink-soft); white-space: pre; overflow-x: auto; position: relative; }
+.diagram::before{ content: "FIG."; position: absolute; top: -9px; left: 18px; background: var(--bg); padding: 0 9px; font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: .2em; color: var(--slate); font-weight: 600; }
+
+/* ============ READOUT PANEL ============ */
+.panel{ background: var(--card); border: 1px solid var(--rule-dark); margin: 22px 0; padding: 20px 24px; position: relative; }
+.panel::before{ content: attr(data-title); position: absolute; top: -9px; left: 20px; background: var(--bg); padding: 0 10px; font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: .2em; color: var(--green); font-weight: 600; }
+.panel-grid{ display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; }
+@media (max-width: 680px){ .panel-grid{ grid-template-columns: 1fr 1fr; } }
+.panel-grid .stat .k{ font-family:'Geist Mono',monospace; font-size: 9px; letter-spacing:.16em; text-transform:uppercase; color: var(--ink-faint); margin-bottom: 4px; }
+.panel-grid .stat .v{ font-family:'Archivo',sans-serif; font-weight: 700; font-size: 17px; color: var(--ink); line-height: 1.15; }
+.panel-grid .stat .v small{ font-weight: 400; font-family:'Source Serif 4',serif; font-size: 13px; color: var(--ink-soft); }
+
+/* ============ ISSUE / WORKED CASE ============ */
+.issue{ margin: 26px 0; background: var(--card); border: 1px solid var(--ink); }
+.issue-header{ padding: 12px 22px; background: var(--ink); color: var(--bg); font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; display: flex; align-items: center; gap: 13px; }
+.issue-header .tag{ background: var(--green); padding: 3px 11px; letter-spacing: .1em; font-weight: 600; font-size: 10px; color: #fff; }
+.issue-header .title{ flex: 1; font-weight: 600; letter-spacing: .08em; }
+.issue-body{ padding: 22px 26px; }
+.issue-body > h5{ margin: 16px 0 7px; font-family:'Geist Mono',monospace; font-size: 10.5px; letter-spacing:.16em; color: var(--green); text-transform: uppercase; font-weight: 600; }
+.issue-body > h5:first-child{ margin-top: 0; }
+
+/* ============ DECISION TREE ============ */
+.tree{ background: var(--card); border: 1px solid var(--slate); padding: 24px 26px; margin: 24px 0; position: relative; }
+.tree::before{ content: "DECISION PATH"; position: absolute; top: -9px; left: 22px; background: var(--bg); padding: 0 11px; font-family:'Geist Mono',monospace; font-size: 10px; letter-spacing: .2em; color: var(--slate); font-weight: 600; }
+.tree pre{ background: transparent; color: var(--ink); border: none; border-left: none; padding: 6px 0 0; font-size: 13px; line-height: 1.7; }
+.tree pre::before{ display: none; }
+.tree .q{ color: var(--green); font-weight: 700; }
+.tree .a{ color: var(--slate); font-weight: 700; }
+
+/* ============ PRINCIPLE ============ */
+.idea{ margin: 24px 0; border: 2px solid var(--green); background: var(--card); padding: 22px 28px; position: relative; }
+.idea::before{ content: "PRINCIPLE"; position: absolute; top: -10px; left: 22px; background: var(--bg); padding: 0 11px; font-family:'Geist Mono',monospace; font-size: 10px; letter-spacing: .24em; color: var(--green); font-weight: 600; }
+.idea p{ margin: 6px 0; font-size: 16px; }
+
+/* ============ PULL ============ */
+.pull{ font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 30px; line-height: 1.08; letter-spacing: -0.015em; color: var(--green); margin: 38px 0; padding: 0 0 0 26px; border-left: 4px solid var(--green); }
+
+/* ============ CHEAT ============ */
+.cheat{ background: var(--card); border: 1px solid var(--ink); padding: 24px 28px; margin: 24px 0; }
+.cheat h5{ margin: 0 0 14px; font-family:'Geist Mono',monospace; font-size: 11px; letter-spacing: .2em; color: var(--green); text-transform: uppercase; font-weight: 600; }
+.cheat-grid{ display: grid; grid-template-columns: 1fr 1.5fr; gap: 6px 22px; font-size: 13px; }
+.cheat-grid .cmd{ font-family:'Geist Mono',monospace; color: var(--green-deep); font-weight: 500; }
+.cheat-grid .desc{ color: var(--ink-soft); font-size: 14.5px; }
+@media (max-width: 680px){ .cheat-grid{ grid-template-columns: 1fr; gap: 2px 18px; } .cheat-grid .desc{ margin-bottom: 10px; } }
+
+/* ============ TWO-COL ============ */
+.twocol{ display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 22px 0; }
+@media (max-width: 760px){ .twocol{ grid-template-columns: 1fr; } }
+.twocol .col{ background: var(--card); border: 1px solid var(--rule-dark); padding: 18px 22px; }
+.twocol .col h5{ margin: 0 0 10px; font-family:'Geist Mono',monospace; font-size: 10.5px; letter-spacing: .18em; text-transform: uppercase; color: var(--slate); font-weight: 600; }
+.twocol .col.bad h5{ color: var(--rose); } .twocol .col.good h5{ color: var(--green); }
+.twocol .col p{ margin: 8px 0; font-size: 15px; } .twocol .col p:first-child{ margin-top: 0; }
+
+/* ============ SEP ============ */
+.rule-sep{ margin: 56px 0; position: relative; height: 0; border-top: 2px solid var(--ink); }
+.rule-sep::after{ content: "◇ ◇ ◇"; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); background: var(--bg); color: var(--green); padding: 0 16px; font-size: 11px; letter-spacing: .3em; }
+
+/* ============ FOOTER ============ */
+footer{ max-width: var(--maxw); margin: 0 auto; padding: 54px 40px 84px; border-top: 2px solid var(--ink); color: var(--ink-soft); font-size: 14px; }
+footer h4{ font-family:'Geist Mono',monospace; font-size: 11px; letter-spacing: .24em; color: var(--green); margin: 0 0 18px; font-weight: 600; }
+footer .resources{ columns: 2; column-gap: 38px; }
+@media (max-width: 680px){ footer .resources{ columns: 1; } }
+footer ul{ list-style: none; padding: 0; margin: 0; }
+footer li{ padding: 5px 0; font-size: 13.5px; break-inside: avoid; }
+footer li code{ color: var(--green-deep); background: transparent; border: none; padding: 0; font-weight: 500; }
+footer .footer-note{ margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--rule); color: var(--ink-faint); font-size: 14px; }
+</style>
+</head>
+<body>
+
+<header>
+  <p class="filed">nvidia · dgxc mars · ai efficiency · interview field manual</p>
+  <p class="vol">Volume IV of IV · goodput, telemetry &amp; observability internals</p>
+  <h1>The<br><span class="acc">Observatory.</span></h1>
+  <p class="deck">
+    The platform that watches the fleet, in full depth: how goodput is formally defined across three layers, the OneLogger field model that measures a job's time budget, the seven-source telemetry data plane and the joins that fuse it, the 110-rule deterministic engine that turns signals into findings, the DCGM and eBPF instrumentation that produces the signals (and the observer effect that can distort them), single-job triangulation, and the action layer that turns insight into changed behavior. The deepest companion — and the series finale — for the ML-efficiency/system-thinking and observability/performance-modeling interviews.
+  </p>
+  <div class="readout">
+    <div class="cell"><div class="k">Manual</div><div class="v">IV<span class="u"> / IV</span></div></div>
+    <div class="cell"><div class="k">Chapters</div><div class="v">40</div></div>
+    <div class="cell"><div class="k">Interviews</div><div class="v" style="font-size:15px;">Matt ★ · Greg ★</div></div>
+    <div class="cell"><div class="k">Focus</div><div class="v" style="font-size:14px;">goodput · telemetry · rules</div></div>
+  </div>
+
+  <div class="toc">
+    <h3>Contents</h3>
+    <p class="toc-sub">Forty chapters across eight parts</p>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part I · The goodput model, formalized</div>
+      <div class="toc-grid">
+        <a href="#c01"><span class="n">01</span><span>What goodput really measures</span></a>
+        <a href="#c02"><span class="n">02</span><span>The scheduling layer (Heimdall)</span></a>
+        <a href="#c03"><span class="n">03</span><span>The runtime layer (OneLogger)</span></a>
+        <a href="#c04"><span class="n">04</span><span>The program layer (DCGM)</span></a>
+        <a href="#c05"><span class="n">05</span><span>Composing the three layers</span></a>
+      </div>
+    </div>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part II · OneLogger: the field model</div>
+      <div class="toc-grid">
+        <a href="#c06"><span class="n">06</span><span>What OneLogger is</span></a>
+        <a href="#c07"><span class="n">07</span><span>The time-budget fields</span></a>
+        <a href="#c08"><span class="n">08</span><span>The startup tax decomposed</span></a>
+        <a href="#c09"><span class="n">09</span><span>Lost work &amp; the checkpoint economy</span></a>
+        <a href="#c10"><span class="n">10</span><span>Reading a OneLogger record</span></a>
+      </div>
+    </div>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part III · The telemetry data plane</div>
+      <div class="toc-grid">
+        <a href="#c11"><span class="n">11</span><span>The seven data sources</span></a>
+        <a href="#c12"><span class="n">12</span><span>jobsinfo-done: the backbone</span></a>
+        <a href="#c13"><span class="n">13</span><span>The join model</span></a>
+        <a href="#c14"><span class="n">14</span><span>The ETL &amp; the indices</span></a>
+        <a href="#c15"><span class="n">15</span><span>Data quality</span></a>
+      </div>
+    </div>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part IV · The rules engine</div>
+      <div class="toc-grid">
+        <a href="#c16"><span class="n">16</span><span>Why deterministic rules</span></a>
+        <a href="#c17"><span class="n">17</span><span>The rule families</span></a>
+        <a href="#c18"><span class="n">18</span><span>Rule anatomy: thresholds &amp; evidence</span></a>
+        <a href="#c19"><span class="n">19</span><span>The pipeline (SP1–SP6)</span></a>
+        <a href="#c20"><span class="n">20</span><span>A worked rule firing</span></a>
+        <a href="#c21"><span class="n">21</span><span>Testing the engine</span></a>
+      </div>
+    </div>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part V · Instrumentation</div>
+      <div class="toc-grid">
+        <a href="#c22"><span class="n">22</span><span>The instrumentation landscape</span></a>
+        <a href="#c23"><span class="n">23</span><span>DCGM: the GPU telemetry layer</span></a>
+        <a href="#c24"><span class="n">24</span><span>The DCGM-NVLink observer effect</span></a>
+        <a href="#c25"><span class="n">25</span><span>eBPF &amp; write-tracer</span></a>
+        <a href="#c26"><span class="n">26</span><span>The SPANK integration</span></a>
+      </div>
+    </div>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part VI · Single-job triangulation</div>
+      <div class="toc-grid">
+        <a href="#c27"><span class="n">27</span><span>The triangulation idea</span></a>
+        <a href="#c28"><span class="n">28</span><span>Three-way discrepancy detection</span></a>
+        <a href="#c29"><span class="n">29</span><span>Graceful degradation</span></a>
+        <a href="#c30"><span class="n">30</span><span>A worked single-job investigation</span></a>
+      </div>
+    </div>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part VII · The action layer</div>
+      <div class="toc-grid">
+        <a href="#c31"><span class="n">31</span><span>The action taxonomy</span></a>
+        <a href="#c32"><span class="n">32</span><span>ppp-notify: the nudge emails</span></a>
+        <a href="#c33"><span class="n">33</span><span>The ReAct agent</span></a>
+        <a href="#c34"><span class="n">34</span><span>LLM narratives &amp; hallucination</span></a>
+        <a href="#c35"><span class="n">35</span><span>The Neo4j rules graph</span></a>
+      </div>
+    </div>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part VIII · Fleet-scale &amp; reference</div>
+      <div class="toc-grid">
+        <a href="#c36"><span class="n">36</span><span>Fleet-scale patterns</span></a>
+        <a href="#c37"><span class="n">37</span><span>Discovering systemic inefficiency</span></a>
+        <a href="#c38"><span class="n">38</span><span>Cheatsheets &amp; the platform map</span></a>
+        <a href="#c39"><span class="n">39</span><span>A worked fleet-scale case</span></a>
+        <a href="#c40"><span class="n">40</span><span>Interview tie-in + closing</span></a>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<!-- ===================== PART I ===================== -->
+<div class="part" id="p1">
+  <div class="part-label">Part I — The goodput model, formalized</div>
+  <h2 class="part-title">What we actually <span class="acc">measure.</span></h2>
+  <p class="part-intro">Manual I introduced goodput as a three-layer idea; this volume makes it precise. Goodput is the fraction of allocated GPU-time that turned into useful model training — and the reason it needs <em>three</em> layers is that a GPU-hour can be wasted in three structurally different places: before the job runs, while it runs but isn't productive, and while it runs at low utilization. Get this decomposition exact and the entire platform — every index, rule, and tool — falls into place as an instrument for measuring one of these layers.</p>
+
+  <section class="chapter" id="c01">
+    <h2><span class="ch-num">01</span>What goodput really measures</h2>
+
+    <p>Start from the question the whole team exists to answer: <strong>of all the GPU-hours we paid for, what fraction produced useful training?</strong> Everything else is a refinement of this ratio.</p>
+
+    <div class="diagram">  GOODPUT = useful training GPU-time ÷ allocated GPU-time
+
+   allocated GPU-time
+   ├── time the job wasn't even running productively
+   │     ├── SCHEDULING layer: allocated but not training
+   │     │     (queue→start gaps, node failures, requeues, preemption)
+   │     └── RUNTIME layer: running but not productive
+   │           (startup tax, checkpoint stalls, lost work, validation)
+   │
+   └── time the job WAS training
+         └── PROGRAM layer: training, but at what GPU utilization?
+               (idle waste — 0%-util windows; low MFU)
+
+   GOODPUT = scheduling_eff × runtime_eff × program_eff   (the three layers multiply)</div>
+
+    <p>The three layers are not arbitrary — they correspond to three different owners and three different fixes:</p>
+
+    <table class="tbl">
+      <thead><tr><th>Layer</th><th>The waste · the owner · the instrument</th></tr></thead>
+      <tbody>
+        <tr><td>Scheduling</td><td>GPUs allocated to a job that isn't training (queue gaps, NODE_FAIL, requeue, preemption). Owner: the platform/ops + the scheduler. Instrument: Heimdall, jobsinfo-done.</td></tr>
+        <tr><td>Runtime</td><td>The job is running but the time isn't productive training (startup, checkpoint, lost work, validation). Owner: the framework config + the researcher. Instrument: OneLogger.</td></tr>
+        <tr><td>Program</td><td>The job is training, but GPUs sit underutilized (idle-waste windows, low MFU). Owner: the researcher's code + the data pipeline. Instrument: DCGM utilization.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="idea">
+      <p><strong>The single most important conceptual move in the whole platform: waste is not one thing, so you cannot measure it with one number.</strong> "GPU utilization" alone is famously misleading (Manual I §15) — it sees only the program layer, and even there it confuses "a kernel ran" with "useful work happened." A job at 95% utilization can have terrible goodput if it spends 30% of its life re-paying startup after requeues (a scheduling+runtime loss that utilization can't see). The three-layer decomposition is what lets the team attribute every wasted GPU-hour to a specific, fixable cause — and it's why there are separate data sources and tools for each layer. Internalizing this is the foundation for Matt's "system thinking" interview.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c02">
+    <h2><span class="ch-num">02</span>The scheduling layer (Heimdall)</h2>
+
+    <p>The first layer: GPUs are <em>allocated</em> to a job but the job isn't training. This is the layer the scheduler and the fleet's health own, and it's measured against the execution record (jobsinfo-done) and Heimdall.</p>
+
+    <div class="diagram">  SCHEDULING-LAYER losses (allocated ≠ training):
+   ┌──────────────────────────────────────────────────────────────┐
+   │ queue→start gap   — allocated nodes idle before the job starts │
+   │ NODE_FAIL         — hardware died under the job (Manual II §33)│
+   │ requeue churn     — job cycles RUNNING→FAIL→REQUEUE, re-paying  │
+   │ preemption        — a higher-priority job took the nodes        │
+   │ hung/zombie jobs  — allocated, GPUs idle, no progress (§37 ML3) │
+   └──────────────────────────────────────────────────────────────┘
+   These are the most EXPENSIVE wastes: every GPU in the allocation
+   is burning while producing zero training. A hung 512-GPU job is
+   the canonical catastrophe.</div>
+
+    <p><strong>Heimdall</strong> is the scheduling-layer instrument and actor: it detects <em>who or what disrupted a job</em> (a node failure, a preemption, a crash) and drives remediation (drain the node, requeue, alert). It answers "why did this allocation stop producing useful work, and whose fault was it" — bad hardware, the scheduler, or the application. That attribution is what separates a scheduling-layer loss (drain the node) from a runtime-layer loss (fix the config).</p>
+
+    <div class="callout tip">
+      <h5>Why this layer is Matt's territory</h5>
+      <p>Matt's body of work (the idle-waste toolkit, the bi-weekly nudges, sisyphus, the GPU-Idle-Waste PIC) lives largely at the intersection of the scheduling and program layers — finding GPUs that are allocated but not doing useful work, at fleet scale. The idle-waste definition itself ("0% utilization for a 5-minute window, not application-aware") is deliberately a <em>blunt, allocation-vs-utilization</em> measure that catches both a hung job (scheduling) and a starved one (program) without needing to know the app's intent. Understanding that this bluntness is a feature — it scales to 18 clusters because it needs no per-app knowledge — is exactly the system-thinking framing Matt will probe.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c03">
+    <h2><span class="ch-num">03</span>The runtime layer (OneLogger)</h2>
+
+    <p>The second layer: the job <em>is</em> running, but not all of that time is productive training. This is the richest layer because the framework instruments itself — <strong>OneLogger</strong> emits a detailed time budget — and it's where most actionable, researcher-facing efficiency wins live.</p>
+
+    <div class="diagram">  RUNTIME-LAYER time budget (the job's wall-clock, decomposed by OneLogger):
+   l_run_time  (total runtime)
+   ├── productive training  ── d_train_iterations_time_total_productive  ← the GOOD part
+   ├── startup tax          ── d_app_startup_time (container, init, ckpt load)
+   ├── lost work            ── d_lost_work_time (re-run since last checkpoint)
+   ├── unsaved work         ── d_unsaved_work_time (progress not yet checkpointed)
+   ├── checkpoint overhead  ── save/finalize time
+   └── validation           ── eval passes interrupting training
+
+   runtime_eff = productive ÷ run_time
+   → OneLogger lets you say EXACTLY where a running job's time went.</div>
+
+    <p>The key property: OneLogger is <em>application-aware</em> — it knows the difference between "loading a checkpoint" and "training iteration 4,201," because the framework (Megatron/NeMo) emits the events. So unlike the blunt idle-waste signal (§02), OneLogger can attribute runtime waste to a specific phase: this job lost 22% to startup, 18% to lost work, 5% to validation. That precision is what makes the runtime layer the most <em>fixable</em> — each phase has a known lever (Manual I §11–§13).</p>
+
+    <div class="callout tip">
+      <h5>The two-instrument complementarity</h5>
+      <p>This is a subtle, important point for the observability interview: DCGM utilization (program layer) is <em>application-blind</em> but always available; OneLogger (runtime layer) is <em>application-aware</em> but only present if the framework is instrumented. The platform uses both because they answer different questions and have different coverage — DCGM catches any job's idle GPUs (even uninstrumented ones), while OneLogger explains <em>why</em> an instrumented job's time was unproductive. When they disagree (DCGM says busy, OneLogger says unproductive), that discrepancy is itself a signal (§28). Knowing why you need both application-aware and application-blind telemetry is a sophisticated observability insight.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c04">
+    <h2><span class="ch-num">04</span>The program layer (DCGM)</h2>
+
+    <p>The third layer: the job is training, but how hard are the GPUs actually working? This is the layer raw <strong>DCGM</strong> utilization measures — and the layer most prone to the "100% util but slow" trap (Manual III §02).</p>
+
+    <table class="tbl">
+      <thead><tr><th>Signal</th><th>What it sees · its blind spot</th></tr></thead>
+      <tbody>
+        <tr><td>GPU utilization (DCGM)</td><td>Was a kernel running in this sample window? Catches idle GPUs (0%-util = idle waste). Blind to <em>what</em> the kernel did — a slow FP32 GEMM reads 100%.</td></tr>
+        <tr><td>SM activity / occupancy (DCGM)</td><td>Finer-grained: were the SMs actually busy, not just "a kernel exists"? Closer to real work but still not FLOP-aware.</td></tr>
+        <tr><td>Tensor-core activity (DCGM)</td><td>Were the tensor cores engaged? A better proxy for useful training FLOPs than gross utilization.</td></tr>
+        <tr><td>MFU (modeled, not DCGM)</td><td>The truth metric (Manual III §28) — achieved vs peak FLOP/s. DCGM can't compute it directly; it requires the FLOP model. The program layer's real efficiency.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="diagram">  The PROGRAM-layer ladder of fidelity (Manual I §15, formalized):
+   gross utilization  ─ "a kernel ran"        ← cheap, blind, always available (idle-waste)
+   SM activity        ─ "the SMs were busy"   ← better
+   tensor activity    ─ "tensor cores engaged"← closer to useful FLOPs
+   MFU                ─ "useful FLOP/s / peak"← the truth, but needs the FLOP model
+   each rung is closer to "useful training" and harder to measure.</div>
+
+    <div class="callout warn">
+      <h5>Why idle-waste uses the bluntest rung deliberately</h5>
+      <p>The idle-waste signal sits at the very bottom rung — 0% utilization for 5 minutes — and that's a <em>design choice</em>, not a limitation. The bluntest metric is the most universal: it requires no model, no instrumentation, no per-app knowledge, so it scales to every job on 18 clusters and catches the most egregious waste (genuinely idle GPUs) with near-zero false positives. The finer rungs (tensor activity, MFU) are reserved for deeper per-job analysis where you can afford the modeling. Matching the metric's fidelity to the analysis scope — blunt for fleet sweeps, precise for single-job deep dives — is exactly the engineering judgment the role rewards.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c05">
+    <h2><span class="ch-num">05</span>Composing the three layers</h2>
+
+    <p>The three layers combine into the headline goodput number, and understanding the composition is what lets you reason about where the biggest fleet wins are.</p>
+
+    <div class="diagram">  GOODPUT = scheduling_eff × runtime_eff × program_eff   (multiplicative!)
+
+   Worked illustration:
+     scheduling_eff = 0.90   (10% lost to requeues/queue gaps/failures)
+     runtime_eff    = 0.75   (25% lost to startup + lost work + checkpoint)
+     program_eff    = 0.85   (15% idle-waste / sub-peak utilization while training)
+   ────────────────────────────────────────────────────────────────────
+     GOODPUT ≈ 0.90 × 0.75 × 0.85 ≈ 0.57  → only 57% of GPU-hours were useful!
+
+   The multiplicative structure means:
+    • no single layer dominates — a 0.9 in each still compounds to 0.73
+    • the BIGGEST lever is the WORST layer (here: runtime at 0.75)
+    • fixing one layer can't exceed the ceiling set by the others</div>
+
+    <p>Two consequences shape the whole strategy:</p>
+    <ul class="dash">
+      <li><strong>Attack the worst layer first.</strong> Because the layers multiply, the marginal return is highest on the lowest-efficiency layer. A fleet at 0.9 × 0.75 × 0.85 should fix runtime (the 0.75), not chase the 0.85 program layer. The tools exist to <em>tell you which layer</em> is worst per job and per fleet.</li>
+      <li><strong>The layers interact.</strong> A scheduling problem (requeues) <em>causes</em> a runtime problem (re-paid startup, lost work) — Manual II §07. So fixing bad nodes (scheduling) lifts the runtime layer too. The decomposition isn't just bookkeeping; it reveals causal chains across layers.</li>
+    </ul>
+
+    <div class="idea">
+      <p><strong>This multiplicative three-layer model is the intellectual core of the entire role, and the thing to be able to draw on a whiteboard in either required interview.</strong> Goodput = scheduling × runtime × program; each layer has its own instrument (Heimdall/jobsinfo-done, OneLogger, DCGM), its own owner, and its own fixes; the layers multiply so the worst one is the biggest lever; and they interact causally so fixes can cascade. Every tool in this volume — the toolkit, sisyphus, the rules engine, the dashboards — is an instrument for measuring, attributing, or acting on one of these three layers. When Matt asks you to "think about fleet efficiency as a system," this composition <em>is</em> the system.</p>
+    </div>
+
+    <p class="pull">Three layers, three instruments, one product: the fraction of every GPU-hour that became a trained model. They multiply, so the worst layer is always the next thing to fix.</p>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART II ===================== -->
+<div class="part" id="p2">
+  <div class="part-label">Part II — OneLogger: the field model</div>
+  <h2 class="part-title">The job's time <span class="acc">budget.</span></h2>
+  <p class="part-intro">OneLogger is the runtime layer's instrument — the framework-emitted telemetry that decomposes a job's wall-clock into productive training versus every flavor of overhead. Reading its fields fluently is what lets you say exactly where a job's time went, and it's the schema the rules engine reasons over. This part is the field model in detail, with a worked decode.</p>
+
+  <section class="chapter" id="c06">
+    <h2><span class="ch-num">06</span>What OneLogger is</h2>
+
+    <p>OneLogger is a telemetry library integrated into the training frameworks (Megatron-LM, NeMo) that emits structured events about a job's lifecycle — startup phases, iteration timing, checkpoint saves, validation passes — which are aggregated into a per-job summary record.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Property</th><th>Detail</th></tr></thead>
+      <tbody>
+        <tr><td>Where it lives</td><td>Inside the training framework; emits as the job runs. Aggregated to the index <code>df-hwinf-dcm-e2e-app-metrics-summary-*</code>.</td></tr>
+        <tr><td>What it captures</td><td>The runtime time budget: productive iteration time, startup time, lost work, unsaved work, checkpoint timing, validation — the full decomposition of <code>l_run_time</code>.</td></tr>
+        <tr><td>Application-aware</td><td>Yes — it knows training phases because the framework tells it. This is its power (precise attribution) and its limit (only instrumented jobs emit it).</td></tr>
+        <tr><td>Granularity</td><td>Per-job (and per-execution) summary, plus the underlying event stream. The summary is what the rules engine and dashboards consume.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <h5>The instrumentation-coverage caveat that matters operationally</h5>
+      <p>Because OneLogger only emits if the framework is instrumented, a job running a custom or older training loop may have <em>no</em> OneLogger record — and then the runtime layer is invisible for that job, leaving only the application-blind DCGM signal (§04). So one real efficiency lever is simply <em>increasing OneLogger coverage</em> — getting more jobs onto instrumented frameworks so their runtime waste becomes visible and fixable. "We can't fix what we can't see, so improving telemetry coverage is itself efficiency work" is a mature observability point, and it's why the team cares about framework defaults (Manual I §39 — corrected OneLogger templates as a shipped fix).</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c07">
+    <h2><span class="ch-num">07</span>The time-budget fields</h2>
+
+    <p>The heart of OneLogger is a set of duration fields that partition the job's runtime. Knowing the key ones by name — and what each represents — is concrete fluency that shows you've worked with the real telemetry.</p>
+
+    <table class="tbl wide">
+      <thead><tr><th>Field</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td>l_run_time</td><td>Total wall-clock runtime of the job (the denominator for runtime efficiency).</td></tr>
+        <tr><td>d_train_iterations_time_total_productive</td><td>The <strong>productive</strong> training time — actual forward/backward/optimizer iterations doing useful work. The numerator. Goodput's runtime component is this ÷ run_time.</td></tr>
+        <tr><td>d_app_startup_time</td><td>Time from process start to the first productive iteration: container load, framework init, model build, checkpoint load, the first NCCL bootstrap (§08).</td></tr>
+        <tr><td>d_lost_work_time</td><td>Training time thrown away — iterations that ran but whose results were lost (e.g., progress since the last checkpoint when the job failed and resumed) (§09).</td></tr>
+        <tr><td>d_unsaved_work_time</td><td>Productive progress made but <em>not yet checkpointed</em> — the work that <em>would</em> be lost if the job failed right now. A risk measure.</td></tr>
+        <tr><td>checkpoint save / finalize time</td><td>Time spent writing checkpoints (and the async finalize tail) — the checkpoint overhead (Manual II §31).</td></tr>
+        <tr><td>validation time</td><td>Time in eval/validation passes that interrupt training.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="diagram">  The fields partition l_run_time (schematically):
+   l_run_time = d_app_startup_time
+              + d_train_iterations_time_total_productive   ← the only "good" bucket
+              + d_lost_work_time
+              + checkpoint_save/finalize_time
+              + validation_time
+              + (other overhead / gaps)
+
+   runtime_eff = d_train_iterations_time_total_productive / l_run_time
+   and each non-productive bucket is a NAMED, ATTRIBUTABLE loss with a known fix.</div>
+
+    <div class="callout tip">
+      <h5>Why naming the fields matters in the interview</h5>
+      <p>Being able to say "<code>d_train_iterations_time_total_productive</code> over <code>l_run_time</code> is the runtime efficiency, and the gap decomposes into <code>d_app_startup_time</code>, <code>d_lost_work_time</code>, checkpoint, and validation" demonstrates you've actually engaged with the team's telemetry rather than speaking in generalities. The field names are the team's real vocabulary; using them precisely signals you'll be productive on day one. (Verify exact field names against the live schema — telemetry fields evolve — but the <em>decomposition</em> they encode is the durable, important part.)</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c08">
+    <h2><span class="ch-num">08</span>The startup tax decomposed</h2>
+
+    <p>Startup (<code>d_app_startup_time</code>) is often the largest single runtime loss, and it's worth decomposing because each sub-phase has a different fix — and because it compounds brutally with requeues (every restart re-pays it).</p>
+
+    <div class="diagram">  d_app_startup_time, phase by phase:
+   ┌──────────────────────────────────────────────────────────────┐
+   │ 1. container instantiation  — Enroot unpacks the .sqsh         │
+   │      fix: sbcast image to /raid (Manual II §14)                │
+   │ 2. framework / library init — import torch, CUDA context, etc. │
+   │ 3. distributed bootstrap    — NCCL rendezvous, build comms     │
+   │      fix: correct MASTER_ADDR / NCCL interface (Manual II §16) │
+   │ 4. model build              — allocate params, optimizer state │
+   │ 5. checkpoint LOAD          — read weights to resume           │
+   │      fix: faster storage / striping (Manual II §27); the       │
+   │           tensor-loading benchmark targets exactly this        │
+   │ 6. dataloader warmup        — fill prefetch buffers            │
+   └──────────────────────────────────────────────────────────────┘
+   each phase is independently measurable and fixable.</div>
+
+    <p>The compounding insight (Manual II §07) is the operationally critical one: <strong>startup is paid once for a clean run, but once <em>per requeue</em> for a flaky one.</strong> A job that requeues 5 times pays startup 6 times. So a high <code>d_app_startup_time</code> fraction can be a <em>runtime</em> problem (slow checkpoint load — fix storage) or a symptom of a <em>scheduling</em> problem (frequent requeues from bad nodes — fix the hardware). Distinguishing these requires joining OneLogger (startup time) with jobsinfo-done (requeue count) — which is exactly what the data plane (Part III) enables.</p>
+
+    <div class="callout tip">
+      <h5>The cross-layer diagnosis this enables</h5>
+      <p>"This job's startup is 30% of runtime" → is it one slow startup (a single big run with a slow checkpoint load → fix storage striping) or many startups (frequent requeues → fix the nodes)? The answer changes the owner and the fix entirely, and you get it by correlating <code>d_app_startup_time</code> with the execution count from jobsinfo-done. This is the kind of multi-source reasoning the platform is built for, and a great concrete example to offer when Matt asks how you'd investigate a high-startup-overhead job: "I'd check whether it's startup-per-run or startup-times-requeues, because those are different problems in different layers."</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c09">
+    <h2><span class="ch-num">09</span>Lost work &amp; the checkpoint economy</h2>
+
+    <p><code>d_lost_work_time</code> and <code>d_unsaved_work_time</code> capture the checkpoint economy — the trade between checkpointing often (cheap insurance, but checkpoint overhead) and rarely (low overhead, but big losses on failure). This is a genuinely quantitative optimization and a favorite efficiency topic.</p>
+
+    <div class="diagram">  THE CHECKPOINT ECONOMY:
+   ───────────────────────────────────────────────────────────────
+   checkpoint OFTEN              checkpoint RARELY
+   + small lost-work on failure  − large lost-work on failure
+   − high checkpoint overhead    + low checkpoint overhead
+   ───────────────────────────────────────────────────────────────
+   optimal interval balances:  E[lost work] = ckpt_interval/2 × failure_rate
+                               vs  ckpt_overhead × (run_time / ckpt_interval)
+
+   KEY ASYMMETRY (Manual II §39 worked case):
+     if ckpt_interval (e.g. 6h) > mean-time-to-failure (e.g. 2h),
+     EVERY failure throws away ~interval/2 of work → lost-work explodes.
+     → the interval must be SHORTER than the cluster's MTTF.</div>
+
+    <table class="tbl">
+      <thead><tr><th>Quantity</th><th>What it tells you · the lever</th></tr></thead>
+      <tbody>
+        <tr><td>d_lost_work_time</td><td>Work actually thrown away. High → checkpoint more often, OR fix the failures causing the resumes (scheduling layer). The cost side of too-sparse checkpointing.</td></tr>
+        <tr><td>d_unsaved_work_time</td><td>Work at risk right now (since last checkpoint). A leading indicator — high unsaved work means a failure would be expensive, even if none has happened yet.</td></tr>
+        <tr><td>checkpoint interval</td><td>The knob. The rules engine flags <code>ckpt_interval &gt; 4h</code> as a threshold (§18) precisely because long intervals risk large lost work on failure-prone clusters.</td></tr>
+        <tr><td>checkpoint overhead</td><td>The other cost — time writing. Mitigated by async/parallel save (Manual II §31), which lets you checkpoint <em>more often</em> without paying more wall-clock.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="idea">
+      <p><strong>The checkpoint economy is where runtime efficiency becomes a real optimization problem, and async checkpointing changes the whole trade.</strong> Naively, checkpointing more often reduces lost work but increases overhead — a balance. But async/parallel checkpointing (write in the background while training continues) makes saves nearly free in wall-clock, which means you can checkpoint <em>far more frequently</em> and crush lost-work without paying overhead. So the combined fix for a job bleeding lost work is: shorten the interval AND make saves async — get the insurance cheaply. This connects the OneLogger fields (the measurement) to the storage work (the mechanism) to the rules engine (the threshold) — a complete cross-layer efficiency story that plays well in both required interviews.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c10">
+    <h2><span class="ch-num">10</span>Reading a OneLogger record</h2>
+
+    <p>Putting the fields together: a worked decode of a job's OneLogger summary, the analytical move at the heart of single-job efficiency analysis.</p>
+
+    <div class="issue">
+      <div class="issue-header">
+        <span class="tag">worked decode</span>
+        <span class="title">A 512-GPU job's OneLogger summary</span>
+      </div>
+      <div class="issue-body">
+        <h5>The record (schematic)</h5>
+<pre data-lang="JSON"><span class="var">l_run_time</span>:                                  <span class="num">100.0</span> h
+<span class="var">d_train_iterations_time_total_productive</span>:    <span class="num">58.0</span> h
+<span class="var">d_app_startup_time</span>:                          <span class="num">22.0</span> h
+<span class="var">d_lost_work_time</span>:                            <span class="num">12.0</span> h
+<span class="var">checkpoint_save_finalize_time</span>:               <span class="num">5.0</span> h
+<span class="var">validation_time</span>:                             <span class="num">3.0</span> h</pre>
+        <h5>The decode</h5>
+        <p>Runtime efficiency = 58 / 100 = <strong>58%</strong>. The 42% loss decomposes: startup 22%, lost work 12%, checkpoint 5%, validation 3%. The two big losses are startup and lost work — and together they suggest a single root cause.</p>
+        <h5>The hypothesis (cross-field reasoning)</h5>
+        <p>Startup at 22% is huge. Lost work at 12% is also high. Both point to <strong>frequent failures/requeues</strong>: each requeue re-pays startup (→ inflated <code>d_app_startup_time</code>) and discards work since the last checkpoint (→ inflated <code>d_lost_work_time</code>). To confirm, join with jobsinfo-done (§12): if the execution count is high (say 8 executions for this job), the story holds — this is a scheduling-layer failure problem manifesting as runtime waste.</p>
+        <h5>The fix (spanning layers)</h5>
+        <p>(1) Find and drain the bad nodes causing the requeues (scheduling, Manual II §34) — stops the churn at the source. (2) Shorten the checkpoint interval and make saves async (runtime, §09) — so each remaining failure costs less lost work. (3) Stage the image to <code>/raid</code> and check the checkpoint-load storage path (startup, §08) — so each restart's startup is cheaper. Net: runtime efficiency should climb from 58% toward the 80s.</p>
+        <h5>The lesson</h5>
+        <p>A OneLogger record isn't just a report card — it's a diagnostic. The <em>pattern</em> across fields (high startup + high lost work) points to a root cause (requeue churn) that no single field reveals, and the fix spans the scheduling, runtime, and storage layers. Reading records this way — pattern, hypothesis, cross-source confirmation, layered fix — is the analytical skill the efficiency role is built on.</p>
+      </div>
+    </div>
+
+    <p class="pull">A OneLogger record is a confession: it tells you exactly how a job spent its life. The skill is reading the pattern across the fields, not just the productive percentage.</p>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART III ===================== -->
+<div class="part" id="p3">
+  <div class="part-label">Part III — The telemetry data plane</div>
+  <h2 class="part-title">Fusing the <span class="acc">signals.</span></h2>
+  <p class="part-intro">No single source sees the whole picture, so the platform joins many. This part is the data engineering: the seven sources and what each contributes, the execution-record backbone that everything joins onto, the join keys and the time-skew problem that makes joining hard, the ETL that lands it all in queryable indices, and the data-quality issues that are an unglamorous but real part of the work. This is squarely Greg's observability territory and the substrate every tool stands on.</p>
+
+  <section class="chapter" id="c11">
+    <h2><span class="ch-num">11</span>The seven data sources</h2>
+
+    <p>The efficiency platform draws on roughly seven distinct telemetry sources, each answering a different question. Knowing the cast — and that each is a separate index with its own keys and quirks — is the foundation of the data plane.</p>
+
+    <table class="tbl wide">
+      <thead><tr><th>Source</th><th>Index · what it provides</th></tr></thead>
+      <tbody>
+        <tr><td>OneLogger</td><td><code>df-hwinf-dcm-e2e-app-metrics-summary-*</code> — the runtime time budget (Part II). Application-aware. Answers "where did this job's runtime go?"</td></tr>
+        <tr><td>GPU utilization / idle</td><td><code>df-hwinf-draco-metrics-gpu-utilization-summary-*</code> — per-job DCGM utilization, the idle-waste signal. Application-blind. Answers "were the GPUs busy?"</td></tr>
+        <tr><td>FACT</td><td><code>df-aidot-fact-job-*</code> — failure attribution: XID correlation, bad-node lists, who/what killed a job. Answers "why did it fail, and whose fault?"</td></tr>
+        <tr><td>jobsinfo-done</td><td><code>df-hwinf-draco-metrics-jobsinfo-done-*</code> — the Slurm execution record: one row per execution, with state, timing, nodes (Manual II §13). The <strong>join backbone</strong> (§12).</td></tr>
+        <tr><td>AI Job Insights</td><td><code>df-hwinf-cs-scheduling-metrics-ai-job-insights-*</code> — scheduling-layer metrics about jobs.</td></tr>
+        <tr><td>Heimdall</td><td>API — the scheduling-layer disruption/remediation record (§02). Answers "what disrupted this allocation?"</td></tr>
+        <tr><td>WandB / Loki</td><td>WandB — researcher-side experiment metrics (per-iteration loss/throughput, the straggler-variance signal). Loki — logs (crashes, NCCL timeouts, the LOG-family rules). Answers "what did the run itself report / log?"</td></tr>
+      </tbody>
+    </table>
+
+    <div class="diagram">  Each source maps to a goodput LAYER (Part I):
+   SCHEDULING layer ── jobsinfo-done, Heimdall, FACT, AI Job Insights
+   RUNTIME layer    ── OneLogger
+   PROGRAM layer    ── GPU-utilization/idle (DCGM)
+   cross-cutting    ── WandB (run metrics), Loki (logs)
+   → to see a job WHOLE, you must join across layers/sources.</div>
+
+    <div class="callout tip">
+      <h5>Why seven sources and not one big table</h5>
+      <p>Each source is produced by a different system (the framework, DCGM, Slurm, the FACT pipeline, Heimdall, WandB) at a different granularity and cadence, and they're owned by different teams. There is no single system that sees scheduling + runtime + program + logs together — so the platform's job is to <em>fuse</em> them after the fact. This is a classic observability data-integration problem, and naming it as such ("the telemetry is federated across the systems that produce it, so the platform's core challenge is correlating it onto a common key") is exactly the framing Greg's observability interview is looking for.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c12">
+    <h2><span class="ch-num">12</span>jobsinfo-done: the backbone</h2>
+
+    <p>Among the seven, one is special: <strong>jobsinfo-done</strong> is the spine everything else joins onto, because it's the authoritative record of <em>what actually executed</em>. Understanding why it's the backbone is the key to the whole join model.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Property</th><th>Detail</th></tr></thead>
+      <tbody>
+        <tr><td>What it is</td><td>The Slurm accounting record (Manual II §13), transformed into an index: one row per <em>execution</em> (each requeue cycle is its own row), with job ID, cluster, start/end time, state, exit code, node list.</td></tr>
+        <tr><td>Why it's the backbone</td><td>It's the ground truth of execution — every other source describes <em>some aspect</em> of a job that appears here. So you anchor on jobsinfo-done and enrich it with OneLogger (runtime), DCGM (utilization), FACT (failures), etc.</td></tr>
+        <tr><td>Per-execution granularity</td><td>Critical: a logical "job" may execute many times (requeues). jobsinfo-done captures each, which is exactly what lets you count requeues (§08) and attribute lost work per cycle.</td></tr>
+        <tr><td>The join key</td><td><code>(s_jobid, s_cluster, ts_start)</code> — job ID + cluster + start timestamp. Cluster is mandatory because job IDs are reused across clusters (Manual II §36); start time disambiguates executions.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="idea">
+      <p><strong>Choosing the execution record as the join backbone is a deliberate and correct data-modeling decision.</strong> You could anchor on the logical job, or on time windows, or on the researcher — but the <em>execution</em> is the unit at which everything else is actually measured: a OneLogger record, a DCGM utilization summary, a FACT attribution all describe a specific run on specific nodes at a specific time. By making jobsinfo-done the spine and keying on <code>(jobid, cluster, ts_start)</code>, the platform gets a stable anchor that every source can attach to. When asked how you'd architect a system to correlate heterogeneous job telemetry, "anchor on the authoritative execution record and enrich outward, keyed on job+cluster+start-time" is a strong, specific answer.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c13">
+    <h2><span class="ch-num">13</span>The join model</h2>
+
+    <p>Joining the sources is harder than it looks, because the keys don't line up cleanly — timestamps differ slightly between systems, job IDs collide across clusters, and some sources lag. The team's join model handles these, and the details are exactly the kind of data-engineering depth Greg probes.</p>
+
+    <div class="diagram">  THE JOIN (anchor = jobsinfo-done):
+   jobsinfo-done row  (s_jobid, s_cluster, ts_start)
+        │  LEFT JOIN each source on the same logical key
+        ├── OneLogger ............ matched by job+cluster, time-aligned
+        ├── GPU-util (DCGM) ...... matched by job+cluster, time window
+        ├── FACT ................. matched by job+cluster, time window
+        └── Heimdall / WandB / Loki
+
+   THE TWO HARD PROBLEMS:
+   1. CLUSTER SCOPING — job IDs REUSE across clusters.
+        join on (jobid, cluster), NEVER jobid alone, or you mismatch jobs.
+   2. TIME SKEW — different systems stamp start times slightly differently.
+        match within a ±300s (±5 min) window, not on exact equality.</div>
+
+    <table class="tbl">
+      <thead><tr><th>Problem</th><th>The handling</th></tr></thead>
+      <tbody>
+        <tr><td>Job-ID reuse</td><td>Always include <code>s_cluster</code> in the key. A bare job ID is ambiguous across the ~18 clusters — joining on it alone silently merges unrelated jobs. (Manual II §36's "cluster scoping is mandatory" is fundamentally a join-correctness requirement.)</td></tr>
+        <tr><td>Time skew</td><td>Match start times within a <strong>±300-second window</strong>, because the framework, Slurm, and DCGM don't stamp the same instant identically. Exact-match joins would drop valid correlations.</td></tr>
+        <tr><td>Lag / late data</td><td>Some sources land after the job ends (FACT attribution, finalized accounting). The pipeline must tolerate sources arriving at different times — re-join as late data lands.</td></tr>
+        <tr><td>Missing sources</td><td>A job may lack OneLogger (uninstrumented) or DCGM (gaps). The join is a LEFT join from the backbone — keep the execution row even when enrichment is missing, and degrade gracefully (§29).</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout warn">
+      <h5>The ±300s window is a real engineering judgment</h5>
+      <p>Why 5 minutes? Too tight and you drop valid matches (clock skew between systems exceeds a few seconds); too loose and you risk matching the <em>wrong</em> execution (two runs of the same job ID on the same cluster close in time). ±300s is the empirical sweet spot — wide enough to absorb inter-system skew, narrow enough to disambiguate executions given that the same (jobid, cluster) rarely restarts within 5 minutes. This is exactly the kind of "the messy reality of joining production telemetry" detail that demonstrates you understand observability data engineering beyond the textbook — and it's a great specific to cite when Greg asks about correlating telemetry across systems.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c14">
+    <h2><span class="ch-num">14</span>The ETL &amp; the indices</h2>
+
+    <p>The raw telemetry has to be extracted, transformed, and landed somewhere queryable. The team's data plane runs through NVPark/OpenSearch, and understanding the shape of the ETL (not every detail) shows you grasp how the data actually flows.</p>
+
+    <div class="diagram">  THE DATA FLOW (schematic):
+   PRODUCERS                    ETL (NVPark)            STORE          CONSUMERS
+   ─────────                    ────────────            ─────          ─────────
+   framework (OneLogger) ─┐                          ┌─ OpenSearch ─┬─ rules engine
+   DCGM (utilization)     ─┤   extract → transform   │   indices     │  (analyze-*)
+   Slurm (jobsinfo)       ─┼──► (normalize, key,   ──┤   df-hwinf-*   ├─ dashboards
+   FACT / Heimdall        ─┤    join, aggregate)     │   df-aidot-*   │  (Streamlit)
+   WandB / Loki           ─┘                          └─ (queryable)  ├─ toolkit / sisyphus
+                                                                       └─ ppp-notify / bot</div>
+
+    <table class="tbl">
+      <thead><tr><th>Stage</th><th>What happens</th></tr></thead>
+      <tbody>
+        <tr><td>Extract</td><td>Pull from each producer (framework events, DCGM exporters, Slurm accounting, FACT, Heimdall API, WandB, Loki).</td></tr>
+        <tr><td>Transform</td><td>Normalize schemas, derive the join keys (job+cluster+ts), compute summaries (per-job/per-execution rollups), align time windows.</td></tr>
+        <tr><td>Load</td><td>Land into OpenSearch indices (the <code>df-hwinf-*</code> / <code>df-aidot-*</code> families), queryable by the downstream tools.</td></tr>
+        <tr><td>Consume</td><td>The rules engine, dashboards, idle-waste toolkit, sisyphus, and action layer all read these indices — they don't re-pull raw telemetry, they query the curated indices.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <h5>The architectural point: curate once, consume many</h5>
+      <p>The valuable design here is that the ETL curates the telemetry <em>once</em> into clean, joined, queryable indices, and then <em>many</em> tools consume those same indices — the rules engine, the dashboards, the per-job tools, the email nudges. This avoids every tool re-implementing the extraction and joining (which would be fragile and inconsistent). It also means the indices' output (e.g., <code>df-mars-ai-efficiency-insights-*</code>) becomes input to further tools — a layered data architecture. Recognizing this "shared curated layer feeds diverse consumers" pattern is a systems-design observation that resonates in the observability interview, and it's why improving the data plane lifts every tool at once.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c15">
+    <h2><span class="ch-num">15</span>Data quality</h2>
+
+    <p>The unglamorous truth of any telemetry platform: a lot of the work is handling bad, missing, or inconsistent data. The platform has an entire rule family (DQ) for it, which tells you how seriously the team takes it — and being honest about this is a mark of real experience.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Data-quality issue</th><th>Why it happens · how it's handled</th></tr></thead>
+      <tbody>
+        <tr><td>Missing telemetry</td><td>A job lacks OneLogger (uninstrumented) or has DCGM gaps. Handled by graceful degradation (§29) and flagged by DQ rules — and "absence of data" is itself a finding, not just an inconvenience.</td></tr>
+        <tr><td>Inconsistent values</td><td>Sources disagree (DCGM says busy, OneLogger says unproductive). The discrepancy is meaningful (§28) — but it must be detected, not silently averaged away.</td></tr>
+        <tr><td>Stale / late data</td><td>Sources land at different times; a too-early analysis sees an incomplete picture. The pipeline re-joins as late data arrives.</td></tr>
+        <tr><td>Schema drift</td><td>Telemetry fields change as frameworks evolve (why this manual flags "verify field names"). The ETL must tolerate and adapt.</td></tr>
+        <tr><td>Outliers / impossible values</td><td>A negative duration, a &gt;100% utilization, a runtime exceeding wall-clock — sensor or aggregation bugs. DQ rules catch these before they corrupt a finding.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="idea">
+      <p><strong>Data quality is where credibility is won or lost.</strong> An efficiency finding delivered to a busy researcher must be <em>right</em> — if you tell someone their job wasted 40% of its GPU-hours and the number is wrong because of a bad join or missing telemetry, you lose their trust and they ignore every future finding. So the DQ rule family, the graceful degradation, the discrepancy detection, and the careful join model all serve one goal: <em>trustworthy</em> findings. The mature engineering stance — "most of the effort in a telemetry platform is not the clever analysis, it's making sure the data underneath is clean enough that the analysis can be trusted" — is exactly the kind of grounded, experienced perspective that lands well, and it's the honest reality of the work.</p>
+    </div>
+
+    <p class="pull">The clever analysis is the easy part. The hard, credibility-defining part is making the federated, skewed, sometimes-missing telemetry clean enough to trust.</p>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART IV ===================== -->
+<div class="part" id="p4">
+  <div class="part-label">Part IV — The rules engine</div>
+  <h2 class="part-title">Signals into <span class="acc">findings.</span></h2>
+  <p class="part-intro">The curated telemetry (Part III) is just data until something turns it into actionable findings. The team's answer is a 110-rule <em>deterministic</em> engine — not an LLM guessing, but explicit, testable rules that each detect one inefficiency pattern and emit evidence. This part is the engine's design: why deterministic, the rule families, a rule's anatomy, the pipeline, a worked firing, and how 576 tests keep it honest. This is the platform's brain, and the clearest demonstration of the team's measurement-rigor culture.</p>
+
+  <section class="chapter" id="c16">
+    <h2><span class="ch-num">16</span>Why deterministic rules</h2>
+
+    <p>A tempting design would be "feed all the telemetry to an LLM and ask what's wrong." The team explicitly does <em>not</em> do this as the core — it uses deterministic rules, with the LLM relegated to narrating (§34). Understanding why is a sharp insight into building trustworthy ML-ops tooling.</p>
+
+    <table class="tbl compare">
+      <thead><tr><th>Property</th><th>Deterministic rules (the core)</th><th>LLM-only (rejected for the core)</th></tr></thead>
+      <tbody>
+        <tr><td>Correctness</td><td>Provably consistent — same input, same finding, every time</td><td>Non-deterministic; ~3.4% hallucination rate observed</td></tr>
+        <tr><td>Testability</td><td>Each rule has unit tests + golden cases (576 tests, §21)</td><td>Hard to test exhaustively; behavior drifts with the model</td></tr>
+        <tr><td>Explainability</td><td>The rule IS the explanation — threshold + evidence, auditable</td><td>Reasoning is opaque; "why did it say that?" is unanswerable</td></tr>
+        <tr><td>Trust</td><td>A researcher can verify the finding against the rule's logic</td><td>A wrong finding erodes trust in all findings (§15)</td></tr>
+        <tr><td>Cost / latency</td><td>Cheap, fast, runs over the whole fleet</td><td>Expensive per job at fleet scale</td></tr>
+      </tbody>
+    </table>
+
+    <div class="idea">
+      <p><strong>The architectural principle: deterministic where correctness matters, LLM where fluency matters.</strong> The <em>detection</em> of an inefficiency must be correct, testable, and explainable — so it's a rule. The <em>explanation</em> of that finding in friendly prose is where an LLM's fluency helps and a mistake is low-stakes — so the LLM narrates a finding the rules already established, rather than deciding the finding itself. This division (rules decide, LLM describes) is a genuinely good piece of ML-ops engineering judgment, and articulating it — "I wouldn't trust an LLM to decide whether a job is inefficient, but it's great at explaining a finding the rules already proved" — is exactly the kind of mature, trust-first system thinking Matt's interview rewards. It also directly addresses the elephant in the room (why not just use an LLM for everything) with a principled answer.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c17">
+    <h2><span class="ch-num">17</span>The rule families</h2>
+
+    <p>The ~110 rules are organized into families by what they detect. Knowing the families — and that they map onto the goodput layers and data sources — gives you a structured grasp of what the engine looks for.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Family</th><th>Detects · layer/source</th></tr></thead>
+      <tbody>
+        <tr><td>G0</td><td>Zero-goodput / not-training conditions — a job producing no useful work (e.g., the checkpoint-hook-never-called case, §20). The most severe findings.</td></tr>
+        <tr><td>GL</td><td>Goodput-loss patterns — runtime inefficiencies (high startup, lost work, checkpoint overhead, validation) from OneLogger. The bread-and-butter runtime-layer rules.</td></tr>
+        <tr><td>DQ</td><td>Data-quality issues (§15) — missing, inconsistent, or impossible telemetry. Findings about the data itself.</td></tr>
+        <tr><td>CS</td><td>Cluster/scheduling issues — XID-correlated failures, bad nodes, scheduling-layer disruptions (from FACT/Heimdall/jobsinfo-done).</td></tr>
+        <tr><td>LOG</td><td>Log-derived findings — crashes, NCCL timeouts, error signatures parsed from Loki (e.g., <code>LOG-CRASH-NCCL-TIMEOUT</code>, Manual III §37).</td></tr>
+        <tr><td>WB</td><td>WandB-derived — run-metric patterns like iteration-time variance (the straggler signal, <code>WB-ITER-VARIANCE</code>, Manual III §35).</td></tr>
+        <tr><td>STUCK</td><td>Hung/stalled-job detection — allocated but not progressing (the expensive scheduling-layer catastrophe).</td></tr>
+        <tr><td>SESSION</td><td>Session/lifecycle-level patterns across a job's executions.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="diagram">  The families map onto the goodput layers (Part I):
+   SCHEDULING ── CS (cluster/XID), STUCK (hung jobs), SESSION
+   RUNTIME    ── GL (startup/lost-work/ckpt), G0 (zero-goodput)
+   PROGRAM    ── (idle-waste, via the utilization source)
+   LOGS/RUNS  ── LOG (crashes/timeouts), WB (variance/stragglers)
+   DATA       ── DQ (telemetry health)
+   → ~110 rules total, each a specific, named, testable detector.</div>
+
+    <div class="callout tip">
+      <h5>Why a taxonomy of rules beats a monolith</h5>
+      <p>Organizing detection into named families, each rule detecting <em>one</em> pattern with <em>one</em> threshold and <em>one</em> piece of evidence, is what makes the engine maintainable and trustworthy at 110 rules. You can test each rule in isolation, explain each finding precisely ("rule GL-STARTUP fired because startup &gt; 30%"), add a new detector without touching the others, and tune one threshold without side effects. This is good software engineering applied to inefficiency detection — and being able to discuss the engine as a well-factored rule system (rather than a black box) shows you'd contribute to it thoughtfully.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c18">
+    <h2><span class="ch-num">18</span>Rule anatomy: thresholds &amp; evidence</h2>
+
+    <p>Each rule has the same shape: a condition over the joined telemetry, a configurable threshold, and the evidence it attaches to a finding. Seeing the anatomy — including the real thresholds from <code>rules_config.yaml</code> — makes the engine concrete.</p>
+
+    <div class="diagram">  ANATOMY of a rule:
+   ┌──────────────────────────────────────────────────────────────┐
+   │ ID:        GL-STARTUP-HIGH        (family-pattern)             │
+   │ INPUT:     d_app_startup_time / l_run_time   (from OneLogger)  │
+   │ THRESHOLD: > 0.30  (configurable in rules_config.yaml)         │
+   │ CONDITION: startup_fraction > threshold                        │
+   │ EVIDENCE:  the fraction, the phase breakdown, the job id       │
+   │ SEVERITY:  derived from how far over threshold                 │
+   │ OUTPUT:    a finding row → df-mars-ai-efficiency-insights-*    │
+   └──────────────────────────────────────────────────────────────┘</div>
+
+    <p>The real thresholds the team configures (from <code>rules_config.yaml</code>) tell you what "inefficient" means in practice:</p>
+
+    <table class="tbl">
+      <thead><tr><th>Threshold</th><th>Rule meaning</th></tr></thead>
+      <tbody>
+        <tr><td>startup &gt; 30%</td><td>If startup time exceeds 30% of runtime, flag it — that's a lot of GPU-time not training.</td></tr>
+        <tr><td>lost_work &gt; 20%</td><td>More than 20% of runtime thrown away → checkpoint/failure problem.</td></tr>
+        <tr><td>ckpt_overhead &gt; 20%</td><td>Checkpoint writing eating &gt;20% → async/parallel save needed.</td></tr>
+        <tr><td>validation &gt; 15%</td><td>Validation passes consuming &gt;15% of runtime → too-frequent eval.</td></tr>
+        <tr><td>ckpt_interval &gt; 4h</td><td>Checkpointing less often than every 4h → lost-work risk on failure (§09).</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <h5>Configurable thresholds are an operational feature</h5>
+      <p>Putting thresholds in a config file (rather than hard-coding them) matters: what counts as "too much startup" differs by workload and may change as the fleet evolves, and the team tunes these to balance catching real waste against false positives that annoy researchers. The threshold <em>values</em> also encode hard-won judgment — 30% startup, 20% lost work, 4h checkpoint interval are calibrated, not arbitrary. When discussing the engine, noting that "the thresholds are config-driven and calibrated to balance sensitivity against false-positive fatigue" shows you understand that the hard part of a rules engine isn't the rules, it's the tuning — and that false positives have a real cost in researcher trust (§15).</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c19">
+    <h2><span class="ch-num">19</span>The pipeline (SP1–SP6)</h2>
+
+    <p>The engine runs as a staged pipeline (SP1 through SP6), transforming raw telemetry into delivered findings. Knowing the stage structure shows you understand the engine as a data pipeline, not a single script.</p>
+
+    <div class="diagram">  THE ENGINE PIPELINE (SP1 → SP6, schematic):
+   SP1  INGEST     ── pull the joined telemetry from the indices (Part III)
+   SP2  PREPARE    ── normalize, derive per-job/per-execution features,
+                      compute the fractions the rules need (startup%, etc.)
+   SP3  EVALUATE   ── run the ~110 rules over each job → raw findings
+   SP4  AGGREGATE  ── roll up findings per job / cluster / fleet; dedupe;
+                      rank by severity
+   SP5  NARRATE    ── LLM generates human-readable explanations of findings
+                      (over the deterministic findings, §34)
+   SP6  PUBLISH    ── write to df-mars-ai-efficiency-insights-*; feed
+                      dashboards, emails, the bot</div>
+
+    <table class="tbl">
+      <thead><tr><th>Stage</th><th>Role</th></tr></thead>
+      <tbody>
+        <tr><td>SP1 Ingest</td><td>Read the curated, joined indices — the engine consumes the data plane's output (§14), it doesn't re-pull raw telemetry.</td></tr>
+        <tr><td>SP2 Prepare</td><td>Feature derivation: compute the ratios and signals the rules evaluate (startup fraction, lost-work fraction, iteration variance, etc.).</td></tr>
+        <tr><td>SP3 Evaluate</td><td>The rule engine proper — apply all families to each job, producing raw findings with evidence.</td></tr>
+        <tr><td>SP4 Aggregate</td><td>Combine and rank — a job may trip several rules; roll up to a coherent per-job/fleet view, severity-ordered.</td></tr>
+        <tr><td>SP5 Narrate</td><td>LLM turns findings into prose (the human-facing explanation) — strictly downstream of the deterministic findings.</td></tr>
+        <tr><td>SP6 Publish</td><td>Emit to the insights index and the consumers (dashboards, ppp-notify, the bot).</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <h5>The staging makes the LLM safe</h5>
+      <p>Notice the LLM (SP5) comes <em>after</em> the deterministic evaluation and aggregation (SP3–SP4) — it never decides findings, only narrates ones the rules already established and ranked. This staged structure is precisely what enforces the "rules decide, LLM describes" principle (§16) architecturally: by the time the LLM runs, the findings are fixed and evidence-backed, so a hallucination can only garble the prose, not invent a false problem (and even that is caught by golden evals, §21/§34). Being able to point to <em>where in the pipeline</em> the determinism/LLM boundary sits demonstrates real understanding of how to build trustworthy LLM-assisted tooling.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c20">
+    <h2><span class="ch-num">20</span>A worked rule firing</h2>
+
+    <p>The canonical example from Manual I, now in full mechanical detail: a 512-GPU job showing 0% goodput, diagnosed by a single G0-family rule. This is the engine at its best — turning a baffling symptom into a precise, evidenced root cause.</p>
+
+    <div class="issue">
+      <div class="issue-header">
+        <span class="tag">rule firing</span>
+        <span class="title">G0-HOOK: a 512-GPU job at 0% goodput</span>
+      </div>
+      <div class="issue-body">
+        <h5>The symptom</h5>
+        <p>A 512-GPU training job reports essentially <strong>0% goodput</strong> — the dashboard shows it consuming GPUs but producing no productive training time. The GPUs look busy (DCGM utilization is non-zero), which makes it baffling: it's running, it's using GPUs, but no goodput.</p>
+        <h5>What the rule checks</h5>
+        <p>The G0-family rule for this pattern inspects OneLogger: <code>d_train_iterations_time_total_productive</code> is ~0 despite a large <code>l_run_time</code> and non-zero GPU activity. Productive iteration time near zero while the job runs and burns GPU cycles is the signature of "training is happening mechanically but the framework's productive-time accounting is never advancing."</p>
+        <h5>The root cause it surfaces</h5>
+        <p>The evidence points to the checkpoint/iteration hook never firing — specifically, <code>on_save_checkpoint_end</code> (the callback that marks productive progress) is never called, because of a misconfiguration in the training loop's callback wiring. So the job <em>is</em> doing forward/backward passes (GPUs busy), but the instrumentation milestone that records productive progress never triggers — and from the goodput system's view, no useful work is being recorded. Depending on the exact bug, this can also mean checkpoints aren't being written, so the "productive" work isn't even being persisted.</p>
+        <h5>Why DCGM alone would mislead</h5>
+        <p>This is the perfect illustration of why you need OneLogger, not just utilization: DCGM says "GPUs busy, all fine"; OneLogger says "productive time is zero." The <em>discrepancy</em> (busy but unproductive) is the finding — and only the application-aware runtime layer can see it. A utilization-only system would rate this catastrophic job as healthy.</p>
+        <h5>The fix and the payoff</h5>
+        <p>Fix the callback wiring so the hook fires; productive time begins accumulating; goodput jumps from 0% to normal. One config fix recovered the full output of a 512-GPU job — among the highest-leverage single fixes possible (512 GPUs is an enormous allocation to be producing nothing). And the engine found it deterministically, with evidence, no guessing.</p>
+        <h5>The lesson</h5>
+        <p>The most expensive wastes are often the most invisible to blunt metrics — a job that <em>looks</em> busy but produces nothing. The deterministic engine, reasoning over the application-aware runtime telemetry, catches exactly these, attributes them to a specific cause (a named hook not firing), and attaches the evidence. That's the value proposition of the whole platform in one case.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="chapter" id="c21">
+    <h2><span class="ch-num">21</span>Testing the engine</h2>
+
+    <p>An engine that makes findings researchers act on must be <em>right</em>, so it's backed by a large test suite — 576 tests — and golden cases. This testing rigor is the concrete expression of the team's measurement culture, and a strong thing to admire and discuss.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Test type</th><th>What it guards</th></tr></thead>
+      <tbody>
+        <tr><td>Per-rule unit tests</td><td>Each rule fires when it should and stays silent when it shouldn't — across boundary cases (just under / just over the threshold). The core of the 576-test suite.</td></tr>
+        <tr><td>Golden cases</td><td>Known real jobs with known correct findings — the engine's output is checked against the established right answer, catching regressions when rules or thresholds change.</td></tr>
+        <tr><td>Data-quality / edge cases</td><td>Missing fields, impossible values, partial telemetry — the engine degrades gracefully (§29) rather than crashing or emitting garbage.</td></tr>
+        <tr><td>LLM-narrative evals</td><td>The narration stage (§34) is checked against golden explanations to keep the ~3.4% hallucination rate bounded and catch when prose diverges from the deterministic finding.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="idea">
+      <p><strong>576 tests for an inefficiency-detection engine is the measurement culture eating its own cooking.</strong> The team that tells researchers "measure, don't guess" holds its <em>own</em> tooling to the same standard — every rule is tested, findings are checked against golden cases, and even the LLM's prose is eval'd. This matters because the engine's findings drive real action (emails, queue conversations, config changes), and a false finding is worse than no finding (it erodes trust and wastes a researcher's time, §15). When discussing the platform, admiring this rigor — "what stands out is that the engine is as rigorously tested as the workloads it analyzes; 576 tests and golden cases mean the findings are trustworthy enough to put in front of busy researchers" — signals that you share the team's values and understand <em>why</em> the testing matters, not just that it exists. It's also a natural place to connect your own work (pydisort, your CUDA projects) where correctness mattered.</p>
+    </div>
+
+    <p class="pull">The engine that judges everyone's efficiency is itself the most rigorously tested thing in the stack — because a finding nobody can trust is worse than no finding at all.</p>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART V ===================== -->
+<div class="part" id="p5">
+  <div class="part-label">Part V — Instrumentation</div>
+  <h2 class="part-title">Producing the <span class="acc">signal.</span></h2>
+  <p class="part-intro">Before telemetry can be joined and ruled over, it has to be produced — and producing it on live GPUs without disturbing them is its own deep problem. This part covers the instrumentation layer: DCGM for GPU telemetry, the eBPF tracing that Abdalla's write-tracer uses, the SPANK mechanism that attaches instrumentation transparently — and the cautionary tale, straight from Matt's work, of telemetry polling that slowed the very GPUs it measured. This is where observability meets the hardware, and the observer effect becomes real.</p>
+
+  <section class="chapter" id="c22">
+    <h2><span class="ch-num">22</span>The instrumentation landscape</h2>
+
+    <p>The signals feeding the platform come from several instrumentation layers, each tapping a different part of the stack. Orienting on who produces what completes the picture from Part III's "sources" — here's where those sources are <em>generated</em>.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Instrument</th><th>Produces · how</th></tr></thead>
+      <tbody>
+        <tr><td>DCGM (+ dcgm-exporter)</td><td>GPU telemetry: utilization, SM/tensor activity, ECC, NVLink counters, power, temperature. Polls the GPU/driver and exports to Prometheus (§23).</td></tr>
+        <tr><td>OneLogger (in-framework)</td><td>Runtime time-budget events (Part II) — emitted by the training code itself.</td></tr>
+        <tr><td>eBPF tracers (write-tracer)</td><td>Kernel-level syscall tracing (e.g., write syscalls) with near-zero overhead, attached at runtime (§25).</td></tr>
+        <tr><td>Slurm accounting / SPANK</td><td>Execution records (jobsinfo-done) and the hook mechanism that attaches per-job instrumentation (§26).</td></tr>
+        <tr><td>Application logs / WandB</td><td>Run-level metrics and log lines (Loki/WandB) — the LOG and WB rule families' inputs.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="idea">
+      <p><strong>The central tension of instrumentation: you must observe the system without perturbing it.</strong> Every measurement costs something — CPU cycles to trace a syscall, driver time to poll a counter, memory bandwidth to emit an event. On a system whose entire purpose is to maximize GPU throughput, instrumentation overhead is directly at odds with the thing being optimized. So the instrumentation layer is a constant balance: enough signal to diagnose, little enough overhead to not become the problem. The two stories in this part — write-tracer's near-zero overhead (a success) and the DCGM-NVLink slowdown (a failure) — are the two sides of that tension, and holding "the observer must not disturb the observed" as a design principle is exactly the kind of systems wisdom that distinguishes a senior engineer.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c23">
+    <h2><span class="ch-num">23</span>DCGM: the GPU telemetry layer</h2>
+
+    <p><strong>DCGM</strong> (Data Center GPU Manager) is NVIDIA's GPU telemetry and management layer — the source of the utilization, activity, and health metrics that feed the program layer (§04) and the bad-node detection (Manual II §33). It's the most important hardware instrument in the stack.</p>
+
+    <table class="tbl">
+      <thead><tr><th>What DCGM provides</th><th>Use in the platform</th></tr></thead>
+      <tbody>
+        <tr><td>Utilization &amp; activity</td><td>GPU util, SM activity, tensor-core activity → the idle-waste signal and program-layer efficiency.</td></tr>
+        <tr><td>Health / errors</td><td>ECC error counts, XID events, remapped rows, throttling → bad-node detection (CS rules, Manual II §33).</td></tr>
+        <tr><td>NVLink / fabric counters</td><td>Per-link traffic and error counters → fabric health, especially on GB200's rack-scale NVLink.</td></tr>
+        <tr><td>Power / thermal</td><td>Power draw, temperature, clocks → throttling detection (a thermal straggler cause).</td></tr>
+        <tr><td>dcgm-exporter</td><td>Exposes DCGM metrics to Prometheus for scraping → lands in the time-series the platform queries; also the <code>dcgm</code> diagnostic in mlops-tests (Greg).</td></tr>
+      </tbody>
+    </table>
+
+    <div class="diagram">  DCGM data flow:
+   GPU + driver
+        │  DCGM polls counters (PPCNT, COUNT, util, ECC, ...)
+   dcgm-exporter
+        │  exposes as Prometheus metrics
+   Prometheus / the ETL
+        │
+   the utilization index (df-hwinf-draco-metrics-gpu-utilization-summary-*)
+        │
+   idle-waste signal, program-layer efficiency, bad-node detection</div>
+
+    <div class="callout warn">
+      <h5>The cost of polling counters</h5>
+      <p>DCGM reads hardware counters by querying the GPU and its driver — and that query is not free. For most counters at sensible intervals it's negligible. But some counters, on some architectures, are expensive to read because they require taking a lock or touching a contended driver path — and polling them too aggressively can interfere with the GPU's actual work. This is not hypothetical; it's exactly what happened on GB200 (§24). The lesson DCGM teaches is that telemetry is a load on the system, and which counters you poll, how often, matters — a subtlety most people don't appreciate until it bites.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c24">
+    <h2><span class="ch-num">24</span>The DCGM-NVLink observer effect</h2>
+
+    <p>The DCGM-NVLink-Test-Harness is one of Matt's most instructive pieces of work, because it's a textbook <strong>observer effect</strong>: the telemetry meant to monitor GB200's NVLink fabric was <em>slowing down</em> the fabric it measured. This story is worth knowing in detail — it's a perfect "deep debugging" narrative and directly Matt's.</p>
+
+    <div class="issue">
+      <div class="issue-header">
+        <span class="tag">observer effect</span>
+        <span class="title">DCGM NVLink polling slows cuMem* ~10× on GB200</span>
+      </div>
+      <div class="issue-body">
+        <h5>The setup</h5>
+        <p>On GB200 NVL72, the fabric-memory path (the <code>cuMem*</code> APIs for multi-node NVLink — Manual II §04) is hot and performance-critical. Separately, <code>dcgm-exporter</code> polls NVLink performance counters (the <code>PPCNT_*</code> family) to monitor fabric health. Both touch the NVLink/driver subsystem.</p>
+        <h5>The symptom</h5>
+        <p>The <code>cuMem*</code> fabric-memory operations were running roughly <strong>10× slower</strong> than expected — a severe, baffling slowdown on a brand-new, expensive platform, hurting exactly the rack-scale workloads GB200 exists for.</p>
+        <h5>The investigation</h5>
+        <p>The slowdown correlated with telemetry being active. The mechanism: polling certain NVLink counters required acquiring a <strong>driver lock</strong>, and the <code>cuMem*</code> operations needed that same lock — so the monitoring and the actual fabric-memory work were <em>contending</em> on it. The telemetry wasn't just adding overhead; it was serializing against the critical path. A flamegraph (with help from Felix Abecassis) localized the culprit to a specific counter family — the <code>COUNT_*</code> counters were the expensive ones triggering the lock contention.</p>
+        <h5>The harness</h5>
+        <p>To pin it down rigorously, the work became a 5-configuration A/B test harness — systematically toggling which counter groups DCGM polled and measuring <code>cuMem*</code> performance under each — isolating exactly which counters caused the contention and proving the causal link (telemetry config → driver-lock contention → fabric-memory slowdown).</p>
+        <h5>The resolution &amp; the lesson</h5>
+        <p>The fix is to <em>not</em> poll the offending counters (or poll them far less aggressively) — accepting slightly less telemetry granularity to recover the fabric performance. The deep lesson: <strong>observability is not free, and on a tightly-coupled system the act of measuring can contend with the work being measured.</strong> The telemetry that was supposed to help ensure GB200 ran well was, through driver-lock contention, making it run badly. This is the observer effect made concrete — and the disciplined, A/B-harness, flamegraph-driven way it was diagnosed is a model of rigorous systems debugging.</p>
+      </div>
+    </div>
+
+    <div class="callout tip">
+      <h5>Why this is a perfect story for Matt's interview</h5>
+      <p>It's <em>his</em> work, so engaging with it substantively shows genuine interest, and it exercises everything the role values: deep systems debugging (driver locks, flamegraphs), rigorous methodology (the 5-config A/B harness — measure, don't guess), the GB200/<code>cuMem*</code> fabric-memory specifics (Manual II §04), and the meta-insight about observability's cost. If the conversation reaches it, being able to say "the observer-effect harness is a great example of the principle that instrumentation is a load on the system — you found that NVLink counter polling was contending on a driver lock with the cuMem fabric-memory path and slowing it 10×, and the A/B harness isolated exactly which counters" demonstrates you've thought deeply about both the specific bug and what it teaches about building telemetry that doesn't harm the thing it watches.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c25">
+    <h2><span class="ch-num">25</span>eBPF &amp; write-tracer</h2>
+
+    <p>The opposite of the DCGM cautionary tale: Abdalla's <strong>write-tracer</strong> shows how to instrument with <em>near-zero</em> overhead, using eBPF. It traces write syscalls across the fleet to understand I/O behavior, and it's a model of low-impact observability — plus it's the culture interviewer's work, so worth understanding.</p>
+
+    <h3>What eBPF is and why it's near-free</h3>
+
+    <div class="diagram">  eBPF: run sandboxed programs INSIDE the kernel at hooks/tracepoints
+   ┌──────────────────────────────────────────────────────────────┐
+   │  a write() syscall happens                                     │
+   │      │                                                         │
+   │  eBPF program attached to the write tracepoint runs IN-KERNEL  │
+   │      │  records size/pid/latency into an eBPF map (no copy out)│
+   │  aggregate in-kernel; export periodically                     │
+   └──────────────────────────────────────────────────────────────┘
+   why near-zero overhead:
+    • runs in-kernel (no context switch to userspace per event)
+    • aggregates in eBPF maps (no per-event copy)
+    • JIT-compiled, verified safe → can't crash the kernel
+   → write-tracer reports ~0% amortized overhead for bursty writes</div>
+
+    <table class="tbl">
+      <thead><tr><th>Aspect</th><th>write-tracer detail</th></tr></thead>
+      <tbody>
+        <tr><td>What it traces</td><td>Write syscalls — to understand checkpoint and data-write I/O patterns at the syscall level, complementing the storage benchmarks (Manual II §30).</td></tr>
+        <tr><td>Implementation</td><td>Go, with an eBPF program for the kernel-side tracing; exports to Loki/Prometheus.</td></tr>
+        <tr><td>Overhead</td><td>~0% amortized for bursty writes — the eBPF design means tracing the writes barely costs anything, which is the whole point (contrast §24).</td></tr>
+        <tr><td>Attachment</td><td>A Slurm SPANK plugin (§26) attaches it per job transparently — the researcher does nothing.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <h5>The two instrumentation stories together teach the principle</h5>
+      <p>write-tracer (eBPF, ~0% overhead, in-kernel aggregation) and the DCGM-NVLink slowdown (counter polling, ~10× slowdown via lock contention) are deliberately the two poles of §22's tension. eBPF is near-free because it aggregates in-kernel and never serializes against the workload's critical path; the DCGM counters were expensive because they contended on a lock the workload needed. The design principle they jointly illustrate — <em>instrument at the right layer with the right mechanism so observation doesn't perturb the observed</em> — is the senior takeaway. Being able to contrast them ("eBPF write tracing is near-free because it's in-kernel and non-contending, whereas the NVLink counter polling was expensive because it fought the cuMem path for a driver lock") shows deep, comparative understanding of observability engineering.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c26">
+    <h2><span class="ch-num">26</span>The SPANK integration</h2>
+
+    <p>How does write-tracer attach to every job without researchers changing anything? Through <strong>SPANK</strong> (Manual II §18) — the Slurm plugin mechanism that hooks the task lifecycle. This "transparent attachment" is a recurring design value worth understanding as a pattern, not just a mechanism.</p>
+
+    <div class="diagram">  write-tracer's SPANK integration:
+   plugin: slurm_write_tracer.so  (registered in plugstack.conf)
+   ┌──────────────────────────────────────────────────────────────┐
+   │ slurm_spank_task_init  ── a job task is about to start         │
+   │     → POST the task's PID to the tracer's REST API             │
+   │       → tracing for this job's writes BEGINS automatically     │
+   │                                                                │
+   │ slurm_spank_task_exit  ── the task finished                    │
+   │     → DELETE the PID from the tracer                           │
+   │       → tracing STOPS automatically                            │
+   └──────────────────────────────────────────────────────────────┘
+   net effect: I/O tracing turns on/off EXACTLY with every job,
+   with ZERO researcher action and zero training-code change.</div>
+
+    <div class="idea">
+      <p><strong>"Transparent, automatic instrumentation" is one of the team's deepest design values, and SPANK is how it's realized.</strong> The same mechanism runs Pyxis (containers), write-tracer (I/O tracing), and in principle any future per-job instrumentation — all attaching at task launch with no change to anyone's code. This matters because the alternative (asking researchers to add instrumentation to their training scripts) doesn't scale — most won't do it, and coverage stays patchy. By hooking at the Slurm task lifecycle, the platform gets fleet-wide coverage for free. When an interviewer asks "how would you instrument all jobs on a cluster," the SPANK <code>task_init</code> answer — "attach at task launch via a SPANK plugin, so it's transparent and universal, the way Pyxis and write-tracer do" — is a fleet-native, scalable answer that shows you think about coverage and adoption, not just the measurement itself.</p>
+    </div>
+
+    <p class="pull">The best instrumentation is the kind nobody has to opt into. Hook the task lifecycle, and the whole fleet is observable for free.</p>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART VI ===================== -->
+<div class="part" id="p6">
+  <div class="part-label">Part VI — Single-job triangulation</div>
+  <h2 class="part-title">One job, three <span class="acc">witnesses.</span></h2>
+  <p class="part-intro">The fleet tools (toolkit, dashboards) scan broadly; <strong>sisyphus</strong> goes deep on a single job, cross-examining three independent telemetry layers to build a complete, self-checking picture. This part is the triangulation idea, the discrepancy detection that makes it robust, the graceful degradation that makes it practical, and a worked single-job investigation. It's Matt's tool, and a model for deep-dive diagnosis.</p>
+
+  <section class="chapter" id="c27">
+    <h2><span class="ch-num">27</span>The triangulation idea</h2>
+
+    <p>The core insight of sisyphus: <strong>no single telemetry source is fully trustworthy, so corroborate a job's story across three independent layers.</strong> Where they agree, you're confident; where they disagree, you've found something.</p>
+
+    <div class="diagram">  SISYPHUS triangulates ONE job across three layers:
+   ┌─────────────────────────────────────────────────────────────┐
+   │  SCHEDULING  ── Heimdall: what disrupted the allocation?      │
+   │  RUNTIME     ── OneLogger: where did the runtime go?          │
+   │  PROGRAM     ── DCGM/FACT: were the GPUs working? any XIDs?   │
+   └─────────────────────────────────────────────────────────────┘
+              three independent views of the SAME job
+                          │
+            agree → high-confidence diagnosis
+            disagree → a DISCREPANCY = a finding in itself (§28)
+
+   spans ~18 clusters; gracefully handles missing layers (§29).</div>
+
+    <p>Why three layers and why these three: they're the three goodput layers (Part I), and they're <em>independent</em> — Heimdall (scheduling) is produced by the remediation system, OneLogger (runtime) by the framework, DCGM/FACT (program/hardware) by the GPU layer. Independence is what makes corroboration meaningful: if three independent witnesses agree a job was healthy, it almost certainly was; if the framework says "productive" but DCGM says "idle," one of them is wrong or something subtle is happening — and that gap is the lead.</p>
+
+    <div class="idea">
+      <p><strong>Triangulation turns the weakness of federated telemetry (Part III) into a strength.</strong> The fact that the data is scattered across independent systems — usually a headache — becomes an asset for a single-job deep dive: three independent measurements of the same job are far more trustworthy together than any one alone, and their disagreements are <em>diagnostic</em>. This is a sophisticated observability idea (cross-source corroboration as both a confidence measure and an anomaly detector), and naming it — "sisyphus uses the independence of the three telemetry layers to both build confidence when they agree and surface anomalies when they don't" — is a strong observability-interview point for Greg, while the tool itself is Matt's to discuss.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c28">
+    <h2><span class="ch-num">28</span>Three-way discrepancy detection</h2>
+
+    <p>The most powerful feature of triangulation is detecting when the three layers <em>disagree</em> — because each disagreement pattern points to a specific kind of problem. This is where sisyphus earns its keep.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Discrepancy pattern</th><th>What it reveals</th></tr></thead>
+      <tbody>
+        <tr><td>DCGM busy + OneLogger unproductive</td><td>GPUs running but no productive training recorded → the G0-HOOK class (§20): instrumentation milestone not firing, or work not being persisted. The classic "busy but useless" job.</td></tr>
+        <tr><td>OneLogger productive + DCGM low util</td><td>Framework thinks it's training but GPUs are underused → likely a stall the framework isn't accounting (dataloader starvation, a sync gap) or a telemetry timing mismatch.</td></tr>
+        <tr><td>Heimdall says disrupted + OneLogger looks clean</td><td>A scheduling-layer event (preemption/node issue) the runtime view doesn't reflect → the disruption's cost is hidden in requeue/startup, not the productive accounting.</td></tr>
+        <tr><td>All three healthy</td><td>High-confidence "this job is fine" → don't waste a researcher's time investigating it. (A negative result is also valuable.)</td></tr>
+        <tr><td>Telemetry missing in one layer</td><td>Not a job problem but a <em>coverage</em> problem (DQ, §15) → the job ran uninstrumented; the finding is about the data gap.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <h5>The discrepancy IS the diagnosis</h5>
+      <p>The elegant thing is that you don't need any single source to be authoritative — you need them to <em>disagree in a characteristic way</em>. "Busy but unproductive" is a different diagnosis from "productive but idle" is different from "disrupted but clean," and each maps to a different root cause and fix. So triangulation isn't just averaging three noisy measurements into one better number; it's using the <em>structure</em> of their disagreement as a classifier. This is a genuinely clever piece of observability design, and being able to explain it — "the value isn't any one source, it's the pattern of agreement and disagreement across the three; busy-but-unproductive means one thing, productive-but-idle means another" — demonstrates the kind of systems insight that makes you credible on the team's own tooling.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c29">
+    <h2><span class="ch-num">29</span>Graceful degradation</h2>
+
+    <p>Real telemetry is incomplete — a job may lack OneLogger, DCGM may have gaps, Heimdall may not have a record. A deep-dive tool that only works with perfect data is useless in practice, so sisyphus degrades gracefully, and that robustness is a mark of production-grade engineering.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Missing layer</th><th>How the tool adapts</th></tr></thead>
+      <tbody>
+        <tr><td>No OneLogger</td><td>Lose the runtime decomposition, but still triangulate scheduling (Heimdall) + program (DCGM) — and flag the OneLogger absence as a coverage finding (§15). A partial diagnosis beats none.</td></tr>
+        <tr><td>DCGM gaps</td><td>Use the runtime and scheduling views; note reduced confidence in the program-layer assessment. Don't claim certainty you don't have.</td></tr>
+        <tr><td>No Heimdall record</td><td>Rely on jobsinfo-done state + the other layers for the scheduling story.</td></tr>
+        <tr><td>Only one layer present</td><td>Report what that layer says, clearly labeled as un-corroborated — lower confidence, but still useful, and honest about the limitation.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="idea">
+      <p><strong>Graceful degradation is the difference between a demo and a tool.</strong> It's easy to build something that produces a beautiful triangulated diagnosis when all three sources are present and clean; it's hard — and far more valuable — to build something that still gives a useful, appropriately-hedged answer when one or two sources are missing, which is the common case at fleet scale. The design stance — "always produce the best diagnosis the available data supports, clearly labeled with its confidence, rather than failing or pretending" — is exactly the production-engineering maturity the role needs. It also connects to the data-quality theme (§15): the tool treats missing data as a first-class condition (a finding and a confidence reduction), not an error. This kind of robustness-and-honesty design is worth foregrounding as something you'd build the same way.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c30">
+    <h2><span class="ch-num">30</span>A worked single-job investigation</h2>
+
+    <p>Triangulation end to end on one job — the deep-dive counterpart to the fleet sweep, and the analytical pattern for "a researcher's specific job is behaving strangely, figure out why."</p>
+
+    <div class="issue">
+      <div class="issue-header">
+        <span class="tag">triangulation</span>
+        <span class="title">"My job's dashboard goodput looks wrong — can you check?"</span>
+      </div>
+      <div class="issue-body">
+        <h5>The request</h5>
+        <p>A researcher's 256-GPU job shows mediocre goodput on the dashboard, but they insist their training is running fine and the numbers don't add up. A single-job deep dive (sisyphus-style) triangulates the three layers.</p>
+        <h5>Layer 1 — scheduling (Heimdall + jobsinfo-done)</h5>
+        <p>jobsinfo-done shows the logical job has <strong>6 executions</strong> — it's been requeuing. Heimdall attributes the disruptions to two compute nodes throwing NVLink XIDs. So there's a real scheduling-layer problem (bad nodes → requeue churn).</p>
+        <h5>Layer 2 — runtime (OneLogger)</h5>
+        <p>OneLogger shows productive training at only 60%, with startup at 24% and lost work at 11% — consistent with the 6 requeues (each re-pays startup, each discards work since the last checkpoint). The runtime view <em>corroborates</em> the scheduling story: the requeues are the cause of the runtime waste.</p>
+        <h5>Layer 3 — program (DCGM/FACT)</h5>
+        <p>DCGM shows that <em>while actually training</em>, GPU utilization is healthy (no idle-waste within the productive periods), and FACT confirms the XID attribution to the two nodes. So the program layer is fine — the problem isn't the researcher's code or data pipeline at all.</p>
+        <h5>The triangulated verdict</h5>
+        <p>All three layers agree on a coherent story: <strong>the job's code is healthy (program OK), but bad nodes are causing requeues (scheduling), which inflate startup and lost work (runtime), dragging goodput down.</strong> The researcher was right that their training is fine — the waste is hardware-induced, not their fault. The fix is ops-side (drain the two nodes, Manual II §34) plus a runtime tweak (shorten checkpoint interval + async save so the remaining failures cost less).</p>
+        <h5>The lesson</h5>
+        <p>Triangulation produced a complete, corroborated diagnosis that correctly assigned the cause to hardware (not the researcher), and the three layers agreeing gave high confidence. Crucially, it also gave the researcher a <em>blameless</em> answer backed by evidence from three independent sources — exactly the "bring data, not blame" delivery (Manual II §39) that gets fixes adopted. That's the deep-dive tool doing its job: turning a confusing goodput number into an evidenced, layered, actionable, and fair diagnosis.</p>
+      </div>
+    </div>
+
+    <p class="pull">One job, three independent witnesses. When they agree, you have a diagnosis you can stake your credibility on — and a researcher you didn't wrongly blame.</p>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART VII ===================== -->
+<div class="part" id="p7">
+  <div class="part-label">Part VII — The action layer</div>
+  <h2 class="part-title">Insight into <span class="acc">change.</span></h2>
+  <p class="part-intro">A finding nobody acts on saves zero GPU-hours. The hardest part of the whole platform isn't detecting waste — it's getting busy researchers to change behavior. This part is the action layer: the taxonomy of how insight becomes change, the bi-weekly nudge emails, the conversational ReAct agent, the LLM narratives (and their hallucination problem), and the Neo4j rules graph. This is where the efficiency mission meets human behavior — and where the team's "make the right thing easy" philosophy is engineered.</p>
+
+  <section class="chapter" id="c31">
+    <h2><span class="ch-num">31</span>The action taxonomy</h2>
+
+    <p>The platform turns findings into change through several channels, each suited to a different situation. Knowing the taxonomy shows you understand that detection is only half the job — delivery is the other half.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Channel</th><th>When it's used</th></tr></thead>
+      <tbody>
+        <tr><td>Better defaults / shipped fixes</td><td>The highest-leverage action: fix the cause once, for everyone — corrected framework templates, a default Slurm account, async-save defaults, opinionated setup scripts (Manual I §39). No researcher action needed; the efficient path becomes the default path.</td></tr>
+        <tr><td>Proactive nudge (ppp-notify emails)</td><td>Bi-weekly, low-pressure: show a PIC their team's idle-waste with evidence and a link (§32). For ongoing, fleet-wide behavior shaping.</td></tr>
+        <tr><td>Self-serve (the ReAct Slack bot)</td><td>On-demand: a researcher asks "why did my job waste GPUs" and gets a goodput diagnosis without a human (§33). Scales support.</td></tr>
+        <tr><td>Direct human triage</td><td>For novel or complex cases the tooling can't handle — a human investigates (using sisyphus, the toolkit). Reserved for the genuinely new.</td></tr>
+        <tr><td>Automated remediation (Heimdall)</td><td>For scheduling-layer issues with known fixes — drain a bad node, requeue — no human in the loop at all.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="idea">
+      <p><strong>The action channels form a leverage hierarchy, and the goal is always to push work up it.</strong> Fixing a default helps every future job for free (highest leverage); a self-serve bot handles the common cases at scale; human triage is reserved for the novel (lowest leverage, highest cost). The strategic move — and a strong answer to "how would you reduce fleet waste at scale" — is to <em>continuously promote</em> recurring findings up this hierarchy: a pattern that shows up in many human-triaged tickets should become a bot capability; a bot diagnosis that always gives the same fix should become a better default. This is how a small team makes ~18 clusters efficient: not by investigating every job, but by turning each recurring lesson into automation or a default. That meta-strategy — make the common case automatic, reserve humans for the novel — is exactly the system-level thinking Matt's interview probes.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c32">
+    <h2><span class="ch-num">32</span>ppp-notify: the nudge emails</h2>
+
+    <p><strong>ppp-notify</strong> (idle-waste-emails) is Matt's bi-weekly nudge system — it emails each project's PIC a summary of their team's idle-waste with evidence. It's a study in <em>how</em> to deliver efficiency feedback so it actually changes behavior.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Design choice</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Bi-weekly cadence</td><td>Frequent enough to stay salient, infrequent enough to not be noise or nagging. Runs as a K8s CronJob.</td></tr>
+        <tr><td>To the PIC, per project</td><td>Targets the person accountable for the project's allocation, framed around <em>their</em> team's GPU-hours — relevant and actionable to the recipient.</td></tr>
+        <tr><td>Shows their own data + evidence</td><td>Concrete idle-waste numbers for their jobs with a deep link to the detail — "bring data, not blame" (Manual II §39). Not a lecture; a fact about their own usage.</td></tr>
+        <tr><td>Based on the blunt idle signal</td><td>Uses <code>df-hwinf-draco-metrics-gpu-utilization-summary-*</code> — the application-blind 0%-util signal (§04) — so it works for every job without needing per-app instrumentation. Scales to the whole fleet.</td></tr>
+        <tr><td>Low-pressure framing</td><td>Informational nudge, not a mandate. People change when shown a clear, self-interested win, not when threatened (Manual II §39).</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <h5>Why a "boring email" is sophisticated behavior design</h5>
+      <p>A bi-weekly idle-waste email sounds mundane, but every choice is deliberate behavioral engineering: the cadence avoids fatigue, the targeting hits the accountable person, the framing (their own data, their own benefit, no blame) maximizes the chance of action, and the blunt-signal basis makes it universal. It's the nudge embodiment of the team's whole delivery philosophy — and it scales (a CronJob emailing every PIC) in a way that per-job human outreach never could. When discussing how to drive efficiency across a large org, "a low-pressure, data-backed, self-interest-framed nudge delivered automatically to the accountable owner" is a far more sophisticated answer than "tell people to stop wasting GPUs," and it shows you understand that the delivery mechanism is as engineered as the detection.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c33">
+    <h2><span class="ch-num">33</span>The ReAct agent</h2>
+
+    <p><strong>ai-efficiency-actions</strong> is a Slack bot built as a <strong>ReAct agent</strong> over the efficiency data — a researcher asks a natural-language question and the agent reasons, queries the telemetry (via an MCP interface over OneLogger), and answers. It's the self-serve layer that scales support, and a current, relevant piece of LLM-agent engineering.</p>
+
+    <div class="diagram">  THE ReAct LOOP (Reason + Act) for an efficiency question:
+   researcher in Slack: "why did my job 12345 waste GPUs last night?"
+        │
+   ┌────▼─────────────────────────────────────────────────────────┐
+   │  REASON: what do I need? → the job's goodput breakdown        │
+   │  ACT:    query OneLogger/insights for job 12345 (via MCP tool)│
+   │  OBSERVE: startup 28%, lost work 15%, 4 requeues              │
+   │  REASON: high startup + requeues → bad-node-induced churn     │
+   │  ACT:    check FACT for XIDs on those nodes                   │
+   │  OBSERVE: 2 nodes with NVLink XIDs                            │
+   │  REASON: enough to answer                                     │
+   │  RESPOND: "Your job requeued 4× due to 2 bad nodes (NVLink   │
+   │            XIDs), inflating startup to 28%. I've flagged the  │
+   │            nodes. Shortening your checkpoint interval would   │
+   │            reduce the lost work."                             │
+   └──────────────────────────────────────────────────────────────┘
+   runs on Astra/OpenShift; validated by golden evals.</div>
+
+    <table class="tbl">
+      <thead><tr><th>Aspect</th><th>Detail</th></tr></thead>
+      <tbody>
+        <tr><td>ReAct pattern</td><td>The agent interleaves reasoning and tool-calls — it decides what telemetry to fetch, fetches it, reasons over the result, and iterates until it can answer. Not a single canned query.</td></tr>
+        <tr><td>MCP over OneLogger</td><td>The telemetry is exposed to the agent as tools (an MCP server), so the LLM queries real data rather than hallucinating numbers.</td></tr>
+        <tr><td>Self-serve value</td><td>Researchers get instant, conversational goodput diagnoses without filing a ticket or waiting for a human — scaling support to the whole fleet.</td></tr>
+        <tr><td>Golden evals</td><td>The agent's answers are validated against known-correct cases to bound errors (the same trust discipline as the rules engine, §21).</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <h5>The grounding principle: tools, not memory</h5>
+      <p>The crucial design point is that the agent answers from <em>queried telemetry</em>, not from the LLM's parametric memory — the MCP tools let it fetch the actual goodput numbers for the actual job, so its answer is grounded in real data. This is the antidote to LLM hallucination in an agentic setting: the model's job is to <em>reason about what to fetch and how to interpret it</em>, not to <em>know</em> the answer. Combined with golden evals, this keeps the bot trustworthy. Being able to articulate "ground the agent in real telemetry via tools and validate with golden evals, so the LLM reasons over facts rather than inventing them" demonstrates current, sophisticated understanding of how to build reliable LLM agents — directly relevant given the team is actively doing this.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c34">
+    <h2><span class="ch-num">34</span>LLM narratives &amp; hallucination</h2>
+
+    <p>The LLM appears twice in the platform — narrating rule findings (SP5, §19) and powering the bot (§33) — and both face the hallucination problem. How the team bounds it (~3.4% measured rate, golden evals, determinism-first) is a model of responsible LLM use in production.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Concern</th><th>The mitigation</th></tr></thead>
+      <tbody>
+        <tr><td>Hallucinated findings</td><td>Prevented structurally: the LLM narrates findings the <em>rules</em> already established (§16) — it can't invent a problem, only describe a real one. Determinism-first is the primary defense.</td></tr>
+        <tr><td>Hallucinated numbers</td><td>The bot queries real telemetry via MCP tools (§33) rather than recalling — grounding in data, not memory.</td></tr>
+        <tr><td>Garbled explanations</td><td>Golden evals: narrations are checked against known-correct explanations; the ~3.4% hallucination rate is <em>measured</em>, not assumed — you can't manage what you don't measure.</td></tr>
+        <tr><td>Drift over time</td><td>Ongoing evals catch when model updates change behavior — the same test-everything rigor as the rules engine (§21).</td></tr>
+      </tbody>
+    </table>
+
+    <div class="idea">
+      <p><strong>The team's LLM stance is a template for responsible production AI: deterministic core, LLM for fluency, grounded in data, and rigorously measured.</strong> They <em>measure</em> the hallucination rate (3.4%) rather than hand-waving it, they confine the LLM to low-stakes roles (describing, not deciding), they ground it in real data (tools, not memory), and they eval it against golden cases. This is exactly how a careful engineer deploys LLMs where correctness matters — and it's a pointed contrast to the naive "just ask GPT" approach. Articulating it — "I'd use the LLM for what it's good at, fluent explanation, keep the decisions deterministic and tested, ground every number in queried data, and measure the hallucination rate so it's a managed quantity, not a hope" — demonstrates both LLM sophistication and the engineering maturity to use it responsibly. Given the team is actively building LLM-assisted tooling, this is a genuinely relevant and differentiating perspective.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c35">
+    <h2><span class="ch-num">35</span>The Neo4j rules graph</h2>
+
+    <p>The rules and their relationships are represented in a <strong>Neo4j knowledge graph</strong> — capturing how findings, causes, and fixes relate. This structures the engine's knowledge beyond a flat list and enables richer reasoning.</p>
+
+    <table class="tbl">
+      <thead><tr><th>What the graph captures</th><th>Why it helps</th></tr></thead>
+      <tbody>
+        <tr><td>Rule → finding → cause → fix relationships</td><td>A finding isn't isolated; it links to likely causes and recommended fixes. The graph encodes this domain knowledge explicitly.</td></tr>
+        <tr><td>Causal chains across layers</td><td>Bad node → requeue → startup inflation → goodput loss (the recurring chain). The graph can represent that one root cause produces a cascade of findings across layers (Part I §05).</td></tr>
+        <tr><td>Related/co-occurring findings</td><td>Findings that tend to appear together (high startup + high lost work → requeue churn, §10) can be linked, so the system reasons about <em>patterns</em>, not just individual rules.</td></tr>
+        <tr><td>Grounding for the LLM</td><td>The graph gives the narration/agent a structured knowledge base to reason over — relationships it can traverse rather than infer, improving grounding.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <h5>Why a graph and not a table</h5>
+      <p>Inefficiency findings are <em>related</em> — causes produce cascades, findings co-occur, fixes address multiple findings — and those relationships are naturally a graph, not rows. Representing them in Neo4j lets the platform traverse from a symptom to its likely root cause to its fix, and to recognize when several findings share one cause (so you fix the cause, not each symptom). It also gives the LLM layer a structured substrate to ground its reasoning in. This is a thoughtful modeling choice — "the knowledge about how inefficiencies relate is inherently a graph (cause→effect→fix, co-occurrence), so a graph database fits the domain better than a flat rules list" — and recognizing why the data model matches the domain is the kind of design sensibility that rounds out a deep understanding of the platform.</p>
+    </div>
+
+    <p class="pull">Detection is half the platform. The other half is turning every finding into the right action, delivered the right way — and promoting each recurring lesson into a default no one has to think about.</p>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART VIII ===================== -->
+<div class="part" id="p8">
+  <div class="part-label">Part VIII — Fleet-scale &amp; reference</div>
+  <h2 class="part-title">The macro <span class="acc">view.</span></h2>
+  <p class="part-intro">Single-job analysis is necessary but doesn't scale to ~18 clusters by itself — the real mandate is finding <em>systemic</em> inefficiencies and shipping fleet-wide fixes. This closing part zooms out to fleet-scale patterns, the discovery process behind the role's core mandate, the platform map, a worked fleet-scale case, and the final mapping of the whole four-volume series to the five interviews.</p>
+
+  <section class="chapter" id="c36">
+    <h2><span class="ch-num">36</span>Fleet-scale patterns</h2>
+
+    <p>The dashboards aggregate the per-job findings into a fleet view, and reading that view — knowing what "good" looks like and how to spot a systemic problem — is the macro skill.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Fleet-scale concept</th><th>Detail</th></tr></thead>
+      <tbody>
+        <tr><td>Run-time-weighted goodput</td><td>The dashboard weights goodput by runtime, so a long inefficient job counts more than a short one — the metric reflects where the GPU-hours actually go, not a per-job average that small jobs could skew. (The ai-efficiency-dashboard, namespace <code>hwinf-cs-mlops-ai-efficiency</code>, Streamlit.)</td></tr>
+        <tr><td>Per-cluster comparison</td><td>Goodput broken down by cluster surfaces a bad cluster (a fabric/storage/config issue affecting everyone there) vs a bad job. cluster-ranking (Greg) formalizes comparing clusters.</td></tr>
+        <tr><td>Trend over time</td><td>Is fleet goodput improving as fixes land? Did a framework/driver change regress it? The time dimension turns the platform into a feedback loop on the team's own work.</td></tr>
+        <tr><td>Finding-frequency analysis</td><td>Which rules fire most across the fleet? A finding that appears on hundreds of jobs is a <em>systemic</em> pattern worth a default/fix, not per-job nudges (§37).</td></tr>
+        <tr><td>Cohort breakdowns</td><td>Goodput by workload type (LLM/AV/Cosmos), by hardware (H100/GB200), by team — to localize where waste concentrates.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <h5>Run-time-weighting is the right default, and knowing why matters</h5>
+      <p>Weighting goodput by runtime means the headline number answers "what fraction of our actual GPU-hours were useful," not "what's the average job's goodput" — and those differ sharply when a few huge jobs dominate consumption. A naive per-job average could look healthy while the handful of long jobs that eat most of the fleet's GPU-hours are inefficient. Choosing the runtime-weighted metric so the number reflects real resource consumption is a subtle but important measurement decision — and noting it ("you weight by runtime so the metric tracks where the GPU-hours actually go") shows you think carefully about what a fleet metric should mean, which is core to the observability interview.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c37">
+    <h2><span class="ch-num">37</span>Discovering systemic inefficiency</h2>
+
+    <p>This is the role's literal mandate (Manual I §04): not fixing one job, but discovering a pattern that wastes GPU-hours across <em>many</em> jobs and shipping a scalable fix. The platform is the instrument for this discovery, and the process is worth making explicit.</p>
+
+    <div class="diagram">  THE SYSTEMIC-DISCOVERY LOOP:
+   1. OBSERVE at fleet scale ── a rule fires on hundreds of jobs;
+                                a cluster's goodput is an outlier;
+                                a cohort (e.g. all GB200 jobs) underperforms
+   2. CHARACTERIZE ─────────── is it one cause? cross-job/cluster analysis
+                                (the toolkit's --all-clusters; finding frequency)
+   3. ROOT-CAUSE ──────────── deep dive (sisyphus on representatives;
+                                profiling; the DCGM-NVLink-style investigation)
+   4. SHIP A SCALABLE FIX ─── a better default, a corrected template, a
+                                drained cohort, a doc, a new rule, a platform change
+   5. MEASURE THE IMPACT ──── did fleet goodput move? (the feedback loop, §36)</div>
+
+    <p>The examples from the team's own work are exactly this loop:</p>
+    <ul class="dash">
+      <li><strong>The DCGM-NVLink slowdown</strong> (§24) — observed as a GB200-cohort performance problem, root-caused to counter polling, fixed by changing what's polled (a fleet-wide config fix, not per-job).</li>
+      <li><strong>Idle-waste nudges</strong> (§32) — observed as a recurring fleet pattern (GPUs allocated but idle), addressed with a scalable mechanism (automated bi-weekly emails) rather than per-job intervention.</li>
+      <li><strong>Corrected OneLogger templates / better defaults</strong> (§31) — a misconfiguration seen across many jobs, fixed once in the default so every future job benefits.</li>
+    </ul>
+
+    <div class="idea">
+      <p><strong>The defining mindset of the role: always ask "is this one job, or a pattern?" — and when it's a pattern, fix it at the source, once, for everyone.</strong> Per-job firefighting doesn't scale to 18 clusters; the leverage is in spotting that the same waste appears across many jobs and shipping a fix that eliminates the whole class — a default, a template, a platform change, a drained cohort. The entire platform (fleet dashboards, finding-frequency, --all-clusters analysis, cross-cluster comparison) exists to make these patterns <em>visible</em> so you can act on the class rather than the instance. This is the through-line of every interview: you're not being hired to fix jobs, you're being hired to find systemic waste and eliminate it at scale — and your own background (pydisort's 1000× via a fundamentally better approach, the 400× via re-architecting, not patching) is evidence you think in systemic fixes, not one-offs.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c38">
+    <h2><span class="ch-num">38</span>Cheatsheets &amp; the platform map</h2>
+
+    <p>The whole platform on one page — the goodput layers, the sources, the engine, and the action layer, as a reference you can hold in your head walking into the interview.</p>
+
+    <div class="cheat">
+      <h5>The goodput layers → instrument → fix</h5>
+      <div class="cheat-grid">
+        <div class="cmd">Scheduling = allocated ÷ ?</div><div class="desc">Heimdall, jobsinfo-done, FACT. Fix: drain bad nodes, reduce requeues/preemption.</div>
+        <div class="cmd">Runtime = productive ÷ run_time</div><div class="desc">OneLogger. Fix: cut startup, lost work, checkpoint, validation overhead.</div>
+        <div class="cmd">Program = util while training</div><div class="desc">DCGM. Fix: kill idle-waste, raise MFU (Manual III).</div>
+        <div class="cmd">GOODPUT = S × R × P</div><div class="desc">Multiplicative — attack the worst layer first; layers interact causally.</div>
+      </div>
+    </div>
+
+    <div class="cheat">
+      <h5>OneLogger fields (the runtime time budget)</h5>
+      <div class="cheat-grid">
+        <div class="cmd">l_run_time</div><div class="desc">Total runtime (the denominator).</div>
+        <div class="cmd">d_train_iterations_time_total_productive</div><div class="desc">Productive training time (the numerator).</div>
+        <div class="cmd">d_app_startup_time</div><div class="desc">Container + init + ckpt-load; re-paid per requeue.</div>
+        <div class="cmd">d_lost_work_time</div><div class="desc">Work thrown away on failure/resume.</div>
+        <div class="cmd">d_unsaved_work_time</div><div class="desc">Progress at risk (not yet checkpointed).</div>
+      </div>
+    </div>
+
+    <div class="cheat">
+      <h5>Rule families &amp; thresholds (rules_config.yaml)</h5>
+      <div class="cheat-grid">
+        <div class="cmd">G0 / GL</div><div class="desc">Zero-goodput / goodput-loss (runtime). The core severity rules.</div>
+        <div class="cmd">CS / STUCK / SESSION</div><div class="desc">Cluster/scheduling, hung jobs, lifecycle.</div>
+        <div class="cmd">LOG / WB / DQ</div><div class="desc">Log crashes/NCCL-timeouts, WandB variance, data quality.</div>
+        <div class="cmd">startup&gt;30% lost_work&gt;20%</div><div class="desc">ckpt_overhead&gt;20%, validation&gt;15%, ckpt_interval&gt;4h.</div>
+      </div>
+    </div>
+
+    <div class="cheat">
+      <h5>The data sources &amp; indices</h5>
+      <div class="cheat-grid">
+        <div class="cmd">OneLogger</div><div class="desc">df-hwinf-dcm-e2e-app-metrics-summary-* (runtime).</div>
+        <div class="cmd">GPU util / idle</div><div class="desc">df-hwinf-draco-metrics-gpu-utilization-summary-* (program).</div>
+        <div class="cmd">jobsinfo-done</div><div class="desc">df-hwinf-draco-metrics-jobsinfo-done-* (backbone; key job+cluster+ts ±300s).</div>
+        <div class="cmd">FACT / insights</div><div class="desc">df-aidot-fact-job-* ; output df-mars-ai-efficiency-insights-*.</div>
+      </div>
+    </div>
+
+    <div class="diagram">  THE PLATFORM, END TO END (one map):
+   PRODUCE          FUSE                EVALUATE           ACT
+   ───────          ────                ────────           ───
+   OneLogger ─┐                       ┌ rules engine ─┐  ┌ better defaults
+   DCGM ──────┤  ETL (NVPark) →       │ (110 rules,   │  │ ppp-notify emails
+   Slurm ─────┼─ joined OpenSearch ──►│  SP1-SP6,     ├─►│ ReAct Slack bot
+   FACT ──────┤  indices (df-*)       │  Neo4j graph) │  │ human triage
+   Heimdall ──┤  key: job+cluster+ts  │ + LLM narrate │  │ Heimdall remediation
+   eBPF/SPANK ┘  ±300s window         └ insights index┘  └ (→ measure → repeat)
+
+   Goodput = Scheduling × Runtime × Program ── measured, attributed, acted on, re-measured.</div>
+  </section>
+
+  <section class="chapter" id="c39">
+    <h2><span class="ch-num">39</span>A worked fleet-scale case</h2>
+
+    <p>The capstone scenario — the full systemic-discovery loop (§37) end to end, exercising the entire volume and the entire series. This is the shape of the answer to "tell me about discovering and fixing a fleet-wide inefficiency," the role's literal job.</p>
+
+    <div class="issue">
+      <div class="issue-header">
+        <span class="tag">fleet scale</span>
+        <span class="title">A checkpoint-overhead rule firing across a whole cohort</span>
+      </div>
+      <div class="issue-body">
+        <h5>1 — Observe (fleet view, §36)</h5>
+        <p>On the dashboard, the <code>GL-CKPT-OVERHEAD</code> rule (checkpoint &gt;20% of runtime) is firing on a large fraction of jobs on several clusters — and run-time-weighted goodput on those clusters is notably depressed. Finding-frequency analysis confirms it's not a few jobs; it's a <em>pattern</em> across a cohort (say, all the large-model jobs from a particular team's templates).</p>
+        <h5>2 — Characterize (cross-job, §37)</h5>
+        <p>Using the toolkit's <code>--all-clusters</code> mode, you pull the affected jobs and look for the common thread. The pattern: they're all using synchronous checkpointing with a short interval and many checkpoint files per save — they checkpoint <em>often</em> (good for lost work) but <em>synchronously</em>, so every save blocks training, inflating checkpoint overhead past 20%. It's a shared config inherited from a common template.</p>
+        <h5>3 — Root-cause (deep dive, §30 + Manual II §31)</h5>
+        <p>Run sisyphus on a few representatives: OneLogger confirms checkpoint save/finalize is the dominant non-productive bucket; the storage view shows the saves are serialized (not async, not fully-parallel). The root cause is config, not hardware: <code>--async-save</code> and <code>--ckpt-fully-parallel-save</code> are off, and the checkpoint dir isn't striped across enough OSTs (Manual II §27). The blocking synchronous save is the whole problem.</p>
+        <h5>4 — Ship a scalable fix (§31)</h5>
+        <p>Don't email each job's owner (per-job firefighting). Instead, fix the <em>template</em>: enable async + fully-parallel checkpointing and proper Lustre striping in the shared default that the cohort inherits. Now every current and future job from that template gets non-blocking checkpoints — overhead drops below threshold without anyone changing their own script. Ship a short doc explaining the async-checkpoint default and why it's safe, and add/keep the rule so regressions are caught.</p>
+        <h5>5 — Measure the impact (the feedback loop, §36)</h5>
+        <p>Over the next weeks, the <code>GL-CKPT-OVERHEAD</code> firing frequency falls across the cohort, and the affected clusters' run-time-weighted goodput climbs measurably. The fix is validated at fleet scale by the same platform that surfaced the problem — the loop closes.</p>
+        <h5>The lesson — the whole role in one case</h5>
+        <p>This is the mandate enacted: a fleet-scale observation (a rule firing across a cohort), characterized as one shared cause, root-caused with the deep-dive tools, fixed <em>once at the source</em> (the template default) rather than per-job, and measured for impact. It spans every layer of the series — the goodput model (this volume), the telemetry and rules (this volume), checkpoint/storage mechanics (Manual II), and the measurement discipline (Manual I) — and it's exactly the kind of leverage that lets a small team make ~18 clusters efficient. It's also, structurally, the same move as your career wins: don't patch the instance, re-architect the class.</p>
+      </div>
+    </div>
+
+    <p class="pull">Spot the pattern across the fleet, root-cause one representative, fix it once in the default, and watch the fleet metric move. That loop — not per-job heroics — is the job.</p>
+  </section>
+
+  <section class="chapter" id="c40">
+    <h2><span class="ch-num">40</span>Interview tie-in + closing</h2>
+
+    <p>How to deploy this volume across its two required interviews — and how the whole four-manual series maps to all five.</p>
+
+    <h3>Matt Nightingale ★ — ML efficiency &amp; system thinking</h3>
+    <ul class="dash">
+      <li><strong>Own the three-layer goodput model (Part I).</strong> Be able to draw Goodput = Scheduling × Runtime × Program, name each layer's instrument and owner, and explain the multiplicative "attack the worst layer" logic. This <em>is</em> system thinking about efficiency.</li>
+      <li><strong>Engage his work substantively.</strong> The idle-waste toolkit's blunt-signal design (§04), the bi-weekly nudge as behavior engineering (§32), sisyphus triangulation (Part VI), and especially the DCGM-NVLink observer-effect harness (§24) — discuss them as someone who understands both the mechanism and the principle (instrumentation must not perturb the observed).</li>
+      <li><strong>Show the systemic-discovery mindset (§37).</strong> "Is this one job or a pattern?" → fix the class, not the instance. Tie it to your own re-architecting wins (pydisort 1000×, the 400×).</li>
+      <li><strong>Bring the trust-first philosophy (§16, §21, §34).</strong> Deterministic core, LLM for fluency, grounded in data, measured hallucination, 576 tests. This is the engineering-maturity signal he'll value most.</li>
+    </ul>
+
+    <h3>Greg Pauloski ★ — parallelism, observability &amp; performance modeling</h3>
+    <ul class="dash">
+      <li><strong>This volume serves his observability half;</strong> Manual III served his parallelism + performance-modeling half. Bring both.</li>
+      <li><strong>Talk the telemetry data plane like an engineer (Part III).</strong> Federated sources, the jobsinfo-done backbone, the join keys, the ±300s skew window, the curate-once-consume-many ETL. This is real observability data engineering, his territory.</li>
+      <li><strong>Connect observability to action (Parts VI-VII).</strong> Triangulation as cross-source corroboration <em>and</em> anomaly detection; the ReAct agent grounded in tools not memory; run-time-weighted fleet goodput as the right metric. Observability that drives change, not just dashboards.</li>
+      <li><strong>His standardized cluster tests (cluster-ranking, mlops-tests)</strong> are the fleet-comparison substrate (§36) — engage them as the way you'd establish per-cluster baselines and catch regressions.</li>
+    </ul>
+
+    <h3>The whole series → the five interviews</h3>
+    <table class="tbl">
+      <thead><tr><th>Interview</th><th>Primary manuals</th></tr></thead>
+      <tbody>
+        <tr><td>Aman — compute, clusters, ML-workload perf</td><td><strong>III</strong> (the training step, profiling, debugging) + <strong>II</strong> (clusters). The roofline, Nsight, the parallelism dimensions.</td></tr>
+        <tr><td>Matt ★ — ML efficiency, system thinking</td><td><strong>IV</strong> (goodput, telemetry, the platform) + <strong>I</strong> (the mandate). His tools, the three-layer model.</td></tr>
+        <tr><td>Abdalla — team/culture fit</td><td><strong>I</strong> (role, motivation, STAR stories) + <strong>II</strong> §18/§26 (SPANK/write-tracer, his work). Values + collaboration.</td></tr>
+        <tr><td>McQueen/O'Kelly — Slurm, systems, customers</td><td><strong>II</strong> (Slurm, fabric, storage, fleet ops, customer craft). The operator's manual.</td></tr>
+        <tr><td>Greg ★ — parallelism, observability, perf modeling</td><td><strong>III</strong> (parallelism, profiling, modeling) + <strong>IV</strong> (observability, telemetry). Both halves.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="idea">
+      <p><strong>The series in one paragraph.</strong> NVIDIA's MARS team runs ~18 GPU clusters whose value is measured in <em>goodput</em> — the fraction of every GPU-hour that becomes a trained model. That goodput decomposes into three multiplicative layers (scheduling, runtime, program), each with its own telemetry. The job of a Senior AI Performance &amp; Efficiency Engineer is to maximize goodput across the fleet: understand the cluster and scheduler deeply enough to operate them (Manual II), understand training performance deeply enough to make a single workload fast — parallelism, NCCL, profiling, performance modeling (Manual III), and understand the observability platform deeply enough to find systemic waste and ship fixes that move the fleet metric (Manuals I &amp; IV). Across all of it runs one discipline — measure, don't guess; attack the worst layer; fix the class, not the instance; and keep the findings trustworthy enough that busy researchers act on them. You bring the proof you can do this: 400× and 124× from re-architecting, not patching; pydisort's 1000× from a fundamentally better approach; deep CUDA, distributed PyTorch/Ray, and UCX/RDMA from the inside. The four manuals are the map; your work is the evidence.</p>
+    </div>
+
+    <p class="pull">Goodput is the product. Three layers, three instruments, one discipline — and a candidate who fixes the class, not the instance. That's the whole series, and the whole role.</p>
+  </section>
+</div>
+
+</main>
+
+<footer>
+  <h4>sources &amp; further study</h4>
+  <div class="resources">
+    <ul>
+      <li><strong>The team's platform (ground truth)</strong></li>
+      <li><code>ai-efficiency-insights</code> — the 110-rule engine, SP1-SP6, Neo4j graph, LLM narratives</li>
+      <li><code>ai-efficiency-dashboard</code> — Streamlit, run-time-weighted goodput</li>
+      <li><code>ai-efficiency-actions</code> — the ReAct Slack bot over OneLogger MCP</li>
+      <li><code>idle-waste-toolkit</code> — 5-source join, per-job/execution CSVs, --all-clusters</li>
+      <li><code>ppp-notify</code> / idle-waste-emails — bi-weekly PIC nudges (CronJob)</li>
+      <li><code>sisyphus</code> — single-job 3-layer triangulation</li>
+      <li><code>DCGM-NVLink-Test-Harness</code> — the observer-effect A/B harness</li>
+      <li><code>write-tracer</code> — eBPF write-syscall tracer + SPANK plugin</li>
+      <li><code>cluster-ranking</code> / mlops-tests — fleet baselines &amp; regression</li>
+      <li><strong>External references</strong></li>
+      <li>NVIDIA DCGM &amp; dcgm-exporter documentation</li>
+      <li>eBPF / bpftrace / libbpf — kernel tracing</li>
+      <li>Slurm SPANK plugin API — task lifecycle hooks</li>
+      <li>OpenSearch / Prometheus — telemetry storage &amp; query</li>
+      <li>Neo4j / Cypher — graph data modeling</li>
+      <li>ReAct (Yao et al.) — reasoning + acting agents</li>
+      <li>Model Context Protocol (MCP) — grounding agents in tools</li>
+      <li>OneLogger / Megatron-LM &amp; NeMo instrumentation</li>
+      <li>"Goodput" (the ML-systems efficiency framing) — productive-time accounting</li>
+    </ul>
+  </div>
+  <p class="footer-note">Manual IV of IV — the finale of the NVIDIA AI Performance &amp; Efficiency interview field-manual series. The platform internals here (OneLogger field names, index names, rule families and thresholds, the ~3.4% hallucination figure, the SP1-SP6 stages) reflect the team's documented practice and evolve quickly — verify the exact field names, index paths, and threshold values against the live repos and schemas before relying on a specific; the architecture and the reasoning are the durable part. Across all four volumes one discipline holds: measure, don't guess; decompose waste into its layers; attack the worst layer first; fix the class, not the instance; and keep every finding trustworthy enough that a busy researcher will act on it. Good luck — you've got the substance.</p>
+</footer>
+
+</body>
+</html>
