@@ -1,0 +1,1097 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Machine — CUDA, Numerics & the Decision Trees · NVIDIA Panel Field Manual</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;0,8..60,700;1,8..60,400;1,8..60,500&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --bg:        #eef1ec;
+  --bg-2:      #e4e8e1;
+  --bg-3:      #d7dcd2;
+  --card:      #f7f9f4;
+  --ink:       #14181a;
+  --ink-soft:  #3d4642;
+  --ink-faint: #76807a;
+  --rule:      #c6ccc0;
+  --rule-soft: #d8ddd2;
+  --rule-dark: #8d958a;
+  --green:     #1a7f46;
+  --green-deep:#0e5e31;
+  --green-bri: #2ea05c;
+  --slate:     #33505f;
+  --slate-deep:#203642;
+  --amber:     #b07d12;
+  --rose:      #a32a1f;
+  --code-bg:   #15201a;
+  --code-ink:  #d6ddd2;
+  --maxw:      1080px;
+}
+*{ box-sizing: border-box; }
+html{ scroll-behavior: smooth; }
+body{
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Source Serif 4', Georgia, serif;
+  font-size: 17px;
+  line-height: 1.62;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ============ HEADER ============ */
+header{ max-width: var(--maxw); margin: 0 auto; padding: 84px 40px 50px; position: relative; }
+.filed{
+  font-family: 'Geist Mono', ui-monospace, monospace; font-size: 10.5px; letter-spacing: .28em;
+  text-transform: uppercase; color: var(--green); margin: 0 0 28px; font-weight: 600;
+  display: flex; align-items: center; gap: 12px;
+}
+.filed::before{ content: "▸"; color: var(--green); font-size: 13px; }
+.vol{
+  font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .18em;
+  color: var(--ink-faint); text-transform: uppercase; margin: 0 0 16px; font-weight: 500;
+}
+h1{
+  font-family: 'Archivo', system-ui, sans-serif; font-weight: 900;
+  font-size: clamp(54px, 9.5vw, 122px); line-height: 0.9; letter-spacing: -0.02em; margin: 0 0 24px; color: var(--ink);
+}
+h1 .acc{ color: var(--green); }
+.deck{ font-family: 'Source Serif 4', serif; font-size: 20px; font-weight: 400; color: var(--ink-soft); max-width: 780px; line-height: 1.5; }
+.readout{ margin-top: 40px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--rule); border: 1px solid var(--rule); }
+@media (max-width: 680px){ .readout{ grid-template-columns: repeat(2,1fr); } }
+.readout .cell{ background: var(--bg); padding: 14px 16px; }
+.readout .k{ font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 6px; }
+.readout .v{ font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 22px; color: var(--ink); line-height: 1; }
+.readout .v .u{ font-size: 12px; color: var(--green); font-weight: 600; }
+
+/* ============ TOC ============ */
+.toc{ margin-top: 46px; background: var(--card); border: 1px solid var(--rule-dark); padding: 30px 32px 34px; position: relative; }
+.toc::before{ content: "CONTENTS"; position: absolute; top: -9px; left: 26px; background: var(--card); padding: 0 10px; font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .3em; color: var(--green); font-weight: 600; }
+.toc h3{ font-family: 'Archivo', sans-serif; font-size: 26px; font-weight: 800; margin: 0 0 3px; color: var(--ink); letter-spacing: -0.01em; }
+.toc .toc-sub{ font-family: 'Geist Mono', monospace; font-size: 10.5px; color: var(--ink-faint); letter-spacing: .1em; text-transform: uppercase; margin-bottom: 20px; }
+.toc-part{ margin-top: 15px; }
+.toc-part-name{ font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .22em; color: var(--slate); text-transform: uppercase; font-weight: 600; border-bottom: 1px solid var(--rule); padding-bottom: 5px; margin-bottom: 7px; }
+.toc-grid{ display: grid; grid-template-columns: repeat(2,1fr); gap: 1px 32px; }
+@media (max-width: 760px){ .toc-grid{ grid-template-columns: 1fr; } }
+.toc-grid a{ color: var(--ink-soft); text-decoration: none; font-size: 14.5px; padding: 5px 0; display: flex; gap: 12px; align-items: baseline; border-bottom: 1px dotted transparent; transition: all .14s; }
+.toc-grid a:hover{ color: var(--green); border-color: var(--rule); }
+.toc-grid a .n{ font-family: 'Geist Mono', monospace; font-size: 10.5px; color: var(--slate); min-width: 26px; font-weight: 600; }
+
+/* ============ MAIN ============ */
+main{ max-width: var(--maxw); margin: 0 auto; padding: 56px 40px 96px; }
+.part{ margin-top: 92px; padding-top: 46px; position: relative; }
+.part::before{ content:""; position: absolute; top: 0; left: 0; right: 0; border-top: 2px solid var(--ink); }
+.part::after{ content:""; position: absolute; top: 5px; left: 0; width: 84px; border-top: 2px solid var(--green); }
+.part:first-child{ margin-top: 28px; padding-top: 28px; }
+.part-label{ font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .28em; color: var(--green); text-transform: uppercase; margin-bottom: 14px; font-weight: 600; }
+.part-title{ font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 54px; line-height: 0.96; letter-spacing: -0.02em; margin: 0 0 18px; color: var(--ink); }
+.part-title .acc{ color: var(--green); }
+.part-intro{ color: var(--ink-soft); font-size: 18.5px; max-width: 800px; margin-bottom: 34px; line-height: 1.5; }
+
+section.chapter{ margin-top: 52px; }
+section.chapter:first-of-type{ margin-top: 8px; }
+h2{ font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 33px; line-height: 1.08; letter-spacing: -0.015em; margin: 0 0 15px; color: var(--ink); display: flex; align-items: baseline; gap: 15px; padding-bottom: 9px; border-bottom: 2px solid var(--ink); }
+h2 .ch-num{ font-family: 'Geist Mono', monospace; font-size: 13px; color: var(--green); letter-spacing: .05em; font-weight: 600; flex-shrink: 0; }
+h3{ font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 22px; margin: 28px 0 9px; color: var(--ink); letter-spacing: -0.01em; }
+h4{ font-family: 'Geist Mono', monospace; font-size: 10.5px; letter-spacing: .18em; text-transform: uppercase; color: var(--slate); margin: 22px 0 8px; font-weight: 600; }
+p{ margin: 12px 0; }
+p code, li code, td code{ font-family: 'Geist Mono', monospace; font-size: .8em; background: var(--bg-3); color: var(--green-deep); padding: 1px 6px; border-radius: 2px; border: 1px solid var(--rule); }
+strong{ font-weight: 700; }
+ul, ol{ padding-left: 1.3em; }
+li{ margin: 6px 0; }
+ul.tight li{ margin: 3px 0; }
+ul.dash{ list-style: none; padding-left: 0; }
+ul.dash li{ position: relative; padding-left: 22px; }
+ul.dash li::before{ content: "▸"; position: absolute; left: 0; color: var(--green); font-weight: 700; }
+ul.check{ list-style: none; padding-left: 0; }
+ul.check li{ position: relative; padding-left: 24px; }
+ul.check li::before{ content: "▪"; position: absolute; left: 2px; top: 2px; color: var(--green); }
+
+/* ============ CODE ============ */
+pre{ background: var(--code-bg); padding: 17px 20px; overflow-x: auto; font-family: 'Geist Mono', monospace; font-size: 12.5px; line-height: 1.6; color: var(--code-ink); margin: 18px 0; position: relative; border-left: 3px solid var(--green); }
+pre .com{ color: #6f8378; font-style: italic; }
+pre .kw{  color: #6cb38a; }
+pre .ty{  color: #8fc6c0; }
+pre .str{ color: #c9b36a; }
+pre .num{ color: #c89a64; }
+pre .fn{  color: #8db8d0; }
+pre .var{ color: #d6ddd2; }
+pre .glb{ color: #7fbf95; }
+pre .opt{ color: #c0a96a; }
+pre::before{ content: attr(data-lang); position: absolute; top: 5px; right: 12px; font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: .18em; color: #56635a; text-transform: uppercase; }
+
+/* ============ CALLOUTS ============ */
+.callout{ margin: 22px 0; padding: 15px 22px; border-left: 4px solid var(--slate); background: var(--bg-2); font-size: 16px; line-height: 1.55; }
+.callout.warn{ border-color: var(--amber); }
+.callout.danger{ border-color: var(--rose); }
+.callout.tip{ border-color: var(--green); }
+.callout h5{ margin: 0 0 6px; font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--slate); font-weight: 600; }
+.callout.warn h5{ color: var(--amber); }
+.callout.danger h5{ color: var(--rose); }
+.callout.tip h5{ color: var(--green); }
+.callout p:first-child{ margin-top: 0; } .callout p:last-child{ margin-bottom: 0; }
+
+/* ============ TABLES ============ */
+.tbl{ width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14.5px; }
+.tbl th, .tbl td{ text-align: left; padding: 9px 14px; vertical-align: top; border-bottom: 1px solid var(--rule); }
+.tbl th{ font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink); font-weight: 600; border-bottom: 2px solid var(--ink); border-top: 2px solid var(--ink); background: var(--bg-2); }
+.tbl td:first-child{ font-family: 'Geist Mono', monospace; font-size: 12px; color: var(--green-deep); font-weight: 500; width: 26%; }
+.tbl.wide td:first-child{ width: 20%; }
+.tbl.compare td:first-child{ font-family: 'Geist Mono', monospace; font-weight: 600; color: var(--ink); width: 22%; font-size: 11.5px; letter-spacing: .03em; }
+.tbl.compare td:nth-child(2){ color: var(--green-deep); font-family: 'Source Serif 4', serif; font-size: 14.5px; }
+.tbl.compare td:nth-child(3){ color: var(--slate-deep); font-family: 'Source Serif 4', serif; font-size: 14.5px; }
+
+/* ============ DIAGRAM ============ */
+.diagram{ background: var(--card); border: 1px solid var(--rule-dark); padding: 22px 24px; margin: 22px 0; font-family: 'Geist Mono', monospace; font-size: 12px; line-height: 1.55; color: var(--ink-soft); white-space: pre; overflow-x: auto; position: relative; }
+.diagram::before{ content: "FIG."; position: absolute; top: -9px; left: 18px; background: var(--bg); padding: 0 9px; font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: .2em; color: var(--slate); font-weight: 600; }
+
+/* ============ ISSUE / WORKED CASE / Q&A ============ */
+.issue{ margin: 26px 0; background: var(--card); border: 1px solid var(--ink); }
+.issue-header{ padding: 12px 22px; background: var(--ink); color: var(--bg); font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; display: flex; align-items: center; gap: 13px; }
+.issue-header .tag{ background: var(--green); padding: 3px 11px; letter-spacing: .1em; font-weight: 600; font-size: 10px; color: #fff; }
+.issue-header .tag.qa{ background: var(--slate); }
+.issue-header .title{ flex: 1; font-weight: 600; letter-spacing: .08em; }
+.issue-body{ padding: 22px 26px; }
+.issue-body > h5{ margin: 16px 0 7px; font-family:'Geist Mono',monospace; font-size: 10.5px; letter-spacing:.16em; color: var(--green); text-transform: uppercase; font-weight: 600; }
+.issue-body > h5:first-child{ margin-top: 0; }
+
+/* ============ INTERVIEWER PROFILE ============ */
+.iv{ margin: 22px 0; background: var(--card); border: 1px solid var(--rule-dark); border-left: 3px solid var(--green); padding: 20px 24px; position: relative; }
+.iv.req{ border-left-color: var(--rose); }
+.iv-head{ display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.iv-name{ font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 22px; color: var(--ink); letter-spacing: -0.01em; }
+.iv-dur{ font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); }
+.iv-badge{ font-family:'Geist Mono',monospace; font-size:9px; letter-spacing:.16em; text-transform:uppercase; background:var(--green); color:#fff; padding:3px 9px; font-weight:600; }
+.iv-role{ font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--slate); margin-bottom: 10px; font-weight: 500; }
+.iv-focus{ font-size: 15px; color: var(--ink-soft); line-height: 1.5; margin: 0; }
+
+/* ============ DECISION TREE ============ */
+.tree{ background: var(--card); border: 1px solid var(--slate); padding: 24px 26px; margin: 24px 0; position: relative; }
+.tree::before{ content: "DECISION PATH"; position: absolute; top: -9px; left: 22px; background: var(--bg); padding: 0 11px; font-family:'Geist Mono',monospace; font-size: 10px; letter-spacing: .2em; color: var(--slate); font-weight: 600; }
+.tree pre{ background: transparent; color: var(--ink); border: none; border-left: none; padding: 6px 0 0; font-size: 13px; line-height: 1.7; }
+.tree pre::before{ display: none; }
+.tree .q{ color: var(--green); font-weight: 700; }
+.tree .a{ color: var(--slate); font-weight: 700; }
+
+/* ============ PRINCIPLE ============ */
+.idea{ margin: 24px 0; border: 2px solid var(--green); background: var(--card); padding: 22px 28px; position: relative; }
+.idea::before{ content: "PRINCIPLE"; position: absolute; top: -10px; left: 22px; background: var(--bg); padding: 0 11px; font-family:'Geist Mono',monospace; font-size: 10px; letter-spacing: .24em; color: var(--green); font-weight: 600; }
+.idea p{ margin: 6px 0; font-size: 16px; }
+
+/* ============ PULL ============ */
+.pull{ font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 30px; line-height: 1.08; letter-spacing: -0.015em; color: var(--green); margin: 38px 0; padding: 0 0 0 26px; border-left: 4px solid var(--green); }
+
+/* ============ CHEAT ============ */
+.cheat{ background: var(--card); border: 1px solid var(--ink); padding: 24px 28px; margin: 24px 0; }
+.cheat h5{ margin: 0 0 14px; font-family:'Geist Mono',monospace; font-size: 11px; letter-spacing: .2em; color: var(--green); text-transform: uppercase; font-weight: 600; }
+.cheat-grid{ display: grid; grid-template-columns: 1fr 1.5fr; gap: 6px 22px; font-size: 13px; }
+.cheat-grid .cmd{ font-family:'Geist Mono',monospace; color: var(--green-deep); font-weight: 500; }
+.cheat-grid .desc{ color: var(--ink-soft); font-size: 14.5px; }
+@media (max-width: 680px){ .cheat-grid{ grid-template-columns: 1fr; gap: 2px 18px; } .cheat-grid .desc{ margin-bottom: 10px; } }
+
+/* ============ TWO-COL ============ */
+.twocol{ display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 22px 0; }
+@media (max-width: 760px){ .twocol{ grid-template-columns: 1fr; } }
+.twocol .col{ background: var(--card); border: 1px solid var(--rule-dark); padding: 18px 22px; }
+.twocol .col h5{ margin: 0 0 10px; font-family:'Geist Mono',monospace; font-size: 10.5px; letter-spacing: .18em; text-transform: uppercase; color: var(--slate); font-weight: 600; }
+.twocol .col.bad h5{ color: var(--rose); } .twocol .col.good h5{ color: var(--green); }
+.twocol .col p{ margin: 8px 0; font-size: 15px; } .twocol .col p:first-child{ margin-top: 0; }
+
+/* ============ PANEL ============ */
+.panel{ background: var(--card); border: 1px solid var(--rule-dark); border-left: 3px solid var(--slate); padding: 16px 22px; margin: 20px 0; position: relative; }
+.panel::before{ content: attr(data-title); position: absolute; top: -9px; left: 18px; background: var(--bg); padding: 0 9px; font-family:'Geist Mono',monospace; font-size: 9px; letter-spacing: .2em; color: var(--slate); font-weight: 600; }
+
+/* ============ SEP ============ */
+.rule-sep{ margin: 56px 0; position: relative; height: 0; border-top: 2px solid var(--ink); }
+.rule-sep::after{ content: "◇ ◇ ◇"; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); background: var(--bg); color: var(--green); padding: 0 16px; font-size: 11px; letter-spacing: .3em; }
+
+/* ============ FOOTER ============ */
+footer{ max-width: var(--maxw); margin: 0 auto; padding: 54px 40px 84px; border-top: 2px solid var(--ink); color: var(--ink-soft); font-size: 14px; }
+footer h4{ font-family:'Geist Mono',monospace; font-size: 11px; letter-spacing: .24em; color: var(--green); margin: 0 0 18px; font-weight: 600; }
+footer .resources{ columns: 2; column-gap: 38px; }
+@media (max-width: 680px){ footer .resources{ columns: 1; } }
+footer ul{ list-style: none; padding: 0; margin: 0; }
+footer li{ padding: 5px 0; font-size: 13.5px; break-inside: avoid; }
+footer li code{ color: var(--green-deep); background: transparent; border: none; padding: 0; font-weight: 500; }
+footer .footer-note{ margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--rule); color: var(--ink-faint); font-size: 14px; }
+</style>
+</head>
+<body>
+
+<header>
+  <p class="filed">nvidia · pytorch core team (piotr bialecki) · panel july 13–14 · cuda &amp; triage volume</p>
+  <p class="vol">Volume VI · pytorch on the gpu · semantics · numerics · backends · the trees</p>
+  <h1>The <span class="acc">Machine.</span></h1>
+  <p class="deck">
+    Volume V opened the framework; this one opens the GPU underneath it. Everything this team is paid to keep working lives here: async execution and the sync points that stall it, the caching allocator, the precision knobs that make results differ across hardware, the backend libraries (cuDNN, cuBLAS, SDPA) whose algorithm choices are the flakiest surface in PyTorch's CI — and then the part you asked for by name: <strong>eight decision trees</strong> for the failures this team triages every week, each one a script you can run out loud in an interview. It closes with the instrument panel and a 48-hour plan.
+  </p>
+  <div class="readout">
+    <div class="cell"><div class="k">Chapters</div><div class="v">27</div></div>
+    <div class="cell"><div class="k">Decision trees</div><div class="v">8</div></div>
+    <div class="cell"><div class="k">Fire drills</div><div class="v">3</div></div>
+    <div class="cell"><div class="k">Companion</div><div class="v" style="font-size:13px;">vol. v ·<br>the core</div></div>
+  </div>
+
+  <div class="toc">
+    <h3>Contents</h3>
+    <p class="toc-sub">Twenty-seven chapters across six parts</p>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part I · CUDA semantics in PyTorch</div>
+      <div class="toc-grid">
+        <a href="#c01"><span class="n">01</span><span>Async execution &amp; the current stream</span></a>
+        <a href="#c02"><span class="n">02</span><span>The caching allocator, operationally</span></a>
+        <a href="#c03"><span class="n">03</span><span>Sync points: the complete hunt</span></a>
+        <a href="#c04"><span class="n">04</span><span>Multi-stream correctness</span></a>
+        <a href="#c05"><span class="n">05</span><span>Pinned memory &amp; the input pipeline</span></a>
+        <a href="#c06"><span class="n">06</span><span>CUDA graphs &amp; the allocator contract</span></a>
+      </div>
+    </div>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part II · Numerics</div>
+      <div class="toc-grid">
+        <a href="#c07"><span class="n">07</span><span>The precision knobs</span></a>
+        <a href="#c08"><span class="n">08</span><span>Why two GPUs disagree</span></a>
+        <a href="#c09"><span class="n">09</span><span>Determinism, and how to force it</span></a>
+        <a href="#c10"><span class="n">10</span><span>Wrong vs differently-right</span></a>
+      </div>
+    </div>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part III · The backend libraries</div>
+      <div class="toc-grid">
+        <a href="#c11"><span class="n">11</span><span>cuDNN: benchmark &amp; algo selection</span></a>
+        <a href="#c12"><span class="n">12</span><span>cuBLAS &amp; the matmul path</span></a>
+        <a href="#c13"><span class="n">13</span><span>SDPA: the backend zoo</span></a>
+        <a href="#c14"><span class="n">14</span><span>NCCL touchpoints</span></a>
+      </div>
+    </div>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part IV · The decision trees</div>
+      <div class="toc-grid">
+        <a href="#c15"><span class="n">15</span><span>Tree 1 · CUDA out of memory</span></a>
+        <a href="#c16"><span class="n">16</span><span>Tree 2 · It's slow</span></a>
+        <a href="#c17"><span class="n">17</span><span>Tree 3 · Numerics mismatch</span></a>
+        <a href="#c18"><span class="n">18</span><span>Tree 4 · Device-side assert</span></a>
+        <a href="#c19"><span class="n">19</span><span>Tree 5 · Nondeterminism</span></a>
+        <a href="#c20"><span class="n">20</span><span>Tree 6 · Memory grows</span></a>
+        <a href="#c21"><span class="n">21</span><span>Tree 7 · Distributed hang</span></a>
+        <a href="#c22"><span class="n">22</span><span>Tree 8 · Regression after upgrade</span></a>
+      </div>
+    </div>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part V · The instrument panel</div>
+      <div class="toc-grid">
+        <a href="#c23"><span class="n">23</span><span>The tools, and when each one</span></a>
+        <a href="#c24"><span class="n">24</span><span>Reproduction discipline</span></a>
+      </div>
+    </div>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part VI · Synthesis</div>
+      <div class="toc-grid">
+        <a href="#c25"><span class="n">25</span><span>Three fire drills</span></a>
+        <a href="#c26"><span class="n">26</span><span>The recalibrated hour-by-hour</span></a>
+        <a href="#c27"><span class="n">27</span><span>The final-day plan</span></a>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<!-- ===================== PART I ===================== -->
+<div class="part" id="p1">
+  <div class="part-label">Part I — CUDA semantics in PyTorch</div>
+  <h2 class="part-title">Async, by <span class="acc">default.</span></h2>
+  <p class="part-intro">Six chapters on the execution model that everything else in this volume sits on. Almost every "PyTorch is doing something weird on my GPU" question is an async-execution question wearing a costume.</p>
+
+  <section class="chapter" id="c01">
+    <h2><span class="ch-num">01</span>Async execution &amp; the current stream</h2>
+
+    <div class="diagram">  THE CONTRACT:
+   • CUDA ops are ENQUEUED on the current stream and return immediately.
+     Python races ahead; the GPU runs behind. `y = x.matmul(w)` returns
+     a tensor whose CONTENTS DO NOT EXIST YET — and that is fine,
+     because every subsequent op on the same stream is ordered after it.
+   • Per-device CURRENT STREAM (thread-local). Default stream unless you
+     enter `with torch.cuda.stream(s):`.
+   • ORDERING IS FREE within a stream. ACROSS streams you must
+     synchronize explicitly (events, wait_stream) — §04.
+  ─────────────────────────────────────────────────────────────
+  THREE CONSEQUENCES YOU WILL BE ASKED ABOUT:
+   1 TIMING: `t0=time(); op(); t1=time()` measures ENQUEUE, not compute.
+     Correct timing needs torch.cuda.synchronize() around the region, or
+     CUDA events (elapsed_time), or the profiler.
+   2 ERRORS: a kernel's error surfaces at the next sync — so the Python
+     traceback points at an innocent line downstream (§18's whole tree).
+   3 PERF: the host must stay AHEAD of the GPU. If Python can't enqueue
+     faster than the GPU drains, you're launch-bound / host-bound —
+     and any accidental sync (§03) collapses the pipeline entirely.</div>
+
+    <div class="callout tip">
+      <h5>The one-liner</h5>
+      <p>"PyTorch's CUDA API is asynchronous: ops enqueue on a stream and return, so correctness comes from stream ordering, timing requires an explicit sync or events, and error reporting is deferred to the next synchronization point — which is why the traceback usually lies."</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c02">
+    <h2><span class="ch-num">02</span>The caching allocator, operationally</h2>
+
+    <p>Vol. I §05–13 has the deep structure; this is the operator's view — the numbers you read and the levers you pull.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Concept</th><th>What it means when you're staring at an OOM</th></tr></thead>
+      <tbody>
+        <tr><td>Why cache at all</td><td><code>cudaMalloc</code>/<code>cudaFree</code> are synchronizing and slow. PyTorch grabs big segments and sub-allocates blocks from them — so allocation is a pointer bump in steady state. This is what makes eager training viable at all.</td></tr>
+        <tr><td><code>memory_allocated</code> vs <code>memory_reserved</code></td><td><strong>The single most diagnostic pair of numbers.</strong> Allocated = what your tensors hold. Reserved = what PyTorch took from the driver. <em>reserved ≫ allocated</em> ⇒ fragmentation, not a leak. <em>allocated climbing</em> ⇒ you're holding references (§20).</td></tr>
+        <tr><td>Fragmentation</td><td>Free memory exists but not <em>contiguously</em> in the right pool → OOM with gigabytes "free". Caused by variable shapes, alternating big/small allocations, long-lived blocks pinning segments.</td></tr>
+        <tr><td><code>expandable_segments:True</code></td><td>The modern fix (via <code>PYTORCH_CUDA_ALLOC_CONF</code>): virtual-memory-backed segments that grow, so blocks don't have to fit a pre-sized segment. Reach for it before <code>max_split_size_mb</code> tuning.</td></tr>
+        <tr><td><code>empty_cache()</code></td><td>Returns <em>free cached</em> segments to the driver. It does not defragment, does not free live tensors, and costs a sync — useful between phases (train→eval, or before handing the GPU to another library), useless as an OOM cure.</td></tr>
+        <tr><td>Stream-awareness</td><td>Blocks are associated with the stream they were allocated on. Reusing memory across streams without telling the allocator is a real corruption bug — §04.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <h5>Your unfair advantage</h5>
+      <p>You've gone deeper on this allocator (MemPool, private pools, capture interaction) than most candidates ever will. When OOM or CUDA graphs comes up in <em>any</em> hour, this is the topic to steer toward and go deep — it's core-team-relevant, it's Piotr's own team's code, and it's yours.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c03">
+    <h2><span class="ch-num">03</span>Sync points: the complete hunt</h2>
+
+    <p>An accidental sync in a training loop is the classic silent 30% — the GPU drains, the host waits, and the pipeline restarts from empty. Know the list, and know the tool that finds them for you.</p>
+
+    <table class="tbl wide">
+      <thead><tr><th>Sync source</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td><code>.item()</code>, <code>float(t)</code>, <code>int(t)</code>, <code>.tolist()</code></td><td>The big one. Any host-side read of a device value must wait for the value to exist. <code>total_loss += loss.item()</code> every step is a per-step sync — usually acceptable, but not in a tight profiling loop.</td></tr>
+        <tr><td><code>print(t)</code>, <code>t.cpu()</code>, <code>t.numpy()</code></td><td>Same mechanism. A stray debug print in an inner loop is a stall.</td></tr>
+        <tr><td>Python control flow on a tensor</td><td><code>if loss &gt; threshold:</code>, <code>while not converged:</code>, <code>assert t.isfinite().all()</code> — each forces the value to the host. Also the reason such code breaks CUDA-graph capture (§06) and causes graph breaks under <code>torch.compile</code>.</td></tr>
+        <tr><td>Data-dependent shapes</td><td><code>torch.nonzero</code>, <code>torch.unique</code>, boolean-mask indexing <code>t[mask]</code>, <code>masked_select</code> — the <em>output shape</em> depends on device data, so the host must learn it. Unavoidable syncs by construction; the fix is algorithmic (fixed-size buffers, padding).</td></tr>
+        <tr><td>D2H copies without pinned memory</td><td><code>non_blocking=True</code> only actually overlaps from <em>pinned</em> host memory; otherwise it's synchronous regardless of the flag (§05).</td></tr>
+        <tr><td><code>torch.cuda.synchronize()</code></td><td>Explicit. Correct for timing; poison in a hot loop.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="cheat">
+      <h5>The tool most people don't know exists — use it in the interview</h5>
+      <div class="cheat-grid">
+        <div class="cmd">torch.cuda.set_sync_debug_mode("warn")</div><div class="desc">PyTorch <em>tells you</em> every time an op synchronizes. <code>"error"</code> makes it raise, so you can hunt every accidental sync in a training step to zero. Mentioning this in a "why is my training slow" answer is a strong signal — it's the diagnostic that converts guessing into a list.</div>
+        <div class="cmd">torch.profiler + trace view</div><div class="desc">Gaps on the GPU timeline with the CPU busy = host-bound; gaps with the CPU idle = you're waiting on a sync.</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="chapter" id="c04">
+    <h2><span class="ch-num">04</span>Multi-stream correctness</h2>
+
+    <div class="diagram">  THE BUG EVERYONE WRITES ONCE:
+    s = torch.cuda.Stream()
+    x = torch.randn(N, device='cuda')     # allocated on the DEFAULT stream
+    with torch.cuda.stream(s):
+        y = big_op(x)                     # runs on s — may start before the
+                                          # default stream finished producing x!
+    del x                                 # allocator may hand x's block to
+                                          # someone else on the default stream
+                                          # WHILE s is still reading it
+  ─────────────────────────────────────────────────────────────
+  TWO SEPARATE HAZARDS, TWO SEPARATE FIXES:
+   1 ORDERING  s must wait for x's producer:
+                 s.wait_stream(torch.cuda.current_stream())
+               (or record an event on the producer and s.wait_event(e))
+   2 LIFETIME  the ALLOCATOR must know x is still in use on s:
+                 x.record_stream(s)
+               otherwise freeing x on the default stream lets its memory
+               be reused while s's kernels still read it → silent
+               corruption (the worst kind of bug: no error, wrong numbers)
+  ─────────────────────────────────────────────────────────────
+  Also: the backward pass runs each op on the stream its FORWARD ran on
+  (Vol. V §17) — so custom-stream forwards propagate their complexity
+  into backward, which is where the genuinely exotic bugs live.</div>
+  </section>
+
+  <section class="chapter" id="c05">
+    <h2><span class="ch-num">05</span>Pinned memory &amp; the input pipeline</h2>
+
+    <table class="tbl">
+      <thead><tr><th>Mechanism</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td>Pageable vs pinned host memory</td><td>The DMA engine can only copy asynchronously from <em>page-locked</em> memory. From pageable memory the driver must stage through an internal pinned buffer — which serializes. So <code>non_blocking=True</code> on a pageable tensor is a no-op promise.</td></tr>
+        <tr><td><code>DataLoader(pin_memory=True)</code> + <code>.to(device, non_blocking=True)</code></td><td>The pair. Together they let the H2D copy of batch N+1 overlap with the compute of batch N. One without the other buys nothing.</td></tr>
+        <tr><td>Cost of pinning</td><td>Page-locked memory is a scarce OS resource; pinning everything can degrade the whole machine. It's a knob, not a religion.</td></tr>
+        <tr><td>Where this shows up in triage</td><td>"GPU utilization is 40% and the CPU is busy" → dataloader-bound: workers, pinning, prefetch, decode cost, or a sync in the loop (§03). It's Tree 2's first branch (§16).</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="chapter" id="c06">
+    <h2><span class="ch-num">06</span>CUDA graphs &amp; the allocator contract</h2>
+
+    <table class="tbl">
+      <thead><tr><th>Piece</th><th>Mechanism</th></tr></thead>
+      <tbody>
+        <tr><td>What capture records</td><td>A DAG of kernel launches on a stream, replayable with one call — collapsing thousands of launches into one submission. The payoff is exactly proportional to how launch-bound you were (Vol. III §20's world).</td></tr>
+        <tr><td>The allocator contract</td><td>Replay reuses the <em>recorded addresses</em>, so every allocation made during capture must remain valid and stable → capture runs against a <strong>private memory pool</strong> in the caching allocator. This is the MemPool machinery you know deeply; it's the load-bearing integration between graphs and memory.</td></tr>
+        <tr><td>What breaks capture</td><td>Host syncs and host-side control flow (§03), CPU-dependent values, dynamic shapes, unsupported ops, and non-capture-safe RNG (handled via graph-safe generator state). This is precisely why <code>capturable=True</code> optimizers keep step counters and even the learning rate as <em>device</em> tensors (Vol. III §21).</td></tr>
+        <tr><td>Practical use</td><td>Static shapes, warmup on a side stream, static input/output buffers you copy into and out of; <code>make_graphed_callables</code> for partial capture; <code>torch.compile(mode="reduce-overhead")</code> applies it for you.</td></tr>
+      </tbody>
+    </table>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART II ===================== -->
+<div class="part" id="p2">
+  <div class="part-label">Part II — Numerics</div>
+  <h2 class="part-title">Different, or <span class="acc">wrong?</span></h2>
+  <p class="part-intro">The question this team answers constantly — about a failing test, a user's bug report, a new arch, a library bump. Four chapters to make you fast and correct at it.</p>
+
+  <section class="chapter" id="c07">
+    <h2><span class="ch-num">07</span>The precision knobs</h2>
+
+    <table class="tbl wide">
+      <thead><tr><th>Knob</th><th>What it actually changes</th></tr></thead>
+      <tbody>
+        <tr><td>TF32</td><td>Ampere+ tensor cores run fp32 matmul/conv with ~10-bit mantissa internally (fp32 range, reduced precision), for a large speedup. Historically <code>torch.backends.cuda.matmul.allow_tf32</code> (default off for matmul) and <code>torch.backends.cudnn.allow_tf32</code> (default on for conv) — with <code>torch.set_float32_matmul_precision("high")</code> as the friendlier switch. The API is consolidating toward unified fp32-precision settings, so <em>state the mechanism, and check the current spelling before asserting a default.</em></td></tr>
+        <tr><td>Reduced-precision reductions</td><td><code>torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction</code> (and the bf16 twin), default on: lets fp16 GEMMs accumulate partial sums in fp16 within split-k. Turning it off is a real diagnostic step when an fp16 matmul's error looks too large.</td></tr>
+        <tr><td>autocast / AMP</td><td>Per-op casting policy at the dispatch layer above autograd (Vol. V §06); GradScaler for fp16's underflow range; bf16 usually needs no scaler.</td></tr>
+        <tr><td>Accumulate types in kernels</td><td>Not user-visible, but decisive: ATen accumulates fp16 reductions in fp32 by design (Vol. V §08, §20). This is why a GPU sum can be <em>more</em> accurate than a naive fp32 CPU loop.</td></tr>
+        <tr><td>FMA contraction</td><td>The compiler fuses <code>a*b+c</code> into one instruction with a single rounding — mathematically better, bitwise different from separate ops. A perpetual source of "the last digit changed."</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="chapter" id="c08">
+    <h2><span class="ch-num">08</span>Why two GPUs disagree</h2>
+
+    <div class="diagram">  SAME CODE, SAME INPUTS, TWO ARCHS, DIFFERENT LAST BITS. WHY:
+   ├─ different REDUCTION TREE (occupancy/geometry differs per arch,
+   │    so the summation order differs → fp is non-associative)
+   ├─ different LIBRARY ALGORITHM chosen by heuristics (cuBLAS/cuDNN
+   │    pick per arch, per shape, per version — §11–12)
+   ├─ TF32 / tensor-core paths available on one arch, not another
+   ├─ different SASS from a different toolkit (FMA contraction choices)
+   └─ atomics-based kernels: order varies even RUN TO RUN (§19)
+  ─────────────────────────────────────────────────────────────
+  NONE of these is a bug. ALL of them can trip a tolerance-tuned test.
+  Which is why "this test only fails on sm_XX" is a WEEKLY event on this
+  team — and why the ability to adjudicate it (§10) is the skill they
+  are actually hiring for.</div>
+  </section>
+
+  <section class="chapter" id="c09">
+    <h2><span class="ch-num">09</span>Determinism, and how to force it</h2>
+
+    <div class="cheat">
+      <h5>The determinism checklist (and what each line buys)</h5>
+      <div class="cheat-grid">
+        <div class="cmd">torch.use_deterministic_algorithms(True)</div><div class="desc"><strong>The killer move.</strong> Nondeterministic ops now <em>raise with the op's name</em> — converting "my run isn't reproducible" from a mystery into a list. Use <code>warn_only=True</code> to survey without failing.</div>
+        <div class="cmd">torch.manual_seed(s) (+ dataloader generator, worker_init_fn)</div><div class="desc">Seeds are necessary but never sufficient — most people stop here and stay confused.</div>
+        <div class="cmd">torch.backends.cudnn.benchmark = False</div><div class="desc">Autotuning picks algorithms by timing → the choice itself varies. Turn it off for reproducibility (and pay in speed).</div>
+        <div class="cmd">torch.backends.cudnn.deterministic = True</div><div class="desc">Restricts cuDNN to deterministic algorithms.</div>
+        <div class="cmd">CUBLAS_WORKSPACE_CONFIG=:4096:8</div><div class="desc">Required for deterministic cuBLAS on modern CUDA — a genuinely obscure line that signals real experience.</div>
+        <div class="cmd">DistributedSampler.set_epoch(e)</div><div class="desc">Data order is part of determinism too; in distributed runs it's a per-epoch shuffle seed everyone must agree on.</div>
+      </div>
+    </div>
+
+    <table class="tbl">
+      <thead><tr><th>Inherently nondeterministic</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td><code>scatter_add</code>/<code>index_add</code> with duplicate indices; <code>embedding</code> backward; <code>index_select</code> backward; <code>bincount</code>; some <code>interpolate</code> backwards</td><td>They use <code>atomicAdd</code>: correct sum, arbitrary order, so the floating-point rounding differs per run. This family is the #1 cause of "training won't reproduce."</td></tr>
+        <tr><td>Some cuDNN conv algorithms</td><td>Atomics/split-k in the backward filter/data passes.</td></tr>
+        <tr><td>NCCL reductions</td><td>Cross-rank summation order isn't guaranteed across runs/topologies.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="chapter" id="c10">
+    <h2><span class="ch-num">10</span>Wrong vs differently-right</h2>
+
+    <div class="idea">
+      <p><strong>The adjudication procedure — this is the single most valuable page in the volume, because it's the judgment call the whole team makes weekly.</strong> (1) Get a <em>trustworthy reference</em>: compute the same math in float64, on CPU. Not another GPU run — that's comparing two suspects. (2) Compute both candidates' error <em>against the reference</em>, not against each other. (3) Ask whether the error is within what the format and the reduction length can produce: fp16 with ~10-bit mantissa over a 10⁶-element sum has a predictable error budget; TF32 matmul has a known mantissa; an fp32 tree-sum differs from a sequential sum by O(√n·ε) at worst. (4) If both candidates sit within the budget on either side of the reference, they are <em>differently right</em> — the fix is the test's tolerance, and the justification is the number you just computed. (5) If one candidate is <em>outside</em> the budget, diverges with scale, produces NaN/Inf, or drifts in a systematic direction, it is <em>wrong</em> — and now you have a minimal repro, an arch, a dtype, and a library version to hand to the kernel owner. That last handoff is what makes you a colleague on this team rather than a ticket-filer.</p>
+    </div>
+
+    <div class="callout warn">
+      <h5>The anti-pattern to name out loud</h5>
+      <p>Loosening a tolerance until the test goes green, with no error budget computed, is how a real numerical regression gets buried — and it's exactly the failure a CI-owning engineer is positioned to prevent. Say that you'd never widen a tolerance without a number behind it, and you've articulated the ethic this team runs on (Vol. III §17's "disable is triage, not disposal," one layer deeper).</p>
+    </div>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART III ===================== -->
+<div class="part" id="p3">
+  <div class="part-label">Part III — The backend libraries</div>
+  <h2 class="part-title">Where the <span class="acc">algorithms</span> get chosen.</h2>
+  <p class="part-intro">PyTorch doesn't compute a convolution — cuDNN does, having picked one of many algorithms by heuristic. That indirection is where performance, numerics, and flakiness all originate, and it is Eddie Yan's daily surface.</p>
+
+  <section class="chapter" id="c11">
+    <h2><span class="ch-num">11</span>cuDNN: benchmark &amp; algo selection</h2>
+
+    <table class="tbl">
+      <thead><tr><th>Mechanism</th><th>Consequence</th></tr></thead>
+      <tbody>
+        <tr><td>Algorithm zoo</td><td>Implicit GEMM, FFT, Winograd, direct… each with different speed, memory (workspace), and <em>numerical</em> characteristics. cuDNN picks per (shape, dtype, arch, layout) via heuristics.</td></tr>
+        <tr><td><code>cudnn.benchmark = True</code></td><td>Empirically times candidate algorithms on the <em>first</em> occurrence of each input shape and caches the winner. Great for fixed shapes; pathological when shapes vary every batch (it re-benchmarks constantly — a classic "why is my model slow with variable-length inputs" answer). Also makes algo choice timing-dependent ⇒ nondeterministic.</td></tr>
+        <tr><td>Workspace</td><td>Faster algorithms often need scratch memory. Under memory pressure, cuDNN falls back to a slower, smaller-workspace algorithm — so <strong>an OOM elsewhere in your model can silently make your convs slower.</strong> Beautiful, non-obvious, and exactly the kind of cross-layer effect this team lives on.</td></tr>
+        <tr><td>Layout</td><td>Tensor-core conv paths want NHWC (channels_last, Vol. V §02). Feed NCHW and the library transposes around the call.</td></tr>
+        <tr><td>Version sensitivity</td><td>A cuDNN bump can change heuristics ⇒ different algorithm ⇒ different perf <em>and</em> different last bits ⇒ arch-scoped test failures. This is the fire drill in Vol. III §25 and the tree in §22.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="chapter" id="c12">
+    <h2><span class="ch-num">12</span>cuBLAS &amp; the matmul path</h2>
+
+    <table class="tbl">
+      <thead><tr><th>Piece</th><th>What to know</th></tr></thead>
+      <tbody>
+        <tr><td>cuBLAS / cuBLASLt</td><td>The GEMM engines. Lt exposes richer epilogue fusion (bias, activation) and heuristic algorithm selection; PyTorch routes matmuls/linear through them with per-shape heuristics.</td></tr>
+        <tr><td>Split-k</td><td>For skinny GEMMs, the k-dimension is split across blocks and partial results summed — which introduces an extra reduction, hence <code>allow_fp16_reduced_precision_reduction</code> (§07) and a source of numerics variation across shapes.</td></tr>
+        <tr><td>Workspace &amp; determinism</td><td><code>CUBLAS_WORKSPACE_CONFIG</code> matters for both performance and (in deterministic mode) reproducibility (§09).</td></tr>
+        <tr><td>Alignment &amp; shape</td><td>Tensor-core paths want aligned pointers and friendly dimensions (multiples of 8/16 depending on dtype). An unlucky feature dimension can silently cost you the tensor-core kernel — a real, checkable answer to "why is this layer slower than the FLOPs suggest?"</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="chapter" id="c13">
+    <h2><span class="ch-num">13</span>SDPA: the backend zoo</h2>
+
+    <p>Scaled-dot-product attention is one op with several completely different implementations, chosen at runtime. It is, for that reason, the single flakiest and most support-heavy surface in modern PyTorch — and it is where Eddie Yan's bug from the intro landed.</p>
+
+    <div class="diagram">  torch.nn.functional.scaled_dot_product_attention(q, k, v, ...)
+   selects among:
+    ├─ FLASH ATTENTION      fastest; fp16/bf16; head-dim &amp; alignment
+    │                        limits; causal/no-mask; sm80+
+    ├─ MEMORY-EFFICIENT     broader support, still no S×S materialization
+    ├─ cuDNN ATTENTION      NVIDIA's library path (newer)
+    └─ MATH (fallback)      composite ops; MATERIALIZES the S×S score
+                            matrix ⇒ O(S²) memory ⇒ the OOM-and-slow
+                            cliff nobody notices until profiling
+  ─────────────────────────────────────────────────────────────
+  SELECTION depends on: dtype, head dim, mask type (arbitrary attn_mask
+  often disqualifies flash), dropout, alignment, arch, train vs eval.
+  Force/inspect with torch.nn.attention.sdpa_kernel(...) — and in triage,
+  ALWAYS check which backend actually ran before blaming the model.
+  ─────────────────────────────────────────────────────────────
+  THE INTERVIEW-GRADE STORY: pytorch#165801 — the CI docker script
+  installed cuDNN 9.8 while the shipped wheels carried 9.10.2, so the
+  cuDNN attention backend was NOT selected as expected. A VERSION SKEW
+  BETWEEN CI AND WHEELS silently changed which KERNEL runs for users.
+  Filed by Eddie Yan — Technical Lead of PyTorch at NVIDIA, and one of
+  Piotr's directs. This one issue is the entire thesis of this loop:
+  the core internals and the delivery pipeline are the same job.</div>
+  </section>
+
+  <section class="chapter" id="c14">
+    <h2><span class="ch-num">14</span>NCCL touchpoints</h2>
+
+    <table class="tbl">
+      <thead><tr><th>Surface</th><th>What a life-cycle engineer must know</th></tr></thead>
+      <tbody>
+        <tr><td>Version pinning</td><td>NCCL ships in the wheel's dependency set; bumps change performance, timing, and occasionally behavior — and distributed tests are the most timing-sensitive in CI (Vol. III §05).</td></tr>
+        <tr><td>Env surface</td><td><code>NCCL_DEBUG=INFO</code>, <code>NCCL_DEBUG_SUBSYS</code>, algorithm/protocol and topology variables — the first tools in any distributed triage, and worth knowing by name.</td></tr>
+        <tr><td>Async error handling &amp; timeouts</td><td>A collective that never completes eventually times out; PyTorch's async error handling and the NCCL <em>flight recorder</em> (a ring buffer of collectives per rank, dumpable on hang) exist because "it hangs" is otherwise undebuggable. §21's tree uses them.</td></tr>
+        <tr><td>Depth</td><td>Vol. I §14–18 — and your UCX/exchange background makes the transport layer genuinely yours.</td></tr>
+      </tbody>
+    </table>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART IV ===================== -->
+<div class="part" id="p4">
+  <div class="part-label">Part IV — The decision trees</div>
+  <h2 class="part-title">Eight <span class="acc">scripts.</span></h2>
+  <p class="part-intro">Each tree is a diagnostic you can execute out loud. They share one grammar — <strong>classify before you dig</strong> — because the senior failure mode in every one of these is debugging the wrong class. Learn the first branch of each; the rest follows.</p>
+
+  <section class="chapter" id="c15">
+    <h2><span class="ch-num">15</span>Tree 1 · CUDA out of memory</h2>
+
+    <div class="tree">
+<pre><span class="q">"CUDA out of memory. Tried to allocate 2.00 GiB…"</span>
+   │
+   ├─ <span class="a">FIRST: read the numbers in the message + memory_summary()</span>
+   │     allocated vs reserved (§02) — this ONE comparison routes you:
+   │
+   ├─ <span class="a">reserved ≫ allocated (GBs "free" but the alloc fails)</span>
+   │     ⇒ FRAGMENTATION, not capacity
+   │     → PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True   (first move)
+   │     → stabilize shapes (variable seq-len is the usual cause);
+   │       bucket/pad; avoid alternating huge/tiny allocations
+   │     → max_split_size_mb as a fallback knob
+   │     → empty_cache() is NOT a fix (§02) — say so
+   │
+   ├─ <span class="a">allocated ≈ capacity (you genuinely need the memory)</span>
+   │     ⇒ CAPACITY. In cost order:
+   │     → autocast/bf16 (activations halve)
+   │     → activation checkpointing (Vol. V §16: recompute vs store)
+   │     → micro-batching + grad accumulation (§Vol. V §11: it's free)
+   │     → fused optimizer (no foreach intermediates, Vol. III §21)
+   │     → FSDP/sharding if the PARAMS+OPTIM STATE are the problem
+   │       (know the split: params/grads/optim vs activations —
+   │        naming which one dominates IS the diagnosis)
+   │
+   ├─ <span class="a">allocated CLIMBS every iteration</span>  ⇒ that's Tree 6 (§20), not this one
+   │
+   ├─ <span class="a">a single op spikes it</span>
+   │     ⇒ materialization: SDPA fell back to MATH (O(S²) scores! §13),
+   │       a cat/stack of everything, a foreach temporary, an
+   │       unexpected fp32 upcast (Vol. V §03), a cuDNN workspace
+   │     → memory snapshot (§23) shows the allocating stack directly
+   │
+   └─ <span class="a">it only OOMs on ONE GPU/rank</span>
+         ⇒ imbalance (uneven shapes per rank), another tenant on the
+           device, or rank 0 doing extra work (logging/eval/checkpoint)</pre>
+    </div>
+  </section>
+
+  <section class="chapter" id="c16">
+    <h2><span class="ch-num">16</span>Tree 2 · It's slow</h2>
+
+    <div class="tree">
+<pre><span class="q">"Training is slower than it should be."</span>
+   │
+   ├─ <span class="a">FIRST QUESTION: is the GPU actually busy?</span>  (profiler timeline;
+   │     nvidia-smi is a crude proxy — the timeline is the truth)
+   │
+   ├─ <span class="a">GPU IDLE, CPU BUSY  ⇒ host-bound</span>
+   │     ├ dataloader: too few workers, no pin_memory, heavy decode,
+   │     │   no prefetch → §05
+   │     ├ python/launch overhead: thousands of tiny kernels
+   │     │   → foreach/fused optimizer · torch.compile · CUDA graphs
+   │     │     (Vol. III §20-21, §06) — the launch-overhead war
+   │     └ accidental SYNCS: run torch.cuda.set_sync_debug_mode("warn")
+   │         and hunt them to zero (§03) ← the move most people miss
+   │
+   ├─ <span class="a">GPU IDLE, CPU IDLE  ⇒ you're waiting on something</span>
+   │     ⇒ a sync, an H2D copy that isn't overlapped, or (distributed)
+   │       a collective waiting on a straggler rank
+   │
+   ├─ <span class="a">GPU BUSY but throughput is below the roofline  ⇒ kernel-level</span>
+   │     ├ not on tensor cores: fp32 without TF32 (§07); bad
+   │     │   alignment/dims (§12); wrong dtype
+   │     ├ layout thrash: NCHW vs channels_last transposes (§11)
+   │     ├ SDPA fell back to MATH (§13) — CHECK WHICH BACKEND RAN
+   │     ├ cudnn.benchmark off, or ON with varying shapes (§11)
+   │     └ hidden copies: dtype promotion inserting a full extra pass
+   │         (Vol. V §03/§18) — visible as stray copy_ kernels
+   │
+   └─ <span class="a">DISTRIBUTED  ⇒ comm-bound</span>
+         ├ allreduce not overlapping (bucket size; find_unused_parameters
+         │   forcing a graph traversal every step) — Vol. V §25
+         ├ stragglers: one slow rank sets the pace (profile ALL ranks)
+         └ topology: NVLink vs PCIe; NCCL_DEBUG=INFO shows the rings</pre>
+    </div>
+
+    <div class="callout tip">
+      <h5>The framing that makes this answer senior</h5>
+      <p>"Slow" is never one question — it's four (host-bound, sync-bound, kernel-bound, comm-bound), and the profiler timeline distinguishes them in about ninety seconds. Open with that, then walk the branch they care about. Volunteering <code>set_sync_debug_mode</code> and "check which SDPA backend actually ran" marks you as someone who has done this for real.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c17">
+    <h2><span class="ch-num">17</span>Tree 3 · Numerics mismatch</h2>
+
+    <div class="tree">
+<pre><span class="q">"Results differ — CPU vs GPU, or across GPUs, or after an upgrade."</span>
+   │
+   ├─ <span class="a">MAKE IT DETERMINISTIC FIRST</span> (§09) — otherwise you're chasing noise
+   │     seeds + use_deterministic_algorithms(True) + cudnn.benchmark=False
+   │
+   ├─ <span class="a">BUILD A TRUSTWORTHY REFERENCE</span>: float64, on CPU.
+   │     NEVER adjudicate by comparing two suspects to each other (§10)
+   │
+   ├─ <span class="a">COMPUTE THE ERROR BUDGET</span>: what CAN this dtype, this reduction
+   │     length, this algorithm produce? (§07-08) Now you have a number.
+   │
+   ├─ <span class="a">WITHIN BUDGET, both sides of the reference ⇒ DIFFERENTLY RIGHT</span>
+   │     → fix the TEST's tolerance, with the budget as justification
+   │     → document the arch-delta. Never widen a tolerance blindly (§10)
+   │
+   ├─ <span class="a">OUTSIDE BUDGET / diverges with scale / NaN / systematic drift</span>
+   │     ⇒ WRONG. Now localize:
+   │     ├ toggle suspects ONE at a time: TF32 off · fp16 reduced-precision
+   │     │   reduction off · force SDPA math backend · autocast off ·
+   │     │   cudnn.benchmark off
+   │     │     → whichever toggle fixes it NAMES THE LAYER
+   │     ├ bisect the MODEL: hook every module, compare activations to the
+   │     │   fp64 reference layer by layer → the first layer that exceeds
+   │     │   budget is your op
+   │     └ bisect the VERSION (Vol. IV P8) if it changed after an upgrade
+   │         → then §22's tree: WHICH layer moved (torch/cuDNN/driver)?
+   │
+   └─ <span class="a">HAND IT OFF WELL</span>: minimal repro + arch + dtype + shapes + library
+         versions + the error-vs-budget number. On this team, that hand-off
+         goes to a colleague down the hall — make it a gift, not a ticket.</pre>
+    </div>
+  </section>
+
+  <section class="chapter" id="c18">
+    <h2><span class="ch-num">18</span>Tree 4 · Device-side assert / illegal memory access</h2>
+
+    <div class="tree">
+<pre><span class="q">"RuntimeError: CUDA error: device-side assert triggered"</span>
+   │
+   ├─ <span class="a">THE TRACEBACK IS LYING</span> — launches are async (§01), so the error
+   │     surfaced at the next sync, not at the faulting kernel.
+   │     ⇒ RERUN with CUDA_LAUNCH_BLOCKING=1 → now the stack points at
+   │       the real op. (Also: only the FIRST error is meaningful; the
+   │       context is corrupted afterward, so everything downstream is
+   │       noise. Say this — it's the ptrblck reflex.)
+   │
+   ├─ <span class="a">READ THE ASSERT TEXT</span> — it names the mechanism:
+   │     "Assertion `srcIndex &lt; srcSelectDimSize` failed"
+   │        ⇒ INDEX OUT OF RANGE in a gather/embedding/index op
+   │     "Assertion `t &gt;= 0 &amp;&amp; t &lt; n_classes` failed"
+   │        ⇒ a LABEL outside [0, C) — nll_loss/cross_entropy
+   │
+   ├─ <span class="a">RANK THE CLASSIC CAUSES</span>
+   │     1 labels 1-indexed, or a sentinel (255 / -1) reaching the loss
+   │     2 embedding index ≥ num_embeddings (vocab/tokenizer mismatch)
+   │     3 class-count mismatch (model head vs dataset)
+   │     4 a genuinely bad index computed upstream
+   │
+   ├─ <span class="a">CONFIRM ON CPU</span> — the same op raises a readable, synchronous
+   │     Python error with the offending value. Cheapest possible proof.
+   │
+   └─ <span class="a">NOT AN INDEX BUG? ⇒ "illegal memory access" territory</span>
+         → compute-sanitizer (memcheck) finds the offending kernel
+         → suspect custom kernels/extensions, out-of-bounds writes,
+           multi-stream lifetime bugs (§04 — freed memory still in use)
+         → TORCH_USE_CUDA_DSA for device-side assertions in builds that
+           enable them; TORCH_SHOW_CPP_STACKTRACES=1 for the C++ frame</pre>
+    </div>
+  </section>
+
+  <section class="chapter" id="c19">
+    <h2><span class="ch-num">19</span>Tree 5 · Nondeterminism</h2>
+
+    <div class="tree">
+<pre><span class="q">"Two identical runs give different numbers."</span>
+   │
+   ├─ <span class="a">Is the INPUT identical?</span> seeds (python/numpy/torch/cuda), dataloader
+   │     worker seeding, shuffle order, DistributedSampler.set_epoch,
+   │     augmentation RNG. Most "nondeterminism" dies here.
+   │
+   ├─ <span class="a">Still differs? ⇒ turn on the oracle</span>
+   │     torch.use_deterministic_algorithms(True)
+   │       → it RAISES AND NAMES the nondeterministic op (§09).
+   │         Mystery → list, in one line. This is the whole trick.
+   │
+   ├─ <span class="a">The named op is atomics-based</span> (scatter_add/index_add/embedding
+   │     backward) ⇒ inherent: order of atomic accumulation varies.
+   │     → use the deterministic variant, restructure (sort+segment-reduce),
+   │       or accept and document
+   │
+   ├─ <span class="a">Nothing raises, but it still differs</span>
+   │     ⇒ cudnn.benchmark (timing-based algo choice) · TF32/precision
+   │       flags differing between runs · a different GPU/arch in a
+   │       multi-node pool (§08) · NCCL reduction order
+   │
+   └─ <span class="a">Ask the meta-question:</span> do you need BITWISE determinism, or
+         STATISTICAL reproducibility? The first costs real speed; the
+         second usually just needs seeds + a fixed data order. Knowing
+         which one the user actually needs is the senior move — because
+         "make it deterministic" is often the wrong request.</pre>
+    </div>
+  </section>
+
+  <section class="chapter" id="c20">
+    <h2><span class="ch-num">20</span>Tree 6 · Memory grows</h2>
+
+    <div class="tree">
+<pre><span class="q">"Memory climbs every iteration / every epoch until it OOMs."</span>
+   │
+   ├─ <span class="a">WHICH number is climbing?</span> (§02)
+   │     allocated climbing  ⇒ you are HOLDING REFERENCES (a real leak)
+   │     reserved climbing, allocated flat ⇒ FRAGMENTATION (Tree 1)
+   │
+   ├─ <span class="a">ALLOCATED climbing — the reference-leak suspects, in order</span>
+   │     1 accumulating a TENSOR instead of a float:
+   │         total_loss += loss        ← keeps the whole autograd graph
+   │         total_loss += loss.item() ← correct  (Vol. IV §13, Vol. V §10)
+   │     2 stashing outputs/activations in a python list for logging
+   │         → .detach() (and usually .cpu()) before you store
+   │     3 retain_graph=True used to silence an error (Vol. V §13) —
+   │         it doesn't fix the bug, it just makes it expensive
+   │     4 hooks / closures capturing tensors; a module holding its own
+   │         last output as an attribute
+   │     5 an EMA/buffer updated with = instead of copy_/detach
+   │     6 caching keyed by shape that never evicts (Vol. IV P7's LRU
+   │         with no capacity)
+   │
+   ├─ <span class="a">PROVE IT rather than guess</span>
+   │     torch.cuda.memory._record_memory_history() → _dump_snapshot()
+   │     → open in the memory visualizer → the surviving allocations show
+   │       their ALLOCATION STACK. The leak names itself. (§23)
+   │
+   └─ <span class="a">Growth only across EPOCHS, not iterations?</span>
+         ⇒ per-epoch objects: a new dataloader/iterator each epoch holding
+           workers, a validation pass without no_grad (Vol. V §15), a list
+           of per-epoch metrics holding CUDA tensors.</pre>
+    </div>
+  </section>
+
+  <section class="chapter" id="c21">
+    <h2><span class="ch-num">21</span>Tree 7 · Distributed hang</h2>
+
+    <div class="tree">
+<pre><span class="q">"The job hangs. No error, no progress, GPUs at 100% or 0%."</span>
+   │
+   ├─ <span class="a">FIRST: WHO is stuck, and WHERE?</span>
+   │     py-spy dump --pid &lt;each rank&gt;   → python stacks for every rank
+   │     → the rank whose stack differs is usually the culprit
+   │     → NCCL flight recorder (a per-rank ring buffer of collectives,
+   │       dumpable on timeout) shows WHICH collective each rank is in —
+   │       a mismatch is immediately visible
+   │
+   ├─ <span class="a">THE UNIVERSAL CAUSE: ranks disagree about the collective sequence</span>
+   │     ⇒ every rank must issue the SAME collectives, in the SAME ORDER,
+   │       with the SAME shapes. Any divergence = permanent wait.
+   │     ├ DDP: a parameter that gets NO GRADIENT on some ranks (unused
+   │     │   head, conditional branch) ⇒ its bucket never completes ⇒ that
+   │     │   rank never launches its allreduce (Vol. V §25).
+   │     │   → find_unused_parameters=True (costly) or fix the model
+   │     ├ control flow that differs per rank (`if rank == 0: extra_step()`,
+   │     │   an early `continue`, a rank-dependent branch)
+   │     ├ UNEVEN DATA: one rank runs out of batches and exits the loop
+   │     │   while others wait at the next allreduce (→ join/drop_last)
+   │     ├ a rank CRASHED or was OOM-killed; the survivors block forever
+   │     └ mixing a CPU barrier (gloo) with GPU collectives inconsistently
+   │
+   ├─ <span class="a">CONFIRM the class</span>: TORCH_DISTRIBUTED_DEBUG=DETAIL names mismatched
+   │     params/shapes; NCCL_DEBUG=INFO shows ring setup and where it stalls
+   │
+   └─ <span class="a">HARDEN</span>: collective timeouts + async error handling so a hang
+         becomes a LOUD, ATTRIBUTED FAILURE instead of a silent stall —
+         which is the difference between a 10-minute debug and a lost night
+         of cluster time. (This is a great thing to say in Wei's hour: hangs
+         are a CI/infra problem as much as a code problem.)</pre>
+    </div>
+  </section>
+
+  <section class="chapter" id="c22">
+    <h2><span class="ch-num">22</span>Tree 8 · Regression after an upgrade</h2>
+
+    <p>The life-cycle tree — the one this role owns. Something changed; the stack has six layers; the user says "it broke."</p>
+
+    <div class="tree">
+<pre><span class="q">"It worked last week. New torch (or driver, or image) — now it's broken/slow/different."</span>
+   │
+   ├─ <span class="a">ENUMERATE what can move</span> (Vol. III §01's vertical, as a checklist)
+   │     model code · data · PyTorch · the nvidia-* dep wheels bundled with
+   │     it (cuDNN/cuBLAS/NCCL!) · CUDA runtime · DRIVER · the GPU itself ·
+   │     the container image
+   │     ⇒ collect_env on BOTH the good and bad environments, diff them.
+   │       Half of all "PyTorch regressions" die at this diff, because the
+   │       thing that moved wasn't PyTorch.
+   │
+   ├─ <span class="a">CLASSIFY the symptom</span>
+   │     ├ CRASH / import error / undefined symbol ⇒ Vol. III §12 (linking),
+   │     │   not this tree
+   │     ├ SLOWER ⇒ an algorithm choice changed: cuDNN/cuBLAS heuristics
+   │     │   picked differently (§11-12), TF32 default changed, an SDPA
+   │     │   backend became unavailable and fell back to MATH (§13),
+   │     │   cudnn.benchmark interacting with new shapes
+   │     └ DIFFERENT NUMBERS ⇒ Tree 3 (§17) — with a version axis
+   │
+   ├─ <span class="a">CHANGE ONE VARIABLE AT A TIME</span> — the whole discipline:
+   │     new torch + OLD cuDNN wheel? old torch + NEW driver? same torch,
+   │     old image? Each pin isolates one layer. The dependency web of
+   │     Vol. III §05 is exactly the list of variables to pin.
+   │
+   ├─ <span class="a">BISECT</span> once the layer is known: nightlies (Vol. IV P8's
+   │     first_bad), or the dep wheel versions, or the image digests.
+   │     Cost model matters: each check is a build+test, so log₂ is hours.
+   │
+   └─ <span class="a">CLOSE THE LOOP LIKE THIS TEAM DOES</span>
+         → if it's OURS: fix + a regression test that would have caught it
+         → if it's a LIBRARY's: minimal repro to the cuDNN/cuBLAS team —
+           internally, down the hall (the vendor advantage)
+         → if it's a SKEW between CI and the shipped wheels: that's
+           pytorch#165801's class — fix the pin AND add the check that
+           makes the skew impossible. THIS is the life-cycle engineer's
+           signature move, and the panel will recognize it instantly.</pre>
+    </div>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART V ===================== -->
+<div class="part" id="p5">
+  <div class="part-label">Part V — The instrument panel</div>
+  <h2 class="part-title">Reach for the right <span class="acc">tool.</span></h2>
+
+  <section class="chapter" id="c23">
+    <h2><span class="ch-num">23</span>The tools, and when each one</h2>
+
+    <div class="cheat">
+      <h5>Diagnostics — the reflexes</h5>
+      <div class="cheat-grid">
+        <div class="cmd">torch.utils.collect_env</div><div class="desc">First move on ANY user report: torch version, CUDA, cuDNN, driver, GPU, OS. Half of Tree 8 is solved by diffing two of these.</div>
+        <div class="cmd">torch.profiler (+ chrome trace)</div><div class="desc">The timeline that separates host-bound / sync-bound / kernel-bound / comm-bound (Tree 2). <code>record_shapes</code> + <code>with_stack</code> when you need to attribute a kernel back to python.</div>
+        <div class="cmd">torch.cuda.set_sync_debug_mode("warn"|"error")</div><div class="desc">Enumerates accidental synchronizations. The highest-yield, least-known perf tool in PyTorch.</div>
+        <div class="cmd">torch.cuda.memory._record_memory_history() / _dump_snapshot()</div><div class="desc">Allocation-level memory forensics with stacks; view in the memory visualizer. Trees 1 and 6 both end here.</div>
+        <div class="cmd">torch.cuda.memory_summary()</div><div class="desc">The allocated-vs-reserved readout, instantly (§02).</div>
+        <div class="cmd">CUDA_LAUNCH_BLOCKING=1</div><div class="desc">Makes async errors report at the faulting launch (Tree 4). Debug only — it serializes everything.</div>
+        <div class="cmd">compute-sanitizer (memcheck / racecheck)</div><div class="desc">Illegal memory access and races, at kernel granularity. The escalation past CUDA_LAUNCH_BLOCKING.</div>
+        <div class="cmd">torch.use_deterministic_algorithms(True)</div><div class="desc">Names the nondeterministic op instead of leaving you guessing (Tree 5).</div>
+        <div class="cmd">torch.autograd.set_detect_anomaly(True)</div><div class="desc">Attributes a backward NaN/error to the FORWARD line that created the node. Slow — a scalpel, not a default.</div>
+        <div class="cmd">TORCH_SHOW_CPP_STACKTRACES=1</div><div class="desc">The C++ frames behind a terse Python RuntimeError.</div>
+        <div class="cmd">TORCH_LOGS=graph_breaks,recompiles,output_code</div><div class="desc">Why <code>torch.compile</code> is slow: breaks and recompiles, plus the generated Triton (Vol. V §23).</div>
+        <div class="cmd">NCCL_DEBUG=INFO · TORCH_DISTRIBUTED_DEBUG=DETAIL · flight recorder</div><div class="desc">The distributed triad (Tree 7).</div>
+        <div class="cmd">py-spy dump --pid</div><div class="desc">Where is every rank stuck, right now, without instrumenting anything. Indispensable for hangs.</div>
+        <div class="cmd">nsys / ncu</div><div class="desc">When the PyTorch profiler isn't enough: full system timeline (nsys) or per-kernel counters and roofline (ncu).</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="chapter" id="c24">
+    <h2><span class="ch-num">24</span>Reproduction discipline</h2>
+
+    <table class="tbl">
+      <thead><tr><th>Step</th><th>Why it's non-negotiable</th></tr></thead>
+      <tbody>
+        <tr><td>Minimal repro</td><td>Shrink until every remaining line is load-bearing. Most bugs die during the shrinking; the survivors are now diagnosable — and shareable with a library team without an NDA-shaped conversation about the user's model.</td></tr>
+        <tr><td>Environment capture</td><td><code>collect_env</code> output attached, always. A repro without an environment is a rumor.</td></tr>
+        <tr><td>Determinize</td><td>Seeds + deterministic algorithms, or you'll "fix" noise (§09).</td></tr>
+        <tr><td>State the expectation</td><td>"Expected X, got Y, tolerance Z, budget W" — a bug report with a number in it gets triaged first, everywhere, forever.</td></tr>
+        <tr><td>Verify the fix, then prevent the class</td><td>The test that would have caught it is the deliverable — not the fix. On a CI-owning team, that sentence <em>is</em> the job description.</td></tr>
+      </tbody>
+    </table>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART VI ===================== -->
+<div class="part" id="p6">
+  <div class="part-label">Part VI — Synthesis</div>
+  <h2 class="part-title">Two days <span class="acc">out.</span></h2>
+
+  <section class="chapter" id="c25">
+    <h2><span class="ch-num">25</span>Three fire drills</h2>
+
+    <div class="issue">
+      <div class="issue-header"><span class="tag">DRILL</span><span class="title">"Users report the 2.x wheels got 30% slower on attention. Nothing in the model changed."</span></div>
+      <div class="issue-body">
+        <h5>Classify</h5>
+        <p>Regression after upgrade (Tree 8) with a perf symptom ⇒ an algorithm-selection change, not a code change. Attention ⇒ SDPA backend selection is the prime suspect (§13).</p>
+        <h5>Diagnose</h5>
+        <p>Check <em>which backend actually runs</em> in both versions (force each with the sdpa_kernel context and compare; profile to see whether an O(S²) score matrix is being materialized — the math-fallback signature). Then ask why selection changed: a dtype/head-dim/mask condition that newly disqualifies flash, an arch condition, or — the pytorch#165801 class — a <strong>version skew between what CI validated and what the wheel actually ships</strong>, so the intended cuDNN/flash path isn't available at runtime. Confirm by diffing <code>collect_env</code> and the bundled nvidia-* wheel versions between the two installs.</p>
+        <h5>Fix &amp; harden</h5>
+        <p>Restore the intended backend (fix the pin/condition), then add the check that makes the class impossible: a CI assertion that the <em>selected backend</em> for representative shapes is the expected one — a behavioral test, not a version test. That's the difference between fixing a bug and closing a hole.</p>
+      </div>
+    </div>
+
+    <div class="issue">
+      <div class="issue-header"><span class="tag">DRILL</span><span class="title">"One CUDA test fails only on one arch, only in fp16, off by 3e-3."</span></div>
+      <div class="issue-body">
+        <h5>Classify</h5>
+        <p>Tree 3, arch-scoped. The magnitude smells like a reduction/accumulation difference, not corruption — but "smells like" is not a verdict.</p>
+        <h5>Diagnose</h5>
+        <p>Determinize; build the float64 CPU reference; compute both sides' error against it. Establish the budget: fp16 mantissa × reduction length × whether split-k / reduced-precision reduction is in play (§07). Toggle: TF32 off, <code>allow_fp16_reduced_precision_reduction=False</code>, force a deterministic algorithm — whichever toggle moves the number names the mechanism. Check whether the failing arch selects a different library algorithm (§11–12) or a different launch geometry (Vol. V §20).</p>
+        <h5>Adjudicate &amp; act</h5>
+        <p>Within budget on both sides ⇒ differently-right: fix the tolerance <em>with the budget written into the test comment</em>, and note the arch-delta. Outside budget or systematic ⇒ wrong: minimal repro + arch + dtype + shapes + library version, handed to the kernel owner. Either way the paper trail is the deliverable — and either way you just did the job this team does every week.</p>
+      </div>
+    </div>
+
+    <div class="issue">
+      <div class="issue-header"><span class="tag">DRILL</span><span class="title">"A distributed CI job hangs, but only on the aarch64 runners, and only sometimes."</span></div>
+      <div class="issue-body">
+        <h5>Classify</h5>
+        <p>Two trees at once: hang (Tree 7) plus platform-scoped flakiness (Vol. III §17, §19). "Sometimes" + "one platform" is the signature of a race that different timing exposes — or of an environment difference that only that fleet has.</p>
+        <h5>Diagnose</h5>
+        <p>Get the stacks: py-spy every rank in a hung job; dump the NCCL flight recorder to see which collective each rank is inside — a mismatch localizes it instantly to a rank-divergence bug (Tree 7's universal cause). If all ranks are in the <em>same</em> collective, it's transport/environment: NCCL_DEBUG=INFO for ring setup, check the fleet's driver/NCCL versions against x86 (Vol. III §09), check for a recent runner image change (Vol. III §19's timeline correlation). Timing sensitivity on one platform often means a real race that x86's timing happens to hide — do not dismiss it as "arm is flaky."</p>
+        <h5>Fix &amp; harden</h5>
+        <p>Root-cause the divergence or the environment drift; then make hangs loud — collective timeouts and async error handling so the next occurrence produces an attributed failure with a flight-recorder dump instead of a dead job (§21). Coverage-wise: this is the parity problem of Vol. III §08 — the arm lane needs the same distributed signal as x86, or its bugs are found by users.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="chapter" id="c26">
+    <h2><span class="ch-num">26</span>The recalibrated hour-by-hour</h2>
+
+    <p>What the org chart changes for each conversation. Vol. II's per-hour drills still stand — this is the internals overlay on top of them.</p>
+
+    <table class="tbl wide">
+      <thead><tr><th>Hour</th><th>The overlay</th></tr></thead>
+      <tbody>
+        <tr><td>Ting (Mon 12:45)</td><td>Enablement is still her ground (Vol. III) — but she's a core-team member, so expect the internals <em>tail</em> of enablement: when a new arch lands, which tests go red and why (Vol. V §20's reductions, §08's dtype macros), what a new dtype costs in compile time and binary size, why a cuDNN bump moves numbers. Bring the arch-list/PTX material AND the tolerance-vs-bug adjudication (§10).</td></tr>
+        <tr><td>Wei (Mon 2:00)</td><td>CI at scale — now with the understanding that <em>the red tests are core failures</em>. His flaky-test taxonomy (Vol. III §17) meets this volume's Trees 3, 5, and 8: arch-scoped numerics, atomics nondeterminism, and library-bump regressions are the actual content of his triage queue. Lead with the classification-before-digging grammar.</td></tr>
+        <tr><td>Masaki (Mon 6:00)</td><td>The deepest internals hour. Vol. V is the preparation: dispatch, autograd mechanism, foreach/fused/capturable, TensorIterator, and honest compiler boundaries (§24). Expect possible source reading (Vol. V §27's file map).</td></tr>
+        <tr><td>Piotr (Tue 2:00)</td><td>Synthesis — and now you know he's the manager of a core team, a PyTorch Core Maintainer, and the forum's most prolific debugger. <strong>These eight trees are his native language.</strong> The debugging story and the live triage (Vol. II §17) should be executed in tree form: classify, hypothesize, instrument, adjudicate, harden. Then the positioning line of Vol. II §25.</td></tr>
+        <tr><td>Paul (Tue 3:00)</td><td>Unchanged (Vol. II §09). Know the bands, defer to offer-and-level.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="chapter" id="c27">
+    <h2><span class="ch-num">27</span>The final-day plan</h2>
+
+    <div class="callout warn">
+      <h5>The loop starts tomorrow. You cannot read six volumes tonight — don't try.</h5>
+      <p>Priority is the only scarce resource left. The org chart raised the internals bar, so the marginal hour is best spent on <em>mechanism you can derive</em>, not coverage you can recite. The blocks below are ordered by expected value, not by clock — do them in order and stop when you run out of day. Getting through Priority 1 and 2 with real fluency beats skimming all six volumes, by a wide margin.</p>
+    </div>
+
+    <table class="tbl">
+      <thead><tr><th>Block</th><th>Do exactly this</th></tr></thead>
+      <tbody>
+        <tr><td>PRIORITY 1 — today, ~3h</td><td><strong>Vol. V Parts II–III</strong>: the dispatcher (§05–06) and autograd (§10–17). Then close the manual and <em>say out loud</em>, from memory: the life of <code>a+b</code>; what <code>backward()</code> does step by step; why the in-place error exists. If you can't say it without notes, reread only that chapter. <strong>This is the single highest-value block in the entire set</strong> — it is the material the org chart added to the bar.</td></tr>
+        <tr><td>PRIORITY 2 — today, ~2h</td><td><strong>Vol. VI Part IV</strong>: all eight trees, aloud, one pass — you only need the <em>first branch</em> of each to be automatic. Then <strong>§10</strong> (wrong vs differently-right) twice; it's the highest-leverage page in the volume. Then skim §03 (sync points) and §13 (the SDPA zoo + the #165801 story).</td></tr>
+        <tr><td>PRIORITY 3 — today, ~1h</td><td><strong>Vol. V Part IV</strong> (TensorIterator, gpu_kernel, reductions — Xiang Gao's machine, and your CUDA background's home turf) and <strong>§22</strong> (adding an op end to end — the bridge sentence that articulates the job better than the JD does).</td></tr>
+        <tr><td>PRIORITY 4 — today, ~1h</td><td><strong>Vol. III</strong> targeted skim — enablement pipeline (§04–08), CI topology (§15–17), linking bestiary (§12). This is still the JD, and tomorrow's first two hours are still Ting's and Wei's. Then <strong>Vol. II</strong> Part VII (the org chart) and §11 (your narrative).</td></tr>
+        <tr><td>Tonight — 45 min, hands on the 5090</td><td>Don't read; <em>run</em>. Three things: <code>torch.cuda.set_sync_debug_mode("warn")</code> on a small training loop and watch it name a sync; a memory snapshot dump (<code>_record_memory_history</code> → <code>_dump_snapshot</code>); and <code>torch.use_deterministic_algorithms(True)</code> until it raises and names an op. <strong>Having personally watched these three tools fire is worth more than another hour of reading</strong> — it converts Vol. VI's trees from prose into muscle memory. Then stop. Sleep is the last prep item (Vol. II §21).</td></tr>
+        <tr><td>Monday morning</td><td>Light only: the Vol. II §21 checklist, your 90-second narrative aloud once, the first branch of each of the eight trees, and Vol. V §26's fifteen answers skimmed. Nothing new. Lunch by noon; seated and set up by 12:30 for Ting at 12:45.</td></tr>
+        <tr><td>Monday 3:00–5:30 (the gap)</td><td>Your one real study window <em>inside</em> the loop: decompress first, then re-arm for Masaki with <strong>Vol. V §10–22</strong> (autograd + kernels) and <strong>Vol. III §20–24</strong>. Energy ritual at 5:50 — that 6 pm hour is the deepest internals conversation of the loop and it lands at your lowest circadian point.</td></tr>
+        <tr><td>Monday night → Tuesday</td><td>Fifteen minutes of notes for Piotr; no cramming. Tuesday morning: <strong>Vol. VI §26</strong> (the recalibrated hours) + <strong>Vol. II §17 and §25</strong> (the drills and the positioning line). Then walk into 2 pm rested.</td></tr>
+        </tbody>
+    </table>
+
+    <div class="idea">
+      <p><strong>The whole strategy in one paragraph.</strong> The org chart didn't change who you are — it changed what the room will recognize. You are interviewing with the people who wrote the machine, for a job that keeps the machine shippable. So: know the mechanism well enough to derive it live (Vol. V), own the failure trees well enough to run them out loud (Vol. VI), keep the enablement and CI depth that the JD actually asks for (Vol. III), and be exact about where your experience ends. Then say the thing that's true and that nobody else in their pipeline can say: <em>"I can read your kernels, I can debug across your whole stack, and I want to own the system that gets your work to the world — reliably, on every GPU you ship."</em> That sentence is the job, the team, and you, in one line.</p>
+    </div>
+
+    <p class="pull">They wrote the machine. You'll keep it shippable — and you can read it while you do.</p>
+  </section>
+</div>
+
+</main>
+
+<footer>
+  <h4>sources &amp; companion volumes</h4>
+  <div class="resources">
+    <ul>
+      <li><strong>Anchor evidence for this volume's thesis</strong></li>
+      <li>pytorch#165801 (Eddie Yan, NVIDIA — Technical Lead of PyTorch): CI installed cuDNN 9.8 while the shipped CUDA 12.8 wheels carried 9.10.2, so cuDNN wasn't selected as an SDPA backend as expected. Core internals + delivery pipeline, one bug, one team.</li>
+      <li>Piotr's directs (from the org chart): Eddie Yan, Xiang Gao (TensorIterator type promotion + vectorized GPU loop; nvFuser), Ivan Yashchuk (PyTorch Compilers), Ting Lu, Wei Wang, Tirth Patel, Lakshay Garg — with Masaki Kozuki in the same org. Sites span HQ, Zurich, Tokyo and NY, which is the JD's "globally distributed teams" line made literal.</li>
+      <li><strong>Verify before asserting</strong></li>
+      <li>Precision-flag spellings and defaults (TF32, fp32 matmul precision), SDPA backend availability rules, and allocator env vars all evolve release-to-release. The <em>mechanisms</em> here are stable; check the current API surface against the docs before quoting a default with confidence.</li>
+      <li><strong>Companion volumes</strong></li>
+      <li>Vol. I — <code>pytorch_lifecycle_manual.html</code> · allocator/MemPool/NCCL/build depth</li>
+      <li>Vol. II — <code>nvidia_pytorch_panel_manual.html</code> · the people, the plan, and (new) Part VII: the org chart</li>
+      <li>Vol. III — <code>nvidia_pytorch_enablement_manual.html</code> · enablement, CI at scale, wheels, linking</li>
+      <li>Vol. IV — <code>nvidia_pytorch_coding_manual.html</code> · 13 worked coding problems</li>
+      <li>Vol. V — <code>nvidia_pytorch_core_manual.html</code> · object model, dispatcher, autograd, ATen kernels</li>
+    </ul>
+  </div>
+  <p class="footer-note">Eight trees, one grammar: classify before you dig. That single habit is what separates a week lost bisecting code for what was a driver update from an hour spent fixing the actual bug — and it is, more than any fact in these volumes, the thing a core team is listening for. Run the trees out loud, name the mechanism, compute the budget before you touch a tolerance, and hand off repros like gifts. That's the craft, and it's the same craft whether the failing thing is a kernel, a wheel, or a CI job at three in the morning.</p>
+</footer>
+
+</body>
+</html>
