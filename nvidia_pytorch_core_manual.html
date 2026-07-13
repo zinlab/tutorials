@@ -1,0 +1,1238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Core — PyTorch Internals · NVIDIA Panel Field Manual</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;0,8..60,700;1,8..60,400;1,8..60,500&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --bg:        #eef1ec;
+  --bg-2:      #e4e8e1;
+  --bg-3:      #d7dcd2;
+  --card:      #f7f9f4;
+  --ink:       #14181a;
+  --ink-soft:  #3d4642;
+  --ink-faint: #76807a;
+  --rule:      #c6ccc0;
+  --rule-soft: #d8ddd2;
+  --rule-dark: #8d958a;
+  --green:     #1a7f46;
+  --green-deep:#0e5e31;
+  --green-bri: #2ea05c;
+  --slate:     #33505f;
+  --slate-deep:#203642;
+  --amber:     #b07d12;
+  --rose:      #a32a1f;
+  --code-bg:   #15201a;
+  --code-ink:  #d6ddd2;
+  --maxw:      1080px;
+}
+*{ box-sizing: border-box; }
+html{ scroll-behavior: smooth; }
+body{
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Source Serif 4', Georgia, serif;
+  font-size: 17px;
+  line-height: 1.62;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ============ HEADER ============ */
+header{ max-width: var(--maxw); margin: 0 auto; padding: 84px 40px 50px; position: relative; }
+.filed{
+  font-family: 'Geist Mono', ui-monospace, monospace; font-size: 10.5px; letter-spacing: .28em;
+  text-transform: uppercase; color: var(--green); margin: 0 0 28px; font-weight: 600;
+  display: flex; align-items: center; gap: 12px;
+}
+.filed::before{ content: "▸"; color: var(--green); font-size: 13px; }
+.vol{
+  font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .18em;
+  color: var(--ink-faint); text-transform: uppercase; margin: 0 0 16px; font-weight: 500;
+}
+h1{
+  font-family: 'Archivo', system-ui, sans-serif; font-weight: 900;
+  font-size: clamp(54px, 9.5vw, 122px); line-height: 0.9; letter-spacing: -0.02em; margin: 0 0 24px; color: var(--ink);
+}
+h1 .acc{ color: var(--green); }
+.deck{ font-family: 'Source Serif 4', serif; font-size: 20px; font-weight: 400; color: var(--ink-soft); max-width: 780px; line-height: 1.5; }
+.readout{ margin-top: 40px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--rule); border: 1px solid var(--rule); }
+@media (max-width: 680px){ .readout{ grid-template-columns: repeat(2,1fr); } }
+.readout .cell{ background: var(--bg); padding: 14px 16px; }
+.readout .k{ font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 6px; }
+.readout .v{ font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 22px; color: var(--ink); line-height: 1; }
+.readout .v .u{ font-size: 12px; color: var(--green); font-weight: 600; }
+
+/* ============ TOC ============ */
+.toc{ margin-top: 46px; background: var(--card); border: 1px solid var(--rule-dark); padding: 30px 32px 34px; position: relative; }
+.toc::before{ content: "CONTENTS"; position: absolute; top: -9px; left: 26px; background: var(--card); padding: 0 10px; font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .3em; color: var(--green); font-weight: 600; }
+.toc h3{ font-family: 'Archivo', sans-serif; font-size: 26px; font-weight: 800; margin: 0 0 3px; color: var(--ink); letter-spacing: -0.01em; }
+.toc .toc-sub{ font-family: 'Geist Mono', monospace; font-size: 10.5px; color: var(--ink-faint); letter-spacing: .1em; text-transform: uppercase; margin-bottom: 20px; }
+.toc-part{ margin-top: 15px; }
+.toc-part-name{ font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .22em; color: var(--slate); text-transform: uppercase; font-weight: 600; border-bottom: 1px solid var(--rule); padding-bottom: 5px; margin-bottom: 7px; }
+.toc-grid{ display: grid; grid-template-columns: repeat(2,1fr); gap: 1px 32px; }
+@media (max-width: 760px){ .toc-grid{ grid-template-columns: 1fr; } }
+.toc-grid a{ color: var(--ink-soft); text-decoration: none; font-size: 14.5px; padding: 5px 0; display: flex; gap: 12px; align-items: baseline; border-bottom: 1px dotted transparent; transition: all .14s; }
+.toc-grid a:hover{ color: var(--green); border-color: var(--rule); }
+.toc-grid a .n{ font-family: 'Geist Mono', monospace; font-size: 10.5px; color: var(--slate); min-width: 26px; font-weight: 600; }
+
+/* ============ MAIN ============ */
+main{ max-width: var(--maxw); margin: 0 auto; padding: 56px 40px 96px; }
+.part{ margin-top: 92px; padding-top: 46px; position: relative; }
+.part::before{ content:""; position: absolute; top: 0; left: 0; right: 0; border-top: 2px solid var(--ink); }
+.part::after{ content:""; position: absolute; top: 5px; left: 0; width: 84px; border-top: 2px solid var(--green); }
+.part:first-child{ margin-top: 28px; padding-top: 28px; }
+.part-label{ font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .28em; color: var(--green); text-transform: uppercase; margin-bottom: 14px; font-weight: 600; }
+.part-title{ font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 54px; line-height: 0.96; letter-spacing: -0.02em; margin: 0 0 18px; color: var(--ink); }
+.part-title .acc{ color: var(--green); }
+.part-intro{ color: var(--ink-soft); font-size: 18.5px; max-width: 800px; margin-bottom: 34px; line-height: 1.5; }
+
+section.chapter{ margin-top: 52px; }
+section.chapter:first-of-type{ margin-top: 8px; }
+h2{ font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 33px; line-height: 1.08; letter-spacing: -0.015em; margin: 0 0 15px; color: var(--ink); display: flex; align-items: baseline; gap: 15px; padding-bottom: 9px; border-bottom: 2px solid var(--ink); }
+h2 .ch-num{ font-family: 'Geist Mono', monospace; font-size: 13px; color: var(--green); letter-spacing: .05em; font-weight: 600; flex-shrink: 0; }
+h3{ font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 22px; margin: 28px 0 9px; color: var(--ink); letter-spacing: -0.01em; }
+h4{ font-family: 'Geist Mono', monospace; font-size: 10.5px; letter-spacing: .18em; text-transform: uppercase; color: var(--slate); margin: 22px 0 8px; font-weight: 600; }
+p{ margin: 12px 0; }
+p code, li code, td code{ font-family: 'Geist Mono', monospace; font-size: .8em; background: var(--bg-3); color: var(--green-deep); padding: 1px 6px; border-radius: 2px; border: 1px solid var(--rule); }
+strong{ font-weight: 700; }
+ul, ol{ padding-left: 1.3em; }
+li{ margin: 6px 0; }
+ul.tight li{ margin: 3px 0; }
+ul.dash{ list-style: none; padding-left: 0; }
+ul.dash li{ position: relative; padding-left: 22px; }
+ul.dash li::before{ content: "▸"; position: absolute; left: 0; color: var(--green); font-weight: 700; }
+ul.check{ list-style: none; padding-left: 0; }
+ul.check li{ position: relative; padding-left: 24px; }
+ul.check li::before{ content: "▪"; position: absolute; left: 2px; top: 2px; color: var(--green); }
+
+/* ============ CODE ============ */
+pre{ background: var(--code-bg); padding: 17px 20px; overflow-x: auto; font-family: 'Geist Mono', monospace; font-size: 12.5px; line-height: 1.6; color: var(--code-ink); margin: 18px 0; position: relative; border-left: 3px solid var(--green); }
+pre .com{ color: #6f8378; font-style: italic; }
+pre .kw{  color: #6cb38a; }
+pre .ty{  color: #8fc6c0; }
+pre .str{ color: #c9b36a; }
+pre .num{ color: #c89a64; }
+pre .fn{  color: #8db8d0; }
+pre .var{ color: #d6ddd2; }
+pre .glb{ color: #7fbf95; }
+pre .opt{ color: #c0a96a; }
+pre::before{ content: attr(data-lang); position: absolute; top: 5px; right: 12px; font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: .18em; color: #56635a; text-transform: uppercase; }
+
+/* ============ CALLOUTS ============ */
+.callout{ margin: 22px 0; padding: 15px 22px; border-left: 4px solid var(--slate); background: var(--bg-2); font-size: 16px; line-height: 1.55; }
+.callout.warn{ border-color: var(--amber); }
+.callout.danger{ border-color: var(--rose); }
+.callout.tip{ border-color: var(--green); }
+.callout h5{ margin: 0 0 6px; font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--slate); font-weight: 600; }
+.callout.warn h5{ color: var(--amber); }
+.callout.danger h5{ color: var(--rose); }
+.callout.tip h5{ color: var(--green); }
+.callout p:first-child{ margin-top: 0; } .callout p:last-child{ margin-bottom: 0; }
+
+/* ============ TABLES ============ */
+.tbl{ width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14.5px; }
+.tbl th, .tbl td{ text-align: left; padding: 9px 14px; vertical-align: top; border-bottom: 1px solid var(--rule); }
+.tbl th{ font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink); font-weight: 600; border-bottom: 2px solid var(--ink); border-top: 2px solid var(--ink); background: var(--bg-2); }
+.tbl td:first-child{ font-family: 'Geist Mono', monospace; font-size: 12px; color: var(--green-deep); font-weight: 500; width: 26%; }
+.tbl.wide td:first-child{ width: 20%; }
+.tbl.compare td:first-child{ font-family: 'Geist Mono', monospace; font-weight: 600; color: var(--ink); width: 22%; font-size: 11.5px; letter-spacing: .03em; }
+.tbl.compare td:nth-child(2){ color: var(--green-deep); font-family: 'Source Serif 4', serif; font-size: 14.5px; }
+.tbl.compare td:nth-child(3){ color: var(--slate-deep); font-family: 'Source Serif 4', serif; font-size: 14.5px; }
+
+/* ============ DIAGRAM ============ */
+.diagram{ background: var(--card); border: 1px solid var(--rule-dark); padding: 22px 24px; margin: 22px 0; font-family: 'Geist Mono', monospace; font-size: 12px; line-height: 1.55; color: var(--ink-soft); white-space: pre; overflow-x: auto; position: relative; }
+.diagram::before{ content: "FIG."; position: absolute; top: -9px; left: 18px; background: var(--bg); padding: 0 9px; font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: .2em; color: var(--slate); font-weight: 600; }
+
+/* ============ ISSUE / WORKED CASE / Q&A ============ */
+.issue{ margin: 26px 0; background: var(--card); border: 1px solid var(--ink); }
+.issue-header{ padding: 12px 22px; background: var(--ink); color: var(--bg); font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; display: flex; align-items: center; gap: 13px; }
+.issue-header .tag{ background: var(--green); padding: 3px 11px; letter-spacing: .1em; font-weight: 600; font-size: 10px; color: #fff; }
+.issue-header .tag.qa{ background: var(--slate); }
+.issue-header .title{ flex: 1; font-weight: 600; letter-spacing: .08em; }
+.issue-body{ padding: 22px 26px; }
+.issue-body > h5{ margin: 16px 0 7px; font-family:'Geist Mono',monospace; font-size: 10.5px; letter-spacing:.16em; color: var(--green); text-transform: uppercase; font-weight: 600; }
+.issue-body > h5:first-child{ margin-top: 0; }
+
+/* ============ INTERVIEWER PROFILE ============ */
+.iv{ margin: 22px 0; background: var(--card); border: 1px solid var(--rule-dark); border-left: 3px solid var(--green); padding: 20px 24px; position: relative; }
+.iv.req{ border-left-color: var(--rose); }
+.iv-head{ display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.iv-name{ font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 22px; color: var(--ink); letter-spacing: -0.01em; }
+.iv-dur{ font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); }
+.iv-badge{ font-family:'Geist Mono',monospace; font-size:9px; letter-spacing:.16em; text-transform:uppercase; background:var(--green); color:#fff; padding:3px 9px; font-weight:600; }
+.iv-role{ font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--slate); margin-bottom: 10px; font-weight: 500; }
+.iv-focus{ font-size: 15px; color: var(--ink-soft); line-height: 1.5; margin: 0; }
+
+/* ============ DECISION TREE ============ */
+.tree{ background: var(--card); border: 1px solid var(--slate); padding: 24px 26px; margin: 24px 0; position: relative; }
+.tree::before{ content: "DECISION PATH"; position: absolute; top: -9px; left: 22px; background: var(--bg); padding: 0 11px; font-family:'Geist Mono',monospace; font-size: 10px; letter-spacing: .2em; color: var(--slate); font-weight: 600; }
+.tree pre{ background: transparent; color: var(--ink); border: none; border-left: none; padding: 6px 0 0; font-size: 13px; line-height: 1.7; }
+.tree pre::before{ display: none; }
+.tree .q{ color: var(--green); font-weight: 700; }
+.tree .a{ color: var(--slate); font-weight: 700; }
+
+/* ============ PRINCIPLE ============ */
+.idea{ margin: 24px 0; border: 2px solid var(--green); background: var(--card); padding: 22px 28px; position: relative; }
+.idea::before{ content: "PRINCIPLE"; position: absolute; top: -10px; left: 22px; background: var(--bg); padding: 0 11px; font-family:'Geist Mono',monospace; font-size: 10px; letter-spacing: .24em; color: var(--green); font-weight: 600; }
+.idea p{ margin: 6px 0; font-size: 16px; }
+
+/* ============ PULL ============ */
+.pull{ font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 30px; line-height: 1.08; letter-spacing: -0.015em; color: var(--green); margin: 38px 0; padding: 0 0 0 26px; border-left: 4px solid var(--green); }
+
+/* ============ CHEAT ============ */
+.cheat{ background: var(--card); border: 1px solid var(--ink); padding: 24px 28px; margin: 24px 0; }
+.cheat h5{ margin: 0 0 14px; font-family:'Geist Mono',monospace; font-size: 11px; letter-spacing: .2em; color: var(--green); text-transform: uppercase; font-weight: 600; }
+.cheat-grid{ display: grid; grid-template-columns: 1fr 1.5fr; gap: 6px 22px; font-size: 13px; }
+.cheat-grid .cmd{ font-family:'Geist Mono',monospace; color: var(--green-deep); font-weight: 500; }
+.cheat-grid .desc{ color: var(--ink-soft); font-size: 14.5px; }
+@media (max-width: 680px){ .cheat-grid{ grid-template-columns: 1fr; gap: 2px 18px; } .cheat-grid .desc{ margin-bottom: 10px; } }
+
+/* ============ TWO-COL ============ */
+.twocol{ display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 22px 0; }
+@media (max-width: 760px){ .twocol{ grid-template-columns: 1fr; } }
+.twocol .col{ background: var(--card); border: 1px solid var(--rule-dark); padding: 18px 22px; }
+.twocol .col h5{ margin: 0 0 10px; font-family:'Geist Mono',monospace; font-size: 10.5px; letter-spacing: .18em; text-transform: uppercase; color: var(--slate); font-weight: 600; }
+.twocol .col.bad h5{ color: var(--rose); } .twocol .col.good h5{ color: var(--green); }
+.twocol .col p{ margin: 8px 0; font-size: 15px; } .twocol .col p:first-child{ margin-top: 0; }
+
+/* ============ PANEL ============ */
+.panel{ background: var(--card); border: 1px solid var(--rule-dark); border-left: 3px solid var(--slate); padding: 16px 22px; margin: 20px 0; position: relative; }
+.panel::before{ content: attr(data-title); position: absolute; top: -9px; left: 18px; background: var(--bg); padding: 0 9px; font-family:'Geist Mono',monospace; font-size: 9px; letter-spacing: .2em; color: var(--slate); font-weight: 600; }
+
+/* ============ SEP ============ */
+.rule-sep{ margin: 56px 0; position: relative; height: 0; border-top: 2px solid var(--ink); }
+.rule-sep::after{ content: "◇ ◇ ◇"; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); background: var(--bg); color: var(--green); padding: 0 16px; font-size: 11px; letter-spacing: .3em; }
+
+/* ============ FOOTER ============ */
+footer{ max-width: var(--maxw); margin: 0 auto; padding: 54px 40px 84px; border-top: 2px solid var(--ink); color: var(--ink-soft); font-size: 14px; }
+footer h4{ font-family:'Geist Mono',monospace; font-size: 11px; letter-spacing: .24em; color: var(--green); margin: 0 0 18px; font-weight: 600; }
+footer .resources{ columns: 2; column-gap: 38px; }
+@media (max-width: 680px){ footer .resources{ columns: 1; } }
+footer ul{ list-style: none; padding: 0; margin: 0; }
+footer li{ padding: 5px 0; font-size: 13.5px; break-inside: avoid; }
+footer li code{ color: var(--green-deep); background: transparent; border: none; padding: 0; font-weight: 500; }
+footer .footer-note{ margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--rule); color: var(--ink-faint); font-size: 14px; }
+</style>
+</head>
+<body>
+
+<header>
+  <p class="filed">nvidia · pytorch core team (piotr bialecki) · panel july 13–14 · internals volume</p>
+  <p class="vol">Volume V · the framework itself · object model · dispatcher · autograd · kernels</p>
+  <h1>The <span class="acc">Core.</span></h1>
+  <p class="deck">
+    The org chart changed the brief. Piotr manages NVIDIA's PyTorch <em>core</em> team — Eddie Yan (Technical Lead of PyTorch at NVIDIA), Xiang Gao (whose PRs are TensorIterator's type promotion and its vectorized GPU loop), Ivan Yashchuk (PyTorch Compilers), Masaki Kozuki, and your two Monday interviewers, Ting Lu and Wei Wang. The Life Cycle role is a headcount <em>inside</em> that team, which means the CI they run is core CI and the red tests are numerics, kernels, and dispatch. So you need the framework's mechanism, not its API: what a tensor is, how a call reaches a kernel, how autograd actually executes, and how ATen turns a lambda into a launched CUDA kernel. Twenty-eight chapters, mechanism-first, with the honest depth map at the end.
+  </p>
+  <div class="readout">
+    <div class="cell"><div class="k">Chapters</div><div class="v">28</div></div>
+    <div class="cell"><div class="k">Parts</div><div class="v">6</div></div>
+    <div class="cell"><div class="k">Register</div><div class="v" style="font-size:13px;">mechanism,<br>not api</div></div>
+    <div class="cell"><div class="k">Companion</div><div class="v" style="font-size:13px;">vol. vi ·<br>the machine</div></div>
+  </div>
+
+  <div class="toc">
+    <h3>Contents</h3>
+    <p class="toc-sub">Twenty-eight chapters across six parts</p>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part I · The object model</div>
+      <div class="toc-grid">
+        <a href="#c01"><span class="n">01</span><span>What a tensor actually is</span></a>
+        <a href="#c02"><span class="n">02</span><span>Strides, views &amp; contiguity</span></a>
+        <a href="#c03"><span class="n">03</span><span>dtype, device &amp; type promotion</span></a>
+        <a href="#c04"><span class="n">04</span><span>The dispatch key set</span></a>
+      </div>
+    </div>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part II · The dispatcher</div>
+      <div class="toc-grid">
+        <a href="#c05"><span class="n">05</span><span>The life of <code>a + b</code></span></a>
+        <a href="#c06"><span class="n">06</span><span>Keys as layers: autocast, autograd, backend</span></a>
+        <a href="#c07"><span class="n">07</span><span>Registration &amp; codegen</span></a>
+        <a href="#c08"><span class="n">08</span><span>AT_DISPATCH and scalar_t</span></a>
+        <a href="#c09"><span class="n">09</span><span>Composite vs explicit; derivatives.yaml</span></a>
+      </div>
+    </div>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part III · Autograd, the machine</div>
+      <div class="toc-grid">
+        <a href="#c10"><span class="n">10</span><span>The graph: grad_fn, Node, edges</span></a>
+        <a href="#c11"><span class="n">11</span><span>Leaves, requires_grad, AccumulateGrad</span></a>
+        <a href="#c12"><span class="n">12</span><span>The engine: dependencies &amp; queues</span></a>
+        <a href="#c13"><span class="n">13</span><span>backward vs grad; double backward</span></a>
+        <a href="#c14"><span class="n">14</span><span>In-place, version counters &amp; views</span></a>
+        <a href="#c15"><span class="n">15</span><span>no_grad vs inference_mode vs detach</span></a>
+        <a href="#c16"><span class="n">16</span><span>Custom Functions &amp; saved-tensor hooks</span></a>
+        <a href="#c17"><span class="n">17</span><span>Autograd meets CUDA streams</span></a>
+      </div>
+    </div>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part IV · ATen kernels</div>
+      <div class="toc-grid">
+        <a href="#c18"><span class="n">18</span><span>TensorIterator: the machine before the kernel</span></a>
+        <a href="#c19"><span class="n">19</span><span>gpu_kernel &amp; the vectorized loop</span></a>
+        <a href="#c20"><span class="n">20</span><span>Reductions, the hard ones</span></a>
+        <a href="#c21"><span class="n">21</span><span>Structured kernels &amp; meta functions</span></a>
+        <a href="#c22"><span class="n">22</span><span>Adding an op, end to end</span></a>
+      </div>
+    </div>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part V · Beyond eager</div>
+      <div class="toc-grid">
+        <a href="#c23"><span class="n">23</span><span>torch.compile: dynamo → AOT → inductor</span></a>
+        <a href="#c24"><span class="n">24</span><span>The NVIDIA compiler lineage</span></a>
+        <a href="#c25"><span class="n">25</span><span>Distributed's hooks into autograd</span></a>
+      </div>
+    </div>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part VI · Drills &amp; honesty</div>
+      <div class="toc-grid">
+        <a href="#c26"><span class="n">26</span><span>Fifteen core questions, answered</span></a>
+        <a href="#c27"><span class="n">27</span><span>Reading the source live</span></a>
+        <a href="#c28"><span class="n">28</span><span>The honest depth map</span></a>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<!-- ===================== PART I ===================== -->
+<div class="part" id="p1">
+  <div class="part-label">Part I — The object model</div>
+  <h2 class="part-title">What you're actually <span class="acc">holding.</span></h2>
+  <p class="part-intro">Every internals conversation bottoms out here. A tensor is not an array — it's a small metadata object pointing at bytes, and almost every "why did PyTorch do that?" question is answered by its five fields.</p>
+
+  <section class="chapter" id="c01">
+    <h2><span class="ch-num">01</span>What a tensor actually is</h2>
+
+    <div class="diagram">  torch.Tensor (Python)  ──▶ at::Tensor  ──▶ intrusive_ptr&lt;TensorImpl&gt;
+                                                    │
+   TensorImpl (c10/core/TensorImpl.h)               │
+   ├─ storage_        ──▶ Storage ──▶ StorageImpl ──▶ DataPtr ──▶ raw bytes
+   │                                     │              └─ Allocator (CUDA
+   │                                     └─ nbytes         caching allocator)
+   ├─ sizes_          [2, 3, 4]
+   ├─ strides_        [12, 4, 1]      ← elements, not bytes
+   ├─ storage_offset_ 0               ← where this tensor starts in storage
+   ├─ dtype_ (TypeMeta), device_
+   ├─ key_set_        DispatchKeySet  ← CUDA | Autograd | ... (see §04)
+   ├─ version_counter_                ← autograd's mutation detector (§14)
+   ├─ autograd_meta_  grad_fn / grad / requires_grad  (nullptr if no autograd)
+   └─ (view metadata, if a view)
+  ─────────────────────────────────────────────────────────────
+  KEY CONSEQUENCE: many Tensors can share ONE Storage. A view is a
+  new TensorImpl with different sizes/strides/offset over the SAME
+  bytes. That single fact explains views, in-place hazards, .detach(),
+  memory "leaks" that aren't leaks, and half of autograd's rules.</div>
+
+    <table class="tbl">
+      <thead><tr><th>Field</th><th>Why an interviewer cares</th></tr></thead>
+      <tbody>
+        <tr><td>storage + offset</td><td><code>t[1:]</code> costs nothing and frees nothing — the storage stays alive as long as any view does. "My memory won't drop after slicing a big tensor" is this, not a leak.</td></tr>
+        <tr><td>sizes/strides</td><td>Layout algebra (§02): transpose/permute/expand are stride tricks with zero data movement.</td></tr>
+        <tr><td>dtype/device</td><td>Drives dispatch and type promotion (§03) — and every "why is there an extra copy kernel?" answer.</td></tr>
+        <tr><td>key_set</td><td>The dispatcher's input (§04–06): the tensor carries which layers must run.</td></tr>
+        <tr><td>version_counter</td><td>The mechanism behind autograd's most-hated error message (§14).</td></tr>
+        <tr><td>autograd_meta</td><td>Nullptr for most tensors — autograd metadata is <em>optional weight</em>, allocated only when needed. (Why <code>inference_mode</code> can be faster than <code>no_grad</code>: §15.)</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="chapter" id="c02">
+    <h2><span class="ch-num">02</span>Strides, views &amp; contiguity</h2>
+
+    <p>Strides are the address function: <code>element(i,j,k) = storage[offset + i·s0 + j·s1 + k·s2]</code>. Everything below follows from letting sizes and strides lie about the bytes.</p>
+
+    <table class="tbl compare">
+      <thead><tr><th>Operation</th><th>What it does to metadata</th><th>Copies?</th></tr></thead>
+      <tbody>
+        <tr><td>view / reshape</td><td>New sizes; strides recomputed. <code>reshape</code> falls back to a copy when the requested shape isn't expressible on the current strides; <code>view</code> raises instead.</td><td>view: never · reshape: sometimes</td></tr>
+        <tr><td>transpose / permute</td><td>Swaps entries of sizes and strides. Result is non-contiguous.</td><td>No</td></tr>
+        <tr><td>expand / broadcast</td><td>Sets stride = 0 on the expanded dim — the same element is read many times.</td><td>No (stride-0 magic)</td></tr>
+        <tr><td>slice / narrow</td><td>Adjusts sizes + storage_offset.</td><td>No</td></tr>
+        <tr><td>contiguous()</td><td>If already contiguous: returns self. Else materializes a fresh, densely-strided copy.</td><td>Conditionally</td></tr>
+        <tr><td>as_strided</td><td>Raw metadata surgery — the escape hatch (and the footgun; it can alias memory arbitrarily).</td><td>No</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <h5>The three sentences that show you actually know this</h5>
+      <p>(1) "Contiguous" means strides are exactly the row-major products of the trailing sizes — nothing more. (2) A stride-0 dimension is how broadcasting avoids materializing the broadcast — which is also why a broadcast tensor can't be written to in-place safely. (3) <code>reshape</code> = <code>view</code> when possible, <code>contiguous().view()</code> otherwise — so <code>reshape</code> can silently cost you a copy in a hot loop, and that copy shows up in a profile as a mysterious <code>copy_</code> kernel.</p>
+    </div>
+
+    <h4>Memory format: the second layout axis</h4>
+    <p><code>channels_last</code> (NHWC) is not a different tensor class — it's a <em>stride permutation</em> with the same logical shape (N,C,H,W). It matters because cuDNN's tensor-core convolution kernels want NHWC: feed them NCHW and the library inserts transposes around every conv. The classic perf bug is a model where <em>some</em> tensors were converted and others weren't, so the stack ping-pongs between formats. Memory-format propagation rules (which ops preserve channels_last) are an actual maintenance surface on this team.</p>
+  </section>
+
+  <section class="chapter" id="c03">
+    <h2><span class="ch-num">03</span>dtype, device &amp; type promotion</h2>
+
+    <p>Type promotion is Xiang Gao's territory — he did much of TensorIterator's promotion machinery, and there's a well-known issue in the repo about promotion causing an <em>extra copy kernel launch</em>. Know the rules and the cost.</p>
+
+    <div class="diagram">  THE PROMOTION LATTICE (categories):
+     bool  &lt;  integral  &lt;  floating  &lt;  complex
+  PARTICIPANT TIERS (within the winning category):
+     dimensioned tensor  >  0-dim tensor  >  python scalar ("wrapped number")
+  ─────────────────────────────────────────────────────────────
+  RESULT = highest category present; within it, the dtype is decided
+  by the HIGHEST TIER of participants — lower tiers can raise the
+  CATEGORY but not the WIDTH.
+  ─────────────────────────────────────────────────────────────
+  int8_tensor  + int64_0dim_tensor  → int8   (0-dim can't widen int8)
+  int8_tensor  + 1.0 (py float)     → float  (category raised → default float)
+  fp16_tensor  + 1.0 (py float)     → fp16   (scalar doesn't widen to fp32!)
+  fp16_tensor  + fp32_tensor        → fp32   (both dimensioned → widen)
+  bool_tensor  + True               → bool
+  ─────────────────────────────────────────────────────────────
+  COST: when inputs disagree, TensorIterator either fuses the cast into
+  the kernel's load, or (if it can't) emits a separate copy kernel —
+  which is exactly the "why are there two kernels?" bug class.</div>
+
+    <div class="callout warn">
+      <h5>The trap worth naming out loud</h5>
+      <p>Mixed-dtype arithmetic in a training loop is a silent perf tax: every promotion is either a fused cast (cheap) or an extra materialized copy (a whole kernel + a whole tensor of bandwidth). When someone says "my AMP model isn't faster," an under-appreciated cause is dtype churn — fp16 activations meeting fp32 constants and getting promoted back up. Say that, and you're speaking directly into this team's daily bug queue.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c04">
+    <h2><span class="ch-num">04</span>The dispatch key set</h2>
+
+    <p>Every tensor carries a <code>DispatchKeySet</code> — a bitset of the layers that apply to it. Every op call unions the key sets of its arguments, applies thread-local includes/excludes, and picks the highest-priority key present. That's the whole dispatcher in one sentence; §05–06 unpack it.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Key family</th><th>Examples · role</th></tr></thead>
+      <tbody>
+        <tr><td>Backend keys (lowest priority)</td><td><code>CPU</code>, <code>CUDA</code>, <code>Meta</code>, <code>SparseCUDA</code>, <code>QuantizedCPU</code>, <code>NestedTensor</code>, <code>XLA</code> — where the actual math lives. A CUDA tensor carries the CUDA key; that's how <code>a + b</code> finds the CUDA kernel with no <code>if device == 'cuda'</code> anywhere.</td></tr>
+        <tr><td>Autograd keys</td><td><code>AutogradCUDA</code>/<code>AutogradCPU</code>/… — the layer that records the graph, then re-dispatches down (§06).</td></tr>
+        <tr><td>Autocast keys</td><td><code>AutocastCUDA</code> — casts inputs per op policy, then re-dispatches (§06). Sits <em>above</em> autograd, which is the whole reason AMP is differentiable.</td></tr>
+        <tr><td>View/in-place bookkeeping</td><td><code>ADInplaceOrView</code> — bumps version counters and records view metadata, separately from graph recording (§14).</td></tr>
+        <tr><td>Functionality/other</td><td><code>Functionalize</code> (removes mutation for compile), <code>Python</code>/<code>PythonTLSSnapshot</code> (<code>__torch_dispatch__</code>), <code>Batched</code>/<code>VmapMode</code> (vmap), <code>Tracer</code>, <code>Conjugate</code>/<code>Negative</code> (lazy conj/neg views), <code>BackendSelect</code> (factory functions like <code>torch.zeros</code> that have no tensor argument to infer from).</td></tr>
+        <tr><td>TLS include/exclude</td><td>How <code>no_grad</code> works: it <em>excludes</em> the autograd keys for the duration. Not a flag check inside every op — a key-set edit.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="idea">
+      <p><strong>The mental model to carry into every one of these interviews: PyTorch is a dispatch machine with layers, and "features" are layers.</strong> Autograd is a layer. AMP is a layer. vmap is a layer. Functionalization is a layer. Backends are the bottom layer. Once you hold that, questions that sound unrelated — "how does autocast interact with autograd?", "why does <code>torch.compile</code> need functionalization?", "how would a new backend get added?" — all collapse into the same answer shape: <em>a key, a kernel registered to it, and a re-dispatch to whatever is below</em>.</p>
+    </div>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART II ===================== -->
+<div class="part" id="p2">
+  <div class="part-label">Part II — The dispatcher</div>
+  <h2 class="part-title">How a call finds its <span class="acc">kernel.</span></h2>
+  <p class="part-intro">Five chapters on the machine that turns <code>a + b</code> into a launched CUDA kernel — the layering, the registration system, and the macro that bridges runtime dtypes to compile-time C++ types. This is the spine of the codebase; knowing it is what separates "PyTorch user" from "PyTorch engineer" in a room full of PyTorch engineers.</p>
+
+  <section class="chapter" id="c05">
+    <h2><span class="ch-num">05</span>The life of <code>a + b</code></h2>
+
+    <div class="diagram">  a + b   (a, b: CUDA fp16, requires_grad, inside autocast)
+  ─────────────────────────────────────────────────────────────
+  1  Python  torch.Tensor.__add__ → C++ binding (torch/csrc)
+  2  at::add(a, b)  →  Dispatcher::call
+        keys = a.key_set | b.key_set | TLS_included  −  TLS_excluded
+        = {AutocastCUDA, AutogradCUDA, ADInplaceOrView, CUDA}
+  3  highest priority → AUTOCAST layer
+        policy for `add`: promote-to-widest (not a cast-to-fp16 op)
+        casts if needed  →  redispatch with Autocast EXCLUDED
+  4  next → AUTOGRAD layer  (AutogradCUDA kernel, codegen'd)
+        - checks requires_grad on inputs
+        - constructs AddBackward0 node; wires next_edges to inputs'
+          grad_fn (or their AccumulateGrad)
+        - saves what backward needs (for add: just alpha — no tensors!)
+        - redispatch with Autograd EXCLUDED  →
+  5  next → ADInplaceOrView (for out-of-place add: near no-op;
+        for add_ : bump version counter; for views: record view meta)
+  6  next → CUDA BACKEND kernel: at::native::add_kernel_cuda
+        - build a TensorIterator (broadcast, promote, coalesce) §18
+        - AT_DISPATCH over the common dtype → scalar_t §08
+        - gpu_kernel(iter, [] __device__ (scalar_t x, scalar_t y)
+                            { return x + alpha * y; })  §19
+        - launch: vectorized_elementwise_kernel if contiguous+aligned
+  7  result tensor gets grad_fn = AddBackward0; returns up the stack
+  ─────────────────────────────────────────────────────────────
+  EVERY layer's exit move is the same: RE-DISPATCH to the next key down.</div>
+
+    <div class="callout tip">
+      <h5>Say this and the room relaxes</h5>
+      <p>"The dispatcher is a priority-ordered layer stack driven by a bitset the tensors carry, and each layer does its job and re-dispatches downward with its own key masked off — so autograd is just the layer that records a node before calling the real kernel." That one sentence answers a dozen possible questions and proves you've read the machine, not the docs.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c06">
+    <h2><span class="ch-num">06</span>Keys as layers: autocast, autograd, backend</h2>
+
+    <p>The priority order isn't arbitrary — it's forced by correctness. Derive it rather than memorizing it, because a derivation survives an interviewer's follow-up.</p>
+
+    <div class="idea">
+      <p><strong>Why autocast must sit ABOVE autograd:</strong> autocast's job is to run the op in fp16/bf16. If autograd recorded <em>first</em>, it would save the fp32 inputs and build a backward expecting an fp32 op, while the forward silently ran in fp16 below — a mismatch. Because autocast is above, the casts it inserts are themselves ordinary ops that pass through the autograd layer below, so each cast gets its own backward node. That's exactly how gradients flow from an fp16 forward back to fp32 master weights with no special-casing anywhere: <em>the cast is differentiable because it happened above autograd</em>. (Autocast also caches the cast copy of a weight within the region, so a weight used twice isn't cast twice.)</p>
+    </div>
+
+    <table class="tbl">
+      <thead><tr><th>Layer</th><th>What it does before redispatching</th></tr></thead>
+      <tbody>
+        <tr><td>Python / <code>__torch_dispatch__</code></td><td>Lets Python subclasses intercept every op — the mechanism behind tensor subclasses, DTensor, and much of the compile stack's tracing.</td></tr>
+        <tr><td>Functionalize</td><td>Rewrites mutations and views into functional equivalents so compilers see a clean, side-effect-free graph. (Answer to "why does compile need functionalization?")</td></tr>
+        <tr><td>Autocast</td><td>Per-op casting policy: matmul/conv-family → lower precision; reductions/norms/softmax-family → fp32; others → promote to widest input. Then redispatch.</td></tr>
+        <tr><td>Autograd</td><td>If any input requires grad: build the backward Node, wire edges, save tensors, set the output's <code>grad_fn</code>. Then redispatch. Under <code>no_grad</code> this key is excluded, so the layer never runs.</td></tr>
+        <tr><td>ADInplaceOrView</td><td>Version-counter bumps for in-place ops; view metadata for view ops. Split out from the autograd layer so inference paths can skip it cheaply.</td></tr>
+        <tr><td>Backend (CPU/CUDA/…)</td><td>The math. Everything above is bookkeeping.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="chapter" id="c07">
+    <h2><span class="ch-num">07</span>Registration &amp; codegen</h2>
+
+    <p>Ops aren't written as C++ functions someone calls — they're <em>declared</em> in a schema file and <em>registered</em> against dispatch keys, with codegen generating the glue. This is the surface a life-cycle engineer touches constantly (every new op = new tests, new coverage, new CI).</p>
+
+    <pre data-lang="yaml"><span class="com"># aten/src/ATen/native/native_functions.yaml — the single source of truth</span>
+- func: add.Tensor(Tensor self, Tensor other, *, Scalar alpha=1) -&gt; Tensor
+  device_check: NoCheck
+  structured_delegate: add.out          <span class="com"># see §21 — impl lives in the out variant</span>
+  variants: function, method            <span class="com"># torch.add(a,b) AND a.add(b)</span>
+  dispatch:
+    SparseCPU, SparseCUDA: add_sparse   <span class="com"># per-key kernels where needed</span>
+  tags: core, pointwise</pre>
+
+    <table class="tbl">
+      <thead><tr><th>Mechanism</th><th>What it gives you</th></tr></thead>
+      <tbody>
+        <tr><td>The schema line</td><td>Name, arg types, defaults, aliasing/mutation annotations (<code>Tensor(a!)</code> = mutated in place). The schema is what the dispatcher, the JIT, functionalization, and every serializer all read.</td></tr>
+        <tr><td>Codegen</td><td>Generates the C++ API (<code>at::add</code>), the Python bindings, the autograd kernel (from <code>derivatives.yaml</code>, §09), the registration boilerplate, and the meta/structured plumbing. Editing generated code is a classic newcomer mistake — you edit the yaml and the codegen.</td></tr>
+        <tr><td><code>TORCH_LIBRARY</code> / <code>TORCH_LIBRARY_IMPL</code></td><td>The out-of-tree path: define a custom op and register kernels per key from an extension — the same machinery, exposed publicly. (Your pybind11 experience lands here: this is how a real custom CUDA op joins the dispatcher rather than bolting onto the side.)</td></tr>
+        <tr><td>Static registration ⇒ build hazards</td><td>Registration runs from static initializers at load time — which is <em>why</em> Vol. III §12's whole-archive/duplicate-registration bestiary exists. The internals and the linking problems are the same fact seen from two sides.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="chapter" id="c08">
+    <h2><span class="ch-num">08</span>AT_DISPATCH and scalar_t</h2>
+
+    <p>You've already gone deep here — this is the bridge between a runtime <code>ScalarType</code> and a compile-time C++ type, and it's why one kernel source compiles into a kernel per dtype.</p>
+
+    <pre data-lang="cpp">void add_kernel_cuda(TensorIteratorBase&amp; iter, const Scalar&amp; alpha_scalar) {
+  AT_DISPATCH_ALL_TYPES_AND_COMPLEX_AND3(
+      at::ScalarType::Half, at::ScalarType::BFloat16, at::ScalarType::Bool,
+      iter.common_dtype(), "add_cuda", [&amp;]() {          <span class="com">// ← the lambda is</span>
+    using opmath_t = at::opmath_type&lt;scalar_t&gt;;          <span class="com">//   instantiated ONCE</span>
+    auto alpha = alpha_scalar.to&lt;opmath_t&gt;();            <span class="com">//   PER DTYPE, with</span>
+    gpu_kernel_with_scalars(iter,                        <span class="com">//   scalar_t bound</span>
+      [alpha] __device__ (scalar_t a, scalar_t b) -&gt; scalar_t {
+        return static_cast&lt;opmath_t&gt;(a) + alpha * static_cast&lt;opmath_t&gt;(b);
+      });
+  });
+}</pre>
+
+    <table class="tbl">
+      <thead><tr><th>Detail</th><th>Why it's the senior detail</th></tr></thead>
+      <tbody>
+        <tr><td>It's a switch, not magic</td><td><code>AT_DISPATCH_*</code> expands to a <code>switch</code> on the runtime ScalarType; each case instantiates the lambda with <code>scalar_t</code> = that C++ type. Hence: <strong>compile time and binary size scale with the dtype list</strong> — a real cost this team pays and manages (and one reason adding a dtype to an op isn't free).</td></tr>
+        <tr><td><code>opmath_t</code> / <code>acc_type</code></td><td>The compute type is deliberately <em>not</em> the storage type: fp16 in, fp32 math, fp16 out. This is the single most important numerics idiom in ATen — and the reason CPU-vs-GPU results can legitimately differ (§Vol. VI).</td></tr>
+        <tr><td>The <code>AND3</code> suffix</td><td>The macro family is a menu — floating-only, all-types, plus explicitly-listed extras (Half/BFloat16/Bool/complex). Which macro an op uses <em>is</em> its dtype support matrix, and mismatches between that and the tests are a live CI issue class.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="chapter" id="c09">
+    <h2><span class="ch-num">09</span>Composite vs explicit; derivatives.yaml</h2>
+
+    <table class="tbl">
+      <thead><tr><th>Kind</th><th>Meaning · consequence</th></tr></thead>
+      <tbody>
+        <tr><td>CompositeImplicitAutograd</td><td>The op is written in terms of other ops. It gets autograd <em>for free</em> (the constituent ops record their own nodes) and works on every backend automatically. Cost: no fused kernel, and the backward graph is the composition — often more memory, more launches.</td></tr>
+        <tr><td>CompositeExplicitAutograd</td><td>One implementation for all backends, but autograd must be defined explicitly (an entry in <code>derivatives.yaml</code>).</td></tr>
+        <tr><td>Per-backend kernels</td><td><code>dispatch: CPU: foo_cpu, CUDA: foo_cuda</code> — the hand-written path, with an explicit derivative formula.</td></tr>
+        <tr><td><code>tools/autograd/derivatives.yaml</code></td><td>Where backward formulas live, as symbolic expressions over <code>grad</code> and saved values. Codegen turns them into the <code>*Backward0</code> Node classes you see in <code>grad_fn</code>. <em>This is the file to know exists</em> — "where is the derivative of X defined?" is a question you can now answer instantly.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <h5>The design question they might actually ask</h5>
+      <p>"When would you write a fused CUDA kernel with an explicit derivative instead of a composite op?" The answer is a tradeoff, not a preference: fuse when the composite's intermediates dominate (memory bandwidth and peak memory), when launch count matters (many tiny ops), or when a numerically-stable formulation needs to be computed in one pass (logsumexp, softmax, Welford variance). Stay composite when generality across backends and dtypes matters more than the last 20% — because every hand-written kernel is a permanent maintenance and testing obligation on <em>this team</em>. Framing the answer as a maintenance cost, not just a perf win, is precisely the lens a core team hires for.</p>
+    </div>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART III ===================== -->
+<div class="part" id="p3">
+  <div class="part-label">Part III — Autograd, the machine</div>
+  <h2 class="part-title">The engine, <span class="acc">opened.</span></h2>
+  <p class="part-intro">Eight chapters on the mechanism the user asked about and every core interviewer assumes: what the graph <em>is</em>, how the engine executes it, why in-place operations are dangerous, how the three "off switches" differ, and how backward interacts with CUDA streams. Mechanism first — because every autograd error message in existence is a direct readout of one of these mechanisms.</p>
+
+  <section class="chapter" id="c10">
+    <h2><span class="ch-num">10</span>The graph: grad_fn, Node, edges</h2>
+
+    <div class="diagram">  FORWARD BUILDS THE GRAPH AS A SIDE EFFECT (no tape replay, no
+  separate "compile" step — the graph IS built by the autograd layer
+  of §06, one Node per differentiable op, as the op runs).
+
+    x (leaf, requires_grad)        w (leaf, requires_grad)
+        │                              │
+        └──────── MulBackward0 ◀───────┘        y = x * w
+                     │  saves: x, w  (needed for the derivative)
+                     ▼
+                 AddBackward0                    z = y + b
+                     │  saves: nothing (d/dy = 1)
+                     ▼
+                  SumBackward0                   loss = z.sum()
+                     │
+                 loss.grad_fn ─── the ROOT the engine starts from
+
+  NODE ANATOMY (torch/csrc/autograd/function.h):
+    next_edges_  : [(Node*, input_nr), ...] — where MY output grads go
+    saved tensors: SavedVariable (records value + VERSION, see §14)
+    apply(grads) : the derivative, from derivatives.yaml codegen (§09)
+
+  LEAF EDGES point at AccumulateGrad nodes (§11) — the graph's exits.
+  ─────────────────────────────────────────────────────────────
+  The graph is built FORWARD and traversed BACKWARD. It is per-iteration
+  and disposable: unless retain_graph=True, running backward FREES the
+  saved tensors (that's the memory model of eager training).</div>
+
+    <table class="tbl">
+      <thead><tr><th>Fact</th><th>Consequence you can be quizzed on</th></tr></thead>
+      <tbody>
+        <tr><td>Only ops on requires-grad inputs record</td><td>The autograd layer checks and skips — that's why inference is cheap without any special mode, and why <code>no_grad</code> is an optimization, not a correctness requirement.</td></tr>
+        <tr><td>Nodes save what the derivative needs</td><td><code>add</code> saves nothing; <code>mul</code> saves both inputs; <code>relu</code> saves its <em>output</em> (the mask is recoverable from it). <strong>Saved tensors are why activations dominate training memory</strong> — the graph is holding them alive for backward. Checkpointing (§16) trades compute to break exactly this.</td></tr>
+        <tr><td>grad_fn is on the output tensor</td><td>Reading <code>t.grad_fn</code> in a debugger tells you which op produced a tensor — a genuinely useful debugging habit (and <code>t.grad_fn.next_functions</code> walks the graph backwards by hand).</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="chapter" id="c11">
+    <h2><span class="ch-num">11</span>Leaves, requires_grad, AccumulateGrad</h2>
+
+    <table class="tbl">
+      <thead><tr><th>Concept</th><th>Mechanism</th></tr></thead>
+      <tbody>
+        <tr><td>Leaf tensor</td><td>A tensor with no <code>grad_fn</code> — created by the user (or by <code>detach</code>), not by a differentiable op. Parameters are leaves. Only leaves (by default) get <code>.grad</code> populated.</td></tr>
+        <tr><td>AccumulateGrad</td><td>The Node at every leaf edge. Its <code>apply</code> writes into <code>param.grad</code>: if <code>.grad</code> is None it <em>steals</em> the incoming buffer; otherwise it <em>adds</em>. <strong>That "otherwise it adds" is the entire reason you must call <code>zero_grad()</code></strong> — gradient accumulation is not a feature bolted on, it's the default behavior of the leaf node.</td></tr>
+        <tr><td><code>zero_grad(set_to_none=True)</code></td><td>Now the default. Sets <code>.grad = None</code> rather than zero-filling: skips a kernel, frees the memory, and makes the next accumulation a steal instead of an add. Side effect worth knowing: optimizers must (and do) handle <code>None</code> grads.</td></tr>
+        <tr><td>Non-leaf <code>.grad</code></td><td>Not populated (you get a warning). Use <code>t.retain_grad()</code> to force it, or <code>torch.autograd.grad(out, [t])</code> to get it without touching <code>.grad</code> at all.</td></tr>
+        <tr><td><code>requires_grad</code> propagation</td><td>Any op with at least one requires-grad input produces a requires-grad output. Freezing = set <code>requires_grad=False</code> on params, which prunes those subgraphs from ever being built.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="chapter" id="c12">
+    <h2><span class="ch-num">12</span>The engine: dependencies &amp; queues</h2>
+
+    <p>This is the chapter that separates "I've used autograd" from "I know how it executes." The engine (<code>torch/csrc/autograd/engine.cpp</code>) is a small, elegant, parallel graph executor.</p>
+
+    <div class="diagram">  loss.backward()  →  Engine::execute(roots, inputs, ...)
+  ─────────────────────────────────────────────────────────────
+  1. SEED       grad_outputs for the roots (implicit ones_like for a
+                scalar loss; explicit gradient= required otherwise —
+                because "gradient of a non-scalar" needs a covector)
+  2. DISCOVER   compute_dependencies(): DFS from the roots counting,
+                for each reachable Node, HOW MANY incoming edges it
+                has within this backward. That count is its "not yet
+                ready" counter.
+  3. EXECUTE    ready queue per DEVICE (a worker thread per CUDA
+                device; CPU work reuses the calling thread):
+                  pop a ready Node
+                  → InputBuffer holds its accumulated incoming grads
+                  → node.apply(grads)  ← the derivative formula runs
+                  → for each next_edge: add the produced grad into the
+                    consumer's InputBuffer; decrement its counter;
+                    when counter hits 0 → push to that device's queue
+  4. FINISH     AccumulateGrad nodes write .grad on leaves (§11);
+                if `inputs=` was given, grads are returned instead
+  ─────────────────────────────────────────────────────────────
+  KEY PROPERTIES:
+   • it's a topological execution, but NOT a sequential list — nodes
+     become ready as their gradient inputs arrive, so independent
+     branches can run concurrently across device queues
+   • a node with TWO consumers (a tensor used twice) waits for BOTH
+     gradients and SUMS them — that's the multivariable chain rule,
+     implemented as the InputBuffer accumulate
+   • the engine is C++; Python-defined Function nodes take the GIL
+     when they run (a real perf consideration for custom Functions)
+   • REENTRANT backward (backward called inside backward, e.g. double
+     backward or a custom Function that calls .backward()) is handled
+     by depth-tracking and spilling to a thread pool past a depth
+     limit — otherwise deep reentrancy would blow the stack</div>
+
+    <div class="callout tip">
+      <h5>The question this chapter answers instantly</h5>
+      <p>"Why does backward need to know dependencies before running?" Because a Node must not fire until <em>all</em> the gradients flowing into it have arrived — a tensor reused in three places contributes three gradient terms that must be summed first. The dependency count is how the engine knows when the sum is complete. Say that, and then say what it buys: correct chain rule for reused tensors, plus parallel execution of independent branches. Two sentences, and you've described a graph scheduler most candidates can't describe at all.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c13">
+    <h2><span class="ch-num">13</span>backward vs grad; double backward</h2>
+
+    <table class="tbl compare">
+      <thead><tr><th>API</th><th><code>loss.backward()</code></th><th><code>torch.autograd.grad(out, inputs)</code></th></tr></thead>
+      <tbody>
+        <tr><td>Writes .grad?</td><td>Yes — accumulates into leaves via AccumulateGrad</td><td>No — returns the gradients as tensors</td></tr>
+        <tr><td>Scope</td><td>Whole graph reachable from the root</td><td>Only what's needed for the requested inputs</td></tr>
+        <tr><td>Typical use</td><td>Training loops</td><td>Higher-order grads, penalties (gradient penalty in GANs), meta-learning, per-sample analysis</td></tr>
+      </tbody>
+    </table>
+
+    <table class="tbl">
+      <thead><tr><th>Flag</th><th>Mechanism &amp; the error it explains</th></tr></thead>
+      <tbody>
+        <tr><td><code>retain_graph=True</code></td><td>Backward normally <em>frees the saved tensors</em> as it goes (that's the memory release you rely on). Retaining keeps them so you can run backward again. The famous error — "Trying to backward through the graph a second time, but the buffers have already been freed" — <strong>is not a bug in your code's logic; it's the engine telling you it already released the activations.</strong> The right fix is usually not to sprinkle <code>retain_graph=True</code> (which silently balloons memory) but to ask why backward is running twice.</td></tr>
+        <tr><td><code>create_graph=True</code></td><td>Makes the backward pass itself differentiable — the derivative computations get recorded as ordinary ops, producing a graph you can backward through again. That's double backward, and it's how gradient penalties and Hessian-vector products work. Cost: the backward's intermediates now live in a graph too.</td></tr>
+        <tr><td>Double backward correctness</td><td>An op supports double backward only if its <em>backward</em> is written in differentiable ops. Custom Functions marked <code>@once_differentiable</code> declare that they aren't. This is a genuine op-coverage matrix on a core team, and <code>gradgradcheck</code> is how it's tested (§16).</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="chapter" id="c14">
+    <h2><span class="ch-num">14</span>In-place, version counters &amp; views</h2>
+
+    <p>The most-hit autograd error in the world, and it has a precise mechanism. Know it cold — Piotr has answered this question on the forum more times than anyone alive.</p>
+
+    <div class="diagram">  THE HAZARD:  backward needs the VALUES the forward saw.
+               In-place ops overwrite those values.
+
+  MECHANISM:   every TensorImpl has a VERSION COUNTER.
+               • an in-place op bumps it (via the ADInplaceOrView layer)
+               • SavedVariable records the version AT SAVE TIME
+               • at backward, the saved version is CHECKED against the
+                 current version → mismatch ⇒ hard error, not silence
+
+  THE MESSAGE (read it like a diagnostic, because it is one):
+   "one of the variables needed for gradient computation has been
+    modified by an inplace operation: [torch.cuda.FloatTensor [64,128]],
+    which is output 0 of ReluBackward0, is at version 2; expected
+    version 1 instead."
+      → the tensor is the OUTPUT of ReLU   → something wrote into the
+        ReLU output after ReLU saved it     → classic: a fused residual
+        add done in-place, or  `x += y`  where x is still needed
+  ─────────────────────────────────────────────────────────────
+  VIEWS MAKE IT SHARPER: a view SHARES its base's version counter.
+  Writing to a view bumps the base's version too — so an in-place write
+  through a slice can invalidate a save of the WHOLE tensor. And the
+  view's own grad_fn gets REBASED (to a CopySlices-style node) so the
+  backward math stays right.
+  ─────────────────────────────────────────────────────────────
+  WHY ALLOW IN-PLACE AT ALL?  Memory. `relu_()`, `add_()`, in-place
+  optimizer math and foreach/fused steps (Vol. III §20-21) exist to
+  avoid materializing another tensor. Autograd's job is to let you have
+  it whenever it's SAFE and to fail LOUDLY when it isn't — the version
+  counter is that guarantee, and it never gives a wrong gradient
+  silently. That property is worth stating out loud: PyTorch chose a
+  hard error over a silent wrong number.</div>
+
+    <table class="tbl">
+      <thead><tr><th>Situation</th><th>Safe?</th></tr></thead>
+      <tbody>
+        <tr><td><code>x = x + y</code> in a loop</td><td>Always safe — makes a new tensor; costs memory.</td></tr>
+        <tr><td><code>x += y</code> where x isn't saved by any node</td><td>Safe. Autograd allows it and the version bump bothers nobody.</td></tr>
+        <tr><td><code>relu_(x)</code> on the output of a conv that saved x</td><td>Unsafe → the error above. (This is why <code>nn.ReLU(inplace=True)</code> is safe after conv/BN but not everywhere — those ops don't need their <em>output</em> saved... whereas ReLU itself does, which is why chained in-place activations bite.)</td></tr>
+        <tr><td>In-place on a <code>detach()</code>ed tensor</td><td><strong>Dangerous</strong> — detach shares storage <em>and</em> the version counter, so mutating the detached alias can still invalidate the original's saves. The safe idiom is <code>.detach().clone()</code>.</td></tr>
+        <tr><td>In-place inside <code>no_grad</code> on a leaf param</td><td>Safe and normal — it's exactly what optimizers do (<code>p.add_(d, alpha=-lr)</code> under <code>@torch.no_grad()</code>).</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="chapter" id="c15">
+    <h2><span class="ch-num">15</span>no_grad vs inference_mode vs detach</h2>
+
+    <table class="tbl compare">
+      <thead><tr><th>Tool</th><th>Mechanism</th><th>When it bites</th></tr></thead>
+      <tbody>
+        <tr><td><code>torch.no_grad()</code></td><td>Excludes the autograd dispatch keys in TLS → the autograd layer never runs → no graph, no saved tensors.</td><td>Nothing subtle. Tensors made inside remain ordinary tensors usable later in autograd.</td></tr>
+        <tr><td><code>torch.inference_mode()</code></td><td>Stronger: also skips view/version-counter bookkeeping (the ADInplaceOrView layer). Tensors created inside are <em>inference tensors</em> — cheaper, but permanently marked.</td><td>Using an inference tensor later in an autograd computation raises ("Inference tensors cannot be saved for backward"). Great for serving; a trap if inference-mode outputs feed training code. <strong>Knowing this distinction is a genuine internals tell.</strong></td></tr>
+        <tr><td><code>t.detach()</code></td><td>New TensorImpl sharing the same storage <em>and</em> version counter, with <code>requires_grad=False</code> and no <code>grad_fn</code> — a graph cut, not a copy.</td><td>The in-place hazard of §14. Also: detach does <em>not</em> free memory (shared storage).</td></tr>
+        <tr><td><code>t.detach().clone()</code></td><td>Cut the graph AND own the memory.</td><td>The idiom to reach for when you're storing something for later (logging, EMA, buffers).</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout warn">
+      <h5>The eval-loop bug this explains</h5>
+      <p>The classic — validation without <code>no_grad</code> — is not just "slower": every forward builds a graph and holds activations alive until the tensors go out of scope, so memory climbs and can OOM mid-eval. And it's a <em>different</em> bug from forgetting <code>model.eval()</code>, which leaves dropout on and lets BatchNorm keep updating its running stats on validation data (silent train/val contamination). Two bugs, two mechanisms, one line apart. Vol. IV §13 plants both on purpose.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c16">
+    <h2><span class="ch-num">16</span>Custom Functions &amp; saved-tensor hooks</h2>
+
+    <pre data-lang="python">class MyReLU(torch.autograd.Function):
+    @staticmethod
+    def forward(x):                       <span class="com"># new style: pure forward…</span>
+        return x.clamp(min=0)
+
+    @staticmethod
+    def setup_context(ctx, inputs, output):   <span class="com"># …ctx setup separated</span>
+        (x,) = inputs
+        ctx.save_for_backward(output)     <span class="com"># save the OUTPUT: mask is recoverable</span>
+
+    @staticmethod
+    def backward(ctx, grad_out):
+        (y,) = ctx.saved_tensors
+        return grad_out * (y &gt; 0)         <span class="com"># one grad per forward input</span>
+
+<span class="com"># verify against numerical derivatives in float64 — the standard of proof</span>
+torch.autograd.gradcheck(MyReLU.apply, (torch.randn(8, dtype=torch.double,
+                                                    requires_grad=True),))</pre>
+
+    <table class="tbl">
+      <thead><tr><th>Mechanism</th><th>Why it exists</th></tr></thead>
+      <tbody>
+        <tr><td><code>save_for_backward</code> (not <code>ctx.x = x</code>)</td><td>Saved tensors get version-checked (§14) and participate in graph-freeing and saved-tensor hooks. Stashing tensors as plain attributes bypasses all of that — a correctness and memory bug that looks like it works.</td></tr>
+        <tr><td><code>setup_context</code> split</td><td>Separating the math from the ctx bookkeeping is what lets <code>vmap</code>/functorch and the compile stack transform custom ops. If asked "how do I make a custom op work with torch.compile," the modern answer is the custom-op registration path (<code>torch.library</code>) with a meta/fake implementation so tracing can compute shapes without running the kernel.</td></tr>
+        <tr><td><code>once_differentiable</code></td><td>Declares no double backward — the honest annotation instead of a wrong second derivative.</td></tr>
+        <tr><td><code>mark_dirty</code></td><td>Tells autograd you mutated an input in place, so version-counter bookkeeping stays coherent.</td></tr>
+        <tr><td><code>gradcheck</code> / <code>gradgradcheck</code></td><td>Finite differences in float64 vs the analytical gradient — <strong>the accepted proof that a derivative is right</strong>. On a core team, "did you gradcheck it?" is the standard first review question. Say it before they ask.</td></tr>
+        <tr><td><code>saved_tensors_hooks</code></td><td>Pack/unpack callbacks on every saved tensor — the mechanism behind activation offloading (pack to CPU, unpack on demand) and a favorite lever for memory-vs-bandwidth tradeoffs. Its cousin, <code>torch.utils.checkpoint</code>, instead <em>drops</em> saves and recomputes the forward during backward — trading FLOPs for activation memory.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="chapter" id="c17">
+    <h2><span class="ch-num">17</span>Autograd meets CUDA streams</h2>
+
+    <table class="tbl">
+      <thead><tr><th>Rule</th><th>Consequence</th></tr></thead>
+      <tbody>
+        <tr><td>Backward ops run on the stream their forward op ran on</td><td>The engine records the stream per node and re-establishes it, inserting the needed event syncs. So multi-stream forwards don't silently corrupt backward — but it also means <em>your</em> custom stream juggling in forward is inherited by backward, which is where exotic bugs live.</td></tr>
+        <tr><td>Backward runs on engine worker threads</td><td>Not the Python thread. So a stream you set with <code>with torch.cuda.stream(s):</code> around <code>loss.backward()</code> does not automatically apply to the backward kernels the way people assume — the engine's per-node stream bookkeeping governs.</td></tr>
+        <tr><td>Nondeterminism enters here</td><td>Backward for scatter-like ops (<code>index_add</code>, <code>embedding</code>, <code>scatter_add</code> with duplicate indices) uses atomics → the summation order varies run to run → bitwise-different gradients. This is the #1 source of "my training isn't reproducible" (Vol. VI §19).</td></tr>
+        <tr><td>Grad accumulation is a sum</td><td>Which means it's floating-point-order-dependent too: the same math, summed in a different order, gives a different last bit. Correct, not broken — and the distinction (§Vol. VI §17) is the whole skill.</td></tr>
+      </tbody>
+    </table>
+
+    <p class="pull">Autograd never gives a silently wrong gradient. It gives you a hard error, an atomics-shaped nondeterminism, or the right answer — and knowing which is which is the job.</p>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART IV ===================== -->
+<div class="part" id="p4">
+  <div class="part-label">Part IV — ATen kernels</div>
+  <h2 class="part-title">From lambda to <span class="acc">launch.</span></h2>
+  <p class="part-intro">Xiang Gao's machine. TensorIterator is the piece of PyTorch that does everything <em>except</em> the math — and then hands a lambda to a launcher that does the math on a few thousand threads. Five chapters: the iterator, the elementwise loop, reductions, structured kernels, and adding an op end to end.</p>
+
+  <section class="chapter" id="c18">
+    <h2><span class="ch-num">18</span>TensorIterator: the machine before the kernel</h2>
+
+    <div class="diagram">  TensorIteratorConfig → build() → everything a kernel needs:
+  ─────────────────────────────────────────────────────────────
+   1 check memory OVERLAP        (is an input also the output? alias?)
+   2 compute SHAPE               broadcasting all operands together
+   3 compute STRIDES             per-operand, in the broadcast shape
+   4 REORDER dimensions          sort dims so the fastest-varying is
+                                 innermost → coalesced memory access
+   5 compute TYPES               common dtype (§03), decide casts;
+                                 fuse the cast into the load if it can,
+                                 else emit a separate copy kernel
+   6 ALLOCATE outputs            (if not provided)
+   7 COALESCE dimensions         merge adjacent dims that are contiguous
+                                 → a 4-D contiguous op becomes 1-D!
+   8 decide 32-BIT INDEXING      if the tensor fits in int32 offsets,
+                                 use them (faster address math); else
+                                 split into sub-iterators that do
+  ─────────────────────────────────────────────────────────────
+  THEN: gpu_kernel(iter, lambda) launches. The KERNEL AUTHOR writes only
+  the lambda — broadcasting, promotion, layout, and indexing are already
+  solved. That's the whole design: ONE iterator, HUNDREDS of ops.</div>
+
+    <table class="tbl">
+      <thead><tr><th>Why each step matters in an interview</th><th></th></tr></thead>
+      <tbody>
+        <tr><td>Coalescing</td><td>Explains why a contiguous elementwise op on a 4-D tensor is as fast as on a flat one — the iterator collapses it to 1-D and the kernel is a simple grid-stride loop.</td></tr>
+        <tr><td>Dim reordering</td><td>Explains why a transposed (non-contiguous) input isn't catastrophic: the iterator reorders for locality rather than forcing a copy.</td></tr>
+        <tr><td>Type computation</td><td>Explains the "extra copy kernel" bug class (§03) — <em>this</em> is the code that decides whether your cast is free or costs a full pass over memory.</td></tr>
+        <tr><td>32-bit indexing</td><td>A real optimization with a real cliff: cross the int32 offset limit and the kernel changes shape. A lovely detail to know exists.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="chapter" id="c19">
+    <h2><span class="ch-num">19</span>gpu_kernel &amp; the vectorized loop</h2>
+
+    <p>Xiang Gao's PR that added vectorized memory access to the TensorIterator GPU loop is one of those changes whose reasoning you should be able to reconstruct from first principles — because it's exactly the CUDA reasoning you already do.</p>
+
+    <div class="diagram">  gpu_kernel(iter, f) picks a launch strategy:
+  ─────────────────────────────────────────────────────────────
+  CONTIGUOUS + ALIGNED inputs/outputs
+      → vectorized_elementwise_kernel
+        each thread loads a VECTOR (e.g. 4 halves = one 64-bit load,
+        or float4 = 128-bit), applies f element-wise, stores a vector
+        WHY: elementwise ops are MEMORY-BOUND. One 128-bit load beats
+        four 32-bit loads: fewer instructions, fewer memory
+        transactions, better bandwidth utilization at the same
+        occupancy. The math was never the bottleneck.
+  NON-CONTIGUOUS / mixed strides
+      → unrolled_elementwise_kernel + OffsetCalculator
+        each thread computes per-operand byte offsets from the
+        iterator's stride metadata (divmod-based), still unrolled to
+        hide latency, but without vector loads.
+  ─────────────────────────────────────────────────────────────
+  ALIGNMENT is a precondition, not a detail: a vector load requires the
+  base pointer to be suitably aligned — which is one reason the
+  allocator's alignment guarantees matter (Vol. VI §02), and why an
+  oddly-offset view can silently take the slow path.</div>
+
+    <div class="callout tip">
+      <h5>Your genuine hook here</h5>
+      <p>You've written CUDA kernels and cared about coalescing, vectorized loads, and occupancy for years — <code>gpu_kernel</code> is that knowledge expressed as framework infrastructure. If the conversation goes to elementwise performance, you can reason as a peer: memory-bound op → maximize bytes-in-flight per thread → vector loads when alignment permits → fall back to offset math when the layout is hostile. That's not memorized; that's your own CUDA instinct pointed at ATen.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c20">
+    <h2><span class="ch-num">20</span>Reductions, the hard ones</h2>
+
+    <table class="tbl">
+      <thead><tr><th>Problem</th><th>How ATen solves it</th></tr></thead>
+      <tbody>
+        <tr><td>Parallel sum needs cross-thread communication</td><td>Multi-stage: thread-local partials → warp shuffle reduce → block shared-memory reduce → cross-block (a second pass or atomics with semaphores). <code>gpu_reduce_kernel</code> plus a <code>ReduceConfig</code> that chooses the shape of that tree from the input's geometry.</td></tr>
+        <tr><td>Precision</td><td>Accumulate in a wider type (<code>acc_type</code>/<code>opmath_t</code>): summing 10⁶ fp16 values in fp16 loses catastrophically; accumulating in fp32 doesn't. <strong>This is why a GPU sum can differ from a naive CPU sum — and why it's often <em>more</em> accurate, not less.</strong></td></tr>
+        <tr><td>Numerical stability</td><td>Welford's algorithm for variance/std (one-pass, stable); log-sum-exp shifting for softmax. Stability is a design constraint, not an afterthought.</td></tr>
+        <tr><td>Determinism</td><td>Tree reduction order depends on the launch geometry, which can depend on the input shape → different shapes, different rounding. Atomics-based cross-block reductions are worse: order varies <em>run to run</em>. Hence Vol. VI §19.</td></tr>
+        <tr><td>Why reductions are the flaky-test capital</td><td>Every one of the above interacts with hardware: new arch → different occupancy → different config → different order → different last bits → a tolerance-tuned test tips over. When Wei says "this test only fails on one GPU type," a reduction is a prime suspect (Vol. II §15).</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="chapter" id="c21">
+    <h2><span class="ch-num">21</span>Structured kernels &amp; meta functions</h2>
+
+    <pre data-lang="cpp"><span class="com">// The two halves of a structured op:</span>
+TORCH_META_FUNC(add) (const Tensor&amp; self, const Tensor&amp; other, const Scalar&amp; alpha) {
+  build_borrowing_binary_op(maybe_get_output(), self, other);   <span class="com">// shapes+dtypes</span>
+  native::alpha_check(dtype(), alpha);                          <span class="com">// no compute here</span>
+}
+
+TORCH_IMPL_FUNC(add_out_cuda) (const Tensor&amp; self, const Tensor&amp; other,
+                               const Scalar&amp; alpha, const Tensor&amp; result) {
+  add_kernel_cuda(*this, alpha);   <span class="com">// `*this` IS the built TensorIterator</span>
+}</pre>
+
+    <table class="tbl">
+      <thead><tr><th>Piece</th><th>What it buys</th></tr></thead>
+      <tbody>
+        <tr><td>meta function</td><td>Computes output shape/dtype and allocates (or validates) the output — <em>without touching data</em>. Write it once and you get: the <code>meta</code> device (shape-only "fake" execution) for free, which is what lets compilers and <code>FakeTensor</code> trace a model without a GPU.</td></tr>
+        <tr><td>impl function</td><td>The math, receiving an already-built iterator and a ready output. No boilerplate.</td></tr>
+        <tr><td>Codegen fans out</td><td>The functional (<code>add</code>), in-place (<code>add_</code>), and out (<code>add_out</code>) variants are all generated from the one impl — instead of three near-copies that drift apart. Fewer variants to test is a direct CI win, which is a very on-message thing to observe out loud.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="chapter" id="c22">
+    <h2><span class="ch-num">22</span>Adding an op, end to end</h2>
+
+    <div class="diagram">  "ADD A FUSED op TO PYTORCH" — the full checklist (say this and you
+  have described this team's actual weekly work):
+   1 SCHEMA        native_functions.yaml entry (name, args, variants,
+                   structured/structured_delegate, dispatch keys, tags)
+   2 META          shape/dtype computation (→ meta device for free)
+   3 KERNELS       CPU + CUDA impls (TensorIterator or hand-written);
+                   pick the dtype macro = your dtype support matrix
+   4 DERIVATIVE    derivatives.yaml formula (or CompositeImplicit and
+                   inherit one); decide double-backward support
+   5 TESTS         OpInfo entry ⇒ inherits the whole generic battery
+                   (dtypes, devices, grad, gradgrad, meta consistency,
+                   compile consistency); plus targeted numerics tests
+   6 COMPILE PATH  fake/meta impl so dynamo+inductor can trace it
+   7 DOCS          the public surface others will rely on
+   8 CI            the new kernel now runs on every arch in the matrix —
+                   which is where the LIFE CYCLE role meets the core op:
+                   new dtypes × new arches = new tolerance surface,
+                   new build time, new flaky candidates
+  ─────────────────────────────────────────────────────────────
+  THE POINT: an "op" is not a function. It is a schema, a kernel per
+  backend, a derivative, a test matrix, a compile path, and a
+  permanent maintenance obligation across every GPU NVIDIA ships.</div>
+
+    <div class="idea">
+      <p><strong>This checklist is the bridge between the two halves of your candidacy.</strong> Steps 1–4 are core engineering (Masaki's and Xiang's world); steps 5–8 are the life cycle (Ting's and Wei's world) — and they are <em>the same op</em>. That's why this team hires a life-cycle engineer who can read ATen: when the new fused kernel turns a test red on one arch at one dtype, the person who owns CI has to know whether that's a tolerance issue, a reduction-order issue, or a real bug — and those three answers live in §20, not in a YAML file. Say this out loud in Piotr's hour and you have articulated the job better than the JD does.</p>
+    </div>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART V ===================== -->
+<div class="part" id="p5">
+  <div class="part-label">Part V — Beyond eager</div>
+  <h2 class="part-title">Where the graph <span class="acc">goes.</span></h2>
+  <p class="part-intro">Three chapters on the two things that consume the autograd graph — compilers and distributed training. Both are staffed on this exact team (Ivan Yashchuk: "PyTorch Compilers @ NVIDIA"; Xiang Gao: nvFuser; Masaki: Thunder), so know the shape and be candid about the depth.</p>
+
+  <section class="chapter" id="c23">
+    <h2><span class="ch-num">23</span>torch.compile: dynamo → AOT → inductor</h2>
+
+    <div class="diagram">  torch.compile(model)(x)
+  ─────────────────────────────────────────────────────────────
+  1 TORCHDYNAMO      hooks CPython frame evaluation; symbolically
+                     executes the bytecode and extracts an FX GRAPH
+                     of tensor ops, plus GUARDS (assumptions: shapes,
+                     dtypes, types, python values). Anything it can't
+                     capture → GRAPH BREAK → that region runs eager.
+                     Guard fails at runtime → RECOMPILE.
+  2 AOTAUTOGRAD      traces the graph AND ITS BACKWARD ahead of time
+                     (via __torch_dispatch__ + FakeTensor + meta funcs
+                     §21) into a JOINT forward+backward graph, then
+                     FUNCTIONALIZES it (§06: mutations/views removed),
+                     then PARTITIONS it into fw/bw graphs — the min-cut
+                     partitioner deciding what to SAVE vs RECOMPUTE.
+                     ⇒ autograd is now a compiled artifact, not an
+                       engine walk. This is the deep idea.
+  3 INDUCTOR         lowers the graphs to code: TRITON kernels on GPU
+                     (fusing elementwise/reduction chains), C++/OpenMP
+                     on CPU; optionally wraps in CUDA graphs
+                     (mode="reduce-overhead") to kill launch overhead.
+  ─────────────────────────────────────────────────────────────
+  DEBUG SURFACE (know these exist): TORCH_LOGS=graph_breaks,recompiles,
+  output_code · torch._dynamo.explain · TORCHINDUCTOR_CACHE_DIR ·
+  "why is my compiled model slow?" is usually GRAPH BREAKS or
+  RECOMPILATION THRASH, not bad kernels.</div>
+
+    <table class="tbl">
+      <thead><tr><th>The insight worth carrying</th><th></th></tr></thead>
+      <tbody>
+        <tr><td>Why functionalization exists</td><td>A compiler cannot reason about a graph full of aliasing in-place mutations (§14 is a <em>runtime</em> guarantee, not a static one). Functionalize rewrites them away so the graph is pure — and then the partitioner is free to move things.</td></tr>
+        <tr><td>Why the meta/fake path matters</td><td>Tracing must compute shapes without executing kernels — which is exactly what the meta functions of §21 provide. <em>An op without a meta/fake impl breaks compile.</em> That's the connective tissue between "adding an op" and "compile works."</td></tr>
+        <tr><td>Save-vs-recompute</td><td>The partitioner is making the same trade as activation checkpointing (§16), automatically: memory vs FLOPs. Naming that equivalence out loud is a strong move in a compiler-adjacent room.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="chapter" id="c24">
+    <h2><span class="ch-num">24</span>The NVIDIA compiler lineage</h2>
+
+    <table class="tbl">
+      <thead><tr><th>Project</th><th>What it is · who on this team</th></tr></thead>
+      <tbody>
+        <tr><td>nvFuser</td><td>NVIDIA's GPU fusion compiler — generates fused kernels for elementwise/normalization/reduction chains. <strong>Xiang Gao's public bio literally reads "PyTorch &amp; nvFuser developer"</strong>; Piotr and Masaki co-authored the nvFuser blog. Its TorchScript-era integration was retired as dynamo/inductor became the mainline (Ivan Yashchuk authored the removal of the dynamo+nvFuser path) — but the codegen lineage continues.</td></tr>
+        <tr><td>Lightning Thunder</td><td>The NVIDIA-collaborative source-to-source compiler Masaki core-develops: acquire the Python program, build an explicit, inspectable TRACE, apply transforms (autograd, distribution, precision), then dispatch regions to pluggable EXECUTORS — nvFuser, vendor libraries, even torch.compile itself. Philosophy: a transparent representation with executor choice.</td></tr>
+        <tr><td>Triton (as inductor's backend)</td><td>Where inductor's generated GPU kernels actually come from — and a real lifecycle dependency (pinned per release, needs new-arch support in step with each CUDA enablement; Vol. III §05).</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout warn">
+      <h5>Calibrate explicitly here — this is the highest-risk bluff zone in the loop</h5>
+      <p>Three of Piotr's directs work on compilers, and one of them may well be in the room. Your honest position is strong: you understand the <em>stack</em> (dynamo's guards, AOTAutograd's joint graph, inductor's Triton lowering), you understand <em>why</em> the pieces exist (functionalization, meta funcs, save-vs-recompute), and you have not built a compiler. Say that boundary plainly and then ask a real question — "does Thunder's explicit trace buy you debuggability that dynamo's guard-and-break model can't?" — and you convert the riskiest topic in the loop into the best conversation in it.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c25">
+    <h2><span class="ch-num">25</span>Distributed's hooks into autograd</h2>
+
+    <div class="diagram">  DDP IS AN AUTOGRAD PLUGIN — this is the mechanism people miss:
+  ─────────────────────────────────────────────────────────────
+   construction:  Reducer registers a post-accumulate-grad HOOK on
+                  every parameter, and packs params into BUCKETS
+                  (~25 MB), built in REVERSE registration order to
+                  approximate the order gradients become ready
+   backward:      the autograd engine (§12) fires each param's hook the
+                  moment that param's grad is finalized
+                  → when ALL params in a bucket are ready, DDP launches
+                    that bucket's ALLREDUCE asynchronously
+                  → so communication OVERLAPS with the rest of backward
+                    instead of waiting for it. The overlap IS the design.
+   end of step:   wait on the outstanding allreduces; grads are now the
+                  average across ranks; optimizer steps identically
+                  everywhere (no parameter broadcast needed)
+  ─────────────────────────────────────────────────────────────
+  FAILURE MODES THAT FALL OUT OF THIS DESIGN:
+   • a param that gets no grad on some ranks (control flow / unused
+     head) ⇒ its bucket never completes ⇒ THAT RANK NEVER LAUNCHES the
+     allreduce ⇒ the others block forever = the classic DDP HANG.
+     find_unused_parameters=True fixes it by traversing the graph to
+     mark unused params ready — at real cost. static_graph=True is the
+     "the graph never changes" fast path.
+   • ranks executing DIFFERENT NUMBERS of collectives (a conditional
+     branch, an early `continue`, uneven dataset lengths) ⇒ desync/hang
+   • bucket size trades overlap granularity against allreduce efficiency
+  ─────────────────────────────────────────────────────────────
+  FSDP: shards params/grads/optimizer state across ranks; all-gathers
+  weights just-in-time in forward, reduce-scatters grads in backward —
+  same "hook into autograd, overlap comm with compute" idea, applied to
+  memory rather than just gradients.</div>
+
+    <div class="callout tip">
+      <h5>Your genuine standing</h5>
+      <p>You've built distributed PyTorch/Ray systems and driven a 400× speedup — so speak to DDP from the systems side you actually lived: overlap, bucketing, stragglers, and the debugging of hangs. And cross-reference Vol. I §14–18 for NCCL depth. When the mechanism above is what you can derive rather than recite, a distributed question becomes home turf rather than a quiz.</p>
+    </div>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<!-- ===================== PART VI ===================== -->
+<div class="part" id="p6">
+  <div class="part-label">Part VI — Drills &amp; honesty</div>
+  <h2 class="part-title">Say it out <span class="acc">loud.</span></h2>
+  <p class="part-intro">Fifteen questions a core interviewer actually asks, each with the shape of a strong answer; how to navigate the source live if someone shares a file; and the honest map of where your depth ends — written so you can state it before anyone has to find it.</p>
+
+  <section class="chapter" id="c26">
+    <h2><span class="ch-num">26</span>Fifteen core questions, answered</h2>
+
+    <div class="issue">
+      <div class="issue-header"><span class="tag qa">Q1</span><span class="title">What actually happens when I call <code>a + b</code>?</span></div>
+      <div class="issue-body"><p>Walk §05's seven steps. Land on the punchline: the dispatcher is a priority-ordered layer stack driven by a key set the tensors carry; each layer does its job and re-dispatches downward.</p></div>
+    </div>
+
+    <div class="issue">
+      <div class="issue-header"><span class="tag qa">Q2</span><span class="title">How does autograd know what to differentiate?</span></div>
+      <div class="issue-body"><p>It doesn't "know" — the forward <em>builds</em> the graph as a side effect (§10). The autograd dispatch layer, for any op with a requires-grad input, constructs a Node whose <code>apply</code> is the codegen'd formula from <code>derivatives.yaml</code>, wires <code>next_edges</code> to the inputs' <code>grad_fn</code>s (or their AccumulateGrad), saves what the derivative needs, and stamps <code>grad_fn</code> on the output.</p></div>
+    </div>
+
+    <div class="issue">
+      <div class="issue-header"><span class="tag qa">Q3</span><span class="title">Walk me through <code>loss.backward()</code>.</span></div>
+      <div class="issue-body"><p>§12: seed the roots → <code>compute_dependencies</code> counts incoming edges per node → per-device ready queues; a node fires only when all its incoming gradients have arrived (InputBuffer sums them = the multivariable chain rule) → <code>apply</code> → push gradients to <code>next_edges</code>, decrement counters → AccumulateGrad writes leaves. Independent branches run concurrently; reentrancy spills to a thread pool.</p></div>
+    </div>
+
+    <div class="issue">
+      <div class="issue-header"><span class="tag qa">Q4</span><span class="title">Why do I have to zero gradients?</span></div>
+      <div class="issue-body"><p>Because AccumulateGrad <em>adds</em> into <code>.grad</code> when it isn't None (§11) — accumulation is the leaf node's defined behavior, which is precisely what makes gradient accumulation across micro-batches work for free. <code>set_to_none=True</code> makes the next write a steal instead of an add, skipping a kernel and freeing memory.</p></div>
+    </div>
+
+    <div class="issue">
+      <div class="issue-header"><span class="tag qa">Q5</span><span class="title">"Modified by an inplace operation" — explain the mechanism.</span></div>
+      <div class="issue-body"><p>§14: version counters on TensorImpl, versions recorded in SavedVariable at save time, checked at backward. Then read the message like a diagnostic — it names the tensor, its producing Node, and the two versions. Close with the design point: PyTorch chose a hard error over a silently wrong gradient.</p></div>
+    </div>
+
+    <div class="issue">
+      <div class="issue-header"><span class="tag qa">Q6</span><span class="title"><code>no_grad</code> vs <code>inference_mode</code> vs <code>detach</code>?</span></div>
+      <div class="issue-body"><p>§15. Three different mechanisms: a TLS key exclusion; a stronger mode that also drops view/version bookkeeping and marks its outputs as inference tensors (which can't later enter autograd); and a graph cut that shares storage <em>and</em> the version counter (hence <code>.detach().clone()</code>).</p></div>
+    </div>
+
+    <div class="issue">
+      <div class="issue-header"><span class="tag qa">Q7</span><span class="title">How does AMP/autocast work, and why is it differentiable?</span></div>
+      <div class="issue-body"><p>§06's derivation: autocast is a dispatch layer <em>above</em> autograd, so the casts it inserts are themselves ops recorded by the autograd layer below — which is exactly how gradients flow back to fp32 master weights. Per-op policies (matmul/conv down, reductions/norms in fp32, others promote-to-widest), plus a cast cache within the region. GradScaler handles fp16's underflow range; bf16 usually doesn't need it.</p></div>
+    </div>
+
+    <div class="issue">
+      <div class="issue-header"><span class="tag qa">Q8</span><span class="title">What does TensorIterator do?</span></div>
+      <div class="issue-body"><p>§18: everything except the math — overlap checks, broadcasting, stride computation, dim reordering for locality, type promotion and cast placement, output allocation, dimension coalescing, 32-bit-indexing selection. Then <code>gpu_kernel</code> takes a lambda and launches a vectorized elementwise kernel when contiguous and aligned, or an unrolled offset-calculator kernel otherwise (§19).</p></div>
+    </div>
+
+    <div class="issue">
+      <div class="issue-header"><span class="tag qa">Q9</span><span class="title">Why is my GPU result different from CPU?</span></div>
+      <div class="issue-body"><p>Not "GPUs are inaccurate." Name the real mechanisms: accumulate types (§20 — fp16 sums accumulate in fp32, often <em>more</em> accurate than a naive CPU loop), different reduction orders (tree vs sequential), TF32 on matmul, fused multiply-add contraction, and library algorithm selection. Then the discipline: compare both against a float64 reference and judge against the format's error bounds — "differently right" vs wrong (Vol. VI §17).</p></div>
+    </div>
+
+    <div class="issue">
+      <div class="issue-header"><span class="tag qa">Q10</span><span class="title">How would you add a new op with a CUDA kernel?</span></div>
+      <div class="issue-body"><p>§22's eight steps — schema, meta, kernels, derivative, OpInfo tests, fake/meta for compile, docs, CI. Then the sentence that gets you hired here: an op is not a function; it's a schema, a kernel per backend, a derivative, a test matrix, a compile path, and a permanent maintenance obligation across every GPU NVIDIA ships.</p></div>
+    </div>
+
+    <div class="issue">
+      <div class="issue-header"><span class="tag qa">Q11</span><span class="title">What's a structured kernel, and why?</span></div>
+      <div class="issue-body"><p>§21: split the op into a meta function (shapes/dtypes/allocation, no data) and an impl (math on a pre-built iterator). Codegen fans out functional/in-place/out variants from one implementation, and the meta function gives you the meta device — which is what lets FakeTensor and the compile stack trace without a GPU.</p></div>
+    </div>
+
+    <div class="issue">
+      <div class="issue-header"><span class="tag qa">Q12</span><span class="title">When is a composite op the right choice?</span></div>
+      <div class="issue-body"><p>§09's tradeoff, framed as maintenance: composite inherits autograd and all backends for free; a fused kernel wins when intermediates dominate memory/bandwidth, when launch count matters, or when stability demands a single-pass formulation — at the cost of a permanent per-backend, per-dtype obligation.</p></div>
+    </div>
+
+    <div class="issue">
+      <div class="issue-header"><span class="tag qa">Q13</span><span class="title">How does DDP overlap communication with backward?</span></div>
+      <div class="issue-body"><p>§25: DDP is an autograd plugin — post-accumulate-grad hooks on every param, buckets built in reverse registration order, a bucket's allreduce fires the moment its last gradient is ready, so comm rides alongside the remaining backward. Then name the hang: a param that gets no grad on some rank means that bucket never completes and that rank never launches its collective.</p></div>
+    </div>
+
+    <div class="issue">
+      <div class="issue-header"><span class="tag qa">Q14</span><span class="title">Why does <code>torch.compile</code> need functionalization?</span></div>
+      <div class="issue-body"><p>§06 + §23: a compiler can't safely reorder or partition a graph full of aliasing mutations, so Functionalize (a dispatch layer) rewrites them into pure ops. AOTAutograd then traces a joint forward+backward graph and min-cut-partitions it, deciding what to save versus recompute — the same memory-vs-FLOPs trade as checkpointing, made automatic.</p></div>
+    </div>
+
+    <div class="issue">
+      <div class="issue-header"><span class="tag qa">Q15</span><span class="title">How do you know a derivative is correct?</span></div>
+      <div class="issue-body"><p><code>gradcheck</code> in float64 against finite differences, <code>gradgradcheck</code> for double backward, and an OpInfo entry so the generic suites hammer it across dtypes/devices/meta/compile (§16, §22). On this team, "did you gradcheck it?" is the first review question — so volunteer it before you're asked.</p></div>
+    </div>
+  </section>
+
+  <section class="chapter" id="c27">
+    <h2><span class="ch-num">27</span>Reading the source live</h2>
+
+    <p>If an interviewer shares a file — very plausible in Masaki's or a core hour — navigation confidence is the signal. The map:</p>
+
+    <div class="cheat">
+      <h5>Where things live</h5>
+      <div class="cheat-grid">
+        <div class="cmd">c10/core/TensorImpl.h</div><div class="desc">The object model of §01 — sizes, strides, key set, version counter, autograd meta.</div>
+        <div class="cmd">c10/core/DispatchKey.h</div><div class="desc">The key enum and its priority ordering — the layer stack of §06, in source form.</div>
+        <div class="cmd">aten/src/ATen/native/native_functions.yaml</div><div class="desc">Every op's schema and dispatch table (§07). Start here for "where is op X?"</div>
+        <div class="cmd">tools/autograd/derivatives.yaml</div><div class="desc">Every backward formula (§09). Start here for "what's the derivative of X?"</div>
+        <div class="cmd">aten/src/ATen/TensorIterator.cpp</div><div class="desc">§18's machine — build(), compute_types, coalesce_dimensions.</div>
+        <div class="cmd">aten/src/ATen/native/cuda/Loops.cuh</div><div class="desc">gpu_kernel, the vectorized and unrolled elementwise launchers (§19).</div>
+        <div class="cmd">aten/src/ATen/native/cuda/Reduce.cuh</div><div class="desc">gpu_reduce_kernel and ReduceConfig (§20).</div>
+        <div class="cmd">torch/csrc/autograd/engine.cpp</div><div class="desc">§12 — compute_dependencies, ready queues, worker threads, reentrancy.</div>
+        <div class="cmd">torch/csrc/autograd/function.h</div><div class="desc">Node, next_edges, apply — the graph's type system.</div>
+        <div class="cmd">torch/csrc/autograd/saved_variable.cpp</div><div class="desc">SavedVariable and the version check that produces the §14 error.</div>
+        <div class="cmd">c10/cuda/CUDACachingAllocator.cpp</div><div class="desc">The allocator (Vol. I §05–13, Vol. VI §02).</div>
+        <div class="cmd">torch/csrc/distributed/c10d/reducer.cpp</div><div class="desc">DDP's buckets and autograd hooks (§25).</div>
+      </div>
+    </div>
+
+    <div class="callout tip">
+      <h5>How to read code with an author watching</h5>
+      <p>Narrate structure before syntax: "this is the meta function, so it's shapes only… here's the AT_DISPATCH, so this instantiates per dtype… and this lambda is the actual math, so the launch strategy is decided by the iterator upstream." Ask about the <em>why</em> when you hit a choice you don't recognize — with the person who wrote it, that's a conversation, not a confession. And when you spot the thing you genuinely know (a coalescing decision, a vectorized load, an accumulate type), say it: that's your CUDA background showing up as fluency in their file.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c28">
+    <h2><span class="ch-num">28</span>The honest depth map</h2>
+
+    <table class="tbl compare">
+      <thead><tr><th>Territory</th><th>Where you genuinely stand</th><th>How to say it</th></tr></thead>
+      <tbody>
+        <tr><td>Dispatcher &amp; ATen</td><td>Studied deeply (AT_DISPATCH internals, the key-set model) — not authored ops upstream</td><td>"I've read the dispatch machinery closely and I can reason about it; I haven't landed an op in core."</td></tr>
+        <tr><td>Autograd</td><td>Mechanism-solid: graph construction, engine execution, version counters, the three off-switches</td><td>Answer mechanistically and let the depth speak. If pushed past it — reentrancy internals, functorch layering — say where the edge is.</td></tr>
+        <tr><td>CUDA kernels</td><td><strong>Real strength.</strong> You've written and optimized them (124×); coalescing, vectorized loads, occupancy, reductions are yours</td><td>Engage <code>gpu_kernel</code> and reductions as a peer, from first principles.</td></tr>
+        <tr><td>Allocator / memory</td><td><strong>Real strength.</strong> Vol. I's MemPool depth is unusual for a candidate</td><td>Bring it when graphs, capture, or OOM comes up — it's the topic where you can go deeper than expected.</td></tr>
+        <tr><td>Distributed</td><td>Strong systems side (400×, NCCL/UCX); DDP's autograd-hook mechanism is studied</td><td>Speak from systems experience, derive the mechanism.</td></tr>
+        <tr><td>Compilers</td><td><strong>Consumer-level.</strong> Stack shape yes; compiler authorship no — and three of Piotr's directs do this for a living</td><td>State the boundary early and ask a real question (§24). This is the one place bluffing is fatal.</td></tr>
+        <tr><td>Upstream process at PyTorch scale</td><td>Not yet — your open-source ownership is package-scale (pydisort)</td><td>The honest ramp line from Vol. II §11, unchanged and still strong.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="idea">
+      <p><strong>The strategic point of this whole volume: the org chart raised the internals bar, and the honest response is not to fake core-contributor experience — it's to become genuinely fluent in the mechanism and then be exact about the line.</strong> A core team can tell the difference between someone who has <em>read</em> the engine and someone who has <em>written</em> it in about ninety seconds. What they cannot easily find is someone who has read the engine, has real CUDA and allocator depth, has shipped and sustained software end-to-end, and will own the machinery that delivers their work to the world. That's the candidate this manual is for — and every line of it is true.</p>
+    </div>
+
+    <p class="pull">Know the mechanism. Name the edge. That combination is rarer than either half.</p>
+  </section>
+</div>
+
+</main>
+
+<footer>
+  <h4>sources &amp; companion volumes</h4>
+  <div class="resources">
+    <ul>
+      <li><strong>Why this volume exists</strong></li>
+      <li>The org chart: Piotr Bialecki manages NVIDIA's PyTorch core team — Eddie Yan (Technical Lead of PyTorch, NVIDIA), Xiang Gao ("PyTorch &amp; nvFuser developer"; TensorIterator type promotion + vectorized GPU loop), Ivan Yashchuk ("PyTorch Compilers @ NVIDIA"), Ting Lu, Wei Wang, Tirth Patel, Lakshay Garg — with Masaki Kozuki (Senior SWE, PyTorch, NVIDIA) in the same org.</li>
+      <li>The proof that core and life cycle are one job: pytorch#165801 (filed by Eddie Yan) — CI installed cuDNN 9.8 while the shipped wheels carried 9.10.2, so cuDNN was silently not selected as an SDPA backend. Internals knowledge + build-matrix knowledge, one bug.</li>
+      <li><strong>Where to verify (do this yourself before Monday)</strong></li>
+      <li>Structure and file paths in §27 are stable landmarks, but PyTorch moves fast — spot-check anything you plan to assert confidently against the current source or docs.</li>
+      <li><strong>Companion volumes</strong></li>
+      <li>Vol. I — <code>pytorch_lifecycle_manual.html</code> · allocator, MemPool, NCCL, build/link, CI/CD</li>
+      <li>Vol. II — <code>nvidia_pytorch_panel_manual.html</code> · the people and the two-day plan (see its new Part VII: the org chart)</li>
+      <li>Vol. III — <code>nvidia_pytorch_enablement_manual.html</code> · enablement, CI at scale, wheels, linking</li>
+      <li>Vol. IV — <code>nvidia_pytorch_coding_manual.html</code> · the live coding rounds, 13 worked problems</li>
+      <li>Vol. VI — <code>nvidia_pytorch_machine_manual.html</code> · CUDA semantics, numerics, and the debugging decision trees</li>
+    </ul>
+  </div>
+  <p class="footer-note">Mechanism over API, throughout — because this panel wrote the mechanism. Everything here is stated so it can be derived rather than recited: the dispatcher as a layer stack, autograd as a graph scheduler, TensorIterator as everything-but-the-math, and the version counter as PyTorch's promise never to hand you a silently wrong gradient. Where the material meets the edge of your experience, §28 says so plainly — because with the authors of the code in the room, calibrated candor isn't a fallback, it's the strategy.</p>
+</footer>
+
+</body>
+</html>
