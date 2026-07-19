@@ -1,0 +1,2002 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>At Scale — PyTorch for Distributed Training &amp; ML Data Pipelines · Latitude AI Field Manual</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;0,8..60,700;1,8..60,400;1,8..60,500&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --bg:        #eef1ec;   /* cool desaturated paper — the page */
+  --bg-2:      #e4e8e1;   /* slightly darker panels / table headers */
+  --bg-3:      #d7dcd2;   /* darker still — inline code chips */
+  --card:      #f7f9f4;   /* card surfaces (slightly lighter than page) */
+  --ink:       #14181a;   /* near-black primary text */
+  --ink-soft:  #3d4642;   /* body text in cards, secondary prose */
+  --ink-faint: #76807a;   /* muted labels, captions */
+  --rule:      #c6ccc0;   /* hairline rules */
+  --rule-soft: #d8ddd2;
+  --rule-dark: #8d958a;   /* card borders */
+  --green:     #7d4ac0;   /* SIGNAL ACCENT — primary */
+  --green-deep:#5a3490;   /* darker accent (code, links) */
+  --green-bri: #a074e8;   /* brighter accent (hover) */
+  --slate:     #33505f;   /* secondary accent — cool blue-grey */
+  --slate-deep:#203642;
+  --amber:     #b07d12;   /* warning accent */
+  --rose:      #a32a1f;   /* danger / required accent */
+  --code-bg:   #1a1626;   /* dark code blocks (green-tinted near-black) */
+  --code-ink:  #d6ddd2;
+  --maxw:      1080px;
+}
+*{ box-sizing: border-box; }
+html{ scroll-behavior: smooth; }
+body{
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Source Serif 4', Georgia, serif;
+  font-size: 17px;
+  line-height: 1.62;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ============ HEADER ============ */
+header{ max-width: var(--maxw); margin: 0 auto; padding: 84px 40px 50px; position: relative; }
+.filed{
+  font-family: 'Geist Mono', ui-monospace, monospace; font-size: 10.5px; letter-spacing: .28em;
+  text-transform: uppercase; color: var(--green); margin: 0 0 28px; font-weight: 600;
+  display: flex; align-items: center; gap: 12px;
+}
+.filed::before{ content: "▸"; color: var(--green); font-size: 13px; }
+.vol{
+  font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .18em;
+  color: var(--ink-faint); text-transform: uppercase; margin: 0 0 16px; font-weight: 500;
+}
+h1{
+  font-family: 'Archivo', system-ui, sans-serif; font-weight: 900;
+  font-size: clamp(54px, 9.5vw, 122px); line-height: 0.9; letter-spacing: -0.02em; margin: 0 0 24px; color: var(--ink);
+}
+h1 .acc{ color: var(--green); }
+.deck{ font-family: 'Source Serif 4', serif; font-size: 20px; font-weight: 400; color: var(--ink-soft); max-width: 770px; line-height: 1.5; }
+.readout{ margin-top: 40px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--rule); border: 1px solid var(--rule); }
+@media (max-width: 680px){ .readout{ grid-template-columns: repeat(2,1fr); } }
+.readout .cell{ background: var(--bg); padding: 14px 16px; }
+.readout .k{ font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 6px; }
+.readout .v{ font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 22px; color: var(--ink); line-height: 1; }
+.readout .v .u{ font-size: 12px; color: var(--green); font-weight: 600; }
+
+/* ============ TOC ============ */
+.toc{ margin-top: 46px; background: var(--card); border: 1px solid var(--rule-dark); padding: 30px 32px 34px; position: relative; }
+.toc::before{ content: "CONTENTS"; position: absolute; top: -9px; left: 26px; background: var(--card); padding: 0 10px; font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .3em; color: var(--green); font-weight: 600; }
+.toc h3{ font-family: 'Archivo', sans-serif; font-size: 26px; font-weight: 800; margin: 0 0 3px; color: var(--ink); letter-spacing: -0.01em; }
+.toc .toc-sub{ font-family: 'Geist Mono', monospace; font-size: 10.5px; color: var(--ink-faint); letter-spacing: .1em; text-transform: uppercase; margin-bottom: 20px; }
+.toc-part{ margin-top: 15px; }
+.toc-part-name{ font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .22em; color: var(--slate); text-transform: uppercase; font-weight: 600; border-bottom: 1px solid var(--rule); padding-bottom: 5px; margin-bottom: 7px; }
+.toc-grid{ display: grid; grid-template-columns: repeat(2,1fr); gap: 1px 32px; }
+@media (max-width: 760px){ .toc-grid{ grid-template-columns: 1fr; } }
+.toc-grid a{ color: var(--ink-soft); text-decoration: none; font-size: 14.5px; padding: 5px 0; display: flex; gap: 12px; align-items: baseline; border-bottom: 1px dotted transparent; transition: all .14s; }
+.toc-grid a:hover{ color: var(--green); border-color: var(--rule); }
+.toc-grid a .n{ font-family: 'Geist Mono', monospace; font-size: 10.5px; color: var(--slate); min-width: 26px; font-weight: 600; }
+
+/* ============ MAIN ============ */
+main{ max-width: var(--maxw); margin: 0 auto; padding: 56px 40px 96px; }
+.part{ margin-top: 92px; padding-top: 46px; position: relative; }
+.part::before{ content:""; position: absolute; top: 0; left: 0; right: 0; border-top: 2px solid var(--ink); }
+.part::after{ content:""; position: absolute; top: 5px; left: 0; width: 84px; border-top: 2px solid var(--green); }
+.part:first-child{ margin-top: 28px; padding-top: 28px; }
+.part-label{ font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .28em; color: var(--green); text-transform: uppercase; margin-bottom: 14px; font-weight: 600; }
+.part-title{ font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 54px; line-height: 0.96; letter-spacing: -0.02em; margin: 0 0 18px; color: var(--ink); }
+.part-title .acc{ color: var(--green); }
+.part-intro{ color: var(--ink-soft); font-size: 18.5px; max-width: 800px; margin-bottom: 34px; line-height: 1.5; }
+
+section.chapter{ margin-top: 52px; }
+section.chapter:first-of-type{ margin-top: 8px; }
+h2{ font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 33px; line-height: 1.08; letter-spacing: -0.015em; margin: 0 0 15px; color: var(--ink); display: flex; align-items: baseline; gap: 15px; padding-bottom: 9px; border-bottom: 2px solid var(--ink); }
+h2 .ch-num{ font-family: 'Geist Mono', monospace; font-size: 13px; color: var(--green); letter-spacing: .05em; font-weight: 600; flex-shrink: 0; }
+h3{ font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 22px; margin: 28px 0 9px; color: var(--ink); letter-spacing: -0.01em; }
+h4{ font-family: 'Geist Mono', monospace; font-size: 10.5px; letter-spacing: .18em; text-transform: uppercase; color: var(--slate); margin: 22px 0 8px; font-weight: 600; }
+p{ margin: 12px 0; }
+p code, li code, td code{ font-family: 'Geist Mono', monospace; font-size: .8em; background: var(--bg-3); color: var(--green-deep); padding: 1px 6px; border-radius: 2px; border: 1px solid var(--rule); }
+strong{ font-weight: 700; }
+ul, ol{ padding-left: 1.3em; }
+li{ margin: 6px 0; }
+ul.tight li{ margin: 3px 0; }
+ul.dash{ list-style: none; padding-left: 0; }
+ul.dash li{ position: relative; padding-left: 22px; }
+ul.dash li::before{ content: "▸"; position: absolute; left: 0; color: var(--green); font-weight: 700; }
+ul.check{ list-style: none; padding-left: 0; }
+ul.check li{ position: relative; padding-left: 24px; }
+ul.check li::before{ content: "▪"; position: absolute; left: 2px; top: 2px; color: var(--green); }
+
+/* ============ CODE ============ */
+pre{ background: var(--code-bg); padding: 17px 20px; overflow-x: auto; font-family: 'Geist Mono', monospace; font-size: 12.5px; line-height: 1.6; color: var(--code-ink); margin: 18px 0; position: relative; border-left: 3px solid var(--green); }
+pre .com{ color: #6f8378; font-style: italic; }   /* comment */
+pre .kw{  color: #6cb38a; }                        /* keyword */
+pre .ty{  color: #8fc6c0; }                        /* type */
+pre .str{ color: #c9b36a; }                        /* string */
+pre .num{ color: #c89a64; }                        /* number */
+pre .fn{  color: #8db8d0; }                        /* function */
+pre .var{ color: #d6ddd2; }                        /* variable */
+pre .glb{ color: #7fbf95; }                        /* global / builtin */
+pre .opt{ color: #c0a96a; }                        /* flag / option */
+pre::before{ content: attr(data-lang); position: absolute; top: 5px; right: 12px; font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: .18em; color: #56635a; text-transform: uppercase; }
+
+/* ============ CALLOUTS ============ */
+.callout{ margin: 22px 0; padding: 15px 22px; border-left: 4px solid var(--slate); background: var(--bg-2); font-size: 16px; line-height: 1.55; }
+.callout.warn{ border-color: var(--amber); }
+.callout.danger{ border-color: var(--rose); }
+.callout.tip{ border-color: var(--green); }
+.callout h5{ margin: 0 0 6px; font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--slate); font-weight: 600; }
+.callout.warn h5{ color: var(--amber); }
+.callout.danger h5{ color: var(--rose); }
+.callout.tip h5{ color: var(--green); }
+.callout p:first-child{ margin-top: 0; } .callout p:last-child{ margin-bottom: 0; }
+
+/* ============ TABLES ============ */
+.tbl{ width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14.5px; }
+.tbl th, .tbl td{ text-align: left; padding: 9px 14px; vertical-align: top; border-bottom: 1px solid var(--rule); }
+.tbl th{ font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink); font-weight: 600; border-bottom: 2px solid var(--ink); border-top: 2px solid var(--ink); background: var(--bg-2); }
+.tbl td:first-child{ font-family: 'Geist Mono', monospace; font-size: 12px; color: var(--green-deep); font-weight: 500; width: 26%; }
+.tbl.wide td:first-child{ width: 20%; }
+.tbl.compare td:first-child{ font-family: 'Geist Mono', monospace; font-weight: 600; color: var(--ink); width: 22%; font-size: 11.5px; letter-spacing: .03em; }
+.tbl.compare td:nth-child(2){ color: var(--green-deep); font-family: 'Source Serif 4', serif; font-size: 14.5px; }
+.tbl.compare td:nth-child(3){ color: var(--slate-deep); font-family: 'Source Serif 4', serif; font-size: 14.5px; }
+
+/* ============ DIAGRAM (monospace ASCII art in a labeled frame) ============ */
+.diagram{ background: var(--card); border: 1px solid var(--rule-dark); padding: 22px 24px; margin: 22px 0; font-family: 'Geist Mono', monospace; font-size: 12px; line-height: 1.55; color: var(--ink-soft); white-space: pre; overflow-x: auto; position: relative; }
+.diagram::before{ content: "FIG."; position: absolute; top: -9px; left: 18px; background: var(--bg); padding: 0 9px; font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: .2em; color: var(--slate); font-weight: 600; }
+
+/* ============ READOUT PANEL (titled stat grid) ============ */
+.panel{ background: var(--card); border: 1px solid var(--rule-dark); margin: 22px 0; padding: 20px 24px; position: relative; }
+.panel::before{ content: attr(data-title); position: absolute; top: -9px; left: 20px; background: var(--bg); padding: 0 10px; font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: .2em; color: var(--green); font-weight: 600; }
+.panel-grid{ display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; }
+@media (max-width: 680px){ .panel-grid{ grid-template-columns: 1fr 1fr; } }
+.panel-grid .stat .k{ font-family:'Geist Mono',monospace; font-size: 9px; letter-spacing:.16em; text-transform:uppercase; color: var(--ink-faint); margin-bottom: 4px; }
+.panel-grid .stat .v{ font-family:'Archivo',sans-serif; font-weight: 700; font-size: 17px; color: var(--ink); line-height: 1.15; }
+.panel-grid .stat .v small{ font-weight: 400; font-family:'Source Serif 4',serif; font-size: 13px; color: var(--ink-soft); }
+
+/* ============ ISSUE / WORKED CASE (dark header + body) ============ */
+.issue{ margin: 26px 0; background: var(--card); border: 1px solid var(--ink); }
+.issue-header{ padding: 12px 22px; background: var(--ink); color: var(--bg); font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; display: flex; align-items: center; gap: 13px; }
+.issue-header .tag{ background: var(--green); padding: 3px 11px; letter-spacing: .1em; font-weight: 600; font-size: 10px; color: #fff; }
+.issue-header .title{ flex: 1; font-weight: 600; letter-spacing: .08em; }
+.issue-body{ padding: 22px 26px; }
+.issue-body > h5{ margin: 16px 0 7px; font-family:'Geist Mono',monospace; font-size: 10.5px; letter-spacing:.16em; color: var(--green); text-transform: uppercase; font-weight: 600; }
+.issue-body > h5:first-child{ margin-top: 0; }
+
+/* ============ DECISION TREE ============ */
+.tree{ background: var(--card); border: 1px solid var(--slate); padding: 24px 26px; margin: 24px 0; position: relative; }
+.tree::before{ content: "DECISION PATH"; position: absolute; top: -9px; left: 22px; background: var(--bg); padding: 0 11px; font-family:'Geist Mono',monospace; font-size: 10px; letter-spacing: .2em; color: var(--slate); font-weight: 600; }
+.tree pre{ background: transparent; color: var(--ink); border: none; border-left: none; padding: 6px 0 0; font-size: 13px; line-height: 1.7; }
+.tree pre::before{ display: none; }
+.tree .q{ color: var(--green); font-weight: 700; }   /* a question node */
+.tree .a{ color: var(--slate); font-weight: 700; }   /* an answer/branch label */
+
+/* ============ PRINCIPLE (green-bordered key idea) ============ */
+.idea{ margin: 24px 0; border: 2px solid var(--green); background: var(--card); padding: 22px 28px; position: relative; }
+.idea::before{ content: "PRINCIPLE"; position: absolute; top: -10px; left: 22px; background: var(--bg); padding: 0 11px; font-family:'Geist Mono',monospace; font-size: 10px; letter-spacing: .24em; color: var(--green); font-weight: 600; }
+.idea p{ margin: 6px 0; font-size: 16px; }
+
+/* ============ PULL QUOTE ============ */
+.pull{ font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 30px; line-height: 1.08; letter-spacing: -0.015em; color: var(--green); margin: 38px 0; padding: 0 0 0 26px; border-left: 4px solid var(--green); }
+
+/* ============ CHEATSHEET ============ */
+.cheat{ background: var(--card); border: 1px solid var(--ink); padding: 24px 28px; margin: 24px 0; }
+.cheat h5{ margin: 0 0 14px; font-family:'Geist Mono',monospace; font-size: 11px; letter-spacing: .2em; color: var(--green); text-transform: uppercase; font-weight: 600; }
+.cheat-grid{ display: grid; grid-template-columns: 1fr 1.5fr; gap: 6px 22px; font-size: 13px; }
+.cheat-grid .cmd{ font-family:'Geist Mono',monospace; color: var(--green-deep); font-weight: 500; }
+.cheat-grid .desc{ color: var(--ink-soft); font-size: 14.5px; }
+@media (max-width: 680px){ .cheat-grid{ grid-template-columns: 1fr; gap: 2px 18px; } .cheat-grid .desc{ margin-bottom: 10px; } }
+
+/* ============ TWO-COLUMN (e.g. good/bad, before/after) ============ */
+.twocol{ display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 22px 0; }
+@media (max-width: 760px){ .twocol{ grid-template-columns: 1fr; } }
+.twocol .col{ background: var(--card); border: 1px solid var(--rule-dark); padding: 18px 22px; }
+.twocol .col h5{ margin: 0 0 10px; font-family:'Geist Mono',monospace; font-size: 10.5px; letter-spacing: .18em; text-transform: uppercase; color: var(--slate); font-weight: 600; }
+.twocol .col.bad h5{ color: var(--rose); } .twocol .col.good h5{ color: var(--green); }
+.twocol .col p{ margin: 8px 0; font-size: 15px; } .twocol .col p:first-child{ margin-top: 0; }
+
+/* ============ PROFILE / ENTITY CARD (e.g. a person, a module) ============ */
+.iv{ background: var(--card); border: 1px solid var(--rule-dark); border-left: 3px solid var(--slate); padding: 20px 24px; margin: 14px 0; position: relative; }
+.iv.req{ border-left: 3px solid var(--rose); }
+.iv-head{ display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 3px; }
+.iv-name{ font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 23px; letter-spacing: -0.01em; color: var(--ink); }
+.iv-dur{ font-family: 'Geist Mono', monospace; font-size: 11px; color: var(--ink-faint); letter-spacing: .08em; }
+.iv-badge{ font-family: 'Geist Mono', monospace; font-size: 8.5px; letter-spacing: .16em; text-transform: uppercase; background: var(--rose); color: #fff; padding: 3px 9px; font-weight: 600; }
+.iv-role{ font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--green); font-weight: 600; margin-bottom: 9px; }
+.iv-focus{ color: var(--ink-soft); font-size: 15.5px; margin: 8px 0 12px; line-height: 1.48; }
+
+/* ============ CLICKABLE NAV CARD (e.g. an index/landing page) ============ */
+a.vol-card{ display: block; text-decoration: none; color: inherit; background: var(--card); border: 1px solid var(--rule-dark); border-left: 4px solid var(--green); padding: 24px 26px 20px; position: relative; transition: all .16s ease; }
+a.vol-card:hover{ border-left-width: 8px; border-color: var(--green); background: #fbfcf9; transform: translateY(-2px); box-shadow: 0 6px 22px rgba(20,40,26,.09); }
+.vol-card .vc-num{ position: absolute; top: 16px; right: 22px; font-family: 'Archivo', sans-serif; font-weight: 900; font-size: 46px; line-height: 1; color: var(--bg-3); letter-spacing: -0.02em; transition: color .16s; }
+a.vol-card:hover .vc-num{ color: var(--green-bri); }
+.vol-card .vc-kicker{ font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .22em; text-transform: uppercase; color: var(--green); font-weight: 600; margin-bottom: 8px; }
+.vol-card .vc-title{ font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 28px; line-height: 1.02; letter-spacing: -0.015em; color: var(--ink); margin: 0 0 10px; }
+.vol-card .vc-open{ margin-top: 14px; font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--green); font-weight: 600; }
+
+/* ============ SECTION SEPARATOR ============ */
+.rule-sep{ margin: 56px 0; position: relative; height: 0; border-top: 2px solid var(--ink); }
+.rule-sep::after{ content: "◇ ◇ ◇"; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); background: var(--bg); color: var(--green); padding: 0 16px; font-size: 11px; letter-spacing: .3em; }
+
+/* ============ FOOTER ============ */
+footer{ max-width: var(--maxw); margin: 0 auto; padding: 54px 40px 84px; border-top: 2px solid var(--ink); color: var(--ink-soft); font-size: 14px; }
+footer h4{ font-family:'Geist Mono',monospace; font-size: 11px; letter-spacing: .24em; color: var(--green); margin: 0 0 18px; font-weight: 600; }
+footer .resources{ columns: 2; column-gap: 38px; }
+@media (max-width: 680px){ footer .resources{ columns: 1; } }
+footer ul{ list-style: none; padding: 0; margin: 0; }
+footer li{ padding: 5px 0; font-size: 13.5px; break-inside: avoid; }
+footer li code{ color: var(--green-deep); background: transparent; border: none; padding: 0; font-weight: 500; }
+footer .footer-note{ margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--rule); color: var(--ink-faint); font-size: 14px; }
+</style>
+</head>
+<body>
+
+<header>
+  <p class="filed">latitude ai · intelligent systems · scalable ml team · interview field manual</p>
+  <p class="vol">Volume I of II · pytorch at scale · data pipelines · distributed training · mlops</p>
+  <h1>At<br><span class="acc">Scale.</span></h1>
+  <p class="deck">
+    The req is unusually clear about what this team does: <em>"methods to improve the efficiency of model training, enabling ML developers to work efficiently with large volumes of data."</em> That is a data-pipeline and distributed-training job, and the PyTorch it asks about is <strong>PyTorch as a system</strong> — DataLoaders that keep GPUs fed, DDP and FSDP, checkpoints that actually resume, and the Ray/Dagster/Parquet machinery around them. Forty-seven chapters, six decision trees, and an honest map of where your experience already lands. <strong>Every PyTorch behaviour asserted here was executed and verified</strong> — including one that contradicts what most engineers assume.
+  </p>
+  <div class="readout">
+    <div class="cell"><div class="k">Chapters</div><div class="v">47</div></div>
+    <div class="cell"><div class="k">Parts</div><div class="v">10</div></div>
+    <div class="cell"><div class="k">Trees</div><div class="v">6</div></div>
+    <div class="cell"><div class="k">Verified</div><div class="v">45<span class="u"> / 45</span></div></div>
+  </div>
+
+  <div class="toc">
+    <h3>Contents</h3>
+    <p class="toc-sub">Forty-seven chapters across ten parts</p>
+    <div class="toc-part">
+      <div class="toc-part-name">Part I · The role and the system</div>
+      <div class="toc-grid">
+        <a href="#c01"><span class="n">01</span><span>Decoding the req</span></a>
+        <a href="#c02"><span class="n">02</span><span>The training system, end to end</span></a>
+        <a href="#c03"><span class="n">03</span><span>Where the time actually goes</span></a>
+        <a href="#c04"><span class="n">04</span><span>The multi-sensor data problem</span></a>
+      </div>
+    </div>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part II · Tensors and modules</div>
+      <div class="toc-grid">
+        <a href="#c05"><span class="n">05</span><span>Tensors, dtypes, devices, layout</span></a>
+        <a href="#c06"><span class="n">06</span><span>Views, contiguity, hidden copies</span></a>
+        <a href="#c07"><span class="n">07</span><span>nn.Module: params, buffers, state_dict</span></a>
+        <a href="#c08"><span class="n">08</span><span>Autograd in practice</span></a>
+        <a href="#c09"><span class="n">09</span><span>Optimizers, schedulers, param groups</span></a>
+      </div>
+    </div>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part III · The data pipeline</div>
+      <div class="toc-grid">
+        <a href="#c10"><span class="n">10</span><span>Dataset vs IterableDataset</span></a>
+        <a href="#c11"><span class="n">11</span><span>DataLoader mechanics</span></a>
+        <a href="#c12"><span class="n">12</span><span>collate_fn for sensor data</span></a>
+        <a href="#c13"><span class="n">13</span><span>Samplers and DistributedSampler</span></a>
+        <a href="#c14"><span class="n">14</span><span>Sharding, and the duplication bug</span></a>
+        <a href="#c15"><span class="n">15</span><span>Storage formats</span></a>
+        <a href="#c16"><span class="n">16</span><span>Feeding the GPU: the throughput model</span></a>
+      </div>
+    </div>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part IV · Distributed training</div>
+      <div class="toc-grid">
+        <a href="#c17"><span class="n">17</span><span>DDP mechanics</span></a>
+        <a href="#c18"><span class="n">18</span><span>FSDP and sharding strategies</span></a>
+        <a href="#c19"><span class="n">19</span><span>torchrun, process groups, rendezvous</span></a>
+        <a href="#c20"><span class="n">20</span><span>Communication and overlap</span></a>
+        <a href="#c21"><span class="n">21</span><span>Scaling: batch size, LR, warmup</span></a>
+        <a href="#c22"><span class="n">22</span><span>Fault tolerance and elasticity</span></a>
+      </div>
+    </div>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part V · Performance</div>
+      <div class="toc-grid">
+        <a href="#c23"><span class="n">23</span><span>Mixed precision</span></a>
+        <a href="#c24"><span class="n">24</span><span>torch.compile</span></a>
+        <a href="#c25"><span class="n">25</span><span>Profiling</span></a>
+        <a href="#c26"><span class="n">26</span><span>Memory: checkpointing and offload</span></a>
+        <a href="#c27"><span class="n">27</span><span>The throughput checklist</span></a>
+      </div>
+    </div>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part VI · Checkpoints and reproducibility</div>
+      <div class="toc-grid">
+        <a href="#c28"><span class="n">28</span><span>What a checkpoint must contain</span></a>
+        <a href="#c29"><span class="n">29</span><span>Distributed checkpointing</span></a>
+        <a href="#c30"><span class="n">30</span><span>The reproducibility contract</span></a>
+      </div>
+    </div>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part VII · The surrounding stack</div>
+      <div class="toc-grid">
+        <a href="#c31"><span class="n">31</span><span>Ray: Data, Train, Tune</span></a>
+        <a href="#c32"><span class="n">32</span><span>Dagster and orchestration</span></a>
+        <a href="#c33"><span class="n">33</span><span>LakeFS and data versioning</span></a>
+        <a href="#c34"><span class="n">34</span><span>PyArrow and Parquet</span></a>
+        <a href="#c35"><span class="n">35</span><span>Cloud and object storage</span></a>
+      </div>
+    </div>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part VIII · MLOps</div>
+      <div class="toc-grid">
+        <a href="#c36"><span class="n">36</span><span>Experiment tracking and artifacts</span></a>
+        <a href="#c37"><span class="n">37</span><span>Deployment and model testing</span></a>
+        <a href="#c38"><span class="n">38</span><span>CI for machine learning</span></a>
+      </div>
+    </div>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part IX · Decision trees</div>
+      <div class="toc-grid">
+        <a href="#c39"><span class="n">39</span><span>Tree 1 · Training is slow</span></a>
+        <a href="#c40"><span class="n">40</span><span>Tree 2 · Out of memory</span></a>
+        <a href="#c41"><span class="n">41</span><span>Tree 3 · Loss diverges or NaNs</span></a>
+        <a href="#c42"><span class="n">42</span><span>Tree 4 · Doesn't scale</span></a>
+        <a href="#c43"><span class="n">43</span><span>Tree 5 · Distributed hang</span></a>
+        <a href="#c44"><span class="n">44</span><span>Tree 6 · Can't reproduce</span></a>
+      </div>
+    </div>
+
+    <div class="toc-part">
+      <div class="toc-part-name">Part X · The interview</div>
+      <div class="toc-grid">
+        <a href="#c45"><span class="n">45</span><span>The question map</span></a>
+        <a href="#c46"><span class="n">46</span><span>Narrative and depth map</span></a>
+        <a href="#c47"><span class="n">47</span><span>Questions to ask, and the plan</span></a>
+      </div>
+    </div>
+
+  </div>
+</header>
+
+<main>
+
+<div class="part" id="p1">
+  <div class="part-label">Part I — The role and the system</div>
+  <h2 class="part-title">What "scalable ML" actually <span class="acc">means here.</span></h2>
+  <p class="part-intro">Latitude AI is Ford's automated-driving subsidiary, building L3 for production vehicles, with engineering in Pittsburgh, Palo Alto, and Dearborn. The Scalable ML team sits inside Intelligent Systems and owns the <em>offboard</em> half: the cloud and data infrastructure that turns sensor logs into trained models. Four chapters to orient before the technical parts.</p>
+
+  <section class="chapter" id="c01">
+    <h2><span class="ch-num">01</span>Decoding the req</h2>
+
+    <table class="tbl wide">
+      <thead><tr><th>What it says</th><th>What it means, and where it's covered</th></tr></thead>
+      <tbody>
+        <tr><td>"cloud services for data ingest, workflow orchestration, and distributed training at scale"</td><td>Three distinct systems. Ingest = getting multi-TB sensor logs into a queryable, versioned store. Orchestration = Dagster-style DAGs that rebuild datasets when upstream changes. Distributed training = the PyTorch/Ray layer. Parts III, IV, VII.</td></tr>
+        <tr><td>"generate, manage, and process large amounts of multi-sensor training data"</td><td><strong>Generate</strong> is the interesting verb — auto-labelling, mining for rare events, simulation, and re-processing old logs through new pipelines. Managing it means versioning and lineage (LakeFS). §04, §15, §33.</td></tr>
+        <tr><td>"advanced MLOps practices — artifact management, experiment tracking, automated deployment and testing"</td><td>The lifecycle around the model: what ran, on what data, producing what weights, validated how. Part VIII.</td></tr>
+        <tr><td>"collaborate with perception experts and roboticists to integrate ML pipelines"</td><td>You're a <strong>platform</strong> engineer. Your users are internal ML engineers, and your success is their iteration speed. §46.</td></tr>
+        <tr><td>"mentor junior engineers, elevate software development standards"</td><td>Senior scope. Expect at least one question about code review, design docs, or how you'd raise a team's bar.</td></tr>
+      </tbody>
+    </table>
+
+    <table class="tbl">
+      <thead><tr><th>Qualification</th><th>Read</th></tr></thead>
+      <tbody>
+        <tr><td>"ML data pipelines, data generation, and distributed model training"</td><td>The core requirement, stated three ways. This is the centre of the interview.</td></tr>
+        <tr><td>"large-scale distributed systems and cloud infrastructure"</td><td>Systems thinking: failure modes, throughput, cost, elasticity — not just "I used AWS."</td></tr>
+        <tr><td>"Python and/or C++ for production-quality software"</td><td>Production-quality is the operative phrase: typed, tested, reviewable.</td></tr>
+        <tr><td><strong>Nice to have: Ray, PyTorch, Dagster, LakeFS, PyArrow</strong></td><td>The actual stack, named. Ray appears <em>first</em>. Part VII covers all five.</td></tr>
+        <tr><td>Nice to have: multi-sensor fusion, safety-critical, L2/L3 autonomy</td><td>Domain colour. Useful, not gating.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="idea">
+      <p><strong>The honest read on fit: this req describes work you have already done.</strong> A 400× distributed PyTorch/Ray speedup is the single most on-target line either of you could put on a page — Ray and PyTorch are both named in the "nice to have" list, and "improving the efficiency of model training" is literally the team's mission statement. Add HPC storage and scheduling (Lustre/GPFS, Slurm) as the on-prem analogue of their cloud layer, C++/CUDA depth for the performance conversations, and pydisort as evidence of shipping and sustaining production software. The gaps are <em>tooling-specific</em>, not conceptual: Dagster, LakeFS, and cloud-native object storage. Those are learnable in a week and honest to name.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c02">
+    <h2><span class="ch-num">02</span>The training system, end to end</h2>
+<div class="diagram">  THE OFFBOARD ML SYSTEM THIS TEAM OWNS
+  ───────────────────────────────────────────────────────────────
+   VEHICLE FLEET
+      │  multi-TB/day: camera, lidar, radar, IMU, GNSS, CAN
+      ▼
+   INGEST            upload, decode, time-align, index
+      │              ← throughput + cost problem, not an ML problem
+      ▼
+   RAW LOG STORE     object storage (S3-like), immutable
+      │
+      ▼
+   CURATION          mine for rare events, dedupe, balance,
+      │              auto-label, human label, simulate
+      │              ← &quot;generate training data&quot; from the req
+      ▼
+   DATASET BUILD     materialize into a TRAINING-READY format
+      │              (Parquet / WebDataset shards), VERSIONED
+      │              ← orchestrated (Dagster), versioned (LakeFS)
+      ▼
+   TRAINING          distributed PyTorch across many GPUs
+      │              ← DataLoader / DDP / FSDP / Ray Train
+      ▼
+   EVALUATION        metrics per slice: night, rain, occlusion,
+      │              cut-in, construction ... regression gates
+      ▼
+   ARTIFACT + REGISTRY   weights, config, data version, metrics
+      │
+      ▼
+   DEPLOY / EXPORT   to the on-vehicle stack (a different team)
+  ───────────────────────────────────────────────────────────────
+   EVERY ARROW IS A PLACE WORK GETS LOST. The team&#x27;s job is to make
+   the whole loop fast enough that an ML engineer can try an idea
+   today rather than next week.</div>
+
+    <div class="callout tip">
+      <h5>The framing that reads as senior</h5>
+      <p>"The metric I'd care about is <em>experiment turnaround time</em> — how long from an ML engineer having an idea to having a trustworthy number. Almost every optimization in this system is a means to that end, and it's usually not the GPUs that are the bottleneck." That sentence reframes performance work as developer velocity, which is exactly what "enabling ML developers to work efficiently" means in the req.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c03">
+    <h2><span class="ch-num">03</span>Where the time actually goes</h2>
+
+    <p>The central, counterintuitive fact of large-scale training: <strong>most training jobs are not compute-bound.</strong> They are input-bound, and the GPUs sit idle waiting for data. Internalize this and half the interview answers write themselves.</p>
+<div class="diagram">  THE THROUGHPUT CHAIN — the slowest link sets the pace
+  ───────────────────────────────────────────────────────────────
+   object store  ──►  network  ──►  CPU decode  ──►  augment  ──►
+   collate  ──►  pinned buffer  ──►  H2D copy  ──►  GPU compute
+                                                        │
+                                                   ◄────┘ and for
+   multi-GPU, add: gradient all-reduce, and the SLOWEST RANK
+  ───────────────────────────────────────────────────────────────
+   TYPICAL AV NUMBERS, to reason with (illustrative):
+     one training sample = 6 camera JPEGs + a lidar sweep
+        ≈ 6 x 200 KB + 2 MB  ≈ 3 MB
+     at 100 samples/s/GPU x 8 GPUs = 2.4 GB/s from storage
+        → this ALONE saturates many network/storage setups
+     JPEG decode ≈ 5 ms/image on one core → 30 ms/sample
+        → 100 samples/s needs ≈ 3 CPU CORES OF DECODE PER GPU
+  ───────────────────────────────────────────────────────────────
+   THE THREE FIXES, in order of leverage:
+     1 MOVE FEWER BYTES  — pre-resize, pre-crop, store at the
+       resolution you train at, use a compact format
+     2 DECODE LESS       — cache decoded tensors, use GPU decode
+       (nvJPEG/DALI), or store pre-decoded shards
+     3 OVERLAP           — enough workers, prefetch, pin_memory,
+       non_blocking copies (§11)
+  ───────────────────────────────────────────────────────────────
+   AND THE ONE PEOPLE MISS: the storage layer hates small files.
+   Millions of individual JPEGs on object storage is a request-rate
+   problem, not a bandwidth problem. SHARD into large sequential
+   files (§15). This single change is often a 5-10x win.</div>
+
+    <div class="idea">
+      <p><strong>The sentence to have ready: "Before I optimize a training loop, I'd find out whether the GPUs are actually busy."</strong> A profiler timeline or even <code>nvidia-smi</code> sampling answers it in minutes. If utilization is 40% and the CPUs are pinned, no amount of mixed precision or <code>torch.compile</code> will help — the fix is in the data path. That diagnosis-before-treatment instinct is the same one you'd bring from GPU kernel work, applied one layer up.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c04">
+    <h2><span class="ch-num">04</span>The multi-sensor data problem</h2>
+
+    <p>AV training data is unlike ImageNet in ways that break naive pipelines. The req names "multi-sensor data fusion and processing" as a nice-to-have; knowing <em>why it's hard</em> is worth more than knowing any specific fusion architecture.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Property</th><th>Consequence for the pipeline</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Heterogeneous shapes</strong></td><td>Images are fixed-size; a lidar sweep has a <em>variable</em> point count; detections vary per frame. Default <code>collate</code> can't stack them — you need padding plus masks, or ragged/nested structures (§12).</td></tr>
+        <tr><td><strong>Time alignment</strong></td><td>Sensors run at different rates with different latencies. A "sample" is a <em>window</em> of synchronized measurements, and building it correctly is an indexing problem you solve once at dataset-build time, not per-epoch.</td></tr>
+        <tr><td><strong>Enormous and imbalanced</strong></td><td>Petabytes of mostly-boring highway driving. The valuable frames — cut-ins, construction, unprotected turns, unusual weather — are rare. <em>Sampling strategy is a first-class part of the pipeline</em>, not an afterthought.</td></tr>
+        <tr><td><strong>Temporal correlation</strong></td><td>Consecutive frames are nearly identical. Random shuffling across a whole log leaks information between train and val; you generally split by <em>drive segment</em>, not by frame.</td></tr>
+        <tr><td><strong>Calibration and metadata travel with it</strong></td><td>Intrinsics, extrinsics, ego pose. A "sample" is a bundle, not a tensor — which shapes both the storage schema and the collate function.</td></tr>
+        <tr><td><strong>Reprocessing is routine</strong></td><td>A new auto-labeller means regenerating derived data for the whole archive. That's the orchestration and versioning problem (§32–33), and it's why lineage matters.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout warn">
+      <h5>The subtle one worth raising unprompted</h5>
+      <p><strong>Temporal leakage.</strong> If you shuffle frames and then split train/val, near-duplicate frames land on both sides and your validation metric becomes optimistic — sometimes dramatically. The fix is to split at the level of a drive or a log segment, and to be careful that any mined/rare-event sampling doesn't quietly reintroduce the same frames. Naming this shows you understand AV data rather than generic vision data, and it's a genuine correctness issue rather than a performance one.</p>
+    </div>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<div class="part" id="p2">
+  <div class="part-label">Part II — Tensors and modules</div>
+  <h2 class="part-title">The API, used <span class="acc">correctly.</span></h2>
+  <p class="part-intro">Not internals — <em>usage</em>. These five chapters cover the PyTorch surface that a scalable-training engineer touches daily, with the specific behaviours that bite at scale. Everything asserted here was executed against PyTorch 2.13 before being written.</p>
+
+  <section class="chapter" id="c05">
+    <h2><span class="ch-num">05</span>Tensors, dtypes, devices, layout</h2>
+
+    <table class="tbl">
+      <thead><tr><th>Concept</th><th>What matters in a training pipeline</th></tr></thead>
+      <tbody>
+        <tr><td>dtype</td><td><code>float32</code> for master weights, <code>bfloat16</code> for compute (wider exponent than fp16, so it rarely needs loss scaling), <code>float16</code> where bf16 isn't supported, <code>uint8</code> for images <em>until</em> the last possible moment. Keeping images as uint8 through the DataLoader and normalizing on GPU cuts host→device bytes by 4×.</td></tr>
+        <tr><td>device</td><td><code>.to(device, non_blocking=True)</code> only actually overlaps from <strong>pinned</strong> host memory. Without <code>pin_memory=True</code> on the DataLoader, <code>non_blocking</code> is a no-op promise (§11).</td></tr>
+        <tr><td>memory_format</td><td><code>channels_last</code> reorders strides, not values — verified: the tensors compare equal, but one reports <code>is_contiguous()</code> False and <code>is_contiguous(memory_format=channels_last)</code> True. Conv on tensor cores wants NHWC, so <code>model.to(memory_format=torch.channels_last)</code> plus channels-last inputs is often a free speedup.</td></tr>
+        <tr><td>Shapes as contracts</td><td>Annotate them. <code>x: [B, N, 4]</code> in a docstring saves more debugging time at scale than any tool.</td></tr>
+      </tbody>
+    </table>
+<pre data-lang="PYTHON"># <span class="var">Keep</span> <span class="var">bytes</span> <span class="var">small</span> <span class="var">on</span> <span class="var">the</span> <span class="var">wire</span>, <span class="var">cast</span> <span class="var">late</span>, <span class="var">on</span> <span class="var">the</span> <span class="var">device</span>.
+# <span class="ty">DataLoader</span> <span class="var">yields</span> <span class="var">uint8</span> [<span class="var">B</span>, <span class="num">3</span>, <span class="var">H</span>, <span class="var">W</span>]; <span class="var">normalize</span> <span class="var">on</span> <span class="var">GPU</span>.
+<span class="var">imgs</span> = <span class="var">batch</span>[<span class="str">&quot;img&quot;</span>].<span class="fn">to</span>(<span class="var">device</span>, <span class="var">non_blocking</span>=<span class="kw">True</span>)      # <span class="var">uint8</span>, <span class="num">1</span> <span class="var">byte</span>/<span class="var">px</span>
+<span class="var">imgs</span> = <span class="var">imgs</span>.<span class="fn">to</span>(<span class="ty">torch</span>.<span class="var">float32</span>).<span class="fn">div_</span>(<span class="num">255.0</span>)              # <span class="var">cast</span> <span class="var">AFTER</span> <span class="var">transfer</span>
+<span class="var">imgs</span> = (<span class="var">imgs</span> - <span class="var">mean</span>) / <span class="ty">std</span>                             # <span class="var">mean</span>/<span class="ty">std</span> <span class="var">live</span> <span class="var">on</span> <span class="var">device</span>
+<span class="var">imgs</span> = <span class="var">imgs</span>.<span class="fn">contiguous</span>(<span class="var">memory_format</span>=<span class="ty">torch</span>.<span class="var">channels_last</span>)
+
+# 4<span class="var">x</span> <span class="var">less</span> <span class="var">PCIe</span> <span class="var">traffic</span> <span class="var">than</span> <span class="var">sending</span> <span class="var">float32</span> <span class="kw">from</span> <span class="var">the</span> <span class="var">worker</span>, <span class="kw">and</span> <span class="var">the</span>
+# <span class="var">normalization</span> <span class="kw">is</span> <span class="var">free</span> <span class="var">on</span> <span class="var">the</span> <span class="var">GPU</span>. <span class="var">On</span> <span class="var">an</span> <span class="var">input</span>-<span class="var">bound</span> <span class="var">job</span> <span class="kw">this</span> <span class="kw">is</span> <span class="var">one</span> <span class="var">of</span>
+# <span class="var">the</span> <span class="var">highest</span>-<span class="var">leverage</span> <span class="var">one</span>-<span class="var">line</span> <span class="var">changes</span> <span class="var">available</span>.</pre>
+
+  </section>
+
+  <section class="chapter" id="c06">
+    <h2><span class="ch-num">06</span>Views, contiguity, and hidden copies</h2>
+
+    <p>Verified behaviours worth being precise about, because each one is a silent performance or correctness trap.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Operation</th><th>Behaviour (executed and checked)</th></tr></thead>
+      <tbody>
+        <tr><td><code>t.transpose(1,2)</code></td><td>Returns a <strong>non-contiguous view</strong> — no copy, but strides are now permuted.</td></tr>
+        <tr><td><code>v.view(-1)</code> on that view</td><td><strong>Raises.</strong> <code>view</code> requires compatible strides. Use <code>reshape</code> (which copies if it must) or <code>.contiguous().view(...)</code> — and know which you chose, because one is free and one is a full copy.</td></tr>
+        <tr><td><code>.contiguous()</code></td><td>Copies into a dense layout. Cheap to write, not cheap to run — in a hot loop it's a full tensor copy every iteration.</td></tr>
+        <tr><td><code>x[mask]</code>, <code>torch.nonzero</code>, <code>.item()</code></td><td>All force a <strong>host synchronization</strong> because the output shape (or value) depends on device data. One <code>.item()</code> per step for logging is usually fine; one inside an inner loop serializes your pipeline.</td></tr>
+        <tr><td>In-place ops (<code>add_</code>, <code>div_</code>)</td><td>Save memory, but can break autograd if the value is needed for a backward. Safe on inputs and on things outside the graph; think twice inside it.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout warn">
+      <h5>The accumulation bug that leaks memory</h5>
+      <p><code>total_loss += loss</code> keeps the entire autograd graph for every step alive. Over an epoch that is an out-of-memory failure with a confusing traceback. It must be <code>total_loss += loss.item()</code> (or <code>.detach()</code>). This is the single most common memory leak in training code and it is worth naming as such — see Tree 2 (§40).</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c07">
+    <h2><span class="ch-num">07</span>nn.Module: parameters, buffers, state_dict</h2>
+
+    <table class="tbl">
+      <thead><tr><th>Thing</th><th>What it is, and why it matters at scale</th></tr></thead>
+      <tbody>
+        <tr><td><code>Parameter</code></td><td>A tensor registered for optimization. Appears in <code>.parameters()</code> and in <code>state_dict()</code>.</td></tr>
+        <tr><td><code>register_buffer</code></td><td>State that is <em>not</em> optimized but <em>is</em> part of the model: BatchNorm running stats, positional tables, anchor grids. Buffers move with <code>.to(device)</code> and are saved in <code>state_dict</code>. Storing them as plain attributes instead is a classic bug — they silently stay on CPU and vanish from checkpoints.</td></tr>
+        <tr><td><code>state_dict()</code> / <code>load_state_dict()</code></td><td>An <code>OrderedDict</code> of tensors. <code>strict=False</code> returns the missing and unexpected keys — invaluable when loading a backbone into a changed architecture. Always inspect what it returned rather than ignoring it.</td></tr>
+        <tr><td><code>train()</code> / <code>eval()</code></td><td>Switches BatchNorm and Dropout behaviour. Forgetting <code>model.eval()</code> before validation is a top-three source of "my metrics look wrong."</td></tr>
+        <tr><td>Hooks</td><td><code>register_forward_hook</code> and friends: the clean way to extract intermediate activations for debugging or feature dumps without editing the model.</td></tr>
+        <tr><td>DDP wrapping</td><td><code>DistributedDataParallel</code> prefixes keys with <code>module.</code>. Save <code>model.module.state_dict()</code>, or strip the prefix on load — otherwise every key mismatches.</td></tr>
+      </tbody>
+    </table>
+<pre data-lang="PYTHON"># <span class="var">Loading</span> <span class="var">a</span> <span class="var">pretrained</span> <span class="var">backbone</span> <span class="var">into</span> <span class="var">a</span> <span class="var">modified</span> <span class="var">model</span>: <span class="var">inspect</span>, <span class="var">don</span>&#x27;<span class="var">t</span> <span class="var">ignore</span>.
+<span class="var">missing</span>, <span class="var">unexpected</span> = <span class="var">model</span>.<span class="fn">load_state_dict</span>(<span class="var">ckpt</span>[<span class="str">&quot;model&quot;</span>], <span class="var">strict</span>=<span class="kw">False</span>)
+<span class="kw">if</span> <span class="var">unexpected</span>:
+    <span class="var">log</span>.<span class="fn">warning</span>(<span class="str">&quot;checkpoint had unused keys: %s&quot;</span>, <span class="var">unexpected</span>[:<span class="num">5</span>])
+# <span class="var">Missing</span> <span class="var">keys</span> <span class="var">are</span> <span class="var">EXPECTED</span> <span class="kw">for</span> <span class="var">a</span> <span class="kw">new</span> <span class="var">head</span>; <span class="var">unexpected</span> <span class="var">keys</span> <span class="var">usually</span> <span class="var">mean</span> <span class="var">the</span>
+# <span class="var">checkpoint</span> <span class="var">came</span> <span class="kw">from</span> <span class="var">a</span> <span class="var">different</span> <span class="var">architecture</span> -- <span class="kw">or</span> <span class="var">you</span> <span class="var">forgot</span> <span class="var">to</span> <span class="var">strip</span>
+# <span class="var">the</span> <span class="ty">DDP</span> <span class="str">&quot;module.&quot;</span> <span class="var">prefix</span>. <span class="var">Assert</span> <span class="var">the</span> <span class="var">ones</span> <span class="var">you</span> <span class="var">care</span> <span class="var">about</span>:
+<span class="kw">assert</span> <span class="kw">not</span> [<span class="var">k</span> <span class="kw">for</span> <span class="var">k</span> <span class="kw">in</span> <span class="var">missing</span> <span class="kw">if</span> <span class="var">k</span>.<span class="fn">startswith</span>(<span class="str">&quot;backbone.&quot;</span>)], \
+    <span class="str">&quot;backbone weights failed to load -- check the prefix&quot;</span></pre>
+
+  </section>
+
+  <section class="chapter" id="c08">
+    <h2><span class="ch-num">08</span>Autograd in practice</h2>
+
+    <p>Four behaviours, all verified by execution, that a training-infrastructure engineer must have exactly right.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Construct</th><th>Verified behaviour</th></tr></thead>
+      <tbody>
+        <tr><td><code>torch.no_grad()</code></td><td>Outputs have <code>requires_grad=False</code>; no graph is built. The standard wrapper for validation and inference.</td></tr>
+        <tr><td><code>torch.inference_mode()</code></td><td>Stronger: outputs are <em>inference tensors</em> (<code>.is_inference()</code> is True) with view/version tracking disabled. <strong>Confirmed: an inference tensor cannot later re-enter autograd</strong> — attempting to backward through one raises. Faster than <code>no_grad</code>, but don't produce anything you'll later want gradients through.</td></tr>
+        <tr><td><code>.detach()</code></td><td>Cuts the graph while sharing storage. Use for logging, for metrics, and for anything you stash in a list.</td></tr>
+        <tr><td><code>zero_grad(set_to_none=True)</code></td><td>The default in modern PyTorch. Frees the gradient tensors instead of filling them with zeros — less memory and one fewer kernel per parameter.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Gradient accumulation — the arithmetic, confirmed</h3>
+    <p>Accumulating N micro-batches must divide the loss by N, because the loss function already averages within each micro-batch. Executed check: four micro-batches of 16 with <code>loss/4</code> reproduced a single batch of 64 to <strong>3.0e-08</strong>. Omitting the division scaled the gradients by <strong>exactly 4×</strong> — which in practice looks like a mysteriously bad learning rate.</p>
+<pre data-lang="PYTHON"><span class="var">ACC</span> = <span class="num">4</span>                      # <span class="var">effective</span> <span class="var">batch</span> = <span class="var">ACC</span> * <span class="var">per_step_batch</span> * <span class="var">world_size</span>
+<span class="var">opt</span>.<span class="fn">zero_grad</span>(<span class="var">set_to_none</span>=<span class="kw">True</span>)
+<span class="kw">for</span> <span class="var">i</span>, <span class="var">batch</span> <span class="kw">in</span> <span class="fn">enumerate</span>(<span class="var">loader</span>):
+    # <span class="ty">DDP</span>: <span class="var">skip</span> <span class="var">the</span> <span class="var">all</span>-<span class="var">reduce</span> <span class="var">on</span> <span class="var">all</span> <span class="var">but</span> <span class="var">the</span> <span class="var">last</span> <span class="var">micro</span>-<span class="var">batch</span>, <span class="var">otherwise</span> <span class="var">you</span>
+    # <span class="var">pay</span> <span class="var">full</span> <span class="var">gradient</span> <span class="var">communication</span> <span class="var">ACC</span> <span class="var">times</span> <span class="var">per</span> <span class="var">optimizer</span> <span class="var">step</span>.
+    <span class="var">sync</span> = ((<span class="var">i</span> + <span class="num">1</span>) % <span class="var">ACC</span> == <span class="num">0</span>)
+    <span class="var">ctx</span> = <span class="var">contextlib</span>.<span class="fn">nullcontext</span>() <span class="kw">if</span> <span class="var">sync</span> <span class="kw">else</span> <span class="var">model</span>.<span class="fn">no_sync</span>()
+    <span class="kw">with</span> <span class="var">ctx</span>:
+        <span class="kw">with</span> <span class="ty">torch</span>.<span class="fn">autocast</span>(<span class="str">&quot;cuda&quot;</span>, <span class="var">dtype</span>=<span class="ty">torch</span>.<span class="var">bfloat16</span>):
+            <span class="var">loss</span> = <span class="fn">criterion</span>(<span class="fn">model</span>(<span class="var">batch</span>), <span class="var">batch</span>[<span class="str">&quot;target&quot;</span>])
+        (<span class="var">loss</span> / <span class="var">ACC</span>).<span class="fn">backward</span>()          # &lt;-- <span class="var">the</span> /<span class="var">ACC</span> <span class="kw">is</span> <span class="kw">not</span> <span class="ty">optional</span>
+
+    <span class="kw">if</span> <span class="var">sync</span>:
+        # <span class="var">clip_grad_norm_</span> <span class="var">returns</span> <span class="var">the</span> <span class="var">PRE</span>-<span class="var">clip</span> <span class="var">norm</span>; <span class="var">it</span> <span class="var">does</span> <span class="var">NOT</span> <span class="var">sanitise</span> <span class="var">NaN</span>
+        <span class="var">gn</span> = <span class="ty">torch</span>.<span class="ty">nn</span>.<span class="var">utils</span>.<span class="fn">clip_grad_norm_</span>(<span class="var">model</span>.<span class="fn">parameters</span>(), <span class="var">max_norm</span>=<span class="num">1.0</span>)
+        <span class="kw">if</span> <span class="ty">torch</span>.<span class="fn">isfinite</span>(<span class="var">gn</span>):           # <span class="var">verified</span>: <span class="var">you</span> <span class="var">must</span> <span class="var">check</span> <span class="var">yourself</span>
+            <span class="var">opt</span>.<span class="fn">step</span>()
+        <span class="kw">else</span>:
+            <span class="var">log</span>.<span class="fn">warning</span>(<span class="str">&quot;non-finite grad norm, skipping step&quot;</span>)
+        <span class="var">opt</span>.<span class="fn">zero_grad</span>(<span class="var">set_to_none</span>=<span class="kw">True</span>)
+        <span class="var">sched</span>.<span class="fn">step</span>()</pre>
+
+    <div class="callout tip">
+      <h5>Two details in that snippet worth saying out loud</h5>
+      <p><strong><code>model.no_sync()</code>.</strong> Without it, DDP all-reduces gradients on <em>every</em> micro-batch — so accumulation costs you 4× the communication for no benefit. This is one of the most common real inefficiencies in distributed training code.</p>
+      <p><strong>The finite check.</strong> Verified: <code>clip_grad_norm_</code> happily returns <code>nan</code> and does not clean the gradients. Stepping on NaN gradients poisons the weights permanently, and the loss curve goes flat several hundred steps later, far from the cause (Tree 3).</p>
+    </div>
+
+    <h3>Activation checkpointing</h3>
+    <p>Trades compute for memory: discard intermediate activations in the forward pass and recompute them during backward. Typically ~30% slower per step for a large reduction in activation memory — which often lets you raise the batch size enough to come out ahead. <code>torch.utils.checkpoint.checkpoint(fn, *args, use_reentrant=False)</code>; use the non-reentrant version, which composes properly with modern features.</p>
+  </section>
+
+  <section class="chapter" id="c09">
+    <h2><span class="ch-num">09</span>Optimizers, schedulers, param groups</h2>
+<pre data-lang="PYTHON"># <span class="var">Param</span> <span class="var">groups</span>: <span class="var">the</span> <span class="var">standard</span> <span class="str">&quot;no weight decay on norms and biases&quot;</span> <span class="var">split</span>.
+# <span class="var">Applying</span> <span class="var">weight</span> <span class="var">decay</span> <span class="var">to</span> <span class="var">LayerNorm</span>/<span class="var">BatchNorm</span> <span class="var">params</span> <span class="var">measurably</span> <span class="var">hurts</span>.
+<span class="var">decay</span>, <span class="var">no_decay</span> = [], []
+<span class="kw">for</span> <span class="var">name</span>, <span class="var">p</span> <span class="kw">in</span> <span class="var">model</span>.<span class="fn">named_parameters</span>():
+    <span class="kw">if</span> <span class="kw">not</span> <span class="var">p</span>.<span class="var">requires_grad</span>:
+        <span class="kw">continue</span>
+    <span class="kw">if</span> <span class="var">p</span>.<span class="var">ndim</span> &lt;= <span class="num">1</span> <span class="kw">or</span> <span class="var">name</span>.<span class="fn">endswith</span>(<span class="str">&quot;.bias&quot;</span>):      # <span class="var">norms</span>, <span class="var">biases</span>
+        <span class="var">no_decay</span>.<span class="fn">append</span>(<span class="var">p</span>)
+    <span class="kw">else</span>:
+        <span class="var">decay</span>.<span class="fn">append</span>(<span class="var">p</span>)
+
+<span class="var">opt</span> = <span class="ty">torch</span>.<span class="var">optim</span>.<span class="fn">AdamW</span>([
+    {<span class="str">&quot;params&quot;</span>: <span class="var">decay</span>,    <span class="str">&quot;weight_decay&quot;</span>: <span class="num">0.05</span>},
+    {<span class="str">&quot;params&quot;</span>: <span class="var">no_decay</span>, <span class="str">&quot;weight_decay&quot;</span>: <span class="num">0.0</span>},
+], <span class="var">lr</span>=<span class="var">base_lr</span>, <span class="var">betas</span>=(<span class="num">0.9</span>, <span class="num">0.95</span>), <span class="var">fused</span>=<span class="kw">True</span>)      # <span class="var">fused</span>=<span class="kw">True</span> <span class="var">on</span> <span class="var">CUDA</span>
+
+# <span class="var">Linear</span> <span class="var">warmup</span> + <span class="var">cosine</span> <span class="var">decay</span>, <span class="kw">as</span> <span class="var">a</span> <span class="var">closed</span> <span class="var">form</span>. <span class="var">Verified</span> <span class="var">monotonic</span> <span class="kw">in</span> <span class="var">both</span>
+# <span class="var">phases</span>, <span class="var">bounded</span> <span class="var">by</span> [<span class="num">0</span>, <span class="var">base_lr</span>], <span class="kw">and</span> <span class="var">reproduced</span> <span class="var">exactly</span> <span class="var">by</span> <span class="var">LambdaLR</span>.
+<span class="kw">def</span> <span class="fn">lr_lambda</span>(<span class="var">step</span>):
+    <span class="kw">if</span> <span class="var">step</span> &lt; <span class="var">warmup_steps</span>:
+        <span class="kw">return</span> (<span class="var">step</span> + <span class="num">1</span>) / <span class="var">warmup_steps</span>
+    <span class="var">p</span> = (<span class="var">step</span> - <span class="var">warmup_steps</span>) / <span class="fn">max</span>(<span class="num">1</span>, <span class="var">total_steps</span> - <span class="var">warmup_steps</span>)
+    <span class="kw">return</span> <span class="num">0.5</span> * (<span class="num">1.0</span> + <span class="ty">math</span>.<span class="fn">cos</span>(<span class="ty">math</span>.<span class="var">pi</span> * <span class="var">p</span>))
+
+<span class="var">sched</span> = <span class="ty">torch</span>.<span class="var">optim</span>.<span class="var">lr_scheduler</span>.<span class="fn">LambdaLR</span>(<span class="var">opt</span>, <span class="var">lr_lambda</span>)</pre>
+
+    <table class="tbl">
+      <thead><tr><th>Point</th><th>Detail</th></tr></thead>
+      <tbody>
+        <tr><td><code>fused=True</code> / <code>foreach=True</code></td><td>Fused optimizers do the whole update in one kernel instead of several per parameter. On a model with hundreds of tensors this is a real step-time win, and it's a one-word change.</td></tr>
+        <tr><td>Scheduler stepping</td><td>Per <em>optimizer step</em>, not per micro-batch — otherwise your schedule runs <code>ACC×</code> too fast. Verified ordering: the scheduler advances after the first optimizer step, so <code>param_groups[0]["lr"]</code> read after <code>sched.step()</code> reflects step 1, not step 0.</td></tr>
+        <tr><td>State size</td><td>AdamW keeps two extra fp32 tensors per parameter. For a 1 B-parameter model that's ~8 GB of optimizer state alone — the reason FSDP shards it (§18).</td></tr>
+        <tr><td>Scaling the LR</td><td>When the effective batch grows with world size, the LR must grow too — linear scaling with warmup is the standard recipe (§21).</td></tr>
+      </tbody>
+    </table>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<div class="part" id="p3">
+  <div class="part-label">Part III — The data pipeline</div>
+  <h2 class="part-title">Keeping the GPUs <span class="acc">fed.</span></h2>
+  <p class="part-intro">The largest part of this manual, because it is the largest part of the job. "Developing and optimizing machine learning data pipelines" is the first required qualification, and in practice it is where most large training jobs lose most of their throughput. Seven chapters, several of them built on behaviours that were executed and checked rather than recalled.</p>
+
+  <section class="chapter" id="c10">
+    <h2><span class="ch-num">10</span>Dataset vs IterableDataset</h2>
+
+    <table class="tbl compare">
+      <thead><tr><th>Dimension</th><th>Map-style (<code>Dataset</code>)</th><th>Iterable-style (<code>IterableDataset</code>)</th></tr></thead>
+      <tbody>
+        <tr><td>Interface</td><td><code>__len__</code> + <code>__getitem__(i)</code></td><td><code>__iter__</code></td></tr>
+        <tr><td>Random access</td><td>Yes — the sampler picks indices</td><td>No — you consume a stream</td></tr>
+        <tr><td>Shuffling</td><td>Free, via the sampler</td><td>Manual: shuffle buffer or pre-shuffled shards</td></tr>
+        <tr><td>Distributed splitting</td><td><code>DistributedSampler</code> handles it</td><td><strong>You must shard yourself</strong> — §14</td></tr>
+        <tr><td>Best for</td><td>Indexable local data, or an index that fits in memory</td><td>Sequential shard reads, streaming from object storage, unbounded sources</td></tr>
+        <tr><td>AV reality</td><td>Fine when you have a manifest of samples and random-access storage</td><td><strong>Usually the right choice for sharded cloud data</strong> — sequential reads are what object storage is good at</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <h5>The practical middle ground</h5>
+      <p>Keep a <em>lightweight manifest</em> (a Parquet index of sample IDs, shard locations, and metadata) that fits in memory, so you get map-style random access and sampler-based shuffling — but have <code>__getitem__</code> read from large sequential shards rather than millions of small files. You get index-level flexibility with storage-friendly access patterns. This is the design most mature AV pipelines converge on, and it's a good answer to "how would you structure the dataset layer?"</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c11">
+    <h2><span class="ch-num">11</span>DataLoader mechanics</h2>
+<div class="diagram">  WHAT THE DATALOADER ACTUALLY DOES
+  ───────────────────────────────────────────────────────────────
+   main process                     worker processes (num_workers)
+   ┌───────────────┐                ┌──────────────────────────┐
+   │ sampler yields│ ──indices──►   │ __getitem__ / __iter__   │
+   │ index batches │                │ decode, augment          │
+   │               │                │ collate_fn               │
+   │               │  ◄──tensors──  │ (optional) pin memory    │
+   │ prefetch queue│                └──────────────────────────┘
+   │  depth =                        workers are FORKED (default on
+   │  prefetch_factor × num_workers  Linux) at iterator creation
+   └───────────────┘
+  ───────────────────────────────────────────────────────────────
+   THE KNOBS, AND WHAT EACH ONE COSTS
+     num_workers        more decode parallelism; more RAM, more IPC.
+                        Start at ~4x per GPU and MEASURE.
+     prefetch_factor    batches queued per worker (default 2). Deeper
+                        smooths jitter, costs memory.
+     pin_memory=True    stages batches in page-locked memory so the
+                        H2D copy can be async. REQUIRED for
+                        non_blocking=True to do anything.
+     persistent_workers Keeps workers alive between epochs. If your
+                        __init__ is expensive (opening shard handles),
+                        this removes a per-epoch stall.
+     drop_last          Equal batch sizes; required for stable
+                        BatchNorm and for clean distributed math.
+  ───────────────────────────────────────────────────────────────
+   THE FORK TRAP: worker processes inherit memory copy-on-write. A
+   big Python list/dict in the dataset gets touched by refcounting and
+   is then COPIED into every worker -&gt; N x memory. Store large indices
+   as numpy arrays or pyarrow tables, NOT python lists of objects.</div>
+<pre data-lang="PYTHON"><span class="var">loader</span> = <span class="ty">DataLoader</span>(
+    <span class="var">dataset</span>,
+    <span class="var">batch_size</span>=<span class="num">32</span>,
+    <span class="var">sampler</span>=<span class="var">sampler</span>,                 # <span class="ty">DistributedSampler</span> <span class="kw">in</span> <span class="var">multi</span>-<span class="var">GPU</span>
+    <span class="var">num_workers</span>=<span class="num">8</span>,
+    <span class="var">pin_memory</span>=<span class="kw">True</span>,                 # <span class="var">required</span> <span class="kw">for</span> <span class="var">non_blocking</span> <span class="var">to</span> <span class="var">matter</span>
+    <span class="var">persistent_workers</span>=<span class="kw">True</span>,         # <span class="var">avoid</span> <span class="var">per</span>-<span class="var">epoch</span> <span class="var">worker</span> <span class="var">respawn</span>
+    <span class="var">prefetch_factor</span>=<span class="num">4</span>,
+    <span class="var">drop_last</span>=<span class="kw">True</span>,                  # <span class="var">equal</span> <span class="var">batches</span> <span class="var">across</span> <span class="var">ranks</span>
+    <span class="var">collate_fn</span>=<span class="var">pad_collate</span>,
+    <span class="var">worker_init_fn</span>=<span class="var">seed_worker</span>,      # <span class="var">reproducible</span> <span class="var">augmentation</span> (§<span class="num">30</span>)
+)
+
+<span class="kw">for</span> <span class="var">batch</span> <span class="kw">in</span> <span class="var">loader</span>:
+    # <span class="var">non_blocking</span> <span class="var">only</span> <span class="var">overlaps</span> <span class="var">because</span> <span class="var">pin_memory</span>=<span class="kw">True</span> <span class="var">above</span>
+    <span class="var">imgs</span> = <span class="var">batch</span>[<span class="str">&quot;img&quot;</span>].<span class="fn">to</span>(<span class="var">device</span>, <span class="var">non_blocking</span>=<span class="kw">True</span>)
+    <span class="var">pts</span>  = <span class="var">batch</span>[<span class="str">&quot;pts&quot;</span>].<span class="fn">to</span>(<span class="var">device</span>, <span class="var">non_blocking</span>=<span class="kw">True</span>)</pre>
+
+    <div class="callout warn">
+      <h5>Two failure modes worth naming</h5>
+      <p><strong>Too many workers.</strong> Each is a process with its own memory and its own share of the CPU. Past the point where decode saturates the cores, more workers add contention and RAM pressure and make throughput <em>worse</em>. It's a tuned number, not a maximized one.</p>
+      <p><strong>Workers that die silently.</strong> An OOM-killed worker surfaces as a cryptic "DataLoader worker (pid N) is killed by signal" — usually caused by the copy-on-write trap above, or by a memory leak in decode. Setting <code>num_workers=0</code> temporarily moves the traceback into the main process and makes the real error visible; that's the first debugging move.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c12">
+    <h2><span class="ch-num">12</span>collate_fn for sensor data</h2>
+
+    <p>The default collate stacks tensors, which requires identical shapes. Lidar sweeps have different point counts, and frames have different numbers of detections — so for AV data you almost always write your own. The verified pattern is padding plus an explicit mask.</p>
+<pre data-lang="PYTHON"><span class="kw">def</span> <span class="fn">pad_collate</span>(<span class="var">batch</span>):
+    # <span class="var">Variable</span>-<span class="var">length</span> <span class="var">point</span> <span class="var">clouds</span> -&gt; <span class="var">padded</span> <span class="var">tensor</span> + <span class="var">boolean</span> <span class="var">mask</span>.
+    # <span class="var">Verified</span>: <span class="var">mask</span>.<span class="fn">sum</span>(<span class="num">1</span>) == <span class="kw">true</span> <span class="var">lengths</span>, <span class="var">padded</span> <span class="var">region</span> <span class="kw">is</span> <span class="var">exactly</span> <span class="var">zero</span>,
+    # <span class="kw">and</span> <span class="var">fixed</span>-<span class="var">size</span> <span class="var">modalities</span> <span class="var">still</span> <span class="var">stack</span> <span class="var">normally</span>.
+    <span class="var">lens</span> = <span class="ty">torch</span>.<span class="fn">tensor</span>([<span class="var">b</span>[<span class="str">&quot;pts&quot;</span>].<span class="var">shape</span>[<span class="num">0</span>] <span class="kw">for</span> <span class="var">b</span> <span class="kw">in</span> <span class="var">batch</span>])
+    <span class="var">max_n</span> = <span class="ty">int</span>(<span class="var">lens</span>.<span class="fn">max</span>())
+    <span class="var">C</span> = <span class="var">batch</span>[<span class="num">0</span>][<span class="str">&quot;pts&quot;</span>].<span class="var">shape</span>[<span class="num">1</span>]
+
+    <span class="var">pts</span>  = <span class="ty">torch</span>.<span class="fn">zeros</span>(<span class="fn">len</span>(<span class="var">batch</span>), <span class="var">max_n</span>, <span class="var">C</span>)
+    <span class="var">mask</span> = <span class="ty">torch</span>.<span class="fn">zeros</span>(<span class="fn">len</span>(<span class="var">batch</span>), <span class="var">max_n</span>, <span class="var">dtype</span>=<span class="ty">torch</span>.<span class="ty">bool</span>)
+    <span class="kw">for</span> <span class="var">i</span>, <span class="var">b</span> <span class="kw">in</span> <span class="fn">enumerate</span>(<span class="var">batch</span>):
+        <span class="var">n</span> = <span class="var">b</span>[<span class="str">&quot;pts&quot;</span>].<span class="var">shape</span>[<span class="num">0</span>]
+        <span class="var">pts</span>[<span class="var">i</span>, :<span class="var">n</span>] = <span class="var">b</span>[<span class="str">&quot;pts&quot;</span>]
+        <span class="var">mask</span>[<span class="var">i</span>, :<span class="var">n</span>] = <span class="kw">True</span>
+
+    <span class="kw">return</span> {
+        <span class="str">&quot;pts&quot;</span>:  <span class="var">pts</span>,                                    # [<span class="var">B</span>, <span class="var">max_n</span>, <span class="var">C</span>]
+        <span class="str">&quot;mask&quot;</span>: <span class="var">mask</span>,                                   # [<span class="var">B</span>, <span class="var">max_n</span>]
+        <span class="str">&quot;lens&quot;</span>: <span class="var">lens</span>,                                   # [<span class="var">B</span>]
+        <span class="str">&quot;img&quot;</span>:  <span class="ty">torch</span>.<span class="fn">stack</span>([<span class="var">b</span>[<span class="str">&quot;img&quot;</span>] <span class="kw">for</span> <span class="var">b</span> <span class="kw">in</span> <span class="var">batch</span>]), # <span class="var">fixed</span> <span class="var">size</span>: <span class="var">stacks</span>
+        <span class="str">&quot;meta&quot;</span>: [<span class="var">b</span>[<span class="str">&quot;meta&quot;</span>] <span class="kw">for</span> <span class="var">b</span> <span class="kw">in</span> <span class="var">batch</span>],             # <span class="var">keep</span> <span class="kw">as</span> <span class="var">a</span> <span class="var">list</span>
+    }
+
+# <span class="var">THE</span> <span class="var">CONSEQUENCE</span> <span class="var">THE</span> <span class="var">MASK</span> <span class="var">EXISTS</span> <span class="var">FOR</span> -- <span class="var">verified</span> <span class="var">that</span> <span class="var">these</span> <span class="var">DIFFER</span>:
+<span class="var">masked_mean</span> = (<span class="var">pts</span> * <span class="var">mask</span>.<span class="fn">unsqueeze</span>(-<span class="num">1</span>)).<span class="fn">sum</span>(<span class="num">1</span>) / <span class="var">lens</span>.<span class="fn">unsqueeze</span>(<span class="num">1</span>)   # <span class="var">correct</span>
+<span class="var">naive_mean</span>  = <span class="var">pts</span>.<span class="fn">mean</span>(<span class="num">1</span>)                                            # <span class="var">WRONG</span>:
+#   <span class="var">averages</span> <span class="var">the</span> <span class="var">zero</span> <span class="var">padding</span> <span class="kw">in</span>, <span class="var">so</span> <span class="var">the</span> <span class="var">answer</span> <span class="var">depends</span> <span class="var">on</span> <span class="var">the</span> <span class="var">batch</span>&#x27;<span class="var">s</span>
+#   <span class="var">longest</span> <span class="var">sample</span>. <span class="var">Every</span> <span class="var">reduction</span> <span class="var">downstream</span> <span class="var">of</span> <span class="var">a</span> <span class="var">padded</span> <span class="var">tensor</span> <span class="var">must</span> <span class="var">be</span>
+#   <span class="var">mask</span>-<span class="var">aware</span>, <span class="kw">and</span> <span class="kw">this</span> <span class="kw">is</span> <span class="var">where</span> <span class="var">that</span> <span class="var">discipline</span> <span class="var">starts</span>.</pre>
+
+    <table class="tbl">
+      <thead><tr><th>Alternative</th><th>When it's better</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Concatenate + batch index</strong></td><td>Instead of padding, concatenate all points into <code>[total_N, C]</code> and carry a <code>batch_idx: [total_N]</code> column. No wasted memory and no masking — and it's the layout sparse/scatter ops want. This is what most production lidar pipelines actually do; padding wastes memory when point counts are highly variable.</td></tr>
+        <tr><td>Fixed-size sampling</td><td>Randomly subsample or pad every sweep to exactly N points. Simplest, and it makes shapes static — which matters for <code>torch.compile</code> and for predictable memory. Costs some information.</td></tr>
+        <tr><td><code>NestedTensor</code></td><td>PyTorch's native ragged type. Improving, but support across ops is still incomplete — mention it as a direction rather than a default.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <h5>Where the collate should run</h5>
+      <p>Inside the worker (which is where <code>collate_fn</code> already runs) — so the padding and stacking cost is parallelized across <code>num_workers</code> rather than serialized in the training process. That's automatic with the DataLoader, but worth stating, because engineers sometimes "optimize" by moving collation into the main loop and quietly serialize it.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c13">
+    <h2><span class="ch-num">13</span>Samplers and DistributedSampler</h2>
+
+    <p>This chapter contains the one result most engineers get wrong, and it was confirmed by execution rather than memory.</p>
+<div class="diagram">  DISTRIBUTEDSAMPLER, MEASURED — 100 samples, 8 ranks
+  ───────────────────────────────────────────────────────────────
+   per-rank size .......... 13
+   total dispatched ....... 104   (8 x 13)
+   unique indices ......... 100
+   duplicated indices ..... [0, 1, 2, 3]
+
+   HOW: the sampler PADS the index list up to a multiple of world size
+   by WRAPPING the first indices onto the end. Those padded copies land
+   on the trailing ranks:
+
+     rank 0 tail: [ 80,  88,  96 ]
+     rank 4 tail: [ 84,  92,   0 ]   ← index 0 again
+     rank 5 tail: [ 85,  93,   1 ]   ← index 1 again
+
+   ⇒ RANKS ARE NOT DISJOINT. Four samples are seen TWICE per epoch.
+  ───────────────────────────────────────────────────────────────
+   WHY IT MATTERS
+     training   : a negligible bias -- 4 extra samples out of 100
+     EVALUATION : SILENTLY DOUBLE-COUNTS. If each rank computes metrics
+                  on its shard and you all-reduce the mean, those four
+                  samples are weighted twice. On a small val set, or a
+                  rare-event slice, that visibly moves the number.
+  ───────────────────────────────────────────────────────────────
+   FIXES
+     drop_last=True   -&gt; verified truly disjoint (96 indices, no dupes),
+                         at the cost of dropping the remainder
+     for eval         -&gt; gather sample IDs alongside predictions and
+                         DEDUPLICATE before computing the metric, or
+                         pad with a sentinel you mask out</div>
+<pre data-lang="PYTHON"><span class="var">sampler</span> = <span class="ty">DistributedSampler</span>(
+    <span class="var">dataset</span>,
+    <span class="var">num_replicas</span>=<span class="var">world_size</span>,
+    <span class="var">rank</span>=<span class="var">rank</span>,
+    <span class="var">shuffle</span>=<span class="kw">True</span>,
+    <span class="var">drop_last</span>=<span class="kw">True</span>,        # <span class="var">training</span>: <span class="var">equal</span> <span class="var">batches</span>, <span class="var">truly</span> <span class="var">disjoint</span> <span class="var">ranks</span>
+)
+
+<span class="kw">for</span> <span class="var">epoch</span> <span class="kw">in</span> <span class="fn">range</span>(<span class="var">num_epochs</span>):
+    <span class="var">sampler</span>.<span class="fn">set_epoch</span>(<span class="var">epoch</span>)     # &lt;-- <span class="var">verified</span>: <span class="var">WITHOUT</span> <span class="kw">this</span> <span class="var">every</span> <span class="var">epoch</span>
+    #                                 <span class="var">uses</span> <span class="var">the</span> <span class="var">SAME</span> <span class="var">permutation</span>. <span class="var">The</span> <span class="var">shuffle</span>
+    #                                 <span class="var">seed</span> <span class="kw">is</span> (<span class="var">base_seed</span> + <span class="var">epoch</span>), <span class="var">so</span> <span class="var">a</span>
+    #                                 <span class="var">missing</span> <span class="var">set_epoch</span> <span class="var">means</span> <span class="var">you</span> <span class="var">train</span> <span class="var">on</span>
+    #                                 <span class="var">the</span> <span class="var">identical</span> <span class="var">order</span> <span class="var">forever</span>.
+    <span class="kw">for</span> <span class="var">batch</span> <span class="kw">in</span> <span class="var">loader</span>:
+        ...</pre>
+
+    <table class="tbl">
+      <thead><tr><th>Sampler</th><th>Use</th></tr></thead>
+      <tbody>
+        <tr><td><code>RandomSampler</code> / <code>SequentialSampler</code></td><td>Single-process defaults.</td></tr>
+        <tr><td><code>WeightedRandomSampler</code></td><td>Class or scenario balancing — the mechanism for oversampling rare AV events (night, rain, cut-ins). Note it samples <em>with replacement</em> by default.</td></tr>
+        <tr><td><code>BatchSampler</code></td><td>Yields whole batches. The hook for bucketing by size — group samples with similar point counts so padding waste drops (§12).</td></tr>
+        <tr><td>Custom</td><td>Any object yielding indices. A curriculum, a hard-example miner, or a scenario-balanced sampler is just a <code>Sampler</code> subclass — and for this team, that's a very plausible design question.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="chapter" id="c14">
+    <h2><span class="ch-num">14</span>Sharding, and the duplication bug</h2>
+
+    <p>With <code>IterableDataset</code>, nothing shards for you. There are <em>two</em> axes — DataLoader workers and distributed ranks — and forgetting either silently multiplies your data.</p>
+<div class="diagram">  MEASURED: a 100-element IterableDataset, num_workers=4
+  ───────────────────────────────────────────────────────────────
+   NAIVE  __iter__ returns iter(range(100))
+          → DataLoader yielded 400 items.
+            Every worker replayed the WHOLE dataset.
+            Your &quot;epoch&quot; is 4 epochs of duplicated data, your loss
+            curve looks fine, and your model has quietly seen each
+            sample 4 times per epoch.
+
+   SHARDED  each worker takes a disjoint stride
+          → DataLoader yielded exactly 100 items, all unique.
+  ───────────────────────────────────────────────────────────────
+   AND IN DISTRIBUTED TRAINING THERE ARE TWO AXES:
+        global_shards = world_size x num_workers
+        shard_id      = rank * num_workers + worker_id
+   Forget the rank axis and every GPU trains on the same data —
+   which looks like training working, and is not.</div>
+<pre data-lang="PYTHON"><span class="kw">class</span> <span class="fn">ShardedIterableDataset</span>(<span class="ty">IterableDataset</span>):
+    # <span class="var">Shards</span> <span class="var">across</span> <span class="var">BOTH</span> <span class="var">distributed</span> <span class="var">ranks</span> <span class="kw">and</span> <span class="ty">DataLoader</span> <span class="var">workers</span>.
+    # <span class="var">Verified</span>: <span class="kw">with</span> <span class="num">4</span> <span class="var">workers</span> <span class="kw">this</span> <span class="var">yields</span> <span class="var">each</span> <span class="var">item</span> <span class="var">exactly</span> <span class="var">once</span>
+    # (<span class="var">the</span> <span class="var">naive</span> <span class="var">version</span> <span class="var">yields</span> <span class="var">the</span> <span class="var">whole</span> <span class="var">dataset</span> <span class="num">4</span> <span class="var">times</span> <span class="var">over</span>).
+    <span class="kw">def</span> <span class="fn">__init__</span>(<span class="ty">self</span>, <span class="var">shard_paths</span>):
+        <span class="ty">self</span>.<span class="var">shard_paths</span> = <span class="fn">sorted</span>(<span class="var">shard_paths</span>)   # <span class="var">sorted</span> =&gt; <span class="var">deterministic</span>
+
+    <span class="kw">def</span> <span class="fn">__iter__</span>(<span class="ty">self</span>):
+        # --- <span class="var">axis</span> <span class="num">1</span>: <span class="var">distributed</span> <span class="var">rank</span> ---
+        <span class="kw">if</span> <span class="ty">dist</span>.<span class="fn">is_available</span>() <span class="kw">and</span> <span class="ty">dist</span>.<span class="fn">is_initialized</span>():
+            <span class="var">rank</span>, <span class="var">world</span> = <span class="ty">dist</span>.<span class="fn">get_rank</span>(), <span class="ty">dist</span>.<span class="fn">get_world_size</span>()
+        <span class="kw">else</span>:
+            <span class="var">rank</span>, <span class="var">world</span> = <span class="num">0</span>, <span class="num">1</span>
+
+        # --- <span class="var">axis</span> <span class="num">2</span>: <span class="ty">DataLoader</span> <span class="var">worker</span> ---
+        <span class="var">info</span> = <span class="ty">torch</span>.<span class="var">utils</span>.<span class="var">data</span>.<span class="fn">get_worker_info</span>()
+        <span class="var">wid</span>, <span class="var">nworkers</span> = (<span class="var">info</span>.<span class="var">id</span>, <span class="var">info</span>.<span class="var">num_workers</span>) <span class="kw">if</span> <span class="var">info</span> <span class="kw">else</span> (<span class="num">0</span>, <span class="num">1</span>)
+
+        <span class="var">shard_id</span>, <span class="var">num_shards</span> = <span class="var">rank</span> * <span class="var">nworkers</span> + <span class="var">wid</span>, <span class="var">world</span> * <span class="var">nworkers</span>
+
+        # <span class="var">shard</span> <span class="var">at</span> <span class="var">FILE</span> <span class="var">granularity</span>: <span class="var">keeps</span> <span class="var">reads</span> <span class="var">sequential</span>, <span class="var">which</span> <span class="kw">is</span> <span class="var">what</span>
+        # <span class="var">object</span> <span class="var">storage</span> <span class="kw">is</span> <span class="var">good</span> <span class="var">at</span>. <span class="var">Requires</span> <span class="fn">len</span>(<span class="var">shards</span>) &gt;= <span class="var">num_shards</span>,
+        # <span class="var">ideally</span> <span class="var">a</span> <span class="var">comfortable</span> <span class="var">multiple</span> <span class="var">so</span> <span class="var">the</span> <span class="var">work</span> <span class="var">divides</span> <span class="var">evenly</span>.
+        <span class="kw">for</span> <span class="var">path</span> <span class="kw">in</span> <span class="ty">self</span>.<span class="var">shard_paths</span>[<span class="var">shard_id</span>::<span class="var">num_shards</span>]:
+            <span class="kw">yield</span> <span class="kw">from</span> <span class="fn">read_shard</span>(<span class="var">path</span>)</pre>
+
+    <div class="callout danger">
+      <h5>Three consequences to state</h5>
+      <p><strong>Shard count must exceed total workers.</strong> With 8 ranks × 8 workers you need ≥ 64 shards, and ideally a few hundred, or some workers idle while others carry the load. Shard count is a dataset-build decision that constrains your training topology — plan it deliberately.</p>
+      <p><strong>Uneven shards cause hangs.</strong> If one rank runs out of data before the others, it stops participating in collectives and the job deadlocks (Tree 5). Either equalize shard sizes at build time, or agree on a global step count and stop everyone together.</p>
+      <p><strong>Shuffling needs two levels.</strong> Shuffle the shard order per epoch <em>and</em> maintain a shuffle buffer within a shard — otherwise samples within a shard always appear in the same sequence, and consecutive AV frames are highly correlated (§04).</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c15">
+    <h2><span class="ch-num">15</span>Storage formats</h2>
+
+    <table class="tbl wide">
+      <thead><tr><th>Format</th><th>Fit for AV training data</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Loose files</strong> (one JPEG per image)</td><td><strong>The anti-pattern at scale.</strong> Millions of small objects means the bottleneck is request rate and per-object latency, not bandwidth. Also expensive on cloud object storage, which charges per request.</td></tr>
+        <tr><td><strong>Sharded tar / WebDataset</strong></td><td>Large sequential files of serialized samples, read as a stream. Excellent object-storage citizen, trivially shardable, and the natural pairing with <code>IterableDataset</code>. Weak at random access and at column projection.</td></tr>
+        <tr><td><strong>Parquet</strong> (via PyArrow)</td><td>Columnar, compressed, with rich metadata and predicate pushdown. Superb for the <em>manifest and metadata</em> layer — "give me all frames at night, in rain, with a cut-in" is a query, not a scan. Can hold binary blobs, though very large per-row payloads strain it.</td></tr>
+        <tr><td><strong>Zarr / HDF5</strong></td><td>Chunked N-dimensional arrays with random access into slices. Good for dense volumetric or gridded data; HDF5 has known concurrency pain under multiprocessing.</td></tr>
+        <tr><td><strong>Pre-decoded tensor shards</strong></td><td>Store already-resized, already-normalized tensors. Removes decode from the critical path entirely — the fastest option, at the cost of storage and total loss of augmentation flexibility. Ideal for a stable dataset trained on repeatedly.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="idea">
+      <p><strong>The design most mature pipelines converge on, and a strong answer to "how would you lay this out?": a Parquet manifest plus sharded blobs.</strong> Metadata, labels, and sample identity live in Parquet — queryable, joinable, cheap to scan, and small enough to hold an index in memory. The heavy sensor payloads live in large sequential shards addressed from the manifest. You get fast slice queries for curation and rare-event mining, sequential reads for training throughput, and a clean separation between "what data exists" and "where the bytes are" — which is also what makes versioning (§33) tractable.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c16">
+    <h2><span class="ch-num">16</span>Feeding the GPU: the throughput model</h2>
+<div class="diagram">  THE ARITHMETIC TO DO ON A WHITEBOARD
+  ───────────────────────────────────────────────────────────────
+   TARGET     GPU step time (measured with synthetic data) = T_gpu
+   REQUIRED   the pipeline must deliver one batch per T_gpu
+
+   per-sample cost budget = T_gpu x num_workers / batch_size
+
+   WORKED (illustrative):
+     T_gpu = 100 ms/batch, batch = 32, num_workers = 8
+     budget = 100ms x 8 / 32 = 25 ms per sample of CPU work
+     if decode+augment takes 40 ms → YOU ARE INPUT BOUND
+     fixes: more workers (if cores allow), cheaper decode,
+            pre-resized data, or GPU decode
+  ───────────────────────────────────────────────────────────────
+   HOW TO TELL, IN ORDER, IN FIVE MINUTES:
+     1 run with SYNTHETIC data (a cached batch, looped)
+         → if step time drops a lot, you are INPUT BOUND. This one
+           experiment is the whole diagnosis and it takes two minutes.
+     2 watch GPU utilization over a few hundred steps
+         → sawtooth or low average = starvation
+     3 torch.profiler with the timeline
+         → gaps between steps = waiting on data
+     4 time the dataset alone: iterate the DataLoader with an empty
+       body and measure samples/sec against your required rate
+  ───────────────────────────────────────────────────────────────
+   THE FIXES, RANKED BY LEVERAGE
+     1 store data at the resolution/format you train at  (10x class)
+     2 shard into large sequential files                 (5-10x)
+     3 right-size num_workers + prefetch + persistent    (2-3x)
+     4 pin_memory + non_blocking H2D                     (overlap)
+     5 GPU-side decode/augment (DALI, nvJPEG)            (specialist)
+     6 cache the decoded epoch if it fits on local NVMe  (huge, if so)</div>
+
+    <p class="pull">Run it with synthetic data first. If the step time collapses, you have a data problem, not a model problem.</p>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<div class="part" id="p4">
+  <div class="part-label">Part IV — Distributed training</div>
+  <h2 class="part-title">Many GPUs, one <span class="acc">model.</span></h2>
+  <p class="part-intro">"Distributed model training" is named in the required qualifications, and it's the half of the job the data pipeline exists to serve. Six chapters on the mechanisms, the scaling rules, and the failure modes.</p>
+
+  <section class="chapter" id="c17">
+    <h2><span class="ch-num">17</span>DDP mechanics</h2>
+<div class="diagram">  DDP IS AN AUTOGRAD PLUGIN — the mechanism, not the API
+  ───────────────────────────────────────────────────────────────
+   SETUP    every rank holds a FULL replica, initialized identically
+            (DDP broadcasts rank 0&#x27;s weights at construction).
+            Parameters are packed into BUCKETS (~25 MB), built in
+            REVERSE registration order — because backward produces
+            gradients roughly in reverse of the forward.
+
+   BACKWARD DDP registers a post-accumulate-grad HOOK on every param.
+            The autograd engine fires it the moment that parameter&#x27;s
+            gradient is final. When every param in a bucket is ready,
+            DDP launches that bucket&#x27;s ALL-REDUCE asynchronously.
+              ⇒ COMMUNICATION OVERLAPS WITH THE REST OF BACKWARD.
+                The overlap IS the design; it is why DDP scales.
+
+   STEP     wait for outstanding all-reduces; gradients are now the
+            mean across ranks; every rank steps its optimizer
+            identically, so replicas stay in sync with NO weight
+            broadcast.
+  ───────────────────────────────────────────────────────────────
+   THE FAILURE MODES THAT FALL OUT OF THIS DESIGN
+    • a parameter that receives NO gradient on some rank (an unused
+      head, a conditional branch) ⇒ its bucket never completes ⇒
+      that rank never launches the all-reduce ⇒ EVERYONE HANGS.
+      find_unused_parameters=True fixes it by traversing the graph
+      each step — at real cost. Better: fix the model.
+    • ranks executing DIFFERENT NUMBERS of collectives (uneven data,
+      a rank-dependent branch, early exit) ⇒ deadlock (Tree 5)
+    • gradient accumulation without no_sync() ⇒ ACC x the comms (§08)</div>
+
+    <table class="tbl">
+      <thead><tr><th>Setting</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td><code>gradient_as_bucket_view=True</code></td><td>Points gradients directly at bucket memory instead of copying — saves a full model's worth of gradient memory. Cheap win, commonly missed.</td></tr>
+        <tr><td><code>static_graph=True</code></td><td>Promises the graph never changes across iterations, enabling extra optimizations and making <code>find_unused_parameters</code> unnecessary in many cases.</td></tr>
+        <tr><td><code>bucket_cap_mb</code></td><td>Trades overlap granularity against all-reduce efficiency. Larger buckets = fewer, bigger collectives = better bandwidth utilization, but less overlap.</td></tr>
+        <tr><td><code>broadcast_buffers</code></td><td>Syncs buffers (BatchNorm running stats) each forward. Disable if you don't need it; better still, use <code>SyncBatchNorm</code> when per-rank batches are small.</td></tr>
+        <tr><td><code>DistributedDataParallel</code> vs <code>DataParallel</code></td><td>Never use <code>DataParallel</code>. Single-process multi-thread, GIL-bound, and it scatters/gathers every step. It exists for backwards compatibility.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="chapter" id="c18">
+    <h2><span class="ch-num">18</span>FSDP and sharding strategies</h2>
+
+    <p>DDP replicates everything, so the largest model you can train is bounded by one GPU's memory. FSDP shards parameters, gradients, and optimizer state across ranks, materializing full weights only transiently.</p>
+
+    <table class="tbl compare">
+      <thead><tr><th>What's sharded</th><th>DDP</th><th>FSDP (full shard)</th></tr></thead>
+      <tbody>
+        <tr><td>Parameters</td><td>Replicated on every rank</td><td>Sharded; all-gathered just-in-time per layer, then freed</td></tr>
+        <tr><td>Gradients</td><td>Replicated, all-reduced</td><td>Reduce-scattered so each rank keeps only its shard</td></tr>
+        <tr><td>Optimizer state</td><td>Replicated (AdamW: 2 fp32 tensors per param)</td><td>Sharded — usually the <em>largest</em> saving</td></tr>
+        <tr><td>Communication</td><td>One all-reduce per bucket per step</td><td>All-gather in forward, all-gather + reduce-scatter in backward — more traffic</td></tr>
+        <tr><td>Use when</td><td>The model fits comfortably; you want simplicity and speed</td><td>The model, gradients, or optimizer state don't fit</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <h5>The honest positioning for an AV perception team</h5>
+      <p>Perception models are typically hundreds of millions of parameters, not hundreds of billions — so <strong>DDP is usually the right tool and FSDP is usually unnecessary</strong>. The scaling problem here is <em>data</em>, not model size. Saying that plainly — "I'd reach for DDP with a well-tuned input pipeline first, and only consider FSDP or activation checkpointing if the model genuinely doesn't fit" — is a better answer than reflexively naming the most sophisticated technique. It also happens to be exactly what the req describes: efficiency of training with <em>large volumes of data</em>.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c19">
+    <h2><span class="ch-num">19</span>torchrun, process groups, rendezvous</h2>
+<pre data-lang="PYTHON"># <span class="var">torchrun</span> <span class="var">sets</span> <span class="var">RANK</span>, <span class="var">LOCAL_RANK</span>, <span class="var">WORLD_SIZE</span>, <span class="var">MASTER_ADDR</span>, <span class="var">MASTER_PORT</span>.
+# <span class="var">Never</span> <span class="var">hand</span>-<span class="var">roll</span> <span class="kw">this</span>; <span class="var">it</span> <span class="var">also</span> <span class="var">gives</span> <span class="var">you</span> <span class="var">restart</span>/<span class="var">elasticity</span> <span class="var">hooks</span>.
+#
+#   <span class="var">torchrun</span> --<span class="var">nnodes</span>=<span class="num">4</span> --<span class="var">nproc_per_node</span>=<span class="num">8</span> \
+#            --<span class="var">rdzv_backend</span>=<span class="var">c10d</span> --<span class="var">rdzv_endpoint</span>=$<span class="var">HEAD</span>:<span class="num">29500</span> <span class="var">train</span>.<span class="var">py</span>
+
+<span class="kw">def</span> <span class="fn">setup</span>():
+    <span class="ty">dist</span>.<span class="fn">init_process_group</span>(<span class="var">backend</span>=<span class="str">&quot;nccl&quot;</span>)        # <span class="var">nccl</span> <span class="kw">for</span> <span class="var">GPU</span>, <span class="var">gloo</span> <span class="kw">for</span> <span class="var">CPU</span>
+    <span class="var">local_rank</span> = <span class="ty">int</span>(<span class="ty">os</span>.<span class="var">environ</span>[<span class="str">&quot;LOCAL_RANK&quot;</span>])
+    <span class="ty">torch</span>.<span class="var">cuda</span>.<span class="fn">set_device</span>(<span class="var">local_rank</span>)              # <span class="var">BEFORE</span> <span class="var">creating</span> <span class="var">any</span> <span class="var">tensors</span>
+    <span class="kw">return</span> <span class="var">local_rank</span>
+
+<span class="kw">def</span> <span class="fn">cleanup</span>():
+    <span class="ty">dist</span>.<span class="fn">barrier</span>()
+    <span class="ty">dist</span>.<span class="fn">destroy_process_group</span>()
+
+<span class="var">local_rank</span> = <span class="fn">setup</span>()
+<span class="var">model</span> = <span class="fn">Model</span>().<span class="fn">to</span>(<span class="var">local_rank</span>)
+<span class="var">model</span> = <span class="ty">DDP</span>(<span class="var">model</span>, <span class="var">device_ids</span>=[<span class="var">local_rank</span>],
+            <span class="var">gradient_as_bucket_view</span>=<span class="kw">True</span>, <span class="var">static_graph</span>=<span class="kw">True</span>)
+
+# <span class="var">Rank</span>-<span class="var">aware</span> <span class="var">side</span> <span class="var">effects</span>: <span class="var">exactly</span> <span class="var">one</span> <span class="var">rank</span> <span class="var">writes</span>.
+<span class="var">is_main</span> = <span class="ty">dist</span>.<span class="fn">get_rank</span>() == <span class="num">0</span>
+<span class="kw">if</span> <span class="var">is_main</span>:
+    <span class="var">logger</span>.<span class="fn">info</span>(<span class="str">&quot;run started&quot;</span>)          # <span class="var">otherwise</span> <span class="num">32</span> <span class="var">copies</span> <span class="var">of</span> <span class="var">every</span> <span class="var">line</span></pre>
+
+    <div class="callout warn">
+      <h5>Three setup mistakes that produce confusing failures</h5>
+      <p><strong>Not calling <code>set_device</code> first.</strong> Every rank then allocates on GPU 0, which OOMs and looks like a memory bug rather than a configuration one.</p>
+      <p><strong>Logging, checkpointing, or metric-writing from every rank.</strong> 32 processes writing the same file corrupts it; 32 copies of every log line makes the log useless. Guard on rank 0 — and remember that <em>all</em> ranks must still participate in collectives, so never put a <code>barrier()</code> inside a rank-0-only branch.</p>
+      <p><strong>Mismatched world size and data.</strong> If the number of batches differs per rank, the job deadlocks at the end of the epoch (Tree 5). <code>drop_last=True</code> plus equal sharding is the defence.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c20">
+    <h2><span class="ch-num">20</span>Communication and overlap</h2>
+
+    <table class="tbl">
+      <thead><tr><th>Topic</th><th>What to know</th></tr></thead>
+      <tbody>
+        <tr><td>NCCL</td><td>The GPU collective library. <code>NCCL_DEBUG=INFO</code> shows ring/tree topology and is the first tool in any distributed performance or hang investigation.</td></tr>
+        <tr><td>Topology</td><td>NVLink within a node is roughly an order of magnitude faster than typical inter-node networking. Scaling from 8 to 16 GPUs crosses that boundary, which is why efficiency often drops sharply at exactly that point.</td></tr>
+        <tr><td>Gradient compression</td><td>bf16 or fp16 gradient all-reduce halves the bytes; PyTorch provides DDP comm hooks for this. Cheap when you're network-bound.</td></tr>
+        <tr><td>Stragglers</td><td>Every collective runs at the speed of the slowest rank. One slow node — a bad NIC, a throttling GPU, a noisy neighbour, an unbalanced shard — sets the pace for the whole job. <strong>Profile all ranks, not rank 0.</strong></td></tr>
+        <tr><td>Scaling efficiency</td><td>Define it and measure it: <code>throughput(N) / (N × throughput(1))</code>. Below ~80% at your target scale, find out whether it's communication, stragglers, or input starvation before adding hardware.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="chapter" id="c21">
+    <h2><span class="ch-num">21</span>Scaling: batch size, LR, warmup</h2>
+
+    <div class="idea">
+      <p><strong>The rule that has to be right: when you scale the effective batch, you must scale the learning rate, and you must warm up.</strong> Effective batch is <code>per_gpu_batch × world_size × grad_accum</code>. The standard recipe is <em>linear scaling</em> — multiply the base LR by the batch multiplier — with a warmup of a few hundred to a few thousand steps, because a large-batch run at full LR from step zero frequently diverges in the first few hundred steps. (The square-root rule is the alternative, more common with adaptive optimizers; either way, <em>state that the LR must move with the batch</em>.)</p>
+    </div>
+
+    <table class="tbl">
+      <thead><tr><th>Consequence of scaling</th><th>Detail</th></tr></thead>
+      <tbody>
+        <tr><td>Fewer optimizer steps per epoch</td><td>Doubling the batch halves the steps. If you keep step count fixed you've also doubled the data seen — be explicit about whether you're comparing at equal <em>steps</em> or equal <em>samples</em>, or your ablations are meaningless.</td></tr>
+        <tr><td>BatchNorm gets weird</td><td>Per-GPU batch shrinks as you scale out. Below ~8–16 samples per GPU, BN statistics get noisy — use <code>SyncBatchNorm</code> (costs a collective) or switch to GroupNorm/LayerNorm.</td></tr>
+        <tr><td>Warmup interacts with the schedule</td><td>Warmup steps are counted in <em>optimizer steps</em>, so they change when you change accumulation. Verified: a linear-warmup-then-cosine lambda is monotonic in both phases and bounded by <code>[0, base_lr]</code>.</td></tr>
+        <tr><td>Diminishing returns</td><td>There is a batch size past which convergence per <em>sample</em> degrades. Beyond it, more GPUs buys wall-clock but wastes compute. Knowing this limit exists is a strong signal.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="chapter" id="c22">
+    <h2><span class="ch-num">22</span>Fault tolerance and elasticity</h2>
+
+    <p>At 64 GPUs for three days, something <em>will</em> fail. Designing for that is a distributed-systems question, which is exactly what the req's "large-scale distributed systems" line is testing.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Concern</th><th>Approach</th></tr></thead>
+      <tbody>
+        <tr><td>Node failure</td><td>Checkpoint on a fixed step cadence; <code>torchrun</code> with <code>--max-restarts</code> relaunches the group and every rank resumes from the last checkpoint. Checkpoint frequency is a trade against re-work: aim to lose no more than ~15–30 minutes.</td></tr>
+        <tr><td>Preemption (spot instances)</td><td>Same mechanism, higher frequency. If preemption gives a warning signal, catch it and checkpoint immediately.</td></tr>
+        <tr><td>Elasticity</td><td>Changing world size mid-run changes the effective batch and the data sharding. Genuinely hard to do correctly — the honest answer is usually "restart from checkpoint at the new size, and recompute the LR" rather than true elasticity.</td></tr>
+        <tr><td>Hangs vs crashes</td><td>A crash is loud and easy. A <em>hang</em> silently burns cluster time. Set a collective timeout so a stall becomes an attributed failure instead of a dead job, and enable NCCL's flight recorder to see which collective each rank was in.</td></tr>
+        <tr><td>Straggler detection</td><td>Log per-rank step time. A single rank consistently 20% slower is a hardware or data-locality problem, and it is invisible if you only watch rank 0.</td></tr>
+      </tbody>
+    </table>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<div class="part" id="p5">
+  <div class="part-label">Part V — Performance</div>
+  <h2 class="part-title">Make the step <span class="acc">shorter.</span></h2>
+  <p class="part-intro">Once the pipeline keeps the GPUs fed (Part III), these are the levers that shorten the step itself. Applied in the wrong order they waste your time — so the ordering here is deliberate.</p>
+
+  <section class="chapter" id="c23">
+    <h2><span class="ch-num">23</span>Mixed precision</h2>
+<pre data-lang="PYTHON"># <span class="var">bf16</span> <span class="kw">is</span> <span class="var">the</span> <span class="kw">default</span> <span class="var">choice</span> <span class="var">on</span> <span class="var">Ampere</span> <span class="kw">and</span> <span class="var">later</span>: <span class="var">same</span> <span class="var">exponent</span> <span class="var">range</span> <span class="kw">as</span>
+# <span class="var">fp32</span>, <span class="var">so</span> <span class="var">it</span> <span class="var">does</span> <span class="var">NOT</span> <span class="var">need</span> <span class="var">loss</span> <span class="var">scaling</span>. <span class="var">fp16</span> <span class="var">needs</span> <span class="var">a</span> <span class="var">GradScaler</span>.
+<span class="var">scaler</span> = <span class="ty">torch</span>.<span class="var">amp</span>.<span class="fn">GradScaler</span>(<span class="str">&quot;cuda&quot;</span>, <span class="var">enabled</span>=(<span class="var">dtype</span> == <span class="ty">torch</span>.<span class="var">float16</span>))
+
+<span class="kw">for</span> <span class="var">batch</span> <span class="kw">in</span> <span class="var">loader</span>:
+    <span class="var">opt</span>.<span class="fn">zero_grad</span>(<span class="var">set_to_none</span>=<span class="kw">True</span>)
+    <span class="kw">with</span> <span class="ty">torch</span>.<span class="fn">autocast</span>(<span class="str">&quot;cuda&quot;</span>, <span class="var">dtype</span>=<span class="var">dtype</span>):
+        <span class="var">loss</span> = <span class="fn">criterion</span>(<span class="fn">model</span>(<span class="var">batch</span>), <span class="var">batch</span>[<span class="str">&quot;target&quot;</span>])   # <span class="var">autocast</span> <span class="var">region</span>
+    # <span class="var">keep</span> <span class="var">the</span> <span class="var">backward</span> <span class="var">OUTSIDE</span> <span class="var">the</span> <span class="var">autocast</span> <span class="var">context</span>
+    <span class="var">scaler</span>.<span class="fn">scale</span>(<span class="var">loss</span>).<span class="fn">backward</span>()
+    <span class="var">scaler</span>.<span class="fn">unscale_</span>(<span class="var">opt</span>)                       # <span class="var">unscale</span> <span class="var">BEFORE</span> <span class="var">clipping</span>
+    <span class="ty">torch</span>.<span class="ty">nn</span>.<span class="var">utils</span>.<span class="fn">clip_grad_norm_</span>(<span class="var">model</span>.<span class="fn">parameters</span>(), <span class="num">1.0</span>)
+    <span class="var">scaler</span>.<span class="fn">step</span>(<span class="var">opt</span>)                           # <span class="var">skips</span> <span class="var">the</span> <span class="var">step</span> <span class="kw">if</span> <span class="var">inf</span>/<span class="var">nan</span>
+    <span class="var">scaler</span>.<span class="fn">update</span>()</pre>
+
+    <table class="tbl">
+      <thead><tr><th>Behaviour</th><th>Verified / stated</th></tr></thead>
+      <tbody>
+        <tr><td>Autocast casts <em>ops</em>, not parameters</td><td>Confirmed by execution: inside an autocast region a Linear's output is bf16 while <code>layer.weight.dtype</code> remains fp32. Master weights stay fp32; only the matmul runs low-precision.</td></tr>
+        <tr><td>Per-op policy</td><td>Matmuls and convolutions run low-precision; reductions, softmax, and normalizations stay fp32. Confirmed: a sum inside an autocast region came back fp32.</td></tr>
+        <tr><td>bf16 vs fp16</td><td>bf16 has fp32's exponent range and fewer mantissa bits, so it rarely underflows and needs no scaler. fp16 has more precision but a narrow range — hence <code>GradScaler</code>.</td></tr>
+        <tr><td><code>unscale_</code> before clipping</td><td>Clipping scaled gradients clips the wrong magnitude. This ordering is a genuine, common bug.</td></tr>
+        <tr><td>TF32</td><td>On Ampere+, <code>torch.set_float32_matmul_precision("high")</code> lets fp32 matmuls use tensor cores. Nearly free speedup; a small precision change worth validating once.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="chapter" id="c24">
+    <h2><span class="ch-num">24</span>torch.compile</h2>
+
+    <p>Verified on CPU: a compiled model reproduced eager output exactly (max error 0.0), and <code>fullgraph=True</code> raised on a deliberate graph break — which is precisely how you use it as a diagnostic.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Concept</th><th>Practical guidance</th></tr></thead>
+      <tbody>
+        <tr><td>What it does</td><td>Traces your model into a graph (dynamo), fuses and generates kernels (inductor/Triton). Biggest wins on models with many small ops — where launch overhead and memory traffic dominate.</td></tr>
+        <tr><td><strong>Graph breaks</strong></td><td>Anything dynamo can't trace — a <code>print</code>, a <code>.item()</code>, data-dependent Python control flow — splits the graph and costs most of the benefit. Find them with <code>fullgraph=True</code> (raises) or <code>TORCH_LOGS=graph_breaks</code>.</td></tr>
+        <tr><td><strong>Recompilation</strong></td><td>Every new input <em>shape</em> triggers a recompile. With variable-length sensor data this is a real hazard — you can spend more time compiling than training. Fixes: pad to fixed sizes, bucket shapes, or use <code>dynamic=True</code>.</td></tr>
+        <tr><td>Compile time</td><td>First step can take tens of seconds. Irrelevant for a multi-hour job, painful for a short test — so guard it behind a flag.</td></tr>
+        <tr><td>Where to apply it</td><td>Compiling the model is standard. Compiling the <em>optimizer step</em> and using <code>foreach</code>/<code>fused</code> optimizers is a smaller, additional win.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout warn">
+      <h5>The AV-specific caution</h5>
+      <p>Variable point counts per lidar sweep mean variable shapes, and variable shapes mean recompilation. If you plan to use <code>torch.compile</code> on a model that consumes ragged sensor data, <strong>fix the shapes in the collate function</strong> (pad to a bucketed maximum) rather than fighting dynamo. This is a concrete example of the data pipeline and the training performance being the same problem — a good thing to point out.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c25">
+    <h2><span class="ch-num">25</span>Profiling</h2>
+<pre data-lang="PYTHON"><span class="kw">from</span> <span class="ty">torch</span>.<span class="var">profiler</span> <span class="kw">import</span> <span class="var">profile</span>, <span class="var">ProfilerActivity</span>, <span class="var">schedule</span>
+
+# <span class="var">Profile</span> <span class="var">a</span> <span class="var">WINDOW</span>, <span class="kw">not</span> <span class="var">the</span> <span class="var">whole</span> <span class="var">run</span>: <span class="var">wait</span>, <span class="var">warm</span> <span class="var">up</span>, <span class="var">record</span> <span class="var">a</span> <span class="var">few</span> <span class="var">steps</span>.
+<span class="var">prof_schedule</span> = <span class="fn">schedule</span>(<span class="var">wait</span>=<span class="num">5</span>, <span class="var">warmup</span>=<span class="num">3</span>, <span class="var">active</span>=<span class="num">5</span>, <span class="var">repeat</span>=<span class="num">1</span>)
+
+<span class="kw">with</span> <span class="fn">profile</span>(
+    <span class="var">activities</span>=[<span class="var">ProfilerActivity</span>.<span class="var">CPU</span>, <span class="var">ProfilerActivity</span>.<span class="var">CUDA</span>],
+    <span class="var">schedule</span>=<span class="var">prof_schedule</span>,
+    <span class="var">on_trace_ready</span>=<span class="ty">torch</span>.<span class="var">profiler</span>.<span class="fn">tensorboard_trace_handler</span>(<span class="str">&quot;./tb&quot;</span>),
+    <span class="var">record_shapes</span>=<span class="kw">True</span>,
+    <span class="var">profile_memory</span>=<span class="kw">True</span>,
+    <span class="var">with_stack</span>=<span class="kw">True</span>,
+) <span class="kw">as</span> <span class="var">prof</span>:
+    <span class="kw">for</span> <span class="var">step</span>, <span class="var">batch</span> <span class="kw">in</span> <span class="fn">enumerate</span>(<span class="var">loader</span>):
+        <span class="fn">train_step</span>(<span class="var">batch</span>)
+        <span class="var">prof</span>.<span class="fn">step</span>()                     # &lt;-- <span class="var">drives</span> <span class="var">the</span> <span class="var">schedule</span>
+
+# <span class="var">Reading</span> <span class="var">the</span> <span class="var">timeline</span>, <span class="kw">in</span> <span class="var">order</span>:
+#   <span class="num">1</span> <span class="var">Are</span> <span class="var">there</span> <span class="var">GAPS</span> <span class="var">between</span> <span class="var">steps</span>?      -&gt; <span class="var">input</span> <span class="var">bound</span> (<span class="var">Part</span> <span class="var">III</span>)
+#   <span class="num">2</span> <span class="var">Is</span> <span class="var">the</span> <span class="var">GPU</span> <span class="var">busy</span> <span class="var">but</span> <span class="var">slow</span>?          -&gt; <span class="var">kernel</span> <span class="var">level</span>: <span class="var">precision</span>,
+#                                           <span class="var">compile</span>, <span class="var">fused</span> <span class="var">optimizer</span>
+#   <span class="num">3</span> <span class="var">Distributed</span>: <span class="var">how</span> <span class="ty">long</span> <span class="kw">in</span> <span class="var">NCCL</span>?     -&gt; <span class="var">comm</span> <span class="var">bound</span> <span class="kw">or</span> <span class="var">straggler</span>
+#   <span class="num">4</span> <span class="var">profile_memory</span> -&gt; <span class="var">which</span> <span class="var">op</span> <span class="var">peaks</span>   -&gt; <span class="var">Tree</span> <span class="num">2</span></pre>
+
+    <div class="cheat">
+      <h5>The wider toolkit</h5>
+      <div class="cheat-grid">
+        <div class="cmd">synthetic-data run</div><div class="desc">The fastest diagnosis in existence: loop one cached batch. If step time collapses, you're input-bound.</div>
+        <div class="cmd">torch.cuda.memory._record_memory_history()</div><div class="desc">Allocation-level memory forensics with stacks; dump and view in the memory visualizer. The tool for Tree 2.</div>
+        <div class="cmd">torch.cuda.max_memory_allocated()</div><div class="desc">Peak allocation for the run — the number to log every epoch so regressions are visible.</div>
+        <div class="cmd">nvidia-smi / DCGM sampling</div><div class="desc">Crude but instant utilization signal across all ranks. Sawtooth = starvation.</div>
+        <div class="cmd">NCCL_DEBUG=INFO</div><div class="desc">Topology and collective behaviour; first stop for distributed slowness or hangs.</div>
+        <div class="cmd">py-spy dump --pid</div><div class="desc">Where is every rank stuck, right now, with no instrumentation. Indispensable for hangs.</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="chapter" id="c26">
+    <h2><span class="ch-num">26</span>Memory: checkpointing and offload</h2>
+
+    <table class="tbl">
+      <thead><tr><th>Technique</th><th>Trade</th></tr></thead>
+      <tbody>
+        <tr><td>Activation checkpointing</td><td>Recompute activations in backward instead of storing them. ~30% slower per step, large activation-memory reduction — often net-positive because it unlocks a bigger batch. Use <code>use_reentrant=False</code>.</td></tr>
+        <tr><td>Gradient accumulation</td><td>Large effective batch at small memory. Costs nothing but wall-clock, and it's exact (verified to 3e-08, §08).</td></tr>
+        <tr><td>bf16 activations</td><td>Halves activation memory as a side effect of mixed precision.</td></tr>
+        <tr><td><code>set_to_none=True</code></td><td>Frees gradient tensors between steps rather than zeroing them.</td></tr>
+        <tr><td>FSDP / ZeRO</td><td>Shards optimizer state, gradients, parameters. The heavy tool; reach for it when the model genuinely doesn't fit (§18).</td></tr>
+        <tr><td>CPU offload</td><td>Move optimizer state or parameters to host memory. Big memory win, big bandwidth cost. Last resort.</td></tr>
+        <tr><td><code>expandable_segments:True</code></td><td>Via <code>PYTORCH_CUDA_ALLOC_CONF</code>. The modern first fix for fragmentation — when reserved memory greatly exceeds allocated (Tree 2).</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="chapter" id="c27">
+    <h2><span class="ch-num">27</span>The throughput checklist</h2>
+
+    <div class="cheat">
+      <h5>In order. Do not skip to step 5.</h5>
+      <div class="cheat-grid">
+        <div class="cmd">1 · measure</div><div class="desc">Synthetic-data run. Is this input-bound or compute-bound? Everything below depends on the answer.</div>
+        <div class="cmd">2 · fix the input path</div><div class="desc">Store at training resolution, shard into large files, tune workers/prefetch, pin memory. Usually the biggest single win.</div>
+        <div class="cmd">3 · mixed precision</div><div class="desc">bf16 autocast. Near-free, and it halves activation memory too.</div>
+        <div class="cmd">4 · fused optimizer</div><div class="desc"><code>fused=True</code> / <code>foreach=True</code>. One line.</div>
+        <div class="cmd">5 · torch.compile</div><div class="desc">After shapes are stable. Check for graph breaks and recompiles before believing the speedup.</div>
+        <div class="cmd">6 · channels_last</div><div class="desc">For conv-heavy vision models on tensor cores.</div>
+        <div class="cmd">7 · scale out</div><div class="desc">Only now. Adding GPUs to an input-bound job buys nothing but cost — it just starves more devices.</div>
+        <div class="cmd">8 · re-measure everything</div><div class="desc">Including the tail: log per-rank step-time distribution, not the mean.</div>
+      </div>
+    </div>
+
+    <p class="pull">Adding GPUs to an input-bound job just starves more GPUs.</p>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<div class="part" id="p6">
+  <div class="part-label">Part VI — Checkpoints and reproducibility</div>
+  <h2 class="part-title">Able to <span class="acc">resume.</span></h2>
+  <p class="part-intro">Three chapters on the properties that make a training system trustworthy: a run that can resume exactly where it stopped, and a result someone else can reproduce. Both were tested by execution.</p>
+
+  <section class="chapter" id="c28">
+    <h2><span class="ch-num">28</span>What a checkpoint must contain</h2>
+
+    <div class="idea">
+      <p><strong>Executed and confirmed: saving only <code>model.state_dict()</code> does not resume a run.</strong> Training 20 steps straight through, versus training 10, checkpointing, and resuming — with model + optimizer + scheduler state the resumed losses matched the uninterrupted run <em>exactly</em> (max difference 0.0). With <em>model weights only</em> and a freshly constructed optimizer, the runs diverged immediately (difference 1.8e-01). AdamW's moment estimates and the LR schedule position are part of the training state, not incidental.</p>
+    </div>
+<pre data-lang="PYTHON"><span class="kw">def</span> <span class="fn">save_checkpoint</span>(<span class="var">path</span>, <span class="var">model</span>, <span class="var">opt</span>, <span class="var">sched</span>, <span class="var">scaler</span>, <span class="var">step</span>, <span class="var">epoch</span>, <span class="var">cfg</span>, <span class="var">metrics</span>):
+    <span class="var">ckpt</span> = {
+        # --- <span class="var">required</span> <span class="kw">for</span> <span class="var">an</span> <span class="var">EXACT</span> <span class="var">resume</span> (<span class="var">verified</span>) ---
+        <span class="str">&quot;model&quot;</span>:  (<span class="var">model</span>.<span class="var">module</span> <span class="kw">if</span> <span class="fn">hasattr</span>(<span class="var">model</span>, <span class="str">&quot;module&quot;</span>) <span class="kw">else</span> <span class="var">model</span>).<span class="fn">state_dict</span>(),
+        <span class="str">&quot;opt&quot;</span>:    <span class="var">opt</span>.<span class="fn">state_dict</span>(),        # <span class="var">AdamW</span> <span class="var">moments</span> -- <span class="var">omitting</span> <span class="kw">this</span> <span class="var">breaks</span> <span class="var">it</span>
+        <span class="str">&quot;sched&quot;</span>:  <span class="var">sched</span>.<span class="fn">state_dict</span>(),      # <span class="var">schedule</span> <span class="var">position</span>
+        <span class="str">&quot;scaler&quot;</span>: <span class="var">scaler</span>.<span class="fn">state_dict</span>(),     # <span class="var">AMP</span> <span class="var">loss</span> <span class="var">scale</span>
+        <span class="str">&quot;step&quot;</span>:   <span class="var">step</span>,
+        <span class="str">&quot;epoch&quot;</span>:  <span class="var">epoch</span>,
+        # --- <span class="var">required</span> <span class="kw">for</span> <span class="var">PROVENANCE</span> (<span class="var">the</span> <span class="var">MLOps</span> <span class="ty">half</span> <span class="var">of</span> <span class="var">the</span> <span class="var">req</span>) ---
+        <span class="str">&quot;cfg&quot;</span>:          <span class="var">cfg</span>,               # <span class="var">full</span> <span class="var">config</span>, <span class="kw">not</span> <span class="var">a</span> <span class="var">path</span> <span class="var">to</span> <span class="var">one</span>
+        <span class="str">&quot;data_version&quot;</span>: <span class="var">cfg</span>.<span class="var">data_version</span>,  # <span class="var">LakeFS</span> <span class="var">commit</span> / <span class="var">dataset</span> <span class="var">digest</span>
+        <span class="str">&quot;git_sha&quot;</span>:      <span class="fn">current_git_sha</span>(),
+        <span class="str">&quot;torch&quot;</span>:        <span class="ty">torch</span>.<span class="var">__version__</span>,
+        <span class="str">&quot;world_size&quot;</span>:   <span class="ty">dist</span>.<span class="fn">get_world_size</span>() <span class="kw">if</span> <span class="ty">dist</span>.<span class="fn">is_initialized</span>() <span class="kw">else</span> <span class="num">1</span>,
+        <span class="str">&quot;rng&quot;</span>: {                           # <span class="kw">for</span> <span class="var">bitwise</span>-<span class="var">reproducible</span> <span class="var">resume</span>
+            <span class="str">&quot;torch&quot;</span>:  <span class="ty">torch</span>.<span class="fn">get_rng_state</span>(),
+            <span class="str">&quot;cuda&quot;</span>:   <span class="ty">torch</span>.<span class="var">cuda</span>.<span class="fn">get_rng_state_all</span>(),
+            <span class="str">&quot;numpy&quot;</span>:  <span class="ty">np</span>.<span class="var">random</span>.<span class="fn">get_state</span>(),
+            <span class="str">&quot;python&quot;</span>: <span class="var">random</span>.<span class="fn">getstate</span>(),
+        },
+        <span class="str">&quot;metrics&quot;</span>: <span class="var">metrics</span>,
+    }
+    # <span class="var">write</span> <span class="var">to</span> <span class="var">a</span> <span class="var">temp</span> <span class="var">path</span> <span class="var">then</span> <span class="var">rename</span>: <span class="var">an</span> <span class="ty">atomic</span> <span class="var">swap</span>, <span class="var">so</span> <span class="var">a</span> <span class="var">crash</span> <span class="var">mid</span>-<span class="var">write</span>
+    # <span class="var">never</span> <span class="var">leaves</span> <span class="var">a</span> <span class="var">truncated</span> <span class="var">checkpoint</span> <span class="var">that</span> <span class="var">fails</span> <span class="var">to</span> <span class="var">load</span> <span class="var">at</span> 3<span class="var">am</span>
+    <span class="var">tmp</span> = <span class="var">f</span><span class="str">&quot;{path}.tmp&quot;</span>
+    <span class="ty">torch</span>.<span class="fn">save</span>(<span class="var">ckpt</span>, <span class="var">tmp</span>)
+    <span class="ty">os</span>.<span class="fn">replace</span>(<span class="var">tmp</span>, <span class="var">path</span>)</pre>
+
+    <table class="tbl">
+      <thead><tr><th>Detail</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Strip the DDP <code>module.</code> prefix</td><td>Otherwise the checkpoint only loads back into a DDP-wrapped model, and single-GPU evaluation breaks.</td></tr>
+        <tr><td>Atomic write</td><td>Save to a temp file and <code>os.replace</code>. A checkpoint truncated by a preemption is worse than no checkpoint, because you discover it hours later.</td></tr>
+        <tr><td>Rank 0 only (for DDP)</td><td>All replicas are identical, so one writer suffices — but every rank must reach the <code>barrier()</code>, so don't put the barrier inside the rank-0 branch.</td></tr>
+        <tr><td>Data version in the checkpoint</td><td>"Which data produced these weights?" is an audit question in a safety-relevant domain. Embedding the dataset version is what makes the answer available years later.</td></tr>
+        <tr><td><code>weights_only=True</code> on load</td><td>The safe default for untrusted checkpoints; use the full load only for your own training state.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="chapter" id="c29">
+    <h2><span class="ch-num">29</span>Distributed checkpointing</h2>
+
+    <table class="tbl">
+      <thead><tr><th>Situation</th><th>Approach</th></tr></thead>
+      <tbody>
+        <tr><td>DDP</td><td>Replicas are identical — rank 0 writes the whole thing. Simple and correct.</td></tr>
+        <tr><td>FSDP</td><td>Each rank holds a <em>shard</em>. Either gather to a full state dict on one rank (simple, memory-hungry, slow) or use <code>torch.distributed.checkpoint</code> to write a sharded checkpoint in parallel — which also allows loading at a different world size.</td></tr>
+        <tr><td>Large models</td><td>Writing tens of GB to object storage stalls training. Overlap the write, or use an async checkpointing path, so the step loop doesn't block on I/O.</td></tr>
+        <tr><td>Retention</td><td>Keep the last N plus the best-by-metric plus periodic milestones. Unbounded checkpoint retention is a real and boring cost problem at fleet scale.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="chapter" id="c30">
+    <h2><span class="ch-num">30</span>The reproducibility contract</h2>
+
+    <p>Verified findings, one of which is a genuine hazard most people don't expect.</p>
+<pre data-lang="PYTHON"><span class="kw">def</span> <span class="fn">seed_everything</span>(<span class="var">seed</span>: <span class="ty">int</span>):
+    <span class="var">random</span>.<span class="fn">seed</span>(<span class="var">seed</span>)
+    <span class="ty">np</span>.<span class="var">random</span>.<span class="fn">seed</span>(<span class="var">seed</span>)
+    <span class="ty">torch</span>.<span class="fn">manual_seed</span>(<span class="var">seed</span>)
+    <span class="ty">torch</span>.<span class="var">cuda</span>.<span class="fn">manual_seed_all</span>(<span class="var">seed</span>)
+
+<span class="kw">def</span> <span class="fn">seed_worker</span>(<span class="var">worker_id</span>: <span class="ty">int</span>):
+    # <span class="var">each</span> <span class="var">worker</span> <span class="var">gets</span> <span class="var">a</span> <span class="var">distinct</span>, <span class="var">DERIVED</span> <span class="var">seed</span> <span class="var">so</span> <span class="var">augmentation</span> <span class="var">differs</span>
+    # <span class="var">per</span> <span class="var">worker</span> <span class="var">but</span> <span class="kw">is</span> <span class="var">reproducible</span> <span class="kw">for</span> <span class="var">a</span> <span class="var">given</span> <span class="var">base</span> <span class="var">seed</span>
+    <span class="var">worker_seed</span> = <span class="ty">torch</span>.<span class="fn">initial_seed</span>() % <span class="num">2</span>**<span class="num">32</span>
+    <span class="ty">np</span>.<span class="var">random</span>.<span class="fn">seed</span>(<span class="var">worker_seed</span>)
+    <span class="var">random</span>.<span class="fn">seed</span>(<span class="var">worker_seed</span>)
+
+<span class="var">g</span> = <span class="ty">torch</span>.<span class="fn">Generator</span>(); <span class="var">g</span>.<span class="fn">manual_seed</span>(<span class="var">seed</span>)
+<span class="var">loader</span> = <span class="ty">DataLoader</span>(<span class="var">ds</span>, <span class="var">generator</span>=<span class="var">g</span>, <span class="var">worker_init_fn</span>=<span class="var">seed_worker</span>, ...)
+
+# <span class="var">The</span> <span class="var">oracle</span>: <span class="kw">this</span> <span class="var">RAISES</span> <span class="var">on</span> <span class="var">any</span> <span class="var">op</span> <span class="var">without</span> <span class="var">a</span> <span class="var">deterministic</span> <span class="var">implementation</span>,
+# <span class="var">naming</span> <span class="var">it</span> -- <span class="var">turning</span> <span class="str">&quot;my run isn&#x27;t reproducible&quot;</span> <span class="var">into</span> <span class="var">a</span> <span class="var">finite</span> <span class="var">list</span>.
+<span class="ty">torch</span>.<span class="fn">use_deterministic_algorithms</span>(<span class="kw">True</span>, <span class="var">warn_only</span>=<span class="kw">True</span>)
+<span class="ty">torch</span>.<span class="var">backends</span>.<span class="var">cudnn</span>.<span class="var">benchmark</span> = <span class="kw">False</span>     # <span class="var">autotuning</span> <span class="var">picks</span> <span class="var">by</span> <span class="var">TIMING</span>
+# <span class="ty">os</span>.<span class="var">environ</span>[<span class="str">&quot;CUBLAS_WORKSPACE_CONFIG&quot;</span>] = <span class="str">&quot;:4096:8&quot;</span>   # <span class="var">needed</span> <span class="kw">for</span> <span class="var">cuBLAS</span> <span class="var">determinism</span></pre>
+
+    <div class="callout danger">
+      <h5>The verified hazard: <code>num_workers</code> is part of your seed</h5>
+      <p>Executed check — with the same seed and the same worker count, the batch stream reproduced exactly. <strong>Changing <code>num_workers</code> from 2 to 4 changed the data stream</strong>, because each worker derives its seed from the base seed and its own id. So "I tuned the DataLoader for throughput" silently changes your augmentation stream and your results. Anyone comparing two runs must hold <code>num_workers</code> fixed, or accept that they are not comparable. This is a genuinely non-obvious footgun and a very good thing to raise unprompted.</p>
+    </div>
+
+    <table class="tbl">
+      <thead><tr><th>Level of reproducibility</th><th>What it costs</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Bitwise</strong></td><td>Deterministic algorithms, fixed cuDNN, fixed world size, fixed worker count, fixed library versions. Real performance cost. Needed for debugging and for audit.</td></tr>
+        <tr><td><strong>Statistical</strong></td><td>Same seeds and data order; results agree within run-to-run noise. Usually what's actually wanted, and far cheaper.</td></tr>
+        <tr><td><strong>Provenance</strong></td><td>You may not reproduce the bits, but you can say exactly what code, config, data version, and environment produced an artifact. <em>For a safety-relevant system this is the non-negotiable one</em> — and it's an MLOps property (Part VIII), not a numerics property.</td></tr>
+      </tbody>
+    </table>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<div class="part" id="p7">
+  <div class="part-label">Part VII — The surrounding stack</div>
+  <h2 class="part-title">The five tools they <span class="acc">named.</span></h2>
+  <p class="part-intro">The req's nice-to-have list is unusually specific: <em>Ray, PyTorch, Dagster, LakeFS, PyArrow</em>. That's not a generic wish list — it's their stack. Five chapters, each aimed at the level of "can hold a design conversation," which is what a nice-to-have actually requires.</p>
+
+  <section class="chapter" id="c31">
+    <h2><span class="ch-num">31</span>Ray: Data, Train, Tune</h2>
+
+    <p>Listed first, and the one where your experience is deepest. Ray is a distributed execution framework with three ML-facing libraries on top.</p>
+
+    <table class="tbl wide">
+      <thead><tr><th>Layer</th><th>What it does, and where it fits here</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Ray Core</strong></td><td>Tasks (stateless functions), actors (stateful workers), and a distributed object store with zero-copy shared memory for numpy/Arrow data. The object store is the part that matters for data work: passing a large array between actors on the same node costs a pointer, not a copy.</td></tr>
+        <tr><td><strong>Ray Data</strong></td><td>A streaming, distributed dataset abstraction. <code>read_parquet</code> → <code>map_batches</code> → <code>iter_torch_batches</code>. The key property is that it <em>streams</em> rather than materializing, and it can autoscale the CPU-side transformation independently of the GPU trainers. That decoupling is the direct answer to the input-bound problem in §16 — you can throw 200 CPU cores at decode while 8 GPUs train.</td></tr>
+        <tr><td><strong>Ray Train</strong></td><td>Wraps distributed PyTorch: a <code>TorchTrainer</code> with a <code>ScalingConfig</code>, handling process-group setup, placement, failure handling, and checkpoint reporting. It's a layer over DDP/FSDP, not a replacement for understanding them.</td></tr>
+        <tr><td><strong>Ray Tune</strong></td><td>Hyperparameter search with early stopping (ASHA, PBT). Relevant when a team runs many training variants.</td></tr>
+      </tbody>
+    </table>
+<pre data-lang="PYTHON"><span class="kw">import</span> <span class="ty">ray</span>
+<span class="kw">from</span> <span class="ty">ray</span> <span class="kw">import</span> <span class="var">train</span>
+<span class="kw">from</span> <span class="ty">ray</span>.<span class="var">train</span>.<span class="ty">torch</span> <span class="kw">import</span> <span class="var">TorchTrainer</span>
+<span class="kw">from</span> <span class="ty">ray</span>.<span class="var">train</span> <span class="kw">import</span> <span class="var">ScalingConfig</span>
+
+# <span class="var">Ray</span> <span class="var">Data</span>: <span class="var">CPU</span>-<span class="var">side</span> <span class="var">pipeline</span> <span class="var">that</span> <span class="var">scales</span> <span class="var">INDEPENDENTLY</span> <span class="var">of</span> <span class="var">the</span> <span class="var">GPU</span> <span class="var">count</span>.
+<span class="var">ds</span> = (
+    <span class="ty">ray</span>.<span class="var">data</span>.<span class="fn">read_parquet</span>(<span class="str">&quot;s3://bucket/manifest/&quot;</span>)     # <span class="var">lazy</span>, <span class="var">streaming</span>
+      .<span class="fn">filter</span>(<span class="kw">lambda</span> <span class="var">r</span>: <span class="var">r</span>[<span class="str">&quot;weather&quot;</span>] <span class="kw">in</span> (<span class="str">&quot;rain&quot;</span>, <span class="str">&quot;night&quot;</span>))   # <span class="var">rare</span>-<span class="var">event</span> <span class="var">mining</span>
+      .<span class="fn">map_batches</span>(<span class="var">decode_and_augment</span>,                  # <span class="var">CPU</span> <span class="var">heavy</span>
+                   <span class="var">batch_size</span>=<span class="num">64</span>,
+                   <span class="var">num_cpus</span>=<span class="num">2</span>,
+                   <span class="var">concurrency</span>=(<span class="num">4</span>, <span class="num">64</span>))                 # <span class="var">AUTOSCALES</span>
+)
+
+<span class="kw">def</span> <span class="fn">train_loop_per_worker</span>(<span class="var">config</span>):
+    # <span class="var">Ray</span> <span class="var">sets</span> <span class="var">up</span> <span class="var">the</span> <span class="var">process</span> <span class="var">group</span>; <span class="var">inside</span>, <span class="var">it</span> <span class="kw">is</span> <span class="var">ordinary</span> <span class="var">PyTorch</span>.
+    <span class="var">model</span> = <span class="var">train</span>.<span class="ty">torch</span>.<span class="fn">prepare_model</span>(<span class="fn">Model</span>())         # <span class="var">wraps</span> <span class="kw">in</span> <span class="ty">DDP</span>
+    <span class="var">shard</span> = <span class="var">train</span>.<span class="fn">get_dataset_shard</span>(<span class="str">&quot;train&quot;</span>)           # <span class="kw">this</span> <span class="var">worker</span>&#x27;<span class="var">s</span> <span class="var">stream</span>
+    <span class="var">opt</span> = <span class="ty">torch</span>.<span class="var">optim</span>.<span class="fn">AdamW</span>(<span class="var">model</span>.<span class="fn">parameters</span>(), <span class="var">lr</span>=<span class="var">config</span>[<span class="str">&quot;lr&quot;</span>], <span class="var">fused</span>=<span class="kw">True</span>)
+
+    <span class="kw">for</span> <span class="var">epoch</span> <span class="kw">in</span> <span class="fn">range</span>(<span class="var">config</span>[<span class="str">&quot;epochs&quot;</span>]):
+        <span class="kw">for</span> <span class="var">batch</span> <span class="kw">in</span> <span class="var">shard</span>.<span class="fn">iter_torch_batches</span>(<span class="var">batch_size</span>=<span class="num">32</span>, <span class="var">dtypes</span>=<span class="ty">torch</span>.<span class="var">float32</span>):
+            <span class="var">opt</span>.<span class="fn">zero_grad</span>(<span class="var">set_to_none</span>=<span class="kw">True</span>)
+            <span class="var">loss</span> = <span class="fn">criterion</span>(<span class="fn">model</span>(<span class="var">batch</span>), <span class="var">batch</span>[<span class="str">&quot;target&quot;</span>])
+            <span class="var">loss</span>.<span class="fn">backward</span>()
+            <span class="var">opt</span>.<span class="fn">step</span>()
+        # <span class="var">report</span> <span class="var">drives</span> <span class="var">checkpointing</span>, <span class="var">Tune</span> <span class="var">scheduling</span>, <span class="kw">and</span> <span class="var">fault</span> <span class="var">recovery</span>
+        <span class="var">train</span>.<span class="fn">report</span>({<span class="str">&quot;loss&quot;</span>: <span class="var">loss</span>.<span class="fn">item</span>()},
+                     <span class="var">checkpoint</span>=<span class="var">train</span>.<span class="var">Checkpoint</span>.<span class="fn">from_dict</span>({<span class="str">&quot;model&quot;</span>: <span class="var">model</span>.<span class="fn">state_dict</span>()}))
+
+<span class="var">trainer</span> = <span class="fn">TorchTrainer</span>(
+    <span class="var">train_loop_per_worker</span>,
+    <span class="var">train_loop_config</span>={<span class="str">&quot;lr&quot;</span>: <span class="num">1e-3</span>, <span class="str">&quot;epochs&quot;</span>: <span class="num">10</span>},
+    <span class="var">scaling_config</span>=<span class="fn">ScalingConfig</span>(<span class="var">num_workers</span>=<span class="num">8</span>, <span class="var">use_gpu</span>=<span class="kw">True</span>),
+    <span class="var">datasets</span>={<span class="str">&quot;train&quot;</span>: <span class="var">ds</span>},
+)
+<span class="var">result</span> = <span class="var">trainer</span>.<span class="fn">fit</span>()</pre>
+
+    <div class="idea">
+      <p><strong>The argument to make for Ray in this role, which is also your strongest personal story:</strong> the fundamental problem in §16 is that CPU-side data preparation and GPU-side training need <em>different</em> amounts of hardware, and a plain <code>DataLoader</code> couples them — your decode parallelism is limited to the cores on the training node. Ray Data breaks that coupling: the transformation stage scales to as many CPU workers as it needs, streaming into GPU trainers that scale separately. When you describe your 400× distributed PyTorch/Ray result, frame it in exactly those terms — <em>what was the bottleneck, why did decoupling fix it, and how did you measure it</em> — because that is this team's core problem stated in their own vocabulary.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c32">
+    <h2><span class="ch-num">32</span>Dagster and orchestration</h2>
+
+    <p>Dagster's distinguishing idea is <strong>software-defined assets</strong>: you declare the data artifacts that should exist and how to compute them, rather than scripting a sequence of tasks. The framework derives the DAG from the dependencies.</p>
+
+    <table class="tbl">
+      <thead><tr><th>Concept</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Asset</strong></td><td>A persistent artifact — a curated dataset, a set of auto-labels, a trained model. Declared as a function whose arguments are its upstream assets.</td></tr>
+        <tr><td><strong>Partitions</strong></td><td>Assets partitioned by date, drive, or region, so you rebuild only what changed. Essential when the archive is petabytes and yesterday's logs are the only new input.</td></tr>
+        <tr><td><strong>Lineage</strong></td><td>The graph knows what produced what. "Which datasets used the old calibration?" becomes a query rather than an archaeology project — and in a safety-relevant domain, that matters.</td></tr>
+        <tr><td><strong>Sensors / schedules</strong></td><td>Trigger materialization on a clock or on an event (new logs landed, a new label version committed).</td></tr>
+        <tr><td><strong>I/O managers</strong></td><td>Separate <em>what to compute</em> from <em>where it's stored</em>, so the same asset definition can write to local disk in dev and object storage in production.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <h5>The contrast worth being able to draw</h5>
+      <p>Airflow is task-centric: it orchestrates <em>operations</em>, and the data artifacts are implicit. Dagster is asset-centric: it orchestrates <em>artifacts</em>, and the operations are implied. For an ML data platform the asset framing usually wins, because the questions you actually ask are about data — "is this dataset stale?", "what fed this model?", "rebuild everything downstream of the new labeller." Being able to state that trade-off is enough to hold the conversation without having shipped Dagster.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c33">
+    <h2><span class="ch-num">33</span>LakeFS and data versioning</h2>
+
+    <p>LakeFS puts git-like semantics — branches, commits, merges, atomic operations — over object storage. It exists to solve a problem that is acute in AV: <strong>datasets change, and you need to know which version trained which model.</strong></p>
+
+    <table class="tbl">
+      <thead><tr><th>Capability</th><th>Why it matters here</th></tr></thead>
+      <tbody>
+        <tr><td>Commits over object storage</td><td>An immutable identifier for "the dataset as it was." Put that commit ID in the checkpoint (§28) and the provenance question is answered forever.</td></tr>
+        <tr><td>Branches</td><td>Build a new dataset version on a branch, validate it, then merge atomically. Nobody trains on a half-written dataset — which is otherwise a real and maddening failure mode.</td></tr>
+        <tr><td>Atomic merges</td><td>Object storage has no transactions. Without a layer like this, "update the dataset" is a non-atomic pile of object writes, and any reader mid-update sees an inconsistent mixture.</td></tr>
+        <tr><td>Rollback</td><td>A bad label batch shipped? Revert the commit rather than reconstructing the previous state by hand.</td></tr>
+        <tr><td>Zero-copy branching</td><td>Branches are metadata, not data copies — so you can fork a petabyte dataset cheaply.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout warn">
+      <h5>The question they might actually ask</h5>
+      <p>"How would you make an experiment reproducible six months later?" The complete answer has four parts, and only one of them is about seeds: <strong>code version</strong> (git SHA), <strong>data version</strong> (LakeFS commit or dataset digest), <strong>environment</strong> (container image digest, library versions), and <strong>config</strong> (the resolved config, embedded — not a path to a file that has since changed). Seeds and deterministic algorithms get you bitwise reproducibility <em>on top</em> of that, but without those four you cannot even attempt it. §30, §36.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c34">
+    <h2><span class="ch-num">34</span>PyArrow and Parquet</h2>
+
+    <table class="tbl">
+      <thead><tr><th>Concept</th><th>What to know</th></tr></thead>
+      <tbody>
+        <tr><td>Arrow's in-memory format</td><td>Columnar, language-agnostic, and designed for <strong>zero-copy</strong> sharing. Two processes (or Ray actors) can view the same buffer without serializing — which is exactly what makes Ray's object store fast for tabular data.</td></tr>
+        <tr><td>Parquet</td><td>The on-disk columnar format. Compressed per column, with per-row-group statistics.</td></tr>
+        <tr><td><strong>Predicate pushdown</strong></td><td>Row-group statistics (min/max per column) let a reader skip entire blocks without decompressing them. "All night-time frames with a cut-in" reads a fraction of the file. This is the property that makes curation queries fast.</td></tr>
+        <tr><td><strong>Column projection</strong></td><td>Read only the columns you need. A manifest with 40 metadata columns costs almost nothing to query on 2 of them.</td></tr>
+        <tr><td>Row-group size</td><td>The key tuning knob: too small and you drown in metadata and lose compression; too large and you lose skipping granularity. Hundreds of MB is a common starting point for large scans.</td></tr>
+        <tr><td>Partitioning</td><td>Directory-level partitioning (<code>date=/drive=/</code>) prunes at the path level before any file is opened.</td></tr>
+      </tbody>
+    </table>
+<pre data-lang="PYTHON"><span class="kw">import</span> <span class="var">pyarrow</span>.<span class="var">dataset</span> <span class="kw">as</span> <span class="var">ds</span>
+
+# <span class="var">The</span> <span class="var">manifest</span> <span class="var">layer</span>: <span class="var">query</span> <span class="var">millions</span> <span class="var">of</span> <span class="var">frames</span> <span class="var">without</span> <span class="var">touching</span> <span class="var">sensor</span> <span class="var">bytes</span>.
+<span class="var">dataset</span> = <span class="var">ds</span>.<span class="fn">dataset</span>(<span class="str">&quot;s3://bucket/manifest/&quot;</span>, <span class="var">format</span>=<span class="str">&quot;parquet&quot;</span>, <span class="var">partitioning</span>=<span class="str">&quot;hive&quot;</span>)
+
+<span class="var">table</span> = <span class="var">dataset</span>.<span class="fn">to_table</span>(
+    <span class="var">filter</span>=(<span class="var">ds</span>.<span class="fn">field</span>(<span class="str">&quot;weather&quot;</span>) == <span class="str">&quot;rain&quot;</span>) &amp; (<span class="var">ds</span>.<span class="fn">field</span>(<span class="str">&quot;num_cutins&quot;</span>) &gt; <span class="num">0</span>),
+    <span class="var">columns</span>=[<span class="str">&quot;sample_id&quot;</span>, <span class="str">&quot;shard_uri&quot;</span>, <span class="str">&quot;offset&quot;</span>, <span class="str">&quot;timestamp&quot;</span>],   # <span class="var">projection</span>
+)
+# <span class="var">Predicate</span> <span class="var">pushdown</span> + <span class="var">column</span> <span class="var">projection</span> <span class="var">means</span> <span class="kw">this</span> <span class="var">reads</span> <span class="var">a</span> <span class="var">small</span> <span class="var">fraction</span>
+# <span class="var">of</span> <span class="var">the</span> <span class="var">bytes</span>. <span class="var">THEN</span> <span class="var">you</span> <span class="var">fetch</span> <span class="var">only</span> <span class="var">the</span> <span class="var">selected</span> <span class="var">samples</span>&#x27; <span class="var">payloads</span> <span class="kw">from</span>
+# <span class="var">their</span> <span class="var">shards</span> -- <span class="var">which</span> <span class="kw">is</span> <span class="var">the</span> <span class="var">whole</span> <span class="var">reason</span> <span class="kw">for</span> <span class="var">splitting</span> <span class="var">the</span> <span class="var">manifest</span>
+# <span class="kw">from</span> <span class="var">the</span> <span class="var">blobs</span> (<span class="var">Vol</span> <span class="var">I</span> §<span class="num">15</span>).
+<span class="kw">print</span>(<span class="var">table</span>.<span class="var">num_rows</span>)</pre>
+  </section>
+
+  <section class="chapter" id="c35">
+    <h2><span class="ch-num">35</span>Cloud and object storage</h2>
+
+    <table class="tbl">
+      <thead><tr><th>Property</th><th>Consequence for an ML data platform</th></tr></thead>
+      <tbody>
+        <tr><td><strong>High latency, high bandwidth</strong></td><td>Tens of milliseconds per request, but enormous aggregate throughput <em>if</em> you parallelize. Sequential large reads win; millions of small reads lose. This is the single most important fact and it drives the whole sharding design (§15).</td></tr>
+        <tr><td><strong>Request rate limits</strong></td><td>Object stores throttle per prefix. Millions of small objects under one prefix will rate-limit before bandwidth is the issue — and the symptom looks like random slowness, not an error.</td></tr>
+        <tr><td>No atomic multi-object operations</td><td>Hence LakeFS (§33), or a manifest-based commit protocol you build yourself.</td></tr>
+        <tr><td>Eventual consistency (historically)</td><td>Modern S3 is strongly read-after-write consistent, but listing behaviour and cross-region replication still surprise people. Don't build correctness on listing.</td></tr>
+        <tr><td>Egress and cross-AZ cost</td><td>Moving data between zones costs money per byte, every epoch. Data locality is a budget line, not just a performance concern.</td></tr>
+        <tr><td>Caching tiers</td><td>Local NVMe on the training node as a read-through cache is often the highest-leverage infrastructure change available: the first epoch pays object-storage cost, every subsequent epoch reads locally.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout tip">
+      <h5>Where your HPC background maps cleanly</h5>
+      <p>Lustre and GPFS taught the same lessons in a different vocabulary: small-file access patterns destroy parallel filesystems too, striping is the on-prem analogue of sharding, and metadata servers throttle much like prefix rate limits. When they ask about cloud storage, saying <em>"I've solved this shape of problem on Lustre and GPFS — the constraint names differ but the design rules are the same: large sequential reads, avoid metadata storms, and cache locally"</em> is both true and more credible than reciting S3 features.</p>
+    </div>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<div class="part" id="p8">
+  <div class="part-label">Part VIII — MLOps</div>
+  <h2 class="part-title">What ran, on what, <span class="acc">producing what.</span></h2>
+  <p class="part-intro">The req names artifact management, experiment tracking, and automated deployment and testing as a distinct responsibility. Three chapters — and the through-line is that all of it is really one question: can you account for how a model came to exist?</p>
+
+  <section class="chapter" id="c36">
+    <h2><span class="ch-num">36</span>Experiment tracking and artifacts</h2>
+
+    <table class="tbl">
+      <thead><tr><th>Thing tracked</th><th>Why it must be automatic</th></tr></thead>
+      <tbody>
+        <tr><td>Config</td><td>The <em>resolved</em> config, embedded in the run — not a path to a YAML that has since been edited. Overrides included.</td></tr>
+        <tr><td>Code version</td><td>Git SHA plus a dirty flag. A run from uncommitted code should be marked as such, loudly.</td></tr>
+        <tr><td>Data version</td><td>The LakeFS commit or dataset digest (§33). Without it, "which data?" is unanswerable.</td></tr>
+        <tr><td>Environment</td><td>Container image digest, PyTorch/CUDA versions, GPU model, world size. Pin the image; "latest" is not a version.</td></tr>
+        <tr><td>Metrics</td><td>Per-step training curves and per-slice evaluation. For AV, <strong>sliced metrics are the ones that matter</strong> — aggregate mAP hides a night-time regression completely.</td></tr>
+        <tr><td>Artifacts</td><td>Weights, exported model, evaluation reports, sample predictions. Registered with a stable identifier and a lifecycle stage.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="idea">
+      <p><strong>The design principle: tracking must be a side effect of running, not a discipline.</strong> If an engineer has to remember to log the data version, it will be missing on exactly the run you later need to audit. Bake capture into the training entry point — resolve the config, stamp the git SHA, record the dataset commit, register the artifact — so that an untracked run is <em>impossible</em> rather than merely discouraged. That's the difference between a tracking tool and an MLOps practice, and it's the kind of platform judgment this req is asking for.</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c37">
+    <h2><span class="ch-num">37</span>Deployment and model testing</h2>
+
+    <p>"Automated model deployment and testing strategies" in a safety-relevant domain means gates, not vibes.</p>
+<div class="diagram">  THE PROMOTION PIPELINE
+  ───────────────────────────────────────────────────────────────
+   trained artifact
+      │
+      ▼  EXPORT           torch -&gt; ONNX / torch.export / TorchScript
+      │                   ← verify NUMERICALLY at this hop: the
+      │                     exported graph must match eager within
+      │                     a stated tolerance, on real inputs
+      ▼  OPTIMIZE         quantize / compile for the target runtime
+      │                   ← re-verify: accuracy after quantization
+      ▼  EVALUATE         full validation set, PER SLICE:
+      │                     night · rain · glare · construction ·
+      │                     cut-in · pedestrian · low-speed · highway
+      ▼  GATE             regression checks vs the incumbent model
+      │                     - no slice may regress beyond threshold
+      │                     - latency/memory budget on target hardware
+      │                     - determinism / reproducibility checks
+      ▼  REGISTER         staged: dev -&gt; shadow -&gt; candidate
+      ▼  DEPLOY           to vehicle stack (a different team&#x27;s boundary)
+  ───────────────────────────────────────────────────────────────
+   THE RULE THAT MATTERS: aggregate metrics can improve while a
+   SAFETY-RELEVANT SLICE regresses. Gate on slices, not on the mean.</div>
+
+    <div class="callout warn">
+      <h5>The export hop is where silent breakage lives</h5>
+      <p>Tracing-based export bakes in whatever branch the example input took and freezes Python-side scalars as constants. The model still runs; it just quietly computes something slightly different. It will pass a smoke test and fail on a rare frame. <strong>A numerical comparison at every hop — eager vs exported vs optimized, on real data, with a stated tolerance — is the only thing that catches it</strong>, and building that comparison is squarely "automated testing strategies."</p>
+    </div>
+  </section>
+
+  <section class="chapter" id="c38">
+    <h2><span class="ch-num">38</span>CI for machine learning</h2>
+
+    <table class="tbl">
+      <thead><tr><th>Tier</th><th>What it checks, and how fast</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Unit</strong> (seconds)</td><td>Dataset returns the expected keys and shapes; collate pads and masks correctly; the sampler shards without overlap; a loss function's gradient is finite. Cheap, and it catches the majority of pipeline bugs.</td></tr>
+        <tr><td><strong>Smoke</strong> (minutes)</td><td>Train two steps on a tiny fixture, on CPU. Catches shape errors, config breakage, and import problems on every PR.</td></tr>
+        <tr><td><strong>Convergence</strong> (tens of minutes, nightly)</td><td>Train a small model on a small dataset and assert the loss falls below a threshold. This is what catches "the pipeline runs but learns nothing" — the failure that unit tests cannot see.</td></tr>
+        <tr><td><strong>Throughput regression</strong> (nightly)</td><td>Samples/sec on fixed hardware, with an alert on distribution shift. A 20% pipeline slowdown is invisible to correctness tests and expensive at fleet scale.</td></tr>
+        <tr><td><strong>Data validation</strong> (per dataset build)</td><td>Schema checks, null rates, label-distribution drift, and per-slice counts. A silently broken upstream labeller should fail the dataset build, not the model evaluation three days later.</td></tr>
+      </tbody>
+    </table>
+
+    <p class="pull">The test that would have caught it is the deliverable — not the fix.</p>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<div class="part" id="p9">
+  <div class="part-label">Part IX — Decision trees</div>
+  <h2 class="part-title">Six <span class="acc">scripts.</span></h2>
+  <p class="part-intro">Each tree is a diagnostic you can run out loud. They share one grammar — <strong>classify before you dig</strong> — because the expensive failure in every one is treating the wrong layer. Learn the first branch of each; the rest follows.</p>
+
+  <section class="chapter" id="c39">
+    <h2><span class="ch-num">39</span>Tree 1 · Training is slow</h2>
+<div class="tree">
+<pre><span class="q">&quot;Training throughput is lower than it should be.&quot;</span>
+   │
+   ├─ <span class="a">FIRST, AND IT TAKES TWO MINUTES: run with SYNTHETIC data</span>
+   │     loop one cached batch, skip the DataLoader entirely.
+   │       step time COLLAPSES  ⇒ INPUT BOUND  → the data branch
+   │       step time UNCHANGED  ⇒ COMPUTE BOUND → the GPU branch
+   │     Everything below depends on this one experiment. Do not skip it.
+   │
+   ├─ <span class="a">INPUT BOUND</span>
+   │     ├ how many bytes per sample, and what rate do you need?
+   │     │   (§16&#x27;s arithmetic — do it on the whiteboard)
+   │     ├ STORAGE SHAPE: millions of small files? → request-rate
+   │     │   bound, not bandwidth bound. SHARD into large files.
+   │     │   This is the 5-10x fix and it is the most common one.
+   │     ├ DECODE COST: profile one __getitem__. JPEG decode at
+   │     │   ~5 ms/image x 6 cameras = 30 ms/sample. Fixes: store
+   │     │   pre-resized, cache decoded, or GPU decode (DALI/nvJPEG)
+   │     ├ WORKERS: too few (CPU idle) or too many (contention,
+   │     │   RAM pressure)? persistent_workers for expensive __init__
+   │     ├ TRANSFER: pin_memory=True AND non_blocking=True — one
+   │     │   without the other buys nothing. Send uint8, cast on GPU.
+   │     └ COPY-ON-WRITE: a big python list in the dataset gets
+   │         duplicated into every worker → RAM blowup → swapping
+   │
+   ├─ <span class="a">COMPUTE BOUND</span>
+   │     ├ mixed precision on? bf16 autocast is the first move
+   │     ├ fused/foreach optimizer? one-word change
+   │     ├ channels_last for conv models on tensor cores
+   │     ├ torch.compile — but CHECK for graph breaks and
+   │     │   recompilation first, or you may be paying for both
+   │     └ profile: is any single op dominating? is the GPU actually
+   │         saturated, or launch-bound on many tiny kernels?
+   │
+   └─ <span class="a">NEITHER — multi-GPU and it just doesn&#x27;t scale</span> → Tree 4</pre>
+</div>
+  </section>
+
+  <section class="chapter" id="c40">
+    <h2><span class="ch-num">40</span>Tree 2 · Out of memory</h2>
+<div class="tree">
+<pre><span class="q">&quot;CUDA out of memory.&quot;</span>
+   │
+   ├─ <span class="a">FIRST: read allocated vs reserved</span>
+   │     torch.cuda.memory_allocated() / memory_reserved()
+   │       reserved &gt;&gt; allocated  ⇒ FRAGMENTATION, not capacity
+   │       allocated ≈ capacity   ⇒ genuinely too big
+   │       allocated CLIMBING     ⇒ a LEAK → below
+   │
+   ├─ <span class="a">MEMORY CLIMBS EVERY STEP ⇒ you are holding references</span>
+   │     1 total_loss += loss           ← keeps the WHOLE GRAPH.
+   │         must be loss.item() or loss.detach(). THE most common
+   │         training memory leak, by a wide margin.
+   │     2 stashing outputs in a list for logging without .detach()
+   │     3 retain_graph=True used to silence an error
+   │     4 a metric object accumulating cuda tensors across an epoch
+   │     → PROVE it: torch.cuda.memory._record_memory_history() then
+   │       _dump_snapshot() — the surviving allocations name their
+   │       own allocation stack. Stop guessing.
+   │
+   ├─ <span class="a">FRAGMENTATION (reserved &gt;&gt; allocated)</span>
+   │     → PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True  (first move)
+   │     → stabilize shapes: variable-length sensor data is the usual
+   │       cause. Pad to buckets in collate (§12).
+   │     → empty_cache() does NOT defragment and is not a fix
+   │
+   ├─ <span class="a">GENUINELY TOO BIG — in increasing cost order</span>
+   │     1 smaller per-GPU batch + GRADIENT ACCUMULATION (exact, §08)
+   │     2 bf16 autocast (halves activations)
+   │     3 activation checkpointing (~30% slower, big saving)
+   │     4 set_to_none=True; gradient_as_bucket_view=True for DDP
+   │     5 FSDP / ZeRO if PARAMS+OPTIMIZER STATE dominate (§18)
+   │     6 CPU offload — last resort
+   │     ⇒ NAME WHICH ONE DOMINATES first: params+optimizer state, or
+   │       activations. The answer picks the fix.
+   │
+   └─ <span class="a">ONLY ONE RANK OOMs</span>
+         uneven shards (one rank got the big samples), rank 0 doing
+         extra work (logging, eval, checkpointing), or another tenant
+         on that device.</pre>
+</div>
+  </section>
+
+  <section class="chapter" id="c41">
+    <h2><span class="ch-num">41</span>Tree 3 · Loss diverges or NaNs</h2>
+<div class="tree">
+<pre><span class="q">&quot;Loss went to NaN / exploded / flatlined.&quot;</span>
+   │
+   ├─ <span class="a">WHEN did it happen? The timing is the diagnosis.</span>
+   │     step 0-10        ⇒ config: LR far too high, bad init, wrong
+   │                        loss reduction, labels misaligned
+   │     during warmup    ⇒ LR schedule / batch scaling (§21)
+   │     suddenly, later  ⇒ a BAD BATCH or numerical overflow
+   │     slow drift up    ⇒ LR too high for the current phase, or a
+   │                        diverging optimizer state
+   │
+   ├─ <span class="a">FIND THE FIRST NON-FINITE VALUE</span>
+   │     assert torch.isfinite(loss), then walk backwards:
+   │       inputs finite?  → a corrupt sample, a bad decode, a
+   │                         division by zero in normalization
+   │       activations?    → register forward hooks and check each
+   │       gradients?      → check the grad norm EVERY step and log it
+   │     torch.autograd.set_detect_anomaly(True) attributes a backward
+   │     NaN to the FORWARD line that made the node. Slow — a scalpel.
+   │
+   ├─ <span class="a">MIXED PRECISION SPECIFICS</span>
+   │     fp16 overflows at ~65k ⇒ use GradScaler, or switch to bf16
+   │     forgot scaler.unscale_() before clipping ⇒ clipping the
+   │       wrong magnitude (§23)
+   │     a softmax/exp/norm running in low precision that should be
+   │       fp32 ⇒ check the autocast policy for a custom op
+   │
+   ├─ <span class="a">THE GUARD YOU SHOULD ALREADY HAVE (verified: clip does NOT</span>
+   │     <span class="a">sanitise NaN)</span>
+   │       gn = clip_grad_norm_(params, 1.0)
+   │       if torch.isfinite(gn): opt.step()
+   │       else: log and SKIP the step
+   │     Stepping on NaN gradients poisons the weights permanently,
+   │     and the symptom appears hundreds of steps later, far from
+   │     the cause. This one guard saves whole training runs.
+   │
+   └─ <span class="a">DISTRIBUTED-ONLY divergence</span>
+         did the LR scale with the effective batch (§21)? is one rank
+         seeing corrupt data? are BatchNorm stats sane at the smaller
+         per-rank batch?</pre>
+</div>
+  </section>
+
+  <section class="chapter" id="c42">
+    <h2><span class="ch-num">42</span>Tree 4 · Doesn't scale with more GPUs</h2>
+<div class="tree">
+<pre><span class="q">&quot;8 GPUs give 4x, not 8x.&quot;</span>
+   │
+   ├─ <span class="a">FIRST: define and measure scaling efficiency</span>
+   │     eff(N) = throughput(N) / (N x throughput(1))
+   │     measure at 1, 2, 4, 8 — the SHAPE of the curve names the cause
+   │
+   ├─ <span class="a">FLAT FROM THE START ⇒ INPUT BOUND (Tree 1)</span>
+   │     more GPUs just starve more GPUs. The data pipeline must scale
+   │     with the trainers — this is the argument for decoupling CPU
+   │     preprocessing from GPU training (Ray Data, §31).
+   │
+   ├─ <span class="a">DEGRADES AT A NODE BOUNDARY (e.g. fine to 8, bad at 16)</span>
+   │     ⇒ you crossed from NVLink to network. Check interconnect,
+   │       try gradient compression (bf16 all-reduce), raise
+   │       bucket_cap_mb, or overlap better.
+   │
+   ├─ <span class="a">DEGRADES GRADUALLY ⇒ COMMUNICATION or STRAGGLERS</span>
+   │     ├ profile ALL ranks, not rank 0. Log per-rank step time.
+   │     │   One consistently slow rank sets the pace for everyone.
+   │     ├ causes: a throttling GPU, a bad NIC, an unbalanced shard,
+   │     │   a noisy neighbour, rank 0 doing eval/logging/checkpointing
+   │     └ is comm overlapping with backward at all? gradient
+   │         accumulation WITHOUT no_sync() multiplies comms by ACC
+   │
+   ├─ <span class="a">SCALES, BUT CONVERGENCE GOT WORSE</span>
+   │     you scaled the batch without scaling the LR, or without
+   │     warmup (§21). Compare at equal SAMPLES, not equal steps.
+   │
+   └─ <span class="a">THE HONEST CHECK</span>
+         is 8 GPUs even the right answer? If the job is input-bound
+         and the fix is a better data layout, buying GPUs is the
+         expensive way to not solve the problem.</pre>
+</div>
+  </section>
+
+  <section class="chapter" id="c43">
+    <h2><span class="ch-num">43</span>Tree 5 · Distributed hang</h2>
+<div class="tree">
+<pre><span class="q">&quot;The job stopped making progress. No error, no crash.&quot;</span>
+   │
+   ├─ <span class="a">FIRST: WHERE is each rank stuck?</span>
+   │     py-spy dump --pid &lt;each rank&gt;  → python stacks, no instrumentation
+   │     the rank whose stack DIFFERS is the culprit.
+   │     NCCL flight recorder shows which collective each rank is in —
+   │     a mismatch localizes it immediately.
+   │
+   ├─ <span class="a">THE UNIVERSAL CAUSE: ranks disagree on the collective sequence</span>
+   │     every rank must issue the SAME collectives, in the SAME ORDER,
+   │     with the SAME shapes. Any divergence = permanent wait.
+   │     ├ UNEVEN DATA — one rank runs out of batches and exits the
+   │     │   loop while others wait at the next all-reduce.
+   │     │   → drop_last=True, equal shard sizes, or agree a global
+   │     │     step count and stop everyone together (§14)
+   │     ├ DDP UNUSED PARAMETERS — a param that gets no gradient on
+   │     │   some rank means its bucket never completes, so that rank
+   │     │   never launches its all-reduce (§17)
+   │     ├ RANK-CONDITIONAL CODE — `if rank == 0:` around anything
+   │     │   that contains a collective, including a barrier
+   │     ├ a rank CRASHED or was OOM-killed; survivors block forever
+   │     └ conditional branches on data (early exit on a bad batch)
+   │
+   ├─ <span class="a">CONFIRM the class</span>
+   │     TORCH_DISTRIBUTED_DEBUG=DETAIL names mismatched params/shapes
+   │     NCCL_DEBUG=INFO shows ring setup and where it stalled
+   │
+   └─ <span class="a">HARDEN so it never costs a night again</span>
+         set a collective timeout and enable async error handling, so
+         a hang becomes a LOUD, ATTRIBUTED failure instead of a job
+         silently burning cluster hours until someone notices.</pre>
+</div>
+  </section>
+
+  <section class="chapter" id="c44">
+    <h2><span class="ch-num">44</span>Tree 6 · Can't reproduce</h2>
+<div class="tree">
+<pre><span class="q">&quot;The same config gives a different result.&quot;</span>
+   │
+   ├─ <span class="a">FIRST: is the INPUT identical?</span>
+   │     ├ seeds set for python, numpy, torch, AND cuda?
+   │     ├ DataLoader generator + worker_init_fn set? (§30)
+   │     ├ sampler.set_epoch called? without it every epoch reuses
+   │     │   the SAME permutation — a different bug with the same smell
+   │     └ *** num_workers CHANGED? *** VERIFIED: the worker count is
+   │         part of the RNG stream. Going from 2 to 4 workers changes
+   │         the augmentation sequence. Two runs with different
+   │         num_workers are NOT comparable. Almost nobody knows this.
+   │
+   ├─ <span class="a">Is the DATA identical?</span>
+   │     dataset version pinned (LakeFS commit)? did an upstream
+   │     labelling job re-materialize a partition underneath you?
+   │     This is why data versioning is a correctness tool, not
+   │     just bookkeeping (§33).
+   │
+   ├─ <span class="a">Is the ENVIRONMENT identical?</span>
+   │     container image DIGEST (not a tag), torch/CUDA/cuDNN versions,
+   │     GPU model, world size. Different world size ⇒ different
+   │     effective batch ⇒ genuinely different training.
+   │
+   ├─ <span class="a">Still differs ⇒ turn on the oracle</span>
+   │     torch.use_deterministic_algorithms(True)
+   │       → it RAISES and NAMES the nondeterministic op. Mystery
+   │         becomes a finite list, in one line.
+   │     also: cudnn.benchmark=False (autotuning picks by TIMING),
+   │     CUBLAS_WORKSPACE_CONFIG, and atomics-based ops
+   │     (scatter_add, index_add, embedding backward) which sum in
+   │     arbitrary order.
+   │
+   └─ <span class="a">ASK THE META-QUESTION</span>
+         do you need BITWISE determinism, or STATISTICAL
+         reproducibility? The first costs real performance; the
+         second usually just needs seeds, a pinned dataset, and a
+         pinned environment. Knowing which one is actually required
+         is the senior move — &quot;make it deterministic&quot; is often the
+         wrong request.</pre>
+</div>
+  </section>
+</div>
+
+<div class="rule-sep"></div>
+
+<div class="part" id="p10">
+  <div class="part-label">Part X — The interview</div>
+  <h2 class="part-title">What to <span class="acc">say.</span></h2>
+
+  <section class="chapter" id="c45">
+    <h2><span class="ch-num">45</span>The question map</h2>
+
+    <table class="tbl wide">
+      <thead><tr><th>Likely round</th><th>What it probes · where to prepare</th></tr></thead>
+      <tbody>
+        <tr><td><strong>PyTorch usage / coding</strong></td><td>Write a Dataset, a collate_fn, a training loop, or fix a broken one. Parts II–III, and Volume II's problems 1–12.</td></tr>
+        <tr><td><strong>Data pipeline design</strong></td><td>"Design the training data pipeline for a multi-camera + lidar fleet." Storage layout, sharding, manifest, throughput arithmetic. §15–16, Vol. II system design.</td></tr>
+        <tr><td><strong>Distributed training</strong></td><td>DDP mechanics, scaling efficiency, what breaks at 64 GPUs. Part IV, Trees 4 and 5.</td></tr>
+        <tr><td><strong>Debugging</strong></td><td>"Training is slow / OOMs / won't reproduce." Run the trees out loud. Part IX.</td></tr>
+        <tr><td><strong>Systems &amp; cloud</strong></td><td>Object-storage behaviour, orchestration, fault tolerance, cost. Parts VII and §22.</td></tr>
+        <tr><td><strong>MLOps</strong></td><td>Reproducibility, artifact lineage, model promotion gates. Part VIII.</td></tr>
+        <tr><td><strong>Behavioural / mentoring</strong></td><td>The req names mentoring and raising standards. Have a concrete story about code review or a design doc that changed a team's approach.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="chapter" id="c46">
+    <h2><span class="ch-num">46</span>Narrative and depth map</h2>
+
+    <h3>The through-line</h3>
+    <p>Open with the shape, not the résumé order: <em>"I build systems that make GPUs efficient — a 400× speedup on distributed PyTorch and Ray, CUDA and C++ optimization down to the kernel, and HPC data and scheduling infrastructure at national-lab scale. What draws me to this team is that it's the same problem with the constraint that matters most: making ML engineers faster, on data volumes where the pipeline, not the model, is the bottleneck."</em></p>
+
+    <table class="tbl compare">
+      <thead><tr><th>Their requirement</th><th>Your evidence</th><th>How to use it</th></tr></thead>
+      <tbody>
+        <tr><td>Distributed model training</td><td><strong>400× distributed PyTorch/Ray speedup</strong></td><td>The headline. Tell it as a <em>diagnosis</em> story: what was the bottleneck, how did you find it, why did the fix work, how did you measure. Ray and PyTorch are both in their nice-to-have list.</td></tr>
+        <tr><td>ML data pipelines and data generation</td><td>Large-scale data processing, cuDF/RAPIDS, HPC I/O</td><td>Connect to §16's arithmetic — you think in bytes/sec and required rates, not vibes.</td></tr>
+        <tr><td>Large-scale distributed systems</td><td>Slurm, Lustre/GPFS, RDMA/UCX transports, cluster workloads</td><td>The on-prem analogue of their cloud layer. Same constraints, different vocabulary (§35).</td></tr>
+        <tr><td>Production-quality Python and C++</td><td><strong>pydisort</strong> — a pybind11 library shipped and sustained, ~239K downloads</td><td>Evidence of API design, maintenance, and users — not just code that ran once.</td></tr>
+        <tr><td>Performance engineering</td><td>124× CUDA optimization, GPU C++ solver</td><td>Credibility for "why is this slow" conversations at any layer of the stack.</td></tr>
+        <tr><td>Mentoring and standards</td><td>Open-source maintenance, code review</td><td>Frame maintaining a public package as sustained review and support work.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>The honest depth map</h3>
+
+    <table class="tbl">
+      <thead><tr><th>Territory</th><th>Where you stand, and how to say it</th></tr></thead>
+      <tbody>
+        <tr><td>PyTorch training at scale, Ray</td><td><strong>Real strength.</strong> Engage as a peer; lead with the 400× as a systems story.</td></tr>
+        <tr><td>Performance analysis, profiling</td><td><strong>Real strength</strong>, from kernels up. This is your most transferable instinct.</td></tr>
+        <tr><td>HPC storage &amp; scheduling</td><td><strong>Real strength</strong>, and it maps cleanly onto cloud object storage — say the mapping explicitly (§35).</td></tr>
+        <tr><td>Cloud-native infrastructure (S3, autoscaling, IaC)</td><td>Adjacent. You know the constraints from the on-prem side; be direct that the specific services are a ramp, and show you know <em>why</em> they behave the way they do.</td></tr>
+        <tr><td>Dagster, LakeFS</td><td><strong>Studied, not shipped.</strong> Say exactly that, then demonstrate you understand what problem each solves — asset-centric orchestration, git-semantics over object storage. Don't bluff a tool they use daily.</td></tr>
+        <tr><td>AV domain, multi-sensor fusion</td><td>New. Compensate with the pipeline-level reasoning in §04 — temporal leakage, ragged shapes, rare-event mining — which is the part that touches your job anyway.</td></tr>
+        <tr><td>Safety-critical process</td><td>The honest gap. Bring the adjacent rigor: reproducibility, provenance, gated promotion, regression testing.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="chapter" id="c47">
+    <h2><span class="ch-num">47</span>Questions to ask, and the plan</h2>
+
+    <ul class="check">
+      <li>"Where's the bottleneck today — is it data throughput, GPU capacity, or experiment turnaround time?" <em>(Goes straight to the team's actual problem, and their answer tells you what the job really is.)</em></li>
+      <li>"How is training data stored and sharded now, and how long does a full dataset rebuild take?"</li>
+      <li>"How do you handle dataset versioning and lineage — is LakeFS in production, or aspirational?"</li>
+      <li>"What does a typical training job look like: how many GPUs, how long, and what's your scaling efficiency at that size?"</li>
+      <li>"How much of the stack is Ray today versus plain PyTorch distributed?"</li>
+      <li>"What's the process for promoting a model — what gates exist between a trained artifact and something that runs on a vehicle?"</li>
+      <li>"For a senior hire, what would the first six months ideally produce?"</li>
+    </ul>
+
+    <h3>The plan</h3>
+
+    <table class="tbl">
+      <thead><tr><th>Priority</th><th>Do exactly this</th></tr></thead>
+      <tbody>
+        <tr><td><strong>1</strong></td><td><strong>Part III, twice.</strong> The data pipeline is the first required qualification and the centre of the interview. You must be able to write a Dataset, a sharded IterableDataset, and a collate_fn from memory, and to do §16's throughput arithmetic on a whiteboard.</td></tr>
+        <tr><td><strong>2</strong></td><td><strong>Part IX, all six trees, aloud.</strong> Only the first branch of each needs to be automatic. "Run it with synthetic data first" is the single most useful sentence in the whole manual.</td></tr>
+        <tr><td><strong>3</strong></td><td><strong>Volume II's problems.</strong> Write the top ones by hand — they're the coding round.</td></tr>
+        <tr><td><strong>4</strong></td><td><strong>Part VII.</strong> Ray properly (it's your story <em>and</em> their first-listed tool); Dagster, LakeFS, PyArrow at conversation depth. An hour on Dagster's asset model and LakeFS's branching is enough to be credible about what problem each solves.</td></tr>
+        <tr><td><strong>5</strong></td><td><strong>Rehearse the 400× as a diagnosis story</strong>, in §46's shape. Then Parts IV–VI as a skim — much of it you already know.</td></tr>
+        <tr><td>Interview morning</td><td>Nothing new. The six trees' first branches, your narrative once aloud, and the seven questions above.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="idea">
+      <p><strong>The strategy in one paragraph.</strong> This req is closer to your actual working life than any of the roles you've interviewed for this year: distributed PyTorch and Ray, data pipelines, performance diagnosis, production software you've sustained. The gaps are tool-shaped rather than concept-shaped — Dagster and LakeFS are a week, not a career — and the domain is new but touches your job mostly through data shape, which §04 covers. So the winning posture is not to oversell breadth; it's to be the person who <em>reasons about the whole pipeline quantitatively</em>: bytes per sample, required samples per second, where the bottleneck is, and how you'd prove it. Say the true thing — <em>you make training systems fast, you measure before you optimize, and you've shipped software other people depend on.</em></p>
+    </div>
+
+    <p class="pull">Run it with synthetic data first. Then you know what job you're actually doing.</p>
+  </section>
+</div>
+
+</main>
+
+<footer>
+  <h4>sources &amp; verification</h4>
+  <div class="resources">
+    <ul>
+      <li><strong>The role</strong></li>
+      <li>Latitude AI — Senior Software Engineer, Scalable Machine Learning (Intelligent Systems → Scalable ML). Latitude is a Ford subsidiary developing automated driving including L3, headquartered in Pittsburgh with engineering centres in Dearborn, Michigan and Palo Alto, California. Responsibilities quoted and paraphrased throughout Part I. Posted California base range $179,200–$268,800 plus bonus and equity; sponsorship available.</li>
+      <li>Named stack (nice-to-have): <strong>Ray, PyTorch, Dagster, LakeFS, PyArrow</strong> — Part VII covers all five.</li>
+      <li><strong>What was executed and verified</strong></li>
+      <li>Every PyTorch behaviour asserted in this volume was run against <strong>PyTorch 2.13 (CPU)</strong> — <strong>45 checks, all passing</strong>: IterableDataset worker sharding (the naive version provably yields the dataset 4× with 4 workers; the sharded version exactly once), DistributedSampler partitioning and padding, gradient-accumulation equivalence, collate padding and masking, <code>no_grad</code>/<code>inference_mode</code>/<code>detach</code> semantics, checkpoint resumability, seeding across workers, memory format and contiguity, autocast policy, warmup-cosine schedule properties, gradient clipping, and a <code>torch.compile</code> round-trip.</li>
+      <li><strong>Three findings worth restating.</strong> (1) <code>DistributedSampler</code> pads by wrapping the first indices onto trailing ranks, so with 100 samples across 8 ranks, indices 0–3 are seen <em>twice per epoch</em> — which silently double-counts in distributed evaluation; <code>drop_last=True</code> is what makes ranks truly disjoint. (2) A model-only checkpoint does <em>not</em> resume a run: with optimizer and scheduler state the resumed losses matched exactly, without them they diverged immediately. (3) <strong>Changing <code>num_workers</code> changes the RNG stream</strong>, so two runs with different worker counts are not comparable.</li>
+      <li><strong>Not verified</strong></li>
+      <li>No GPU was available, so all CUDA-, NCCL-, and multi-node-specific behaviour is stated from mechanism rather than measured. Ray, Dagster, LakeFS, and PyArrow snippets are illustrative and were not executed — check current APIs before relying on a signature.</li>
+      <li><strong>Companion</strong></li>
+      <li>Volume II — <code>latitude_pytorch_problems_manual.html</code> · the coding problems, debugging drills, and system-design questions.</li>
+    </ul>
+  </div>
+  <p class="footer-note">One habit runs through every part of this manual: <strong>find out what's actually limiting you before you fix anything.</strong> Run the job with synthetic data before optimizing the model. Check allocated against reserved before assuming a leak. Measure scaling efficiency before buying GPUs. Ask whether bitwise determinism is really the requirement before paying for it. In a domain where a training run costs thousands of dollars and a bad dataset silently poisons a model, that discipline is worth more than fluency with any particular tool — and it is the thing that transfers when the tools change.</p>
+</footer>
+
+</body>
+</html>
