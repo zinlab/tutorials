@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PyTorch Field Manual — Volume II · Training Neural Networks</title>
+
+<!-- ============================================================
+     FIELD MANUAL TEMPLATE
+     Copy this whole file, then replace the example content in
+     <body>. The <head> CSS is the complete design system — do not
+     edit it except to swap the single accent token (see note below).
+
+     ONE ALLOWED VARIATION: to re-hue the accent, change --green,
+     --green-deep, --green-bri, and --code-bg to a different family
+     (e.g. a blue or copper). Leave everything else alone — the
+     paper, ink, slate, amber, and rose are calibrated to pair with
+     the accent and with each other.
+     ============================================================ -->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;0,8..60,700;1,8..60,400;1,8..60,500&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --bg:        #eef1ec;   /* cool desaturated paper — the page */
+  --bg-2:      #e4e8e1;   /* slightly darker panels / table headers */
+  --bg-3:      #d7dcd2;   /* darker still — inline code chips */
+  --card:      #f7f9f4;   /* card surfaces (slightly lighter than page) */
+  --ink:       #14181a;   /* near-black primary text */
+  --ink-soft:  #3d4642;   /* body text in cards, secondary prose */
+  --ink-faint: #76807a;   /* muted labels, captions */
+  --rule:      #c6ccc0;   /* hairline rules */
+  --rule-soft: #d8ddd2;
+  --rule-dark: #8d958a;   /* card borders */
+  --green:     #1a7f46;   /* SIGNAL ACCENT — primary */
+  --green-deep:#0e5e31;   /* darker accent (code, links) */
+  --green-bri: #2ea05c;   /* brighter accent (hover) */
+  --slate:     #33505f;   /* secondary accent — cool blue-grey */
+  --slate-deep:#203642;
+  --amber:     #b07d12;   /* warning accent */
+  --rose:      #a32a1f;   /* danger / required accent */
+  --code-bg:   #15201a;   /* dark code blocks (green-tinted near-black) */
+  --code-ink:  #d6ddd2;
+  --maxw:      1080px;
+}
+*{ box-sizing: border-box; }
+html{ scroll-behavior: smooth; }
+body{
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Source Serif 4', Georgia, serif;
+  font-size: 17px;
+  line-height: 1.62;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ============ HEADER ============ */
+header{ max-width: var(--maxw); margin: 0 auto; padding: 84px 40px 50px; position: relative; }
+.filed{
+  font-family: 'Geist Mono', ui-monospace, monospace; font-size: 10.5px; letter-spacing: .28em;
+  text-transform: uppercase; color: var(--green); margin: 0 0 28px; font-weight: 600;
+  display: flex; align-items: center; gap: 12px;
+}
+.filed::before{ content: "▸"; color: var(--green); font-size: 13px; }
+.vol{
+  font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .18em;
+  color: var(--ink-faint); text-transform: uppercase; margin: 0 0 16px; font-weight: 500;
+}
+h1{
+  font-family: 'Archivo', system-ui, sans-serif; font-weight: 900;
+  font-size: clamp(54px, 9.5vw, 122px); line-height: 0.9; letter-spacing: -0.02em; margin: 0 0 24px; color: var(--ink);
+}
+h1 .acc{ color: var(--green); }
+.deck{ font-family: 'Source Serif 4', serif; font-size: 20px; font-weight: 400; color: var(--ink-soft); max-width: 770px; line-height: 1.5; }
+.readout{ margin-top: 40px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--rule); border: 1px solid var(--rule); }
+@media (max-width: 680px){ .readout{ grid-template-columns: repeat(2,1fr); } }
+.readout .cell{ background: var(--bg); padding: 14px 16px; }
+.readout .k{ font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 6px; }
+.readout .v{ font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 22px; color: var(--ink); line-height: 1; }
+.readout .v .u{ font-size: 12px; color: var(--green); font-weight: 600; }
+
+/* ============ TOC ============ */
+.toc{ margin-top: 46px; background: var(--card); border: 1px solid var(--rule-dark); padding: 30px 32px 34px; position: relative; }
+.toc::before{ content: "CONTENTS"; position: absolute; top: -9px; left: 26px; background: var(--card); padding: 0 10px; font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .3em; color: var(--green); font-weight: 600; }
+.toc h3{ font-family: 'Archivo', sans-serif; font-size: 26px; font-weight: 800; margin: 0 0 3px; color: var(--ink); letter-spacing: -0.01em; }
+.toc .toc-sub{ font-family: 'Geist Mono', monospace; font-size: 10.5px; color: var(--ink-faint); letter-spacing: .1em; text-transform: uppercase; margin-bottom: 20px; }
+.toc-part{ margin-top: 15px; }
+.toc-part-name{ font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .22em; color: var(--slate); text-transform: uppercase; font-weight: 600; border-bottom: 1px solid var(--rule); padding-bottom: 5px; margin-bottom: 7px; }
+.toc-grid{ display: grid; grid-template-columns: repeat(2,1fr); gap: 1px 32px; }
+@media (max-width: 760px){ .toc-grid{ grid-template-columns: 1fr; } }
+.toc-grid a{ color: var(--ink-soft); text-decoration: none; font-size: 14.5px; padding: 5px 0; display: flex; gap: 12px; align-items: baseline; border-bottom: 1px dotted transparent; transition: all .14s; }
+.toc-grid a:hover{ color: var(--green); border-color: var(--rule); }
+.toc-grid a .n{ font-family: 'Geist Mono', monospace; font-size: 10.5px; color: var(--slate); min-width: 26px; font-weight: 600; }
+
+/* ============ MAIN ============ */
+main{ max-width: var(--maxw); margin: 0 auto; padding: 56px 40px 96px; }
+.part{ margin-top: 92px; padding-top: 46px; position: relative; }
+.part::before{ content:""; position: absolute; top: 0; left: 0; right: 0; border-top: 2px solid var(--ink); }
+.part::after{ content:""; position: absolute; top: 5px; left: 0; width: 84px; border-top: 2px solid var(--green); }
+.part:first-child{ margin-top: 28px; padding-top: 28px; }
+.part-label{ font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .28em; color: var(--green); text-transform: uppercase; margin-bottom: 14px; font-weight: 600; }
+.part-title{ font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 54px; line-height: 0.96; letter-spacing: -0.02em; margin: 0 0 18px; color: var(--ink); }
+.part-title .acc{ color: var(--green); }
+.part-intro{ color: var(--ink-soft); font-size: 18.5px; max-width: 800px; margin-bottom: 34px; line-height: 1.5; }
+
+section.chapter{ margin-top: 52px; }
+section.chapter:first-of-type{ margin-top: 8px; }
+h2{ font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 33px; line-height: 1.08; letter-spacing: -0.015em; margin: 0 0 15px; color: var(--ink); display: flex; align-items: baseline; gap: 15px; padding-bottom: 9px; border-bottom: 2px solid var(--ink); }
+h2 .ch-num{ font-family: 'Geist Mono', monospace; font-size: 13px; color: var(--green); letter-spacing: .05em; font-weight: 600; flex-shrink: 0; }
+h3{ font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 22px; margin: 28px 0 9px; color: var(--ink); letter-spacing: -0.01em; }
+h4{ font-family: 'Geist Mono', monospace; font-size: 10.5px; letter-spacing: .18em; text-transform: uppercase; color: var(--slate); margin: 22px 0 8px; font-weight: 600; }
+p{ margin: 12px 0; }
+p code, li code, td code{ font-family: 'Geist Mono', monospace; font-size: .8em; background: var(--bg-3); color: var(--green-deep); padding: 1px 6px; border-radius: 2px; border: 1px solid var(--rule); }
+strong{ font-weight: 700; }
+ul, ol{ padding-left: 1.3em; }
+li{ margin: 6px 0; }
+ul.tight li{ margin: 3px 0; }
+ul.dash{ list-style: none; padding-left: 0; }
+ul.dash li{ position: relative; padding-left: 22px; }
+ul.dash li::before{ content: "▸"; position: absolute; left: 0; color: var(--green); font-weight: 700; }
+ul.check{ list-style: none; padding-left: 0; }
+ul.check li{ position: relative; padding-left: 24px; }
+ul.check li::before{ content: "▪"; position: absolute; left: 2px; top: 2px; color: var(--green); }
+
+/* ============ CODE ============ */
+pre{ background: var(--code-bg); padding: 17px 20px; overflow-x: auto; font-family: 'Geist Mono', monospace; font-size: 12.5px; line-height: 1.6; color: var(--code-ink); margin: 18px 0; position: relative; border-left: 3px solid var(--green); }
+pre .com{ color: #6f8378; font-style: italic; }   /* comment */
+pre .kw{  color: #6cb38a; }                        /* keyword */
+pre .ty{  color: #8fc6c0; }                        /* type */
+pre .str{ color: #c9b36a; }                        /* string */
+pre .num{ color: #c89a64; }                        /* number */
+pre .fn{  color: #8db8d0; }                        /* function */
+pre .var{ color: #d6ddd2; }                        /* variable */
+pre .glb{ color: #7fbf95; }                        /* global / builtin */
+pre .opt{ color: #c0a96a; }                        /* flag / option */
+pre::before{ content: attr(data-lang); position: absolute; top: 5px; right: 12px; font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: .18em; color: #56635a; text-transform: uppercase; }
+
+/* ============ CALLOUTS ============ */
+.callout{ margin: 22px 0; padding: 15px 22px; border-left: 4px solid var(--slate); background: var(--bg-2); font-size: 16px; line-height: 1.55; }
+.callout.warn{ border-color: var(--amber); }
+.callout.danger{ border-color: var(--rose); }
+.callout.tip{ border-color: var(--green); }
+.callout h5{ margin: 0 0 6px; font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--slate); font-weight: 600; }
+.callout.warn h5{ color: var(--amber); }
+.callout.danger h5{ color: var(--rose); }
+.callout.tip h5{ color: var(--green); }
+.callout p:first-child{ margin-top: 0; } .callout p:last-child{ margin-bottom: 0; }
+
+/* ============ TABLES ============ */
+.tbl{ width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14.5px; }
+.tbl th, .tbl td{ text-align: left; padding: 9px 14px; vertical-align: top; border-bottom: 1px solid var(--rule); }
+.tbl th{ font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink); font-weight: 600; border-bottom: 2px solid var(--ink); border-top: 2px solid var(--ink); background: var(--bg-2); }
+.tbl td:first-child{ font-family: 'Geist Mono', monospace; font-size: 12px; color: var(--green-deep); font-weight: 500; width: 26%; }
+.tbl.wide td:first-child{ width: 20%; }
+.tbl.compare td:first-child{ font-family: 'Geist Mono', monospace; font-weight: 600; color: var(--ink); width: 22%; font-size: 11.5px; letter-spacing: .03em; }
+.tbl.compare td:nth-child(2){ color: var(--green-deep); font-family: 'Source Serif 4', serif; font-size: 14.5px; }
+.tbl.compare td:nth-child(3){ color: var(--slate-deep); font-family: 'Source Serif 4', serif; font-size: 14.5px; }
+
+/* ============ DIAGRAM (monospace ASCII art in a labeled frame) ============ */
+.diagram{ background: var(--card); border: 1px solid var(--rule-dark); padding: 22px 24px; margin: 22px 0; font-family: 'Geist Mono', monospace; font-size: 12px; line-height: 1.55; color: var(--ink-soft); white-space: pre; overflow-x: auto; position: relative; }
+.diagram::before{ content: "FIG."; position: absolute; top: -9px; left: 18px; background: var(--bg); padding: 0 9px; font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: .2em; color: var(--slate); font-weight: 600; }
+
+/* ============ READOUT PANEL (titled stat grid) ============ */
+.panel{ background: var(--card); border: 1px solid var(--rule-dark); margin: 22px 0; padding: 20px 24px; position: relative; }
+.panel::before{ content: attr(data-title); position: absolute; top: -9px; left: 20px; background: var(--bg); padding: 0 10px; font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: .2em; color: var(--green); font-weight: 600; }
+.panel-grid{ display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; }
+@media (max-width: 680px){ .panel-grid{ grid-template-columns: 1fr 1fr; } }
+.panel-grid .stat .k{ font-family:'Geist Mono',monospace; font-size: 9px; letter-spacing:.16em; text-transform:uppercase; color: var(--ink-faint); margin-bottom: 4px; }
+.panel-grid .stat .v{ font-family:'Archivo',sans-serif; font-weight: 700; font-size: 17px; color: var(--ink); line-height: 1.15; }
+.panel-grid .stat .v small{ font-weight: 400; font-family:'Source Serif 4',serif; font-size: 13px; color: var(--ink-soft); }
+
+/* ============ ISSUE / WORKED CASE (dark header + body) ============ */
+.issue{ margin: 26px 0; background: var(--card); border: 1px solid var(--ink); }
+.issue-header{ padding: 12px 22px; background: var(--ink); color: var(--bg); font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; display: flex; align-items: center; gap: 13px; }
+.issue-header .tag{ background: var(--green); padding: 3px 11px; letter-spacing: .1em; font-weight: 600; font-size: 10px; color: #fff; }
+.issue-header .title{ flex: 1; font-weight: 600; letter-spacing: .08em; }
+.issue-body{ padding: 22px 26px; }
+.issue-body > h5{ margin: 16px 0 7px; font-family:'Geist Mono',monospace; font-size: 10.5px; letter-spacing:.16em; color: var(--green); text-transform: uppercase; font-weight: 600; }
+.issue-body > h5:first-child{ margin-top: 0; }
+
+/* ============ DECISION TREE ============ */
+.tree{ background: var(--card); border: 1px solid var(--slate); padding: 24px 26px; margin: 24px 0; position: relative; }
+.tree::before{ content: "DECISION PATH"; position: absolute; top: -9px; left: 22px; background: var(--bg); padding: 0 11px; font-family:'Geist Mono',monospace; font-size: 10px; letter-spacing: .2em; color: var(--slate); font-weight: 600; }
+.tree pre{ background: transparent; color: var(--ink); border: none; border-left: none; padding: 6px 0 0; font-size: 13px; line-height: 1.7; }
+.tree pre::before{ display: none; }
+.tree .q{ color: var(--green); font-weight: 700; }   /* a question node */
+.tree .a{ color: var(--slate); font-weight: 700; }   /* an answer/branch label */
+
+/* ============ PRINCIPLE (green-bordered key idea) ============ */
+.idea{ margin: 24px 0; border: 2px solid var(--green); background: var(--card); padding: 22px 28px; position: relative; }
+.idea::before{ content: "PRINCIPLE"; position: absolute; top: -10px; left: 22px; background: var(--bg); padding: 0 11px; font-family:'Geist Mono',monospace; font-size: 10px; letter-spacing: .24em; color: var(--green); font-weight: 600; }
+.idea p{ margin: 6px 0; font-size: 16px; }
+
+/* ============ PULL QUOTE ============ */
+.pull{ font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 30px; line-height: 1.08; letter-spacing: -0.015em; color: var(--green); margin: 38px 0; padding: 0 0 0 26px; border-left: 4px solid var(--green); }
+
+/* ============ CHEATSHEET ============ */
+.cheat{ background: var(--card); border: 1px solid var(--ink); padding: 24px 28px; margin: 24px 0; }
+.cheat h5{ margin: 0 0 14px; font-family:'Geist Mono',monospace; font-size: 11px; letter-spacing: .2em; color: var(--green); text-transform: uppercase; font-weight: 600; }
+.cheat-grid{ display: grid; grid-template-columns: 1fr 1.5fr; gap: 6px 22px; font-size: 13px; }
+.cheat-grid .cmd{ font-family:'Geist Mono',monospace; color: var(--green-deep); font-weight: 500; }
+.cheat-grid .desc{ color: var(--ink-soft); font-size: 14.5px; }
+@media (max-width: 680px){ .cheat-grid{ grid-template-columns: 1fr; gap: 2px 18px; } .cheat-grid .desc{ margin-bottom: 10px; } }
+
+/* ============ TWO-COLUMN (e.g. good/bad, before/after) ============ */
+.twocol{ display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 22px 0; }
+@media (max-width: 760px){ .twocol{ grid-template-columns: 1fr; } }
+.twocol .col{ background: var(--card); border: 1px solid var(--rule-dark); padding: 18px 22px; }
+.twocol .col h5{ margin: 0 0 10px; font-family:'Geist Mono',monospace; font-size: 10.5px; letter-spacing: .18em; text-transform: uppercase; color: var(--slate); font-weight: 600; }
+.twocol .col.bad h5{ color: var(--rose); } .twocol .col.good h5{ color: var(--green); }
+.twocol .col p{ margin: 8px 0; font-size: 15px; } .twocol .col p:first-child{ margin-top: 0; }
+
+/* ============ PROFILE / ENTITY CARD (e.g. a person, a module) ============ */
+.iv{ background: var(--card); border: 1px solid var(--rule-dark); border-left: 3px solid var(--slate); padding: 20px 24px; margin: 14px 0; position: relative; }
+.iv.req{ border-left: 3px solid var(--rose); }
+.iv-head{ display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 3px; }
+.iv-name{ font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 23px; letter-spacing: -0.01em; color: var(--ink); }
+.iv-dur{ font-family: 'Geist Mono', monospace; font-size: 11px; color: var(--ink-faint); letter-spacing: .08em; }
+.iv-badge{ font-family: 'Geist Mono', monospace; font-size: 8.5px; letter-spacing: .16em; text-transform: uppercase; background: var(--rose); color: #fff; padding: 3px 9px; font-weight: 600; }
+.iv-role{ font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--green); font-weight: 600; margin-bottom: 9px; }
+.iv-focus{ color: var(--ink-soft); font-size: 15.5px; margin: 8px 0 12px; line-height: 1.48; }
+
+/* ============ CLICKABLE NAV CARD (e.g. an index/landing page) ============ */
+a.vol-card{ display: block; text-decoration: none; color: inherit; background: var(--card); border: 1px solid var(--rule-dark); border-left: 4px solid var(--green); padding: 24px 26px 20px; position: relative; transition: all .16s ease; }
+a.vol-card:hover{ border-left-width: 8px; border-color: var(--green); background: #fbfcf9; transform: translateY(-2px); box-shadow: 0 6px 22px rgba(20,40,26,.09); }
+.vol-card .vc-num{ position: absolute; top: 16px; right: 22px; font-family: 'Archivo', sans-serif; font-weight: 900; font-size: 46px; line-height: 1; color: var(--bg-3); letter-spacing: -0.02em; transition: color .16s; }
+a.vol-card:hover .vc-num{ color: var(--green-bri); }
+.vol-card .vc-kicker{ font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .22em; text-transform: uppercase; color: var(--green); font-weight: 600; margin-bottom: 8px; }
+.vol-card .vc-title{ font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 28px; line-height: 1.02; letter-spacing: -0.015em; color: var(--ink); margin: 0 0 10px; }
+.vol-card .vc-open{ margin-top: 14px; font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--green); font-weight: 600; }
+
+/* ============ SECTION SEPARATOR ============ */
+.rule-sep{ margin: 56px 0; position: relative; height: 0; border-top: 2px solid var(--ink); }
+.rule-sep::after{ content: "◇ ◇ ◇"; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); background: var(--bg); color: var(--green); padding: 0 16px; font-size: 11px; letter-spacing: .3em; }
+
+/* ============ FOOTER ============ */
+footer{ max-width: var(--maxw); margin: 0 auto; padding: 54px 40px 84px; border-top: 2px solid var(--ink); color: var(--ink-soft); font-size: 14px; }
+footer h4{ font-family:'Geist Mono',monospace; font-size: 11px; letter-spacing: .24em; color: var(--green); margin: 0 0 18px; font-weight: 600; }
+footer .resources{ columns: 2; column-gap: 38px; }
+@media (max-width: 680px){ footer .resources{ columns: 1; } }
+footer ul{ list-style: none; padding: 0; margin: 0; }
+footer li{ padding: 5px 0; font-size: 13.5px; break-inside: avoid; }
+footer li code{ color: var(--green-deep); background: transparent; border: none; padding: 0; font-weight: 500; }
+footer .footer-note{ margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--rule); color: var(--ink-faint); font-size: 14px; }
+</style>
+</head>
+<body>
+<header>
+  <p class="filed">pytorch field manual · volume ii · training neural networks</p>
+  <p class="vol">Volume II of VI · the craft of making models actually learn</p>
+  <h1>Training<br><span class="acc">Networks.</span></h1>
+  <p class="deck">
+    Volume I got a one-line model to learn. Real work is everything around that line: composing many layers into a model, feeding it data efficiently, choosing an optimizer and learning rate that converge, and — the hard part — making the result generalize to data it has never seen. This volume is the practitioner's craft, code-first, with the failure modes named and fixed.
+  </p>
+  <div class="readout">
+    <div class="cell"><div class="k">Volume</div><div class="v">II<span class="u"> / VI</span></div></div>
+    <div class="cell"><div class="k">Chapters</div><div class="v">16</div></div>
+    <div class="cell"><div class="k">Parts</div><div class="v">4</div></div>
+    <div class="cell"><div class="k">Focus</div><div class="v" style="font-size:13px;">nn · data · optim · reg</div></div>
+  </div>
+
+  <div class="toc">
+    <h3>Contents</h3>
+    <p class="toc-sub">Sixteen chapters across four parts</p>
+    <div class="toc-part">
+      <div class="toc-part-name">Part I · Building models</div>
+      <div class="toc-grid">
+        <a href="#c01"><span class="n">01</span><span>nn.Module in depth</span></a>
+        <a href="#c02"><span class="n">02</span><span>Layers, activations &amp; your first MLP</span></a>
+        <a href="#c03"><span class="n">03</span><span>Weight initialization</span></a>
+        <a href="#c04"><span class="n">04</span><span>A reusable model pattern</span></a>
+      </div>
+    </div>
+    <div class="toc-part">
+      <div class="toc-part-name">Part II · The data pipeline</div>
+      <div class="toc-grid">
+        <a href="#c05"><span class="n">05</span><span>Dataset &amp; DataLoader</span></a>
+        <a href="#c06"><span class="n">06</span><span>Transforms &amp; augmentation</span></a>
+        <a href="#c07"><span class="n">07</span><span>Fast input pipelines</span></a>
+        <a href="#c08"><span class="n">08</span><span>Splits, leakage &amp; reproducibility</span></a>
+      </div>
+    </div>
+    <div class="toc-part">
+      <div class="toc-part-name">Part III · Optimization</div>
+      <div class="toc-grid">
+        <a href="#c09"><span class="n">09</span><span>SGD &amp; momentum</span></a>
+        <a href="#c10"><span class="n">10</span><span>Adam, AdamW &amp; weight decay</span></a>
+        <a href="#c11"><span class="n">11</span><span>The learning rate: schedules &amp; warmup</span></a>
+        <a href="#c12"><span class="n">12</span><span>Batch size, accumulation &amp; clipping</span></a>
+      </div>
+    </div>
+    <div class="toc-part">
+      <div class="toc-part-name">Part IV · Generalization &amp; the real loop</div>
+      <div class="toc-grid">
+        <a href="#c13"><span class="n">13</span><span>Over/underfitting &amp; capacity</span></a>
+        <a href="#c14"><span class="n">14</span><span>Regularization that works</span></a>
+        <a href="#c15"><span class="n">15</span><span>Normalization: BatchNorm &amp; LayerNorm</span></a>
+        <a href="#c16"><span class="n">16</span><span>A production training loop</span></a>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="part" id="p1">
+    <div class="part-label">Part I — Building models</div>
+    <h2 class="part-title">From one layer to <span class="acc">real networks.</span></h2>
+    <p class="part-intro">A model is just many small functions composed together, each with its own parameters. PyTorch's <code>nn.Module</code> is the container that makes composition clean: it tracks every parameter automatically, moves them to a device together, and saves them as one unit. Master the module and you can assemble any architecture in the series from parts.</p>
+
+    <section class="chapter" id="c01">
+      <h2><span class="ch-num">01</span>nn.Module in depth</h2>
+      <p>Everything you build in PyTorch is an <code>nn.Module</code>: a single layer, a block of layers, or an entire hundred-layer network — all the same type, nestable inside each other. A module bundles two things: <strong>state</strong> (its learnable parameters and any fixed buffers) and <strong>behavior</strong> (a <code>forward</code> method that says how to turn inputs into outputs).</p>
+      <p>You define one by subclassing <code>nn.Module</code>, creating child modules and parameters in <code>__init__</code>, and describing the computation in <code>forward</code>. Here is <code>Linear</code> rebuilt from scratch to expose the machinery:</p>
+<pre data-lang="PYTHON"><span class="kw">import</span> torch
+<span class="kw">import</span> torch.nn <span class="kw">as</span> nn
+
+<span class="kw">class</span> <span class="ty">MyLinear</span>(nn.<span class="ty">Module</span>):
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, in_features, out_features):
+        <span class="fn">super</span>().<span class="fn">__init__</span>()                 <span class="com"># ALWAYS call this first</span>
+        <span class="com"># nn.Parameter marks a tensor as learnable -&gt; auto-registered.</span>
+        self.weight = nn.<span class="ty">Parameter</span>(torch.<span class="fn">randn</span>(out_features, in_features) * <span class="num">0.01</span>)
+        self.bias = nn.<span class="ty">Parameter</span>(torch.<span class="fn">zeros</span>(out_features))
+
+    <span class="kw">def</span> <span class="fn">forward</span>(self, x):                   <span class="com"># x: (batch, in_features)</span>
+        <span class="kw">return</span> x @ self.weight.<span class="fn">t</span>() + self.bias   <span class="com"># -&gt; (batch, out_features)</span>
+
+layer = <span class="ty">MyLinear</span>(<span class="num">4</span>, <span class="num">3</span>)
+out = <span class="fn">layer</span>(torch.<span class="fn">randn</span>(<span class="num">2</span>, <span class="num">4</span>))              <span class="com"># call the module, NOT .forward()</span>
+<span class="fn">print</span>(out.shape)                            <span class="com"># torch.Size([2, 3])</span></pre>
+      <p>Two rules do a lot of quiet work here. First, <strong>assigning an <code>nn.Parameter</code> (or a child <code>nn.Module</code>) as an attribute registers it automatically</strong> — PyTorch now knows to track it, include it in <code>parameters()</code>, move it with <code>.to(device)</code>, and save it in the checkpoint. Second, you <strong>call the module</strong> (<code>layer(x)</code>), never <code>layer.forward(x)</code> directly, because <code>__call__</code> runs hooks and bookkeeping around your <code>forward</code>.</p>
+
+      <h3>Inspecting a module's state</h3>
+      <p>Because registration is automatic, you can always enumerate what a module contains — indispensable for debugging, freezing layers, and counting parameters.</p>
+<pre data-lang="PYTHON"><span class="kw">for</span> name, p <span class="kw">in</span> layer.<span class="fn">named_parameters</span>():
+    <span class="fn">print</span>(name, <span class="fn">tuple</span>(p.shape), p.requires_grad)
+<span class="com"># weight (3, 4) True</span>
+<span class="com"># bias   (3,)   True</span>
+
+n_params = <span class="fn">sum</span>(p.<span class="fn">numel</span>() <span class="kw">for</span> p <span class="kw">in</span> layer.<span class="fn">parameters</span>())   <span class="com"># total learnable numbers</span>
+<span class="fn">print</span>(<span class="str">&quot;params:&quot;</span>, n_params)                              <span class="com"># 15</span>
+
+layer.<span class="fn">to</span>(<span class="str">&quot;cuda&quot;</span>)     <span class="com"># moves weight AND bias together, in one call</span></pre>
+      <h3>Buffers: state that isn't learned</h3>
+      <p>Some modules need persistent state that is <em>not</em> a parameter — it's part of the model and must be saved and moved with it, but the optimizer must never update it. Batch-norm's running mean and variance are the canonical example. Register these with <code>register_buffer</code>:</p>
+<pre data-lang="PYTHON"><span class="kw">class</span> <span class="ty">RunningMean</span>(nn.<span class="ty">Module</span>):
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, size):
+        <span class="fn">super</span>().<span class="fn">__init__</span>()
+        self.<span class="fn">register_buffer</span>(<span class="str">&quot;total&quot;</span>, torch.<span class="fn">zeros</span>(size))  <span class="com"># saved &amp; moved,</span>
+        self.<span class="fn">register_buffer</span>(<span class="str">&quot;count&quot;</span>, torch.<span class="fn">zeros</span>(<span class="num">1</span>))     <span class="com"># but not a parameter</span>
+
+    <span class="kw">def</span> <span class="fn">forward</span>(self, x):
+        self.total += x.<span class="fn">sum</span>(dim=<span class="num">0</span>)
+        self.count += x.<span class="fn">size</span>(<span class="num">0</span>)
+        <span class="kw">return</span> self.total / self.count</pre>
+      <div class="callout tip">
+        <h5>Parameter vs buffer, in one line</h5>
+        <p>If gradient descent should update it, make it an <code>nn.Parameter</code>. If it's stateful but learned by some other rule (or fixed), make it a buffer. Both are saved in <code>state_dict()</code> and moved by <code>.to()</code>; only parameters appear in <code>.parameters()</code> and get gradients.</p>
+      </div>
+    </section>
+
+    <section class="chapter" id="c02">
+      <h2><span class="ch-num">02</span>Layers, activations &amp; your first MLP</h2>
+      <p>You rarely write layers from scratch — PyTorch ships them. The one you'll use most is <code>nn.Linear</code> (a matrix multiply plus bias, the "fully-connected" layer). Between linear layers you insert a nonlinear <strong>activation function</strong>, and that nonlinearity is non-negotiable: stack linear layers with nothing between them and the whole stack algebraically collapses to a single linear layer. The activation is what lets depth buy you expressive power.</p>
+      <table class="tbl">
+        <thead><tr><th>Activation</th><th>What it does · when to use</th></tr></thead>
+        <tbody>
+          <tr><td>nn.ReLU</td><td><code>max(0, x)</code>. The default workhorse — cheap, effective. Kills negatives, which can occasionally "die," but rarely a problem in practice.</td></tr>
+          <tr><td>nn.GELU</td><td>A smooth ReLU. The default inside transformers (Volumes III, V); slightly better in deep nets, marginally costlier.</td></tr>
+          <tr><td>nn.SiLU / Swish</td><td>Another smooth gate, common in modern CNNs (EfficientNet). Interchangeable with GELU in practice.</td></tr>
+          <tr><td>nn.Sigmoid</td><td>Squashes to <code>(0,1)</code>. Use only for binary output probabilities, not hidden layers (it saturates and stalls gradients).</td></tr>
+          <tr><td>nn.Tanh</td><td>Squashes to <code>(−1,1)</code>. Historically common in RNNs; mostly superseded by ReLU-family for feed-forward nets.</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Composing layers: Sequential and ModuleList</h3>
+      <p><code>nn.Sequential</code> chains modules so the output of each feeds the next — perfect for a simple straight-through stack. <code>nn.ModuleList</code> holds a list of modules you call yourself in <code>forward</code>, for when the flow isn't a simple chain.</p>
+<pre data-lang="PYTHON"><span class="com"># A multi-layer perceptron (MLP): the classic first neural network.</span>
+<span class="com"># Input: a flattened 28x28 image (784 numbers). Output: 10 class scores.</span>
+mlp = nn.<span class="ty">Sequential</span>(
+    nn.<span class="ty">Linear</span>(<span class="num">784</span>, <span class="num">256</span>),   <span class="com"># 784 -&gt; 256</span>
+    nn.<span class="ty">ReLU</span>(),             <span class="com"># nonlinearity</span>
+    nn.<span class="ty">Linear</span>(<span class="num">256</span>, <span class="num">128</span>),   <span class="com"># 256 -&gt; 128</span>
+    nn.<span class="ty">ReLU</span>(),
+    nn.<span class="ty">Linear</span>(<span class="num">128</span>, <span class="num">10</span>),    <span class="com"># 128 -&gt; 10 class logits (no activation on output)</span>
+)
+
+x = torch.<span class="fn">randn</span>(<span class="num">64</span>, <span class="num">784</span>)   <span class="com"># a batch of 64 flattened images</span>
+logits = <span class="fn">mlp</span>(x)            <span class="com"># -&gt; (64, 10): ten raw scores per image</span>
+<span class="fn">print</span>(logits.shape)</pre>
+      <p>Note the output has no activation: for classification you emit raw scores called <strong>logits</strong>, and the loss function (<code>nn.CrossEntropyLoss</code>) applies the softmax internally for numerical stability. Adding a softmax yourself before cross-entropy is a classic double-application bug.</p>
+      <div class="callout warn">
+        <h5>Flatten before a Linear</h5>
+        <p><code>nn.Linear</code> expects its input's last dimension to match <code>in_features</code>. Image data arrives as <code>(batch, channels, height, width)</code>; you must flatten it to <code>(batch, features)</code> first — <code>nn.Flatten()</code> as the first layer, or <code>x.view(x.size(0), -1)</code> in <code>forward</code>. A shape mismatch here is the #1 first-MLP error.</p>
+      </div>
+    </section>
+
+    <section class="chapter" id="c03">
+      <h2><span class="ch-num">03</span>Weight initialization</h2>
+      <p>Before training, every parameter needs a starting value, and the choice matters more than beginners expect. Initialize weights too large and the signal amplifies layer over layer until activations and gradients explode to <code>NaN</code>; too small and the signal shrinks to nothing and the network can't learn. Good initialization keeps the <em>scale</em> of activations and gradients roughly constant as they pass through the network.</p>
+      <p>The good news: PyTorch's built-in layers already initialize themselves sensibly (<code>nn.Linear</code> and the conv layers use a Kaiming-style scheme by default). You often don't touch it. But when you build custom modules, or want to match a paper, you set it explicitly with <code>nn.init</code>.</p>
+<pre data-lang="PYTHON"><span class="kw">import</span> torch.nn <span class="kw">as</span> nn
+
+<span class="kw">def</span> <span class="fn">init_weights</span>(m):
+    <span class="kw">if</span> <span class="fn">isinstance</span>(m, nn.<span class="ty">Linear</span>):
+        <span class="com"># Kaiming (He) init: tuned for ReLU-family activations.</span>
+        nn.init.<span class="fn">kaiming_normal_</span>(m.weight, nonlinearity=<span class="str">&quot;relu&quot;</span>)
+        <span class="kw">if</span> m.bias <span class="kw">is</span> <span class="kw">not</span> <span class="kw">None</span>:
+            nn.init.<span class="fn">zeros_</span>(m.bias)      <span class="com"># biases almost always start at 0</span>
+
+model = nn.<span class="ty">Sequential</span>(nn.<span class="ty">Linear</span>(<span class="num">784</span>, <span class="num">256</span>), nn.<span class="ty">ReLU</span>(), nn.<span class="ty">Linear</span>(<span class="num">256</span>, <span class="num">10</span>))
+model.<span class="fn">apply</span>(init_weights)             <span class="com"># applies the fn to every submodule</span></pre>
+      <p>The two schemes you'll meet by name encode the same idea for different activations. <strong>Xavier/Glorot</strong> init assumes a symmetric activation (tanh, sigmoid); <strong>Kaiming/He</strong> init accounts for ReLU zeroing out half the values, so it scales up to compensate. The rule of thumb: <em>ReLU-family activations → Kaiming; tanh/sigmoid → Xavier.</em></p>
+      <div class="idea">
+        <p><strong>Initialization sets the stage; it doesn't run the play.</strong> Good init makes training <em>possible</em> and fast to start, but it's a one-time scale-setting, not a substitute for normalization layers (Chapter 15) which keep activations well-behaved <em>throughout</em> training. Reach for explicit init when you write custom layers or reproduce a paper; trust the defaults otherwise.</p>
+      </div>
+    </section>
+
+    <section class="chapter" id="c04">
+      <h2><span class="ch-num">04</span>A reusable model pattern</h2>
+      <p>Two ways exist to express the same computation: the <strong>module API</strong> (<code>nn.ReLU()</code> — an object you store) and the <strong>functional API</strong> (<code>F.relu(x)</code> — a plain function). Stateless operations like activations and pooling can go either way; stateful ones with parameters (linear, conv, batch-norm) should be modules so their parameters register. The idiomatic pattern uses modules for anything with weights and functional calls for the stateless glue in <code>forward</code>.</p>
+<pre data-lang="PYTHON"><span class="kw">import</span> torch
+<span class="kw">import</span> torch.nn <span class="kw">as</span> nn
+<span class="kw">import</span> torch.nn.functional <span class="kw">as</span> <span class="ty">F</span>
+
+<span class="kw">class</span> <span class="ty">MLP</span>(nn.<span class="ty">Module</span>):
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, in_dim=<span class="num">784</span>, hidden=<span class="num">256</span>, out_dim=<span class="num">10</span>, p_drop=<span class="num">0.2</span>):
+        <span class="fn">super</span>().<span class="fn">__init__</span>()
+        self.fc1 = nn.<span class="ty">Linear</span>(in_dim, hidden)   <span class="com"># stateful -&gt; module</span>
+        self.fc2 = nn.<span class="ty">Linear</span>(hidden, out_dim)
+        self.drop = nn.<span class="ty">Dropout</span>(p_drop)         <span class="com"># stateful behavior -&gt; module</span>
+
+    <span class="kw">def</span> <span class="fn">forward</span>(self, x):
+        x = torch.<span class="fn">flatten</span>(x, <span class="num">1</span>)                <span class="com"># (B,1,28,28) -&gt; (B,784)</span>
+        x = <span class="ty">F</span>.<span class="fn">relu</span>(self.<span class="fn">fc1</span>(x))                <span class="com"># stateless relu -&gt; functional</span>
+        x = self.<span class="fn">drop</span>(x)
+        <span class="kw">return</span> self.<span class="fn">fc2</span>(x)                     <span class="com"># logits, no final activation</span>
+
+model = <span class="ty">MLP</span>()
+<span class="fn">print</span>(model)                                   <span class="com"># prints the module tree</span>
+<span class="fn">print</span>(<span class="str">&quot;params:&quot;</span>, <span class="fn">sum</span>(p.<span class="fn">numel</span>() <span class="kw">for</span> p <span class="kw">in</span> model.<span class="fn">parameters</span>()))</pre>
+      <p>This subclass-and-<code>forward</code> template is the shape of virtually every model in this series. Its virtues: the architecture is readable top to bottom, hyperparameters are constructor arguments (so you can sweep them), and <code>print(model)</code> gives you the whole tree. When something is the wrong shape, you add a <code>print(x.shape)</code> line in <code>forward</code> and run once — because it's just Python, there's nothing more exotic to debug.</p>
+      <div class="callout tip">
+        <h5>Make the constructor configurable</h5>
+        <p>Pass sizes and rates as arguments with defaults (<code>hidden=256</code>, <code>p_drop=0.2</code>) rather than hard-coding them. Future-you tuning hyperparameters, and Volume IV scaling this model up, will both thank you. A model whose shape is data, not literals, is a model you can experiment on.</p>
+      </div>
+    </section>
+  </div>
+
+  <div class="rule-sep"></div>
+  <div class="part" id="p2">
+    <div class="part-label">Part II — The data pipeline</div>
+    <h2 class="part-title">Feeding the model <span class="acc">without starving it.</span></h2>
+    <p class="part-intro">A GPU that finishes a batch and waits for the next one is money burning. PyTorch splits data handling into two clean pieces — a <code>Dataset</code> that knows how to fetch one example, and a <code>DataLoader</code> that batches, shuffles, and loads many in parallel. Get this pipeline right and your expensive compute stays fed; get it wrong and no model tweak will save your throughput.</p>
+
+    <section class="chapter" id="c05">
+      <h2><span class="ch-num">05</span>Dataset &amp; DataLoader</h2>
+      <p>A <strong><code>Dataset</code></strong> answers two questions about your data: how many examples are there (<code>__len__</code>), and give me example number <code>i</code> (<code>__getitem__</code>). That's the entire contract. It says nothing about batching or shuffling — those are the <code>DataLoader</code>'s job — which keeps each piece simple.</p>
+<pre data-lang="PYTHON"><span class="kw">import</span> torch
+<span class="kw">from</span> torch.utils.data <span class="kw">import</span> <span class="ty">Dataset</span>, <span class="ty">DataLoader</span>
+
+<span class="kw">class</span> <span class="ty">PointsDataset</span>(<span class="ty">Dataset</span>):
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, <span class="ty">X</span>, y):
+        self.<span class="ty">X</span>, self.y = <span class="ty">X</span>, y            <span class="com"># tensors, arrays, or paths to files</span>
+
+    <span class="kw">def</span> <span class="fn">__len__</span>(self):
+        <span class="kw">return</span> <span class="fn">len</span>(self.<span class="ty">X</span>)               <span class="com"># how many examples</span>
+
+    <span class="kw">def</span> <span class="fn">__getitem__</span>(self, i):
+        <span class="kw">return</span> self.<span class="ty">X</span>[i], self.y[i]      <span class="com"># ONE (input, target) pair</span>
+
+<span class="ty">X</span> = torch.<span class="fn">randn</span>(<span class="num">1000</span>, <span class="num">20</span>); y = torch.<span class="fn">randint</span>(<span class="num">0</span>, <span class="num">2</span>, (<span class="num">1000</span>,))
+ds = <span class="ty">PointsDataset</span>(<span class="ty">X</span>, y)
+<span class="fn">print</span>(<span class="fn">len</span>(ds), ds[<span class="num">0</span>][<span class="num">0</span>].shape)           <span class="com"># 1000, torch.Size([20])</span></pre>
+      <p>The <strong><code>DataLoader</code></strong> wraps a dataset and turns single examples into shuffled mini-batches, iterable in a <code>for</code> loop. It's what Volume I's loop consumed.</p>
+<pre data-lang="PYTHON">loader = <span class="ty">DataLoader</span>(
+    ds,
+    batch_size=<span class="num">64</span>,      <span class="com"># examples per batch</span>
+    shuffle=<span class="kw">True</span>,       <span class="com"># reshuffle every epoch (train only!)</span>
+    drop_last=<span class="kw">False</span>,    <span class="com"># keep the smaller final batch</span>
+)
+
+<span class="kw">for</span> xb, yb <span class="kw">in</span> loader:            <span class="com"># each iteration yields one batch</span>
+    <span class="fn">print</span>(xb.shape, yb.shape)    <span class="com"># (64, 20)  (64,)  -- stacked automatically</span>
+    <span class="kw">break</span></pre>
+      <p>The loader <em>collates</em> a list of individual examples into batched tensors by stacking along a new first dimension — the <strong>batch dimension</strong>, by convention always first. For unusual data (variable-length sequences, say), you supply a <code>collate_fn</code> to control that stacking; Volume III uses one for padding sequences. For the common case of fixed-shape tensors, the default just works. And when your data already lives in tensors, skip the custom class entirely:</p>
+<pre data-lang="PYTHON"><span class="kw">from</span> torch.utils.data <span class="kw">import</span> <span class="ty">TensorDataset</span>
+ds = <span class="ty">TensorDataset</span>(<span class="ty">X</span>, y)         <span class="com"># wraps tensors as a Dataset in one line</span></pre>
+    </section>
+
+    <section class="chapter" id="c06">
+      <h2><span class="ch-num">06</span>Transforms &amp; augmentation</h2>
+      <p>Raw data rarely enters the model unchanged. Two kinds of processing happen in <code>__getitem__</code>: <strong>preprocessing</strong> that every example needs (convert to tensor, normalize to a standard scale) and <strong>augmentation</strong> that randomly perturbs training examples to combat overfitting. Both are expressed as <em>transforms</em> — small callables you compose into a pipeline. For images, use the modern <code>torchvision.transforms.v2</code> API.</p>
+<pre data-lang="PYTHON"><span class="kw">from</span> torchvision.transforms <span class="kw">import</span> v2
+
+<span class="com"># TRAIN pipeline: augment (random) + preprocess (deterministic).</span>
+train_tf = v2.<span class="ty">Compose</span>([
+    v2.<span class="ty">RandomResizedCrop</span>(<span class="num">224</span>),          <span class="com"># random crop + resize -&gt; more views</span>
+    v2.<span class="ty">RandomHorizontalFlip</span>(p=<span class="num">0.5</span>),     <span class="com"># mirror half the time</span>
+    v2.<span class="ty">ToDtype</span>(torch.float32, scale=<span class="kw">True</span>),   <span class="com"># uint8 [0,255] -&gt; float [0,1]</span>
+    v2.<span class="ty">Normalize</span>(mean=[<span class="num">0.485</span>, <span class="num">0.456</span>, <span class="num">0.406</span>], <span class="com"># per-channel standardization</span>
+                 std=[<span class="num">0.229</span>, <span class="num">0.224</span>, <span class="num">0.225</span>]),  <span class="com"># (ImageNet statistics)</span>
+])
+
+<span class="com"># VAL/TEST pipeline: preprocess ONLY. No randomness at evaluation.</span>
+eval_tf = v2.<span class="ty">Compose</span>([
+    v2.<span class="ty">Resize</span>(<span class="num">256</span>), v2.<span class="ty">CenterCrop</span>(<span class="num">224</span>),
+    v2.<span class="ty">ToDtype</span>(torch.float32, scale=<span class="kw">True</span>),
+    v2.<span class="ty">Normalize</span>(mean=[<span class="num">0.485</span>, <span class="num">0.456</span>, <span class="num">0.406</span>], std=[<span class="num">0.229</span>, <span class="num">0.224</span>, <span class="num">0.225</span>]),
+])</pre>
+      <p><strong>Normalization</strong> rescales each input feature (here, each color channel) to roughly zero mean and unit variance. Models train faster and more stably when inputs are on a consistent, modest scale — it keeps the optimization landscape well-conditioned. The mean/std above are the standard ImageNet statistics; for your own data, compute them on the <em>training set only</em> (Chapter 08 explains why).</p>
+      <p><strong>Augmentation</strong> is free regularization: by showing the model a randomly cropped, flipped, color-jittered version of each image every epoch, you multiply the effective size of your dataset and force the model to learn features that survive those perturbations rather than memorizing exact pixels.</p>
+      <div class="callout danger">
+        <h5>Never augment the validation or test set</h5>
+        <p>Augmentation is a training-time trick to improve generalization. Applying random crops or flips at evaluation makes your metrics noisy and not comparable across runs. Evaluation transforms must be deterministic — resize, center-crop, normalize, nothing random.</p>
+      </div>
+    </section>
+
+    <section class="chapter" id="c07">
+      <h2><span class="ch-num">07</span>Fast input pipelines</h2>
+      <p>By default the <code>DataLoader</code> fetches data in the main process, one batch at a time, <em>between</em> training steps — so your GPU sits idle while the CPU reads and transforms the next batch. The fix is to load in parallel background workers that prepare upcoming batches while the GPU is busy on the current one.</p>
+<pre data-lang="PYTHON">loader = <span class="ty">DataLoader</span>(
+    ds,
+    batch_size=<span class="num">64</span>,
+    shuffle=<span class="kw">True</span>,
+    num_workers=<span class="num">8</span>,            <span class="com"># background processes fetching batches in parallel</span>
+    pin_memory=<span class="kw">True</span>,          <span class="com"># stage batches in page-locked RAM -&gt; faster to GPU</span>
+    persistent_workers=<span class="kw">True</span>,  <span class="com"># keep workers alive across epochs (avoid respawn)</span>
+    prefetch_factor=<span class="num">2</span>,        <span class="com"># each worker preloads this many batches ahead</span>
+)</pre>
+      <p>Then, in the loop, copy each batch to the GPU with <code>non_blocking=True</code> so the transfer overlaps with computation instead of stalling it:</p>
+<pre data-lang="PYTHON"><span class="kw">for</span> xb, yb <span class="kw">in</span> loader:
+    xb = xb.<span class="fn">to</span>(device, non_blocking=<span class="kw">True</span>)   <span class="com"># overlaps with GPU work</span>
+    yb = yb.<span class="fn">to</span>(device, non_blocking=<span class="kw">True</span>)   <span class="com"># (pairs with pin_memory=True)</span>
+    <span class="com"># ... forward / loss / backward / step ...</span></pre>
+      <table class="tbl">
+        <thead><tr><th>Knob</th><th>What it buys · how to set it</th></tr></thead>
+        <tbody>
+          <tr><td>num_workers</td><td>Parallel loading. Start around the number of CPU cores; too many can thrash. <code>0</code> means load in the main process (simplest, slowest, easiest to debug).</td></tr>
+          <tr><td>pin_memory</td><td>Faster CPU→GPU copies. Turn on when training on a GPU; pairs with <code>non_blocking=True</code>.</td></tr>
+          <tr><td>persistent_workers</td><td>Avoids the cost of respawning workers each epoch. Set <code>True</code> when <code>num_workers &gt; 0</code>.</td></tr>
+          <tr><td>prefetch_factor</td><td>How far ahead workers read. Raise it if the GPU still waits; costs memory.</td></tr>
+        </tbody>
+      </table>
+      <div class="callout tip">
+        <h5>Diagnose before you tune</h5>
+        <p>If GPU utilization (watch <code>nvidia-smi</code>) sits low and spiky, you're input-bound — the pipeline, not the model, is the bottleneck, and the knobs above are your fix. If it's pinned near 100%, data loading isn't your problem; look to the model or batch size instead. Volume IV profiles this properly.</p>
+      </div>
+    </section>
+
+    <section class="chapter" id="c08">
+      <h2><span class="ch-num">08</span>Splits, leakage &amp; reproducibility</h2>
+      <p>You split data into three parts, each with a distinct job. <strong>Train</strong> fits the parameters. <strong>Validation</strong> is checked during development to tune hyperparameters and decide when to stop. <strong>Test</strong> is touched exactly once, at the very end, to estimate real-world performance. The moment you use the test set to make decisions, it stops being an honest estimate.</p>
+<pre data-lang="PYTHON"><span class="kw">from</span> torch.utils.data <span class="kw">import</span> random_split
+
+g = torch.<span class="ty">Generator</span>().<span class="fn">manual_seed</span>(<span class="num">42</span>)          <span class="com"># reproducible split</span>
+n = <span class="fn">len</span>(full_ds)
+n_val = <span class="fn">int</span>(<span class="num">0.15</span> * n); n_test = <span class="fn">int</span>(<span class="num">0.15</span> * n)
+n_train = n - n_val - n_test
+train_ds, val_ds, test_ds = <span class="fn">random_split</span>(
+    full_ds, [n_train, n_val, n_test], generator=g)</pre>
+      <h3>Data leakage: the silent metric-inflater</h3>
+      <p><strong>Leakage</strong> is when information from outside the training set sneaks into training, making your validation and test numbers optimistic — sometimes wildly so — and then production performance craters. It is the single most common way honest-looking projects fail. The usual culprits:</p>
+      <ul class="dash">
+        <li><strong>Fitting preprocessing on all the data.</strong> Compute normalization mean/std, vocabulary, or feature scalers on the <em>training set only</em>, then apply those fixed statistics to val and test. Fit them on the full dataset and you've leaked test information into training.</li>
+        <li><strong>Duplicates or near-duplicates across splits.</strong> The same image (or an augmented copy, or the same patient's two scans) in both train and test lets the model "recognize" test examples. De-duplicate, and split by group (patient, user, document) when examples cluster.</li>
+        <li><strong>Temporal leakage.</strong> For time-ordered data, training on the future to predict the past is cheating. Split by time: train on earlier, validate on later.</li>
+      </ul>
+      <div class="issue">
+        <div class="issue-header">
+          <span class="tag">worked case</span>
+          <span class="title">98% validation accuracy that collapsed to 61% in production</span>
+        </div>
+        <div class="issue-body">
+          <h5>The setup</h5>
+          <p>A classifier scored 98% on validation but barely beat a coin flip once deployed. The pipeline normalized features using statistics computed over the entire dataset before splitting.</p>
+          <h5>The investigation</h5>
+          <p>Because the mean and standard deviation were computed over train + val together, every validation example had already influenced its own normalization. The model was implicitly told something about the validation distribution during training.</p>
+          <h5>The fix</h5>
+          <p>Split first, compute normalization statistics on the training split alone, and apply those exact numbers to validation and test. Validation accuracy dropped to a <em>truthful</em> 62% — which matched production, and could then be honestly improved.</p>
+          <h5>The lesson</h5>
+          <p>Any quantity fit from data — scalers, vocabularies, imputation values, class weights — must be learned on train only. If validation looks too good to be true, suspect leakage before you celebrate.</p>
+        </div>
+      </div>
+      <p>Finally, reproducibility: seed the split generator (above), seed the framework (<code>torch.manual_seed</code>), and for fully deterministic worker shuffling, pass a seeded generator to the <code>DataLoader</code>. You won't get bit-identical results across different GPUs, but you'll remove the everyday run-to-run randomness that makes debugging maddening.</p>
+    </section>
+  </div>
+
+  <div class="rule-sep"></div>
+  <div class="part" id="p3">
+    <div class="part-label">Part III — Optimization</div>
+    <h2 class="part-title">Turning gradients into <span class="acc">good steps.</span></h2>
+    <p class="part-intro">Autograd hands you a gradient; the optimizer decides what to do with it. The plain "subtract learning-rate times gradient" of Volume I is the floor, not the ceiling. Momentum smooths the path, adaptive methods tune a rate per parameter, schedules change the step over time, and clipping keeps a bad batch from blowing up the run. This part is how modern models actually converge.</p>
+
+    <section class="chapter" id="c09">
+      <h2><span class="ch-num">09</span>SGD &amp; momentum</h2>
+      <p>The "stochastic" in stochastic gradient descent refers to the mini-batch: each step estimates the true gradient (over all data) from just one batch. That estimate is noisy — and the noise is a feature, not a bug. It jostles the parameters out of shallow bad spots and acts as a mild regularizer. But pure SGD also zig-zags across narrow valleys and crawls along gentle slopes.</p>
+      <p><strong>Momentum</strong> fixes both. Instead of stepping by the raw gradient, you accumulate a running "velocity" — an exponential average of past gradients — and step by that. Consistent directions build up speed; oscillating directions cancel out. The physical picture is a heavy ball rolling downhill: it powers through small bumps and doesn't rattle side to side.</p>
+<pre data-lang="PYTHON"><span class="kw">import</span> torch
+
+optimizer = torch.optim.<span class="ty">SGD</span>(
+    model.<span class="fn">parameters</span>(),
+    lr=<span class="num">0.1</span>,
+    momentum=<span class="num">0.9</span>,        <span class="com"># keep 90% of last step&#x27;s velocity -&gt; smooth, faster</span>
+    nesterov=<span class="kw">True</span>,       <span class="com"># a &quot;look-ahead&quot; variant, usually a small free win</span>
+    weight_decay=<span class="num">5e-4</span>,   <span class="com"># L2 regularization (Chapter 10 explains the subtlety)</span>
+)</pre>
+      <p>The velocity update is, conceptually, <code>v ← momentum·v + gradient</code>, then <code>param ← param − lr·v</code>. A momentum of <code>0.9</code> (the near-universal default) means the velocity remembers roughly the last ten gradients. SGD with momentum remains, to this day, a top choice for convolutional networks — often reaching a slightly better final accuracy than adaptive methods, at the cost of needing its learning rate and schedule tuned more carefully.</p>
+      <div class="callout tip">
+        <h5>Why noise helps</h5>
+        <p>A perfectly computed full-dataset gradient would march straight into the nearest minimum — which might be sharp and generalize poorly. Mini-batch noise nudges the optimizer toward flatter, wider minima that tend to generalize better. This is part of why very large batches (smoother gradients) sometimes need extra care to match small-batch generalization.</p>
+      </div>
+    </section>
+
+    <section class="chapter" id="c10">
+      <h2><span class="ch-num">10</span>Adam, AdamW &amp; weight decay</h2>
+      <p>SGD uses one learning rate for every parameter. <strong>Adam</strong> adapts a rate <em>per parameter</em> from the running statistics of its gradients: it keeps an exponential average of the gradient (like momentum) and of the gradient's square (a measure of how noisy/large that parameter's gradients are), and divides the step by the latter. Parameters with big, noisy gradients get smaller steps; quiet ones get larger steps. The upshot is an optimizer that works reasonably out of the box across a huge range of problems.</p>
+<pre data-lang="PYTHON">optimizer = torch.optim.<span class="ty">AdamW</span>(
+    model.<span class="fn">parameters</span>(),
+    lr=<span class="num">3e-4</span>,              <span class="com"># Adam&#x27;s &quot;sweet spot&quot; is ~1e-3; 3e-4 is a safe default</span>
+    betas=(<span class="num">0.9</span>, <span class="num">0.999</span>),   <span class="com"># decay rates for the gradient / gradient-squared avgs</span>
+    eps=<span class="num">1e-8</span>,             <span class="com"># numerical floor to avoid divide-by-zero</span>
+    weight_decay=<span class="num">0.01</span>,    <span class="com"># decoupled L2 (see below) -- the reason it&#x27;s AdamW</span>
+)</pre>
+      <h3>Weight decay, and why it's AdamW not Adam</h3>
+      <p><strong>Weight decay</strong> gently pulls every parameter toward zero each step, discouraging the model from relying on any one large weight — a form of regularization that improves generalization. The subtlety: the "obvious" way to add it (fold an L2 penalty into the loss) interacts badly with Adam's per-parameter scaling, effectively decaying big-gradient weights less. <strong>AdamW</strong> "decouples" weight decay — applying it directly to the parameters, separately from the adaptive gradient step — which is the mathematically correct version and now the default choice everywhere.</p>
+      <table class="tbl compare">
+        <thead><tr><th>Choose</th><th>SGD + momentum</th><th>AdamW</th></tr></thead>
+        <tbody>
+          <tr><td>Best for</td><td>CNNs / vision, where a tuned schedule can reach top accuracy.</td><td>Transformers, NLP, anything sparse; the robust default.</td></tr>
+          <tr><td>Tuning effort</td><td>Higher — sensitive to lr and schedule.</td><td>Lower — forgiving; <code>3e-4</code> often just works.</td></tr>
+          <tr><td>Memory</td><td>1 extra buffer per param (velocity).</td><td>2 extra buffers per param — matters for huge models (Vol IV/V).</td></tr>
+        </tbody>
+      </table>
+      <div class="callout tip">
+        <h5>The practical default</h5>
+        <p>Starting a new problem, reach for <strong>AdamW at <code>lr=3e-4</code></strong>. It converges reliably with little fuss. Once things work, if you're training a CNN and chasing the last point of accuracy, try SGD+momentum with a cosine schedule — it may edge ahead. Don't agonize over the optimizer early; the learning rate matters far more.</p>
+      </div>
+    </section>
+
+    <section class="chapter" id="c11">
+      <h2><span class="ch-num">11</span>The learning rate: schedules &amp; warmup</h2>
+      <p>A fixed learning rate is a compromise: large enough to make progress early is too large to settle precisely late. So we <strong>schedule</strong> it — start higher to cover ground, then decay toward zero to fine-tune. The most common modern choice is <strong>cosine decay</strong>, often with a short <strong>warmup</strong> that ramps the rate up from near-zero over the first few hundred steps. Warmup matters because a fresh model with random weights produces wild gradients; hitting it with a full learning rate immediately can destabilize or diverge it, especially for transformers and large batches.</p>
+      <div class="diagram">  LEARNING RATE OVER TRAINING (warmup + cosine decay):
+
+   lr │        ___
+      │      /     ‾‾‾--__
+      │    /              ‾‾--__
+      │  /                       ‾‾--___
+      │ /                               ‾‾‾----____
+      └─┴────────┬──────────────────────────────────► step
+        warmup   peak         cosine decay to ~0
+       (ramp up)      (long, smooth wind-down)</div>
+<pre data-lang="PYTHON"><span class="kw">import</span> math
+<span class="kw">from</span> torch.optim.lr_scheduler <span class="kw">import</span> <span class="ty">LambdaLR</span>
+
+optimizer = torch.optim.<span class="ty">AdamW</span>(model.<span class="fn">parameters</span>(), lr=<span class="num">3e-4</span>)
+warmup, total = <span class="num">500</span>, <span class="num">10_000</span>          <span class="com"># steps</span>
+
+<span class="kw">def</span> <span class="fn">lr_factor</span>(step):
+    <span class="kw">if</span> step &lt; warmup:                <span class="com"># linear ramp 0 -&gt; 1</span>
+        <span class="kw">return</span> step / warmup
+    <span class="com"># cosine from 1 -&gt; 0 over the remaining steps</span>
+    progress = (step - warmup) / (total - warmup)
+    <span class="kw">return</span> <span class="num">0.5</span> * (<span class="num">1</span> + math.<span class="fn">cos</span>(math.pi * progress))
+
+scheduler = <span class="ty">LambdaLR</span>(optimizer, lr_factor)
+
+<span class="kw">for</span> step <span class="kw">in</span> <span class="fn">range</span>(total):
+    <span class="com"># ... forward / loss / zero_grad / backward ...</span>
+    optimizer.<span class="fn">step</span>()
+    scheduler.<span class="fn">step</span>()                 <span class="com"># advance the LR schedule EACH step</span></pre>
+      <p>Note the ordering: <code>optimizer.step()</code> then <code>scheduler.step()</code>. And decide up front whether your schedule advances per <em>step</em> (as here — the modern norm for large models) or per <em>epoch</em> (common with <code>StepLR</code> / <code>CosineAnnealingLR</code> on smaller vision jobs); mixing them up silently ruins the schedule.</p>
+      <div class="callout tip">
+        <h5>Finding a learning rate fast</h5>
+        <p>Don't guess blindly. The "LR range test" trains for a few hundred steps while exponentially increasing the LR and plots loss against it: the good range is the steepest downhill stretch, and a rule of thumb is to pick roughly one-tenth of the LR where the loss bottomed out. Even cruder but effective: try <code>1e-3, 3e-4, 1e-4</code> and keep whichever trains fastest without diverging.</p>
+      </div>
+    </section>
+
+    <section class="chapter" id="c12">
+      <h2><span class="ch-num">12</span>Batch size, accumulation &amp; clipping</h2>
+      <p><strong>Batch size</strong> trades three things off at once: memory (bigger batch, more GPU RAM), gradient quality (bigger batch, less noisy estimate), and speed (bigger batch, better hardware utilization — to a point). When you change it, the learning rate usually needs to move with it: the <em>linear scaling rule</em> says if you double the batch, roughly double the learning rate (with warmup to keep the now-larger early steps stable).</p>
+
+      <h3>Gradient accumulation: a big batch on a small GPU</h3>
+      <p>Want the smoother gradient of a batch of 256 but only have memory for 64? Run four batches of 64, summing their gradients, and step once. Because gradients accumulate by default (Volume I, Chapter 11), this is almost free — just don't zero them until after the fourth.</p>
+<pre data-lang="PYTHON">accum_steps = <span class="num">4</span>                        <span class="com"># effective batch = batch_size x 4</span>
+optimizer.<span class="fn">zero_grad</span>()
+<span class="kw">for</span> i, (xb, yb) <span class="kw">in</span> <span class="fn">enumerate</span>(loader):
+    loss = <span class="fn">loss_fn</span>(<span class="fn">model</span>(xb), yb)
+    (loss / accum_steps).<span class="fn">backward</span>()    <span class="com"># scale so the sum matches a mean</span>
+    <span class="kw">if</span> (i + <span class="num">1</span>) % accum_steps == <span class="num">0</span>:
+        optimizer.<span class="fn">step</span>()               <span class="com"># step once per 4 micro-batches</span>
+        optimizer.<span class="fn">zero_grad</span>()</pre>
+
+      <h3>Gradient clipping: a seatbelt for the update</h3>
+      <p>Occasionally one bad batch produces an enormous gradient that, applied, blows the model to <code>NaN</code> in a single step — endemic to RNNs (Volume III) and large transformers (Volume V). <strong>Gradient clipping</strong> caps the total gradient size before the update: if the combined norm exceeds a threshold, scale it back down. It costs nothing and prevents a whole class of training explosions.</p>
+<pre data-lang="PYTHON">loss.<span class="fn">backward</span>()
+<span class="com"># clip BEFORE stepping: rescales all grads so their global norm &lt;= 1.0</span>
+torch.nn.utils.<span class="fn">clip_grad_norm_</span>(model.<span class="fn">parameters</span>(), max_norm=<span class="num">1.0</span>)
+optimizer.<span class="fn">step</span>()</pre>
+      <div class="idea">
+        <p><strong>The learning rate dominates; everything else is refinement.</strong> If you tune one thing, tune the learning rate and its schedule — they decide whether training converges at all and how well. Optimizer choice, batch size, and clipping matter, but a right-sized, well-scheduled learning rate is worth more than any of them. When a run misbehaves, look there first.</p>
+      </div>
+      <p class="pull">Autograd finds the direction; the optimizer, schedule, and clip decide how bravely to walk it.</p>
+    </section>
+  </div>
+
+  <div class="rule-sep"></div>
+  <div class="part" id="p4">
+    <div class="part-label">Part IV — Generalization &amp; the real loop</div>
+    <h2 class="part-title">Doing well on data you've <span class="acc">never seen.</span></h2>
+    <p class="part-intro">Fitting the training set is easy; a big enough model can memorize it outright. The real goal is <em>generalization</em> — performing well on new data — and everything in this part serves it: diagnosing over- and underfitting, the regularizers that close the gap, the normalization layers that make deep training stable, and finally a production loop that ties Volume II together and won't lose your work.</p>
+
+    <section class="chapter" id="c13">
+      <h2><span class="ch-num">13</span>Over/underfitting &amp; capacity</h2>
+      <p>A model has <strong>capacity</strong> — roughly, how flexible it is, driven by its size and architecture. Too little capacity and it can't even fit the training data (<strong>underfitting</strong>); too much, and it fits the training data <em>too</em> well, memorizing noise and quirks that don't transfer (<strong>overfitting</strong>). The art is landing in between, and you diagnose where you are by watching training loss and validation loss <em>together</em>.</p>
+      <div class="diagram">  READING THE TWO CURVES:
+
+  loss│                            loss│
+      │╲                               │╲
+      │ ╲___ val                       │ ╲        ___----  val  ← rising = memorizing
+      │ ╲__  train    GOOD FIT         │  ╲___---            OVERFIT
+      │    ‾‾‾‾‾‾‾‾ (small gap)        │     ‾‾‾___ train (→0)
+      └──────────────► epoch           └──────────────► epoch
+      both low, close together         train falls, val turns UP → stop / regularize</div>
+      <table class="tbl">
+        <thead><tr><th>Symptom</th><th>Diagnosis &amp; move</th></tr></thead>
+        <tbody>
+          <tr><td>train high, val high</td><td><strong>Underfitting.</strong> Add capacity (wider/deeper), train longer, raise the learning rate, or reduce regularization.</td></tr>
+          <tr><td>train low, val much higher</td><td><strong>Overfitting.</strong> Add regularization (Chapter 14), get more/augmented data, or reduce capacity.</td></tr>
+          <tr><td>train low, val low &amp; close</td><td><strong>Good fit.</strong> Ship it, or push capacity up while watching the gap.</td></tr>
+          <tr><td>train won't drop at all</td><td>Not a capacity issue — a bug. Check the learning rate, data, and loss (Chapter 16's decision tree).</td></tr>
+        </tbody>
+      </table>
+      <p>The distance between the curves is the <strong>generalization gap</strong>. A little gap is normal and fine. A gap that widens as training continues — validation loss turning upward while training loss keeps falling — is the signature of overfitting, and the cue to regularize or stop.</p>
+    </section>
+
+    <section class="chapter" id="c14">
+      <h2><span class="ch-num">14</span>Regularization that works</h2>
+      <p>Regularization is any technique that trades a little training-set fit for better generalization. You have a toolbox; these are the ones that earn their keep, roughly in the order to reach for them.</p>
+      <ul class="dash">
+        <li><strong>More (or augmented) data.</strong> The most reliable regularizer of all. If you can't get more, augmentation (Chapter 06) manufactures variety for free. Always try this first.</li>
+        <li><strong>Weight decay.</strong> Already in your AdamW (Chapter 10). Penalizes large weights, favoring simpler functions. A default of <code>0.01</code>–<code>0.1</code> for transformers, <code>1e-4</code>–<code>5e-4</code> for CNNs.</li>
+        <li><strong>Dropout.</strong> During training, randomly zero a fraction of activations each step, so the network can't lean on any single unit and must learn redundant, robust features. At evaluation it's turned off automatically (this is why <code>model.eval()</code> matters).</li>
+        <li><strong>Early stopping.</strong> Keep the checkpoint with the best validation score and stop when it hasn't improved for a while. Free, and it directly targets the gap.</li>
+        <li><strong>Label smoothing.</strong> Soften one-hot targets slightly (e.g. 0.9 for the true class instead of 1.0), which curbs overconfidence and often nudges accuracy up. Built into <code>CrossEntropyLoss(label_smoothing=0.1)</code>.</li>
+      </ul>
+<pre data-lang="PYTHON"><span class="kw">import</span> torch.nn <span class="kw">as</span> nn
+
+<span class="com"># Dropout is just another layer; it self-disables under model.eval().</span>
+net = nn.<span class="ty">Sequential</span>(
+    nn.<span class="ty">Linear</span>(<span class="num">784</span>, <span class="num">256</span>), nn.<span class="ty">ReLU</span>(),
+    nn.<span class="ty">Dropout</span>(<span class="num">0.3</span>),                <span class="com"># zero 30% of activations while training</span>
+    nn.<span class="ty">Linear</span>(<span class="num">256</span>, <span class="num">10</span>),
+)
+
+<span class="com"># Label smoothing is a one-argument change to the loss.</span>
+loss_fn = nn.<span class="ty">CrossEntropyLoss</span>(label_smoothing=<span class="num">0.1</span>)</pre>
+      <div class="callout danger">
+        <h5>Dropout and BatchNorm make <code>train()</code>/<code>eval()</code> mandatory</h5>
+        <p>These layers behave differently in the two modes. Forget <code>model.eval()</code> before validating and dropout keeps randomly zeroing activations while batch-norm uses batch statistics — your metrics turn noisy and pessimistic. Forget <code>model.train()</code> when you resume training and the model stops regularizing. Set the mode explicitly at the top of every train and eval phase.</p>
+      </div>
+    </section>
+
+    <section class="chapter" id="c15">
+      <h2><span class="ch-num">15</span>Normalization: BatchNorm &amp; LayerNorm</h2>
+      <p>Deep networks train poorly when the scale of activations drifts from layer to layer — gradients vanish or explode, and you're forced to use a tiny learning rate. <strong>Normalization layers</strong> fix this by re-centering and re-scaling activations to a standard distribution partway through the network, then letting the model learn a per-feature scale and shift back. The payoff is faster, more stable training and tolerance for higher learning rates. Two variants dominate, differing only in <em>which</em> numbers they average over.</p>
+      <div class="diagram">  WHAT EACH NORM AVERAGES OVER  (a batch of feature vectors):
+
+        features →                         features →
+      ┌───────────────┐                  ┌───────────────┐
+   b  │ ▓ ▓ ▓ ▓ ▓ ▓ ▓ │  BatchNorm:    b │ ▓▓▓▓▓▓▓        │ LayerNorm:
+   a  │ ▓ ▓ ▓ ▓ ▓ ▓ ▓ │  normalize     a │               │ normalize
+   t  │ ▓ ▓ ▓ ▓ ▓ ▓ ▓ │  down each      t │       ▓▓▓▓▓▓▓ │ across each
+   c  │ ▓ ▓ ▓ ▓ ▓ ▓ ▓ │  COLUMN         c │               │ ROW (one
+   h  │ ▓ ▓ ▓ ▓ ▓ ▓ ▓ │  (per feature,    │               │ example,
+      └───────────────┘   across batch)   └───────────────┘  across features)</div>
+
+      <h3>BatchNorm — normalize each feature across the batch</h3>
+      <p><code>nn.BatchNorm</code> standardizes each feature using the mean and variance <em>of the current batch</em>. It's a staple of convolutional networks and often lets you train them noticeably faster. Its quirk: because it depends on batch statistics, it behaves differently at evaluation, where there's no meaningful "batch" — so it keeps a running average of the statistics during training and uses those frozen numbers in <code>eval()</code> mode. That's the buffer state from Chapter 01, and the reason batch-norm is sensitive to very small batch sizes.</p>
+
+      <h3>LayerNorm — normalize each example across its features</h3>
+      <p><code>nn.LayerNorm</code> standardizes across the features of a <em>single</em> example, so it doesn't depend on the batch at all — identical behavior in training and eval, and unbothered by batch size. That independence is why it's the normalization of choice in transformers and sequence models (Volumes III and V), where batch composition varies and sequence lengths differ.</p>
+<pre data-lang="PYTHON"><span class="kw">import</span> torch.nn <span class="kw">as</span> nn
+
+<span class="com"># BatchNorm for a conv/MLP feature map (num_features = channels/width):</span>
+bn_block = nn.<span class="ty">Sequential</span>(nn.<span class="ty">Linear</span>(<span class="num">256</span>, <span class="num">256</span>), nn.<span class="ty">BatchNorm1d</span>(<span class="num">256</span>), nn.<span class="ty">ReLU</span>())
+
+<span class="com"># LayerNorm for a transformer-style feature vector (normalized_shape = width):</span>
+ln_block = nn.<span class="ty">LayerNorm</span>(<span class="num">512</span>)   <span class="com"># normalizes the last dim of each token vector</span></pre>
+      <table class="tbl compare">
+        <thead><tr><th>Dimension</th><th>BatchNorm</th><th>LayerNorm</th></tr></thead>
+        <tbody>
+          <tr><td>Averages over</td><td>The batch, per feature.</td><td>The features, per example.</td></tr>
+          <tr><td>Batch-size sensitive?</td><td>Yes — struggles with tiny batches.</td><td>No — batch-independent.</td></tr>
+          <tr><td>Train vs eval differ?</td><td>Yes — uses running stats at eval.</td><td>No — identical in both.</td></tr>
+          <tr><td>Home turf</td><td>CNNs / vision.</td><td>Transformers / sequences.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="chapter" id="c16">
+      <h2><span class="ch-num">16</span>A production training loop</h2>
+      <p>Here is Volume II assembled: device handling, the schedule and clipping from Part III, evaluation with an accuracy metric, checkpointing so a crash doesn't cost you the run, and early stopping. This is the template to copy for real projects.</p>
+<pre data-lang="PYTHON"><span class="kw">import</span> torch
+
+<span class="kw">def</span> <span class="fn">train</span>(model, train_dl, val_dl, epochs=<span class="num">50</span>, patience=<span class="num">5</span>, device=<span class="str">&quot;cuda&quot;</span>):
+    model.<span class="fn">to</span>(device)
+    opt = torch.optim.<span class="ty">AdamW</span>(model.<span class="fn">parameters</span>(), lr=<span class="num">3e-4</span>, weight_decay=<span class="num">0.01</span>)
+    sched = torch.optim.lr_scheduler.<span class="ty">CosineAnnealingLR</span>(opt, <span class="ty">T_max</span>=epochs)
+    loss_fn = torch.nn.<span class="ty">CrossEntropyLoss</span>(label_smoothing=<span class="num">0.1</span>)
+    best_val, waited = <span class="fn">float</span>(<span class="str">&quot;inf&quot;</span>), <span class="num">0</span>
+
+    <span class="kw">for</span> epoch <span class="kw">in</span> <span class="fn">range</span>(epochs):
+        model.<span class="fn">train</span>()                                  <span class="com"># regularizers ON</span>
+        <span class="kw">for</span> xb, yb <span class="kw">in</span> train_dl:
+            xb, yb = xb.<span class="fn">to</span>(device), yb.<span class="fn">to</span>(device)
+            loss = <span class="fn">loss_fn</span>(<span class="fn">model</span>(xb), yb)
+            opt.<span class="fn">zero_grad</span>()
+            loss.<span class="fn">backward</span>()
+            torch.nn.utils.<span class="fn">clip_grad_norm_</span>(model.<span class="fn">parameters</span>(), <span class="num">1.0</span>)
+            opt.<span class="fn">step</span>()
+        sched.<span class="fn">step</span>()                                   <span class="com"># per-epoch schedule</span>
+
+        <span class="com"># ---- validation ----</span>
+        model.<span class="fn">eval</span>()                                   <span class="com"># regularizers OFF</span>
+        val_loss, correct, total = <span class="num">0.0</span>, <span class="num">0</span>, <span class="num">0</span>
+        <span class="kw">with</span> torch.<span class="fn">no_grad</span>():
+            <span class="kw">for</span> xb, yb <span class="kw">in</span> val_dl:
+                xb, yb = xb.<span class="fn">to</span>(device), yb.<span class="fn">to</span>(device)
+                out = <span class="fn">model</span>(xb)
+                val_loss += <span class="fn">loss_fn</span>(out, yb).<span class="fn">item</span>() * <span class="fn">len</span>(xb)
+                correct += (out.<span class="fn">argmax</span>(<span class="num">1</span>) == yb).<span class="fn">sum</span>().<span class="fn">item</span>()
+                total += <span class="fn">len</span>(xb)
+        val_loss /= total
+        <span class="fn">print</span>(<span class="str">f&quot;epoch {epoch}  val_loss {val_loss:.4f}  acc {correct/total:.3f}&quot;</span>)
+
+        <span class="com"># ---- checkpoint best + early stop ----</span>
+        <span class="kw">if</span> val_loss &lt; best_val:
+            best_val, waited = val_loss, <span class="num">0</span>
+            torch.<span class="fn">save</span>({<span class="str">&quot;epoch&quot;</span>: epoch,
+                        <span class="str">&quot;model&quot;</span>: model.<span class="fn">state_dict</span>(),
+                        <span class="str">&quot;opt&quot;</span>: opt.<span class="fn">state_dict</span>()}, <span class="str">&quot;best.pt&quot;</span>)   <span class="com"># save STATE, not the object</span>
+        <span class="kw">else</span>:
+            waited += <span class="num">1</span>
+            <span class="kw">if</span> waited &gt;= patience:
+                <span class="fn">print</span>(<span class="str">&quot;early stop&quot;</span>); <span class="kw">break</span></pre>
+      <div class="callout warn">
+        <h5>Save the <code>state_dict</code>, not the model object</h5>
+        <p>Persist <code>model.state_dict()</code> (a plain dict of tensors), not the whole model via pickle — the latter breaks when your code moves or refactors. To resume training, save the optimizer and scheduler states and the epoch too; to just deploy, the model state_dict alone is enough. Load with <code>model.load_state_dict(torch.load("best.pt")["model"])</code>.</p>
+      </div>
+
+      <h3>When it won't train: a triage path</h3>
+      <div class="tree">
+<pre><span class="q">Training is misbehaving — what do you see?</span>
+   │
+   ├─ <span class="a">loss is NaN/inf</span> → lower the LR; add grad clipping; check for
+   │        bad inputs (NaNs, /0); confirm you're not softmaxing before CE loss
+   │
+   ├─ <span class="a">loss flat, never drops</span> → LR too low or a wiring bug: is the
+   │        optimizer holding the right params? are labels/inputs aligned?
+   │        overfit a SINGLE batch first — a correct model can memorize it
+   │
+   ├─ <span class="a">train drops, val rises</span> → overfitting → regularize (Ch.14),
+   │        more data/augmentation, early stop
+   │
+   └─ <span class="a">both stuck high</span> → underfitting → more capacity, train longer,
+            higher LR, less regularization</pre>
+      </div>
+      <div class="idea">
+        <p><strong>Overfit one batch before you trust anything.</strong> The fastest sanity check in deep learning: take a single batch and train on it repeatedly. A correctly wired model will drive that loss to near zero within a few dozen steps. If it can't, no amount of data or tuning will help — you have a bug in the model, loss, or data plumbing, and you've just localized it cheaply.</p>
+      </div>
+      <p class="pull">A model that fits everything and generalizes to nothing has learned the answers, not the lesson.</p>
+    </section>
+  </div>
+
+</main>
+
+<footer>
+  <h4>sources &amp; further study</h4>
+  <div class="resources">
+    <ul>
+      <li><strong>Official</strong></li>
+      <li>PyTorch — "Optimizing Model Parameters" tutorial</li>
+      <li>torch.utils.data &amp; torch.optim reference</li>
+      <li>torchvision.transforms.v2 guide</li>
+      <li><strong>Deeper</strong></li>
+      <li>Deep Learning (Goodfellow et al.) — regularization &amp; optimization</li>
+      <li>Loshchilov &amp; Hutter — "Decoupled Weight Decay" (AdamW)</li>
+      <li>Ioffe &amp; Szegedy (BatchNorm); Ba et al. (LayerNorm)</li>
+      <li><strong>Next</strong></li>
+      <li>Volume III — Architectures</li>
+    </ul>
+  </div>
+  <p class="footer-note">Volume II of the PyTorch Field Manual. The building blocks (<code>nn.Module</code>, data loading, optimizers, regularization, normalization) and the production loop here underpin every model in the rest of the series. Volume III puts specific architectures — CNNs, sequence models, transformers — into the forward pass. Code targets PyTorch 2.x (2.13, mid-2026).</p>
+</footer>
+
+</body>
+</html>

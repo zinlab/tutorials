@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PyTorch Field Manual — Volume IV · Efficiency, Scale &amp; Production</title>
+
+<!-- ============================================================
+     FIELD MANUAL TEMPLATE
+     Copy this whole file, then replace the example content in
+     <body>. The <head> CSS is the complete design system — do not
+     edit it except to swap the single accent token (see note below).
+
+     ONE ALLOWED VARIATION: to re-hue the accent, change --green,
+     --green-deep, --green-bri, and --code-bg to a different family
+     (e.g. a blue or copper). Leave everything else alone — the
+     paper, ink, slate, amber, and rose are calibrated to pair with
+     the accent and with each other.
+     ============================================================ -->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;0,8..60,700;1,8..60,400;1,8..60,500&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --bg:        #eef1ec;   /* cool desaturated paper — the page */
+  --bg-2:      #e4e8e1;   /* slightly darker panels / table headers */
+  --bg-3:      #d7dcd2;   /* darker still — inline code chips */
+  --card:      #f7f9f4;   /* card surfaces (slightly lighter than page) */
+  --ink:       #14181a;   /* near-black primary text */
+  --ink-soft:  #3d4642;   /* body text in cards, secondary prose */
+  --ink-faint: #76807a;   /* muted labels, captions */
+  --rule:      #c6ccc0;   /* hairline rules */
+  --rule-soft: #d8ddd2;
+  --rule-dark: #8d958a;   /* card borders */
+  --green:     #1a7f46;   /* SIGNAL ACCENT — primary */
+  --green-deep:#0e5e31;   /* darker accent (code, links) */
+  --green-bri: #2ea05c;   /* brighter accent (hover) */
+  --slate:     #33505f;   /* secondary accent — cool blue-grey */
+  --slate-deep:#203642;
+  --amber:     #b07d12;   /* warning accent */
+  --rose:      #a32a1f;   /* danger / required accent */
+  --code-bg:   #15201a;   /* dark code blocks (green-tinted near-black) */
+  --code-ink:  #d6ddd2;
+  --maxw:      1080px;
+}
+*{ box-sizing: border-box; }
+html{ scroll-behavior: smooth; }
+body{
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Source Serif 4', Georgia, serif;
+  font-size: 17px;
+  line-height: 1.62;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ============ HEADER ============ */
+header{ max-width: var(--maxw); margin: 0 auto; padding: 84px 40px 50px; position: relative; }
+.filed{
+  font-family: 'Geist Mono', ui-monospace, monospace; font-size: 10.5px; letter-spacing: .28em;
+  text-transform: uppercase; color: var(--green); margin: 0 0 28px; font-weight: 600;
+  display: flex; align-items: center; gap: 12px;
+}
+.filed::before{ content: "▸"; color: var(--green); font-size: 13px; }
+.vol{
+  font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .18em;
+  color: var(--ink-faint); text-transform: uppercase; margin: 0 0 16px; font-weight: 500;
+}
+h1{
+  font-family: 'Archivo', system-ui, sans-serif; font-weight: 900;
+  font-size: clamp(54px, 9.5vw, 122px); line-height: 0.9; letter-spacing: -0.02em; margin: 0 0 24px; color: var(--ink);
+}
+h1 .acc{ color: var(--green); }
+.deck{ font-family: 'Source Serif 4', serif; font-size: 20px; font-weight: 400; color: var(--ink-soft); max-width: 770px; line-height: 1.5; }
+.readout{ margin-top: 40px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--rule); border: 1px solid var(--rule); }
+@media (max-width: 680px){ .readout{ grid-template-columns: repeat(2,1fr); } }
+.readout .cell{ background: var(--bg); padding: 14px 16px; }
+.readout .k{ font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 6px; }
+.readout .v{ font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 22px; color: var(--ink); line-height: 1; }
+.readout .v .u{ font-size: 12px; color: var(--green); font-weight: 600; }
+
+/* ============ TOC ============ */
+.toc{ margin-top: 46px; background: var(--card); border: 1px solid var(--rule-dark); padding: 30px 32px 34px; position: relative; }
+.toc::before{ content: "CONTENTS"; position: absolute; top: -9px; left: 26px; background: var(--card); padding: 0 10px; font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .3em; color: var(--green); font-weight: 600; }
+.toc h3{ font-family: 'Archivo', sans-serif; font-size: 26px; font-weight: 800; margin: 0 0 3px; color: var(--ink); letter-spacing: -0.01em; }
+.toc .toc-sub{ font-family: 'Geist Mono', monospace; font-size: 10.5px; color: var(--ink-faint); letter-spacing: .1em; text-transform: uppercase; margin-bottom: 20px; }
+.toc-part{ margin-top: 15px; }
+.toc-part-name{ font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .22em; color: var(--slate); text-transform: uppercase; font-weight: 600; border-bottom: 1px solid var(--rule); padding-bottom: 5px; margin-bottom: 7px; }
+.toc-grid{ display: grid; grid-template-columns: repeat(2,1fr); gap: 1px 32px; }
+@media (max-width: 760px){ .toc-grid{ grid-template-columns: 1fr; } }
+.toc-grid a{ color: var(--ink-soft); text-decoration: none; font-size: 14.5px; padding: 5px 0; display: flex; gap: 12px; align-items: baseline; border-bottom: 1px dotted transparent; transition: all .14s; }
+.toc-grid a:hover{ color: var(--green); border-color: var(--rule); }
+.toc-grid a .n{ font-family: 'Geist Mono', monospace; font-size: 10.5px; color: var(--slate); min-width: 26px; font-weight: 600; }
+
+/* ============ MAIN ============ */
+main{ max-width: var(--maxw); margin: 0 auto; padding: 56px 40px 96px; }
+.part{ margin-top: 92px; padding-top: 46px; position: relative; }
+.part::before{ content:""; position: absolute; top: 0; left: 0; right: 0; border-top: 2px solid var(--ink); }
+.part::after{ content:""; position: absolute; top: 5px; left: 0; width: 84px; border-top: 2px solid var(--green); }
+.part:first-child{ margin-top: 28px; padding-top: 28px; }
+.part-label{ font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .28em; color: var(--green); text-transform: uppercase; margin-bottom: 14px; font-weight: 600; }
+.part-title{ font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 54px; line-height: 0.96; letter-spacing: -0.02em; margin: 0 0 18px; color: var(--ink); }
+.part-title .acc{ color: var(--green); }
+.part-intro{ color: var(--ink-soft); font-size: 18.5px; max-width: 800px; margin-bottom: 34px; line-height: 1.5; }
+
+section.chapter{ margin-top: 52px; }
+section.chapter:first-of-type{ margin-top: 8px; }
+h2{ font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 33px; line-height: 1.08; letter-spacing: -0.015em; margin: 0 0 15px; color: var(--ink); display: flex; align-items: baseline; gap: 15px; padding-bottom: 9px; border-bottom: 2px solid var(--ink); }
+h2 .ch-num{ font-family: 'Geist Mono', monospace; font-size: 13px; color: var(--green); letter-spacing: .05em; font-weight: 600; flex-shrink: 0; }
+h3{ font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 22px; margin: 28px 0 9px; color: var(--ink); letter-spacing: -0.01em; }
+h4{ font-family: 'Geist Mono', monospace; font-size: 10.5px; letter-spacing: .18em; text-transform: uppercase; color: var(--slate); margin: 22px 0 8px; font-weight: 600; }
+p{ margin: 12px 0; }
+p code, li code, td code{ font-family: 'Geist Mono', monospace; font-size: .8em; background: var(--bg-3); color: var(--green-deep); padding: 1px 6px; border-radius: 2px; border: 1px solid var(--rule); }
+strong{ font-weight: 700; }
+ul, ol{ padding-left: 1.3em; }
+li{ margin: 6px 0; }
+ul.tight li{ margin: 3px 0; }
+ul.dash{ list-style: none; padding-left: 0; }
+ul.dash li{ position: relative; padding-left: 22px; }
+ul.dash li::before{ content: "▸"; position: absolute; left: 0; color: var(--green); font-weight: 700; }
+ul.check{ list-style: none; padding-left: 0; }
+ul.check li{ position: relative; padding-left: 24px; }
+ul.check li::before{ content: "▪"; position: absolute; left: 2px; top: 2px; color: var(--green); }
+
+/* ============ CODE ============ */
+pre{ background: var(--code-bg); padding: 17px 20px; overflow-x: auto; font-family: 'Geist Mono', monospace; font-size: 12.5px; line-height: 1.6; color: var(--code-ink); margin: 18px 0; position: relative; border-left: 3px solid var(--green); }
+pre .com{ color: #6f8378; font-style: italic; }   /* comment */
+pre .kw{  color: #6cb38a; }                        /* keyword */
+pre .ty{  color: #8fc6c0; }                        /* type */
+pre .str{ color: #c9b36a; }                        /* string */
+pre .num{ color: #c89a64; }                        /* number */
+pre .fn{  color: #8db8d0; }                        /* function */
+pre .var{ color: #d6ddd2; }                        /* variable */
+pre .glb{ color: #7fbf95; }                        /* global / builtin */
+pre .opt{ color: #c0a96a; }                        /* flag / option */
+pre::before{ content: attr(data-lang); position: absolute; top: 5px; right: 12px; font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: .18em; color: #56635a; text-transform: uppercase; }
+
+/* ============ CALLOUTS ============ */
+.callout{ margin: 22px 0; padding: 15px 22px; border-left: 4px solid var(--slate); background: var(--bg-2); font-size: 16px; line-height: 1.55; }
+.callout.warn{ border-color: var(--amber); }
+.callout.danger{ border-color: var(--rose); }
+.callout.tip{ border-color: var(--green); }
+.callout h5{ margin: 0 0 6px; font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--slate); font-weight: 600; }
+.callout.warn h5{ color: var(--amber); }
+.callout.danger h5{ color: var(--rose); }
+.callout.tip h5{ color: var(--green); }
+.callout p:first-child{ margin-top: 0; } .callout p:last-child{ margin-bottom: 0; }
+
+/* ============ TABLES ============ */
+.tbl{ width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14.5px; }
+.tbl th, .tbl td{ text-align: left; padding: 9px 14px; vertical-align: top; border-bottom: 1px solid var(--rule); }
+.tbl th{ font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink); font-weight: 600; border-bottom: 2px solid var(--ink); border-top: 2px solid var(--ink); background: var(--bg-2); }
+.tbl td:first-child{ font-family: 'Geist Mono', monospace; font-size: 12px; color: var(--green-deep); font-weight: 500; width: 26%; }
+.tbl.wide td:first-child{ width: 20%; }
+.tbl.compare td:first-child{ font-family: 'Geist Mono', monospace; font-weight: 600; color: var(--ink); width: 22%; font-size: 11.5px; letter-spacing: .03em; }
+.tbl.compare td:nth-child(2){ color: var(--green-deep); font-family: 'Source Serif 4', serif; font-size: 14.5px; }
+.tbl.compare td:nth-child(3){ color: var(--slate-deep); font-family: 'Source Serif 4', serif; font-size: 14.5px; }
+
+/* ============ DIAGRAM (monospace ASCII art in a labeled frame) ============ */
+.diagram{ background: var(--card); border: 1px solid var(--rule-dark); padding: 22px 24px; margin: 22px 0; font-family: 'Geist Mono', monospace; font-size: 12px; line-height: 1.55; color: var(--ink-soft); white-space: pre; overflow-x: auto; position: relative; }
+.diagram::before{ content: "FIG."; position: absolute; top: -9px; left: 18px; background: var(--bg); padding: 0 9px; font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: .2em; color: var(--slate); font-weight: 600; }
+
+/* ============ READOUT PANEL (titled stat grid) ============ */
+.panel{ background: var(--card); border: 1px solid var(--rule-dark); margin: 22px 0; padding: 20px 24px; position: relative; }
+.panel::before{ content: attr(data-title); position: absolute; top: -9px; left: 20px; background: var(--bg); padding: 0 10px; font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: .2em; color: var(--green); font-weight: 600; }
+.panel-grid{ display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; }
+@media (max-width: 680px){ .panel-grid{ grid-template-columns: 1fr 1fr; } }
+.panel-grid .stat .k{ font-family:'Geist Mono',monospace; font-size: 9px; letter-spacing:.16em; text-transform:uppercase; color: var(--ink-faint); margin-bottom: 4px; }
+.panel-grid .stat .v{ font-family:'Archivo',sans-serif; font-weight: 700; font-size: 17px; color: var(--ink); line-height: 1.15; }
+.panel-grid .stat .v small{ font-weight: 400; font-family:'Source Serif 4',serif; font-size: 13px; color: var(--ink-soft); }
+
+/* ============ ISSUE / WORKED CASE (dark header + body) ============ */
+.issue{ margin: 26px 0; background: var(--card); border: 1px solid var(--ink); }
+.issue-header{ padding: 12px 22px; background: var(--ink); color: var(--bg); font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; display: flex; align-items: center; gap: 13px; }
+.issue-header .tag{ background: var(--green); padding: 3px 11px; letter-spacing: .1em; font-weight: 600; font-size: 10px; color: #fff; }
+.issue-header .title{ flex: 1; font-weight: 600; letter-spacing: .08em; }
+.issue-body{ padding: 22px 26px; }
+.issue-body > h5{ margin: 16px 0 7px; font-family:'Geist Mono',monospace; font-size: 10.5px; letter-spacing:.16em; color: var(--green); text-transform: uppercase; font-weight: 600; }
+.issue-body > h5:first-child{ margin-top: 0; }
+
+/* ============ DECISION TREE ============ */
+.tree{ background: var(--card); border: 1px solid var(--slate); padding: 24px 26px; margin: 24px 0; position: relative; }
+.tree::before{ content: "DECISION PATH"; position: absolute; top: -9px; left: 22px; background: var(--bg); padding: 0 11px; font-family:'Geist Mono',monospace; font-size: 10px; letter-spacing: .2em; color: var(--slate); font-weight: 600; }
+.tree pre{ background: transparent; color: var(--ink); border: none; border-left: none; padding: 6px 0 0; font-size: 13px; line-height: 1.7; }
+.tree pre::before{ display: none; }
+.tree .q{ color: var(--green); font-weight: 700; }   /* a question node */
+.tree .a{ color: var(--slate); font-weight: 700; }   /* an answer/branch label */
+
+/* ============ PRINCIPLE (green-bordered key idea) ============ */
+.idea{ margin: 24px 0; border: 2px solid var(--green); background: var(--card); padding: 22px 28px; position: relative; }
+.idea::before{ content: "PRINCIPLE"; position: absolute; top: -10px; left: 22px; background: var(--bg); padding: 0 11px; font-family:'Geist Mono',monospace; font-size: 10px; letter-spacing: .24em; color: var(--green); font-weight: 600; }
+.idea p{ margin: 6px 0; font-size: 16px; }
+
+/* ============ PULL QUOTE ============ */
+.pull{ font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 30px; line-height: 1.08; letter-spacing: -0.015em; color: var(--green); margin: 38px 0; padding: 0 0 0 26px; border-left: 4px solid var(--green); }
+
+/* ============ CHEATSHEET ============ */
+.cheat{ background: var(--card); border: 1px solid var(--ink); padding: 24px 28px; margin: 24px 0; }
+.cheat h5{ margin: 0 0 14px; font-family:'Geist Mono',monospace; font-size: 11px; letter-spacing: .2em; color: var(--green); text-transform: uppercase; font-weight: 600; }
+.cheat-grid{ display: grid; grid-template-columns: 1fr 1.5fr; gap: 6px 22px; font-size: 13px; }
+.cheat-grid .cmd{ font-family:'Geist Mono',monospace; color: var(--green-deep); font-weight: 500; }
+.cheat-grid .desc{ color: var(--ink-soft); font-size: 14.5px; }
+@media (max-width: 680px){ .cheat-grid{ grid-template-columns: 1fr; gap: 2px 18px; } .cheat-grid .desc{ margin-bottom: 10px; } }
+
+/* ============ TWO-COLUMN (e.g. good/bad, before/after) ============ */
+.twocol{ display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 22px 0; }
+@media (max-width: 760px){ .twocol{ grid-template-columns: 1fr; } }
+.twocol .col{ background: var(--card); border: 1px solid var(--rule-dark); padding: 18px 22px; }
+.twocol .col h5{ margin: 0 0 10px; font-family:'Geist Mono',monospace; font-size: 10.5px; letter-spacing: .18em; text-transform: uppercase; color: var(--slate); font-weight: 600; }
+.twocol .col.bad h5{ color: var(--rose); } .twocol .col.good h5{ color: var(--green); }
+.twocol .col p{ margin: 8px 0; font-size: 15px; } .twocol .col p:first-child{ margin-top: 0; }
+
+/* ============ PROFILE / ENTITY CARD (e.g. a person, a module) ============ */
+.iv{ background: var(--card); border: 1px solid var(--rule-dark); border-left: 3px solid var(--slate); padding: 20px 24px; margin: 14px 0; position: relative; }
+.iv.req{ border-left: 3px solid var(--rose); }
+.iv-head{ display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 3px; }
+.iv-name{ font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 23px; letter-spacing: -0.01em; color: var(--ink); }
+.iv-dur{ font-family: 'Geist Mono', monospace; font-size: 11px; color: var(--ink-faint); letter-spacing: .08em; }
+.iv-badge{ font-family: 'Geist Mono', monospace; font-size: 8.5px; letter-spacing: .16em; text-transform: uppercase; background: var(--rose); color: #fff; padding: 3px 9px; font-weight: 600; }
+.iv-role{ font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--green); font-weight: 600; margin-bottom: 9px; }
+.iv-focus{ color: var(--ink-soft); font-size: 15.5px; margin: 8px 0 12px; line-height: 1.48; }
+
+/* ============ CLICKABLE NAV CARD (e.g. an index/landing page) ============ */
+a.vol-card{ display: block; text-decoration: none; color: inherit; background: var(--card); border: 1px solid var(--rule-dark); border-left: 4px solid var(--green); padding: 24px 26px 20px; position: relative; transition: all .16s ease; }
+a.vol-card:hover{ border-left-width: 8px; border-color: var(--green); background: #fbfcf9; transform: translateY(-2px); box-shadow: 0 6px 22px rgba(20,40,26,.09); }
+.vol-card .vc-num{ position: absolute; top: 16px; right: 22px; font-family: 'Archivo', sans-serif; font-weight: 900; font-size: 46px; line-height: 1; color: var(--bg-3); letter-spacing: -0.02em; transition: color .16s; }
+a.vol-card:hover .vc-num{ color: var(--green-bri); }
+.vol-card .vc-kicker{ font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .22em; text-transform: uppercase; color: var(--green); font-weight: 600; margin-bottom: 8px; }
+.vol-card .vc-title{ font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 28px; line-height: 1.02; letter-spacing: -0.015em; color: var(--ink); margin: 0 0 10px; }
+.vol-card .vc-open{ margin-top: 14px; font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--green); font-weight: 600; }
+
+/* ============ SECTION SEPARATOR ============ */
+.rule-sep{ margin: 56px 0; position: relative; height: 0; border-top: 2px solid var(--ink); }
+.rule-sep::after{ content: "◇ ◇ ◇"; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); background: var(--bg); color: var(--green); padding: 0 16px; font-size: 11px; letter-spacing: .3em; }
+
+/* ============ FOOTER ============ */
+footer{ max-width: var(--maxw); margin: 0 auto; padding: 54px 40px 84px; border-top: 2px solid var(--ink); color: var(--ink-soft); font-size: 14px; }
+footer h4{ font-family:'Geist Mono',monospace; font-size: 11px; letter-spacing: .24em; color: var(--green); margin: 0 0 18px; font-weight: 600; }
+footer .resources{ columns: 2; column-gap: 38px; }
+@media (max-width: 680px){ footer .resources{ columns: 1; } }
+footer ul{ list-style: none; padding: 0; margin: 0; }
+footer li{ padding: 5px 0; font-size: 13.5px; break-inside: avoid; }
+footer li code{ color: var(--green-deep); background: transparent; border: none; padding: 0; font-weight: 500; }
+footer .footer-note{ margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--rule); color: var(--ink-faint); font-size: 14px; }
+</style>
+</head>
+<body>
+<header>
+  <p class="filed">pytorch field manual · volume iv · efficiency, scale &amp; production</p>
+  <p class="vol">Volume IV of VI · fast, cheap, distributed, deployed</p>
+  <h1>Efficiency<br><span class="acc">&amp; Scale.</span></h1>
+  <p class="deck">
+    A model that trains is only half the job; a model that trains <em>fast</em>, fits in memory, spreads across GPUs, and ships to production is the other half — and it's where most of the money and frustration live. This volume is the performance engineer's toolkit: mixed precision, <code>torch.compile</code>, profiling, distributed training with DDP and FSDP2, and the quantize-and-export path to deployment.
+  </p>
+  <div class="readout">
+    <div class="cell"><div class="k">Volume</div><div class="v">IV<span class="u"> / VI</span></div></div>
+    <div class="cell"><div class="k">Chapters</div><div class="v">16</div></div>
+    <div class="cell"><div class="k">Parts</div><div class="v">4</div></div>
+    <div class="cell"><div class="k">Focus</div><div class="v" style="font-size:13px;">speed · scale · deploy</div></div>
+  </div>
+
+  <div class="toc">
+    <h3>Contents</h3>
+    <p class="toc-sub">Sixteen chapters across four parts</p>
+    <div class="toc-part">
+      <div class="toc-part-name">Part I · Single-GPU speed</div>
+      <div class="toc-grid">
+        <a href="#c01"><span class="n">01</span><span>Mixed precision</span></a>
+        <a href="#c02"><span class="n">02</span><span>torch.compile</span></a>
+        <a href="#c03"><span class="n">03</span><span>Memory &amp; activation checkpointing</span></a>
+        <a href="#c04"><span class="n">04</span><span>Profiling: find the bottleneck</span></a>
+      </div>
+    </div>
+    <div class="toc-part">
+      <div class="toc-part-name">Part II · Throughput</div>
+      <div class="toc-grid">
+        <a href="#c05"><span class="n">05</span><span>The input pipeline at scale</span></a>
+        <a href="#c06"><span class="n">06</span><span>Kernel wins: channels_last, TF32, fused</span></a>
+        <a href="#c07"><span class="n">07</span><span>Effective batch size</span></a>
+        <a href="#c08"><span class="n">08</span><span>Determinism &amp; reproducible performance</span></a>
+      </div>
+    </div>
+    <div class="toc-part">
+      <div class="toc-part-name">Part III · Distributed training</div>
+      <div class="toc-grid">
+        <a href="#c09"><span class="n">09</span><span>The landscape: DP → DDP → FSDP</span></a>
+        <a href="#c10"><span class="n">10</span><span>DDP in depth</span></a>
+        <a href="#c11"><span class="n">11</span><span>FSDP2 for large models</span></a>
+        <a href="#c12"><span class="n">12</span><span>Multi-node &amp; communication pitfalls</span></a>
+      </div>
+    </div>
+    <div class="toc-part">
+      <div class="toc-part-name">Part IV · Compression &amp; deployment</div>
+      <div class="toc-grid">
+        <a href="#c13"><span class="n">13</span><span>Quantization</span></a>
+        <a href="#c14"><span class="n">14</span><span>Pruning &amp; distillation</span></a>
+        <a href="#c15"><span class="n">15</span><span>Export: torch.export</span></a>
+        <a href="#c16"><span class="n">16</span><span>Serving &amp; inference optimization</span></a>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="part" id="p1">
+    <div class="part-label">Part I — Single-GPU speed</div>
+    <h2 class="part-title">Wringing the most from <span class="acc">one GPU.</span></h2>
+    <p class="part-intro">Before you reach for more hardware, make one GPU fly. Three moves — lower-precision math, a one-line compiler, and disciplined memory use — routinely cut training time by half or more with no change to your model's accuracy. And none of it is worth doing blind: the fourth chapter is the profiler that tells you which change will actually help.</p>
+
+    <section class="chapter" id="c01">
+      <h2><span class="ch-num">01</span>Mixed precision</h2>
+      <p>By default every number is 32-bit float (FP32). But modern GPUs have dedicated hardware (tensor cores) that multiply 16-bit floats several times faster, and 16-bit values take half the memory. <strong>Mixed precision</strong> runs the bulk of the math — the matrix multiplies and convolutions — in 16-bit, while keeping a few precision-sensitive pieces (the master weights, the loss reduction) in FP32. The result is typically 1.5–3× faster training and roughly half the activation memory, at no cost to final accuracy.</p>
+      <p>Two 16-bit formats exist and the choice matters. <strong>bfloat16 (bf16)</strong> keeps FP32's wide exponent range, trading precision for stability — it "just works" without extra machinery and is the default on Ampere-and-newer GPUs (A100, H100, and later). <strong>float16 (fp16)</strong> has more precision but a narrow range, so small gradients underflow to zero; it needs a <code>GradScaler</code> that multiplies the loss up before backward and unscales before the step.</p>
+<pre data-lang="PYTHON"><span class="kw">import</span> torch
+
+model = model.<span class="fn">to</span>(<span class="str">&quot;cuda&quot;</span>)
+opt = torch.optim.<span class="ty">AdamW</span>(model.<span class="fn">parameters</span>(), lr=<span class="num">3e-4</span>)
+
+<span class="com"># --- bf16: the modern default on A100/H100+. No scaler needed. ---</span>
+<span class="kw">for</span> xb, yb <span class="kw">in</span> loader:
+    xb, yb = xb.<span class="fn">to</span>(<span class="str">&quot;cuda&quot;</span>), yb.<span class="fn">to</span>(<span class="str">&quot;cuda&quot;</span>)
+    <span class="kw">with</span> torch.<span class="fn">autocast</span>(<span class="str">&quot;cuda&quot;</span>, dtype=torch.bfloat16):   <span class="com"># run ops in bf16</span>
+        loss = <span class="fn">loss_fn</span>(<span class="fn">model</span>(xb), yb)
+    opt.<span class="fn">zero_grad</span>()
+    loss.<span class="fn">backward</span>()
+    opt.<span class="fn">step</span>()
+
+<span class="com"># --- fp16: needs a GradScaler to stop tiny gradients underflowing ---</span>
+scaler = torch.amp.<span class="ty">GradScaler</span>(<span class="str">&quot;cuda&quot;</span>)
+<span class="kw">for</span> xb, yb <span class="kw">in</span> loader:
+    xb, yb = xb.<span class="fn">to</span>(<span class="str">&quot;cuda&quot;</span>), yb.<span class="fn">to</span>(<span class="str">&quot;cuda&quot;</span>)
+    <span class="kw">with</span> torch.<span class="fn">autocast</span>(<span class="str">&quot;cuda&quot;</span>, dtype=torch.float16):
+        loss = <span class="fn">loss_fn</span>(<span class="fn">model</span>(xb), yb)
+    opt.<span class="fn">zero_grad</span>()
+    scaler.<span class="fn">scale</span>(loss).<span class="fn">backward</span>()     <span class="com"># scale up before backward</span>
+    scaler.<span class="fn">step</span>(opt)                  <span class="com"># unscale, then step (skips if inf/nan)</span>
+    scaler.<span class="fn">update</span>()                   <span class="com"># adapt the scale factor</span></pre>
+      <div class="callout tip">
+        <h5>Prefer bf16 when your GPU supports it</h5>
+        <p>On Ampere or newer, use <code>bfloat16</code>: same speed as fp16, no <code>GradScaler</code>, far fewer instability headaches. Reserve fp16 (with a scaler) for older GPUs that lack bf16 tensor cores. Either way, <code>autocast</code> chooses per-operation which precision is safe, so you don't manually cast anything.</p>
+      </div>
+    </section>
+
+    <section class="chapter" id="c02">
+      <h2><span class="ch-num">02</span>torch.compile</h2>
+      <p>Eager mode runs your model op by op, dispatching each through Python — flexible, but it leaves speed on the table by launching many tiny GPU kernels and never fusing them. <code>torch.compile</code> (the flagship feature of the PyTorch 2 line) traces your model into a graph, fuses operations, and generates optimized kernels with its backend compiler (TorchInductor). It's one line, it keeps eager's debuggability, and it commonly delivers 1.3–2× speedups — stacking on top of mixed precision.</p>
+<pre data-lang="PYTHON"><span class="kw">import</span> torch
+
+model = torch.<span class="fn">compile</span>(model)      <span class="com"># that&#x27;s it — compiles on the first call</span>
+
+<span class="com"># The first iteration is SLOW (it compiles); subsequent ones are fast.</span>
+<span class="kw">for</span> xb, yb <span class="kw">in</span> loader:
+    loss = <span class="fn">loss_fn</span>(<span class="fn">model</span>(xb.<span class="fn">cuda</span>()), yb.<span class="fn">cuda</span>())   <span class="com"># compiled, fused kernels</span>
+    ...
+
+<span class="com"># Modes trade compile time for runtime speed:</span>
+model = torch.<span class="fn">compile</span>(model, mode=<span class="str">&quot;reduce-overhead&quot;</span>)  <span class="com"># best for small models</span>
+model = torch.<span class="fn">compile</span>(model, mode=<span class="str">&quot;max-autotune&quot;</span>)     <span class="com"># slowest compile, fastest run</span></pre>
+      <p>Two things to understand so it doesn't surprise you. First, the <strong>first call compiles</strong> and is much slower — this is normal; time your throughput after warmup, not on step one. Second, <strong>graph breaks</strong>: data-dependent Python control flow (an <code>if</code> on a tensor's value, printing a tensor, calling <code>.item()</code>) forces the compiler to split the graph, and shape changes trigger recompiles. The compiler handles breaks gracefully — it just optimizes each piece — but for maximum speed you minimize them, and <code>fullgraph=True</code> makes any break an error so you can find them.</p>
+      <div class="callout warn">
+        <h5>Compiler internals move fast — the interface doesn't</h5>
+        <p><code>torch.compile</code> has been stable and recommended for years, but its internals (supported patterns, autotuning, determinism guarantees) improve every release — recent versions added run-to-run determinism under <code>torch.use_deterministic_algorithms(True)</code>. Treat the <em>one-line interface</em> as durable; treat exact edge-case behavior and flags as current-but-evolving, and re-check the docs for your version.</p>
+      </div>
+    </section>
+
+    <section class="chapter" id="c03">
+      <h2><span class="ch-num">03</span>Memory &amp; activation checkpointing</h2>
+      <p>Running out of GPU memory is the most common wall in scaling. Four things consume it, and knowing the split tells you what to cut:</p>
+      <table class="tbl">
+        <thead><tr><th>Consumer</th><th>Size · notes</th></tr></thead>
+        <tbody>
+          <tr><td>parameters</td><td>The weights. Fixed by model size. (1 unit)</td></tr>
+          <tr><td>gradients</td><td>One per parameter. (1 unit)</td></tr>
+          <tr><td>optimizer state</td><td>Adam/AdamW keep two extra buffers per parameter. (2 units) — this is why the optimizer alone can triple parameter memory.</td></tr>
+          <tr><td>activations</td><td>Everything saved during forward for the backward pass. Grows with batch size, sequence length, and depth — often the <em>largest</em> consumer, and the one you can trade away.</td></tr>
+        </tbody>
+      </table>
+      <p><strong>Activation checkpointing</strong> (gradient checkpointing) attacks the biggest consumer: instead of storing every intermediate activation for the backward pass, it stores only a few and <em>recomputes</em> the rest during backward. You spend roughly one extra forward pass of compute to slash activation memory — often enough to fit a 2–4× larger batch or model. It's the standard tool when a model almost fits.</p>
+<pre data-lang="PYTHON"><span class="kw">from</span> torch.utils.checkpoint <span class="kw">import</span> checkpoint
+
+<span class="kw">class</span> <span class="ty">Block</span>(nn.<span class="ty">Module</span>):
+    <span class="kw">def</span> <span class="fn">forward</span>(self, x):
+        <span class="com"># Wrap an expensive sub-computation: its activations are NOT stored,</span>
+        <span class="com"># they&#x27;re recomputed in the backward pass. Memory down, compute up.</span>
+        <span class="kw">return</span> <span class="fn">checkpoint</span>(self._heavy, x, use_reentrant=<span class="kw">False</span>)
+
+    <span class="kw">def</span> <span class="fn">_heavy</span>(self, x):
+        <span class="kw">return</span> self.<span class="fn">mlp</span>(self.<span class="fn">attn</span>(x))</pre>
+      <div class="callout tip">
+        <h5>The OOM escape ladder</h5>
+        <p>Hit "CUDA out of memory"? Climb this ladder in order: (1) mixed precision (halves activations), (2) smaller batch size with gradient accumulation to keep the effective batch (Volume II), (3) activation checkpointing, (4) a more memory-efficient optimizer or 8-bit optimizer, and only then (5) more GPUs and sharding (Part III). Each step is cheaper than the next.</p>
+      </div>
+    </section>
+
+    <section class="chapter" id="c04">
+      <h2><span class="ch-num">04</span>Profiling: find the bottleneck</h2>
+      <p>The cardinal rule of performance work: <strong>measure, don't guess.</strong> Intuition about what's slow is wrong more often than not — the culprit is frequently the data pipeline or a hidden CPU-GPU synchronization, not the math you assumed. PyTorch's profiler records where time actually goes, on both CPU and GPU.</p>
+<pre data-lang="PYTHON"><span class="kw">import</span> torch
+<span class="kw">from</span> torch.profiler <span class="kw">import</span> profile, <span class="ty">ProfilerActivity</span>
+
+<span class="kw">with</span> <span class="fn">profile</span>(activities=[<span class="ty">ProfilerActivity</span>.<span class="ty">CPU</span>, <span class="ty">ProfilerActivity</span>.<span class="ty">CUDA</span>],
+             record_shapes=<span class="kw">True</span>) <span class="kw">as</span> prof:
+    <span class="kw">for</span> i, (xb, yb) <span class="kw">in</span> <span class="fn">enumerate</span>(loader):
+        loss = <span class="fn">loss_fn</span>(<span class="fn">model</span>(xb.<span class="fn">cuda</span>()), yb.<span class="fn">cuda</span>())
+        loss.<span class="fn">backward</span>(); opt.<span class="fn">step</span>(); opt.<span class="fn">zero_grad</span>()
+        <span class="kw">if</span> i &gt;= <span class="num">10</span>: <span class="kw">break</span>
+
+<span class="com"># The heaviest operations, by GPU time:</span>
+<span class="fn">print</span>(prof.<span class="fn">key_averages</span>().<span class="fn">table</span>(sort_by=<span class="str">&quot;cuda_time_total&quot;</span>, row_limit=<span class="num">10</span>))
+prof.<span class="fn">export_chrome_trace</span>(<span class="str">&quot;trace.json&quot;</span>)   <span class="com"># open in chrome://tracing or Perfetto</span></pre>
+      <p>A handful of patterns account for most wasted time. If GPU utilization is low and spiky, you're <strong>input-bound</strong> — fix the data pipeline (Part II). If the timeline is full of many tiny kernels, you're <strong>launch-bound</strong> — <code>torch.compile</code> fuses them. Frequent <code>.item()</code>, <code>print(tensor)</code>, or <code>.cpu()</code> calls force <strong>synchronization points</strong> that stall the pipeline — batch your logging and pull metrics off the GPU sparingly. And large host↔device copies signal a transfer problem — pin memory and use <code>non_blocking=True</code>.</p>
+      <div class="idea">
+        <p><strong>Optimize the measured bottleneck, nothing else.</strong> Every hour spent speeding up code that wasn't the bottleneck is wasted, and worse, it adds complexity you'll maintain forever. Profile first, find the single biggest cost, fix that, then profile again. Performance work is a loop of measurement, not a checklist of tricks applied hopefully.</p>
+      </div>
+    </section>
+  </div>
+
+  <div class="rule-sep"></div>
+  <div class="part" id="p2">
+    <div class="part-label">Part II — Throughput</div>
+    <h2 class="part-title">Keeping the tensor cores <span class="acc">saturated.</span></h2>
+    <p class="part-intro">Peak speed comes from three habits: never let the GPU wait on data, use the memory layouts and fused kernels the hardware prefers, and size batches for the throughput curve rather than by feel. Small, unglamorous changes here often beat a fancier model — and they compound with Part I's precision and compilation wins.</p>
+
+    <section class="chapter" id="c05">
+      <h2><span class="ch-num">05</span>The input pipeline at scale</h2>
+      <p>Volume II's <code>num_workers</code> and <code>pin_memory</code> are table stakes. At scale, the bottleneck shifts to <em>how the data is stored</em>. Millions of tiny individual files murder throughput: each incurs filesystem overhead, and random access thrashes the disk. The fix is to pack data into a smaller number of large sequential <strong>shards</strong> (tar archives, or formats like WebDataset), which stream efficiently and shard cleanly across machines.</p>
+      <ul class="dash">
+        <li><strong>Shard into big files.</strong> Group thousands of examples per archive; read them sequentially. Turns random small reads into fast streaming.</li>
+        <li><strong>Push decode/augment to the GPU when the CPU can't keep up.</strong> JPEG decoding and heavy augmentation can bottleneck the CPU; libraries that decode on the GPU (e.g. NVIDIA DALI) move that work off the critical path.</li>
+        <li><strong>Cache what's stable.</strong> If preprocessing is deterministic and fits, cache the processed tensors so you pay the cost once, not every epoch.</li>
+        <li><strong>Keep <code>__getitem__</code> cheap.</strong> Per-item Python overhead multiplies by millions. Do vectorized work in batches, not heavy per-example logic.</li>
+      </ul>
+      <div class="callout tip">
+        <h5>The test: is the GPU ever idle?</h5>
+        <p>Watch GPU utilization during a real run. If it dips between batches, data is your bottleneck and the moves above pay off directly. If it's pinned near 100%, your pipeline is fine — stop optimizing it and look at the model (Part I). The pipeline only matters until it stops being the limit.</p>
+      </div>
+    </section>
+
+    <section class="chapter" id="c06">
+      <h2><span class="ch-num">06</span>Kernel wins: channels_last, TF32, fused</h2>
+      <p>Several near-free switches let the same math run faster by matching what the hardware wants. None change your model or its accuracy meaningfully; they change layout and kernel choice.</p>
+      <table class="tbl">
+        <thead><tr><th>Switch</th><th>What it does · when</th></tr></thead>
+        <tbody>
+          <tr><td>channels_last</td><td>Reorders conv tensors to <code>(N,H,W,C)</code> in memory, which tensor cores prefer — often a solid CNN speedup. <code>model.to(memory_format=torch.channels_last)</code> and same for inputs.</td></tr>
+          <tr><td>TF32</td><td>Lets FP32 matmuls/convs use tensor cores at slightly reduced precision on Ampere+. Big speedup, negligible accuracy cost for training.</td></tr>
+          <tr><td>fused optimizer</td><td><code>AdamW(..., fused=True)</code> runs the whole update in one kernel instead of many — meaningful when you have thousands of parameter tensors.</td></tr>
+          <tr><td>SDPA / FlashAttention</td><td><code>F.scaled_dot_product_attention</code> (Volume III) is the fused, memory-efficient attention — always prefer it over a hand-rolled softmax for transformers.</td></tr>
+        </tbody>
+      </table>
+<pre data-lang="PYTHON"><span class="kw">import</span> torch
+
+<span class="com"># Let FP32 matmuls use tensor cores (TF32) — set once at startup.</span>
+torch.<span class="fn">set_float32_matmul_precision</span>(<span class="str">&quot;high&quot;</span>)
+
+<span class="com"># channels_last for a CNN: convert both model and inputs.</span>
+model = model.<span class="fn">to</span>(memory_format=torch.channels_last)
+xb = xb.<span class="fn">to</span>(memory_format=torch.channels_last)
+
+<span class="com"># Fused optimizer step (one kernel for the whole update).</span>
+opt = torch.optim.<span class="ty">AdamW</span>(model.<span class="fn">parameters</span>(), lr=<span class="num">3e-4</span>, fused=<span class="kw">True</span>)</pre>
+      <div class="callout tip">
+        <h5>Stack them</h5>
+        <p>These compose with Part I. A modern recipe — bf16 autocast + <code>torch.compile</code> + channels_last + TF32 + fused AdamW — routinely runs several times faster than naive FP32 eager, with the same final accuracy. Turn them on early; they're the cheapest speed you'll ever buy.</p>
+      </div>
+    </section>
+
+    <section class="chapter" id="c07">
+      <h2><span class="ch-num">07</span>Effective batch size</h2>
+      <p>Bigger batches use the GPU more efficiently — up to a point. Throughput climbs steeply at first, then flattens once the hardware is saturated, after which a larger batch only costs memory. The job is to find that knee, then hold the <em>effective</em> batch there regardless of what fits in memory.</p>
+      <div class="diagram">  THROUGHPUT vs BATCH SIZE (schematic):
+
+   samples/sec │              ______________  ← saturated: bigger batch
+               │            /                   just costs memory, not speed
+               │          /
+               │        /
+               │     /
+               │  /  ← steep early gains
+               └──────────────────────────────► batch size
+                       ↑ the "knee": aim here</div>
+      <p>Two levers set the effective batch independent of memory. <strong>Gradient accumulation</strong> (Volume II) sums several micro-batches before stepping, simulating a big batch on a small GPU. <strong>Data parallelism</strong> (Part III) splits a large batch across GPUs. When you raise the effective batch, remember the <em>linear scaling rule</em>: roughly scale the learning rate with it, and add warmup so the larger early steps stay stable.</p>
+      <div class="callout warn">
+        <h5>Bigger isn't automatically better</h5>
+        <p>Very large batches produce smoother gradients that can converge to sharper minima and generalize slightly worse, and they need careful LR scaling and warmup to match small-batch quality. Chase batch size for throughput, but validate that accuracy holds — don't assume a 4× batch is strictly an upgrade.</p>
+      </div>
+    </section>
+
+    <section class="chapter" id="c08">
+      <h2><span class="ch-num">08</span>Determinism &amp; reproducible performance</h2>
+      <p>Two different goals get confused here: <em>reproducibility</em> (same result every run) and <em>fast benchmarking</em> (trustworthy speed numbers). They pull in opposite directions, because the fastest kernels are often nondeterministic.</p>
+      <p>For reproducibility, seed everything and force deterministic kernels — accepting some slowdown, since a few fast GPU operations use nondeterministic atomic adds:</p>
+<pre data-lang="PYTHON"><span class="kw">import</span> torch
+
+torch.<span class="fn">manual_seed</span>(<span class="num">0</span>)
+torch.<span class="fn">use_deterministic_algorithms</span>(<span class="kw">True</span>)   <span class="com"># error out on nondeterministic ops</span>
+torch.backends.cudnn.deterministic = <span class="kw">True</span>
+torch.backends.cudnn.benchmark = <span class="kw">False</span>     <span class="com"># benchmark picks fast, varying algos</span></pre>
+      <p>For raw speed, do the opposite: let cuDNN benchmark and pick the fastest convolution algorithm for your (fixed) input shapes. It's nondeterministic and adds a warmup cost the first time each shape appears, but it's a real speedup for shape-stable training.</p>
+<pre data-lang="PYTHON">torch.backends.cudnn.benchmark = <span class="kw">True</span>      <span class="com"># fastest algos for fixed shapes</span></pre>
+      <div class="callout danger">
+        <h5>Benchmark correctly or your numbers lie</h5>
+        <p>GPU work is asynchronous — the Python line returns before the kernel finishes. To time anything, <strong>warm up</strong> first (compile, cuDNN benchmark, and caches settle over the first iterations), then <code>torch.cuda.synchronize()</code> before reading the clock, and average over many iterations. Timing a single un-synchronized step measures Python dispatch, not the GPU, and will be off by orders of magnitude.</p>
+      </div>
+      <p class="pull">Reproducible or fast — pick per situation, because the fastest kernels are the ones that don't promise the same bits twice.</p>
+    </section>
+  </div>
+
+  <div class="rule-sep"></div>
+  <div class="part" id="p3">
+    <div class="part-label">Part III — Distributed training</div>
+    <h2 class="part-title">Many GPUs, <span class="acc">one model.</span></h2>
+    <p class="part-intro">One GPU eventually runs out — of time, or of memory. Spreading a job across many GPUs is how large models get trained, but it introduces a new problem: keeping replicas in sync without drowning in communication. This part walks the ladder from simple data parallelism (DDP) to full sharding (FSDP2), and names the pitfalls that turn a multi-GPU run into a hung one.</p>
+
+    <section class="chapter" id="c09">
+      <h2><span class="ch-num">09</span>The landscape: DP → DDP → FSDP</h2>
+      <p>There are two fundamentally different reasons to go distributed, and they call for different tools. If your model <em>fits</em> on one GPU but training is slow, you want <strong>data parallelism</strong>: put a full copy of the model on each GPU, feed each a different slice of the batch, and average their gradients so all copies stay identical. If your model <em>doesn't fit</em> on one GPU, you need to <strong>shard</strong> it — split the parameters themselves across GPUs.</p>
+      <div class="tree">
+<pre><span class="q">How do I scale this training run?</span>
+   │
+   ├─ <span class="a">model fits on 1 GPU, want it faster</span> → DistributedDataParallel (DDP)
+   │        one full replica per GPU, split the batch, all-reduce gradients
+   │
+   ├─ <span class="a">model + optimizer states don't fit</span> → FSDP2 (fully_shard)
+   │        shard params/grads/optimizer state across GPUs, gather just-in-time
+   │
+   └─ <span class="a">model is enormous (many billions)</span> → FSDP2 + tensor/pipeline
+            parallelism — split individual layers and the depth across GPUs too</pre>
+      </div>
+      <p>One historical note that saves confusion: PyTorch's old single-process <code>nn.DataParallel</code> (DP) is deprecated and slow — it bottlenecks on one process coordinating all GPUs. <strong>Always use <code>DistributedDataParallel</code> (DDP)</strong>, which runs one process per GPU. When people say "data parallel" today, they mean DDP.</p>
+    </section>
+
+    <section class="chapter" id="c10">
+      <h2><span class="ch-num">10</span>DDP in depth</h2>
+      <p><strong>DistributedDataParallel</strong> launches one process per GPU. Each holds a complete copy of the model and trains on its own shard of the data. The magic is in the backward pass: as gradients are computed, DDP <strong>all-reduces</strong> them — averages each gradient across all processes — so every replica applies an identical update and they never drift apart. Better still, it overlaps that communication with the backward computation (bucketing gradients and reducing them as soon as each bucket is ready), so the syncing is largely hidden behind work you're doing anyway.</p>
+<pre data-lang="PYTHON"><span class="kw">import</span> torch
+<span class="kw">import</span> torch.distributed <span class="kw">as</span> dist
+<span class="kw">from</span> torch.nn.parallel <span class="kw">import</span> <span class="ty">DistributedDataParallel</span> <span class="kw">as</span> <span class="ty">DDP</span>
+<span class="kw">from</span> torch.utils.data <span class="kw">import</span> <span class="ty">DataLoader</span>
+<span class="kw">from</span> torch.utils.data.distributed <span class="kw">import</span> <span class="ty">DistributedSampler</span>
+
+<span class="kw">def</span> <span class="fn">main</span>():
+    dist.<span class="fn">init_process_group</span>(<span class="str">&quot;nccl&quot;</span>)            <span class="com"># NCCL: the GPU comm backend</span>
+    rank = dist.<span class="fn">get_rank</span>()
+    local_rank = rank % torch.cuda.<span class="fn">device_count</span>()
+    torch.cuda.<span class="fn">set_device</span>(local_rank)
+
+    model = <span class="ty">MyModel</span>().<span class="fn">to</span>(local_rank)
+    model = <span class="ty">DDP</span>(model, device_ids=[local_rank])   <span class="com"># wrap it</span>
+
+    <span class="com"># Each rank must see a DIFFERENT slice of the data:</span>
+    sampler = <span class="ty">DistributedSampler</span>(dataset)
+    loader = <span class="ty">DataLoader</span>(dataset, batch_size=<span class="num">64</span>, sampler=sampler)
+    opt = torch.optim.<span class="ty">AdamW</span>(model.<span class="fn">parameters</span>(), lr=<span class="num">3e-4</span>)
+
+    <span class="kw">for</span> epoch <span class="kw">in</span> <span class="fn">range</span>(epochs):
+        sampler.<span class="fn">set_epoch</span>(epoch)               <span class="com"># reshuffle differently each epoch</span>
+        <span class="kw">for</span> xb, yb <span class="kw">in</span> loader:
+            loss = <span class="fn">loss_fn</span>(<span class="fn">model</span>(xb.<span class="fn">to</span>(local_rank)), yb.<span class="fn">to</span>(local_rank))
+            opt.<span class="fn">zero_grad</span>(); loss.<span class="fn">backward</span>(); opt.<span class="fn">step</span>()   <span class="com"># all-reduce in backward</span>
+
+    dist.<span class="fn">destroy_process_group</span>()</pre>
+      <p>You launch it with <code>torchrun --nproc_per_node=8 train.py</code>, which spawns the eight processes and sets the environment variables DDP reads. Two correctness essentials: use a <code>DistributedSampler</code> so each rank gets distinct data (otherwise every GPU trains on the same batch — pure waste), and call <code>sampler.set_epoch(epoch)</code> each epoch so the shuffle varies. The effective batch size is your per-GPU batch times the number of GPUs, so revisit the learning-rate scaling from Part II.</p>
+      <div class="callout tip">
+        <h5>Log and checkpoint from rank 0 only</h5>
+        <p>All processes run the same code, so guard side effects — printing, progress bars, saving checkpoints — with <code>if rank == 0:</code>. Otherwise eight processes fight over the same file and flood your logs eightfold. Since replicas are identical, rank 0's weights represent them all.</p>
+      </div>
+    </section>
+
+    <section class="chapter" id="c11">
+      <h2><span class="ch-num">11</span>FSDP2 for large models</h2>
+      <p>DDP replicates the <em>entire</em> model — parameters, gradients, and optimizer states — on every GPU. For a large model that's wasteful, and eventually impossible: with AdamW, a model needs roughly its parameter memory plus gradients plus two optimizer buffers, so a model that barely fits leaves no room to train. <strong>Fully Sharded Data Parallel (FSDP)</strong> fixes this by <em>sharding</em> those tensors across GPUs — each GPU stores only a slice. When a layer runs, FSDP gathers its full parameters just-in-time (an all-gather), computes, then immediately frees the gathered copy. Memory per GPU drops toward the total divided by the number of GPUs, at the cost of extra communication.</p>
+      <p>The current API is <strong>FSDP2</strong> — <code>fully_shard</code> — which shards at the level of individual parameters and composes cleanly with mixed precision, activation checkpointing, and <code>torch.compile</code>. You apply it to the sub-modules you want sharded (typically each transformer block), then to the whole model:</p>
+<pre data-lang="PYTHON"><span class="kw">import</span> torch
+<span class="kw">from</span> torch.distributed.fsdp <span class="kw">import</span> fully_shard, <span class="ty">MixedPrecisionPolicy</span>
+
+<span class="com"># (inside each process, after init_process_group as in DDP)</span>
+model = <span class="ty">MyLargeTransformer</span>()
+
+mp = <span class="ty">MixedPrecisionPolicy</span>(param_dtype=torch.bfloat16,
+                          reduce_dtype=torch.float32)   <span class="com"># bf16 compute, fp32 grads</span>
+
+<span class="com"># Shard each block, then the root. Blocks gather -&gt; compute -&gt; free in turn.</span>
+<span class="kw">for</span> block <span class="kw">in</span> model.blocks:
+    <span class="fn">fully_shard</span>(block, mp_policy=mp)
+<span class="fn">fully_shard</span>(model, mp_policy=mp)
+
+opt = torch.optim.<span class="ty">AdamW</span>(model.<span class="fn">parameters</span>(), lr=<span class="num">3e-4</span>)    <span class="com"># now over sharded params</span>
+<span class="com"># training loop is the same shape as DDP from here</span></pre>
+      <div class="callout warn">
+        <h5>The distributed frontier moves quickly</h5>
+        <p>Large-scale training is the fastest-changing corner of PyTorch. FSDP2 (<code>fully_shard</code>) is the current, recommended path and replaced the earlier <code>FullyShardedDataParallel</code> wrapper; the exact policy classes and options evolve each release, and higher-level libraries (such as <code>torchtitan</code>) package best-practice recipes. The <em>concepts</em> here — shard params/grads/optimizer state, gather just-in-time, overlap comm with compute — are durable; verify the exact API against your version's docs.</p>
+      </div>
+    </section>
+
+    <section class="chapter" id="c12">
+      <h2><span class="ch-num">12</span>Multi-node &amp; communication pitfalls</h2>
+      <p>Scaling past one machine adds the network as a new bottleneck. Inside a node, GPUs talk over fast NVLink; between nodes, over slower InfiniBand or Ethernet. Because every step synchronizes gradients, communication can come to dominate wall-clock time, and the whole run moves at the speed of its slowest participant. The pitfalls are less about code than about the failure modes:</p>
+      <ul class="dash">
+        <li><strong>Uneven data hangs the job.</strong> Collective operations (all-reduce, all-gather) require every rank to participate. If one rank has fewer batches and exits early, the others wait forever. Ensure every rank runs the same number of steps (drop the ragged last batch, or use a join context).</li>
+        <li><strong>BatchNorm needs syncing.</strong> Each GPU's batch-norm sees only its shard's statistics, so replicas diverge. Convert to <code>SyncBatchNorm</code> so stats are averaged across GPUs — or use batch-independent norms (LayerNorm/GroupNorm), which sidestep the issue.</li>
+        <li><strong>Checkpointing sharded state is different.</strong> With FSDP each rank holds a slice; use distributed checkpointing to save and restore correctly rather than assuming rank 0 has the whole model.</li>
+        <li><strong>Stragglers and non-determinism.</strong> One slow GPU, thermal throttle, or a noisy network link drags everyone. Monitor per-rank step times; large-scale runs live and die by their slowest link.</li>
+      </ul>
+      <div class="idea">
+        <p><strong>Communication is the tax on parallelism.</strong> Every distributed strategy is a trade between memory saved and bytes moved: DDP moves gradients once per step; FSDP additionally moves parameters every layer. Scaling well means keeping the GPUs computing while the bytes fly — overlapping communication with computation — and never adding a GPU whose communication cost outweighs its compute. Past a point, more GPUs make a step <em>slower</em>, not faster.</p>
+      </div>
+    </section>
+  </div>
+
+  <div class="rule-sep"></div>
+  <div class="part" id="p4">
+    <div class="part-label">Part IV — Compression &amp; deployment</div>
+    <h2 class="part-title">Shrinking it, then <span class="acc">shipping it.</span></h2>
+    <p class="part-intro">A trained model is a research artifact; a deployed model is a product, and the gap between them is compression and export. This part makes models smaller and faster for inference — quantization, pruning, distillation — then takes them out of Python with the modern <code>torch.export</code> path and into a serving stack. Note the deprecation: TorchScript is retired; <code>torch.export</code> is the way now.</p>
+
+    <section class="chapter" id="c13">
+      <h2><span class="ch-num">13</span>Quantization</h2>
+      <p>Training happens in 16- or 32-bit floats, but inference often doesn't need that precision. <strong>Quantization</strong> represents weights (and sometimes activations) in low-bit integers — usually int8 — which shrinks the model roughly 4× and runs faster, especially on CPUs and edge devices with integer-optimized hardware. The trade is a small, usually recoverable accuracy drop.</p>
+      <p>Two approaches, differing in when the quantization happens:</p>
+      <table class="tbl compare">
+        <thead><tr><th>Approach</th><th>Post-training (PTQ)</th><th>Quantization-aware (QAT)</th></tr></thead>
+        <tbody>
+          <tr><td>How</td><td>Quantize an already-trained model; calibrate scales on a little data.</td><td>Simulate quantization <em>during</em> training so the model adapts to it.</td></tr>
+          <tr><td>Cost</td><td>Minutes, no retraining.</td><td>A full (or fine-tuning) training run.</td></tr>
+          <tr><td>Accuracy</td><td>Good for many models; can slip on sensitive ones.</td><td>Best — recovers most of the quantization loss.</td></tr>
+          <tr><td>Use when</td><td>First thing to try; often enough.</td><td>PTQ lost too much accuracy and it matters.</td></tr>
+        </tbody>
+      </table>
+<pre data-lang="PYTHON"><span class="com"># torchao is the current PyTorch library for quantization (and low-bit training).</span>
+<span class="kw">import</span> torchao
+<span class="kw">from</span> torchao.quantization <span class="kw">import</span> quantize_, <span class="ty">Int8WeightOnlyConfig</span>
+
+model.<span class="fn">eval</span>()
+<span class="com"># Post-training, weight-only int8 — a fast, low-risk default for inference:</span>
+<span class="fn">quantize_</span>(model, <span class="ty">Int8WeightOnlyConfig</span>())
+<span class="com"># The model now stores int8 weights: ~4x smaller, faster memory-bound inference.</span></pre>
+      <p>For large language models, quantization is nearly universal at inference time — int8 and even 4-bit weight quantization make models fit on smaller GPUs with little quality loss, and pair with the fine-tuning methods in Volume V (QLoRA). The exact APIs here evolve, but the idea is stable: fewer bits per weight, big memory and speed wins, modest accuracy cost.</p>
+    </section>
+
+    <section class="chapter" id="c14">
+      <h2><span class="ch-num">14</span>Pruning &amp; distillation</h2>
+      <p>Two more ways to make a model smaller, orthogonal to quantization and often stacked with it.</p>
+      <p><strong>Pruning</strong> removes parameters the model barely uses. <em>Unstructured</em> pruning zeros individual weights (high sparsity, but needs special hardware/kernels to actually speed up). <em>Structured</em> pruning removes whole channels or heads — less aggressive, but the smaller model is genuinely faster on any hardware because it's simply smaller. Pruning usually degrades accuracy, so you fine-tune afterward to recover.</p>
+      <p><strong>Knowledge distillation</strong> takes a different tack: train a small "student" model to mimic a large "teacher." Instead of (or alongside) the hard labels, the student learns from the teacher's full output distribution — the "soft" probabilities that reveal how the teacher sees relationships between classes. A well-distilled student can retain most of the teacher's accuracy at a fraction of the size.</p>
+<pre data-lang="PYTHON"><span class="kw">import</span> torch.nn.functional <span class="kw">as</span> <span class="ty">F</span>
+
+<span class="kw">def</span> <span class="fn">distillation_loss</span>(student_logits, teacher_logits, labels, <span class="ty">T</span>=<span class="num">2.0</span>, alpha=<span class="num">0.5</span>):
+    <span class="com"># Soft targets: match the teacher&#x27;s softened distribution (KL divergence).</span>
+    soft = <span class="ty">F</span>.<span class="fn">kl_div</span>(
+        <span class="ty">F</span>.<span class="fn">log_softmax</span>(student_logits / <span class="ty">T</span>, dim=-<span class="num">1</span>),
+        <span class="ty">F</span>.<span class="fn">softmax</span>(teacher_logits / <span class="ty">T</span>, dim=-<span class="num">1</span>),
+        reduction=<span class="str">&quot;batchmean&quot;</span>) * (<span class="ty">T</span> * <span class="ty">T</span>)
+    hard = <span class="ty">F</span>.<span class="fn">cross_entropy</span>(student_logits, labels)   <span class="com"># plus the real labels</span>
+    <span class="kw">return</span> alpha * soft + (<span class="num">1</span> - alpha) * hard</pre>
+      <div class="callout tip">
+        <h5>Compression stacks</h5>
+        <p>These techniques compose: distill a large model into a small one, prune the redundant channels, then quantize the result to int8. Each multiplies the savings. In practice, distillation + quantization is the most common production combo — a small student, quantized, serves cheaply while retaining most of the teacher's quality.</p>
+      </div>
+    </section>
+
+    <section class="chapter" id="c15">
+      <h2><span class="ch-num">15</span>Export: torch.export</h2>
+      <p>Your training code is Python, but production often wants a portable, Python-free graph — for a C++ service, a mobile app, or a specialized runtime. <strong><code>torch.export</code></strong> captures your model as an <code>ExportedProgram</code>: a clean, self-contained graph representation that downstream tools can compile and run anywhere.</p>
+<pre data-lang="PYTHON"><span class="kw">import</span> torch
+
+model.<span class="fn">eval</span>()
+example = (torch.<span class="fn">randn</span>(<span class="num">1</span>, <span class="num">3</span>, <span class="num">224</span>, <span class="num">224</span>),)          <span class="com"># a representative input</span>
+
+exported = torch.export.<span class="fn">export</span>(model, example)    <span class="com"># capture the graph</span>
+<span class="fn">print</span>(exported.graph_module)                       <span class="com"># inspect the captured ops</span>
+
+torch.export.<span class="fn">save</span>(exported, <span class="str">&quot;model.pt2&quot;</span>)           <span class="com"># portable artifact</span>
+<span class="com"># ...load and run elsewhere, or lower to a runtime (below).</span></pre>
+      <div class="callout danger">
+        <h5>TorchScript is deprecated — use torch.export</h5>
+        <p>Older tutorials reach for <code>torch.jit.script</code>/<code>torch.jit.trace</code> (TorchScript). That path is now deprecated. New deployment work should target <code>torch.export</code> and the runtimes built on it. If you inherit a TorchScript model it still runs, but don't build anything new on it.</p>
+      </div>
+      <p>From an <code>ExportedProgram</code> you lower to whatever runs your model: <strong>ExecuTorch</strong> for phones and edge devices, <strong>AOTInductor</strong> to compile it to a standalone shared library for C++ serving, or <strong>ONNX</strong> as an interchange format for other runtimes. Always export in <code>eval()</code> mode (so dropout/batch-norm behave for inference), pass a representative example input, and declare dynamic dimensions (like variable batch size) explicitly if the graph must handle them.</p>
+    </section>
+
+    <section class="chapter" id="c16">
+      <h2><span class="ch-num">16</span>Serving &amp; inference optimization</h2>
+      <p>Serving is a different optimization problem than training. There's no backward pass, so no gradients or optimizer state — memory is just weights and activations. You care about two metrics that trade against each other: <strong>latency</strong> (how long one request takes, watched at the tail — p99, not just the average) and <strong>throughput</strong> (requests per second per dollar). The knobs:</p>
+      <ul class="dash">
+        <li><strong>Turn off gradients, switch to eval.</strong> Wrap inference in <code>torch.no_grad()</code> (or <code>inference_mode()</code>, which is stricter and faster) and call <code>model.eval()</code>. Free speed and memory.</li>
+        <li><strong>Compile and quantize.</strong> <code>torch.compile</code> and int8 quantization apply to inference too, often for bigger relative wins than in training.</li>
+        <li><strong>Batch requests.</strong> Group incoming requests into batches to use the GPU efficiently — the central trick of every serving system, trading a little latency for a lot of throughput.</li>
+        <li><strong>Cache what repeats.</strong> For autoregressive generation, the KV cache (Volume V) avoids recomputing attention over the whole prefix each token — the single biggest LLM inference optimization.</li>
+      </ul>
+      <p>You rarely build serving from scratch. Dedicated servers handle batching, queuing, and scaling: <strong>TorchServe</strong> or NVIDIA <strong>Triton</strong> for general models, and specialized engines like <strong>vLLM</strong> for LLMs (which build in continuous batching and paged KV caches). Your job is to hand them an optimized, exported model and choose the batching and precision that hit your latency target.</p>
+      <div class="idea">
+        <p><strong>Training optimizes a number; serving optimizes a budget.</strong> In production the question isn't "how accurate?" but "how much accuracy per dollar per millisecond?" Compression and export exist to move a model along that curve — smaller, faster, cheaper — until it fits the latency and cost envelope the product actually has. A model that can't be served within budget hasn't shipped.</p>
+      </div>
+      <p class="pull">The last mile — quantize, export, serve — is where a model stops being a demo and starts being a product.</p>
+    </section>
+  </div>
+
+</main>
+
+<footer>
+  <h4>sources &amp; further study</h4>
+  <div class="resources">
+    <ul>
+      <li><strong>Official (verify against your version)</strong></li>
+      <li>PyTorch — torch.amp &amp; "Automatic Mixed Precision" recipe</li>
+      <li>PyTorch — torch.compile tutorial &amp; programming model</li>
+      <li>torch.distributed.fsdp — fully_shard (FSDP2)</li>
+      <li>torch.export &amp; torch.profiler docs</li>
+      <li><strong>Libraries</strong></li>
+      <li>torchao — quantization &amp; low-bit</li>
+      <li>torchtitan — large-scale training recipes</li>
+      <li>ExecuTorch · AOTInductor · vLLM · Triton</li>
+      <li><strong>Next</strong></li>
+      <li>Volume V — Transformers &amp; LLMs</li>
+    </ul>
+  </div>
+  <p class="footer-note">Volume IV of the PyTorch Field Manual. This is the fastest-moving material in the series: mixed precision, <code>torch.compile</code>, FSDP2, quantization, and <code>torch.export</code> are all under active development. The <em>concepts</em> — lower precision, kernel fusion, sharding, compression, graph capture — are durable; exact flags, class names, and defaults are current as of PyTorch 2.x (2.13, mid-2026) and should be re-checked against your installed version. TorchScript is deprecated in favor of <code>torch.export</code>.</p>
+</footer>
+
+</body>
+</html>

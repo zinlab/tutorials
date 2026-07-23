@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PyTorch Field Manual — Volume VI · Computer Vision</title>
+
+<!-- ============================================================
+     FIELD MANUAL TEMPLATE
+     Copy this whole file, then replace the example content in
+     <body>. The <head> CSS is the complete design system — do not
+     edit it except to swap the single accent token (see note below).
+
+     ONE ALLOWED VARIATION: to re-hue the accent, change --green,
+     --green-deep, --green-bri, and --code-bg to a different family
+     (e.g. a blue or copper). Leave everything else alone — the
+     paper, ink, slate, amber, and rose are calibrated to pair with
+     the accent and with each other.
+     ============================================================ -->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;0,8..60,700;1,8..60,400;1,8..60,500&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --bg:        #eef1ec;   /* cool desaturated paper — the page */
+  --bg-2:      #e4e8e1;   /* slightly darker panels / table headers */
+  --bg-3:      #d7dcd2;   /* darker still — inline code chips */
+  --card:      #f7f9f4;   /* card surfaces (slightly lighter than page) */
+  --ink:       #14181a;   /* near-black primary text */
+  --ink-soft:  #3d4642;   /* body text in cards, secondary prose */
+  --ink-faint: #76807a;   /* muted labels, captions */
+  --rule:      #c6ccc0;   /* hairline rules */
+  --rule-soft: #d8ddd2;
+  --rule-dark: #8d958a;   /* card borders */
+  --green:     #1a7f46;   /* SIGNAL ACCENT — primary */
+  --green-deep:#0e5e31;   /* darker accent (code, links) */
+  --green-bri: #2ea05c;   /* brighter accent (hover) */
+  --slate:     #33505f;   /* secondary accent — cool blue-grey */
+  --slate-deep:#203642;
+  --amber:     #b07d12;   /* warning accent */
+  --rose:      #a32a1f;   /* danger / required accent */
+  --code-bg:   #15201a;   /* dark code blocks (green-tinted near-black) */
+  --code-ink:  #d6ddd2;
+  --maxw:      1080px;
+}
+*{ box-sizing: border-box; }
+html{ scroll-behavior: smooth; }
+body{
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Source Serif 4', Georgia, serif;
+  font-size: 17px;
+  line-height: 1.62;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ============ HEADER ============ */
+header{ max-width: var(--maxw); margin: 0 auto; padding: 84px 40px 50px; position: relative; }
+.filed{
+  font-family: 'Geist Mono', ui-monospace, monospace; font-size: 10.5px; letter-spacing: .28em;
+  text-transform: uppercase; color: var(--green); margin: 0 0 28px; font-weight: 600;
+  display: flex; align-items: center; gap: 12px;
+}
+.filed::before{ content: "▸"; color: var(--green); font-size: 13px; }
+.vol{
+  font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .18em;
+  color: var(--ink-faint); text-transform: uppercase; margin: 0 0 16px; font-weight: 500;
+}
+h1{
+  font-family: 'Archivo', system-ui, sans-serif; font-weight: 900;
+  font-size: clamp(54px, 9.5vw, 122px); line-height: 0.9; letter-spacing: -0.02em; margin: 0 0 24px; color: var(--ink);
+}
+h1 .acc{ color: var(--green); }
+.deck{ font-family: 'Source Serif 4', serif; font-size: 20px; font-weight: 400; color: var(--ink-soft); max-width: 770px; line-height: 1.5; }
+.readout{ margin-top: 40px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--rule); border: 1px solid var(--rule); }
+@media (max-width: 680px){ .readout{ grid-template-columns: repeat(2,1fr); } }
+.readout .cell{ background: var(--bg); padding: 14px 16px; }
+.readout .k{ font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 6px; }
+.readout .v{ font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 22px; color: var(--ink); line-height: 1; }
+.readout .v .u{ font-size: 12px; color: var(--green); font-weight: 600; }
+
+/* ============ TOC ============ */
+.toc{ margin-top: 46px; background: var(--card); border: 1px solid var(--rule-dark); padding: 30px 32px 34px; position: relative; }
+.toc::before{ content: "CONTENTS"; position: absolute; top: -9px; left: 26px; background: var(--card); padding: 0 10px; font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .3em; color: var(--green); font-weight: 600; }
+.toc h3{ font-family: 'Archivo', sans-serif; font-size: 26px; font-weight: 800; margin: 0 0 3px; color: var(--ink); letter-spacing: -0.01em; }
+.toc .toc-sub{ font-family: 'Geist Mono', monospace; font-size: 10.5px; color: var(--ink-faint); letter-spacing: .1em; text-transform: uppercase; margin-bottom: 20px; }
+.toc-part{ margin-top: 15px; }
+.toc-part-name{ font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .22em; color: var(--slate); text-transform: uppercase; font-weight: 600; border-bottom: 1px solid var(--rule); padding-bottom: 5px; margin-bottom: 7px; }
+.toc-grid{ display: grid; grid-template-columns: repeat(2,1fr); gap: 1px 32px; }
+@media (max-width: 760px){ .toc-grid{ grid-template-columns: 1fr; } }
+.toc-grid a{ color: var(--ink-soft); text-decoration: none; font-size: 14.5px; padding: 5px 0; display: flex; gap: 12px; align-items: baseline; border-bottom: 1px dotted transparent; transition: all .14s; }
+.toc-grid a:hover{ color: var(--green); border-color: var(--rule); }
+.toc-grid a .n{ font-family: 'Geist Mono', monospace; font-size: 10.5px; color: var(--slate); min-width: 26px; font-weight: 600; }
+
+/* ============ MAIN ============ */
+main{ max-width: var(--maxw); margin: 0 auto; padding: 56px 40px 96px; }
+.part{ margin-top: 92px; padding-top: 46px; position: relative; }
+.part::before{ content:""; position: absolute; top: 0; left: 0; right: 0; border-top: 2px solid var(--ink); }
+.part::after{ content:""; position: absolute; top: 5px; left: 0; width: 84px; border-top: 2px solid var(--green); }
+.part:first-child{ margin-top: 28px; padding-top: 28px; }
+.part-label{ font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .28em; color: var(--green); text-transform: uppercase; margin-bottom: 14px; font-weight: 600; }
+.part-title{ font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 54px; line-height: 0.96; letter-spacing: -0.02em; margin: 0 0 18px; color: var(--ink); }
+.part-title .acc{ color: var(--green); }
+.part-intro{ color: var(--ink-soft); font-size: 18.5px; max-width: 800px; margin-bottom: 34px; line-height: 1.5; }
+
+section.chapter{ margin-top: 52px; }
+section.chapter:first-of-type{ margin-top: 8px; }
+h2{ font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 33px; line-height: 1.08; letter-spacing: -0.015em; margin: 0 0 15px; color: var(--ink); display: flex; align-items: baseline; gap: 15px; padding-bottom: 9px; border-bottom: 2px solid var(--ink); }
+h2 .ch-num{ font-family: 'Geist Mono', monospace; font-size: 13px; color: var(--green); letter-spacing: .05em; font-weight: 600; flex-shrink: 0; }
+h3{ font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 22px; margin: 28px 0 9px; color: var(--ink); letter-spacing: -0.01em; }
+h4{ font-family: 'Geist Mono', monospace; font-size: 10.5px; letter-spacing: .18em; text-transform: uppercase; color: var(--slate); margin: 22px 0 8px; font-weight: 600; }
+p{ margin: 12px 0; }
+p code, li code, td code{ font-family: 'Geist Mono', monospace; font-size: .8em; background: var(--bg-3); color: var(--green-deep); padding: 1px 6px; border-radius: 2px; border: 1px solid var(--rule); }
+strong{ font-weight: 700; }
+ul, ol{ padding-left: 1.3em; }
+li{ margin: 6px 0; }
+ul.tight li{ margin: 3px 0; }
+ul.dash{ list-style: none; padding-left: 0; }
+ul.dash li{ position: relative; padding-left: 22px; }
+ul.dash li::before{ content: "▸"; position: absolute; left: 0; color: var(--green); font-weight: 700; }
+ul.check{ list-style: none; padding-left: 0; }
+ul.check li{ position: relative; padding-left: 24px; }
+ul.check li::before{ content: "▪"; position: absolute; left: 2px; top: 2px; color: var(--green); }
+
+/* ============ CODE ============ */
+pre{ background: var(--code-bg); padding: 17px 20px; overflow-x: auto; font-family: 'Geist Mono', monospace; font-size: 12.5px; line-height: 1.6; color: var(--code-ink); margin: 18px 0; position: relative; border-left: 3px solid var(--green); }
+pre .com{ color: #6f8378; font-style: italic; }   /* comment */
+pre .kw{  color: #6cb38a; }                        /* keyword */
+pre .ty{  color: #8fc6c0; }                        /* type */
+pre .str{ color: #c9b36a; }                        /* string */
+pre .num{ color: #c89a64; }                        /* number */
+pre .fn{  color: #8db8d0; }                        /* function */
+pre .var{ color: #d6ddd2; }                        /* variable */
+pre .glb{ color: #7fbf95; }                        /* global / builtin */
+pre .opt{ color: #c0a96a; }                        /* flag / option */
+pre::before{ content: attr(data-lang); position: absolute; top: 5px; right: 12px; font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: .18em; color: #56635a; text-transform: uppercase; }
+
+/* ============ CALLOUTS ============ */
+.callout{ margin: 22px 0; padding: 15px 22px; border-left: 4px solid var(--slate); background: var(--bg-2); font-size: 16px; line-height: 1.55; }
+.callout.warn{ border-color: var(--amber); }
+.callout.danger{ border-color: var(--rose); }
+.callout.tip{ border-color: var(--green); }
+.callout h5{ margin: 0 0 6px; font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--slate); font-weight: 600; }
+.callout.warn h5{ color: var(--amber); }
+.callout.danger h5{ color: var(--rose); }
+.callout.tip h5{ color: var(--green); }
+.callout p:first-child{ margin-top: 0; } .callout p:last-child{ margin-bottom: 0; }
+
+/* ============ TABLES ============ */
+.tbl{ width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14.5px; }
+.tbl th, .tbl td{ text-align: left; padding: 9px 14px; vertical-align: top; border-bottom: 1px solid var(--rule); }
+.tbl th{ font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink); font-weight: 600; border-bottom: 2px solid var(--ink); border-top: 2px solid var(--ink); background: var(--bg-2); }
+.tbl td:first-child{ font-family: 'Geist Mono', monospace; font-size: 12px; color: var(--green-deep); font-weight: 500; width: 26%; }
+.tbl.wide td:first-child{ width: 20%; }
+.tbl.compare td:first-child{ font-family: 'Geist Mono', monospace; font-weight: 600; color: var(--ink); width: 22%; font-size: 11.5px; letter-spacing: .03em; }
+.tbl.compare td:nth-child(2){ color: var(--green-deep); font-family: 'Source Serif 4', serif; font-size: 14.5px; }
+.tbl.compare td:nth-child(3){ color: var(--slate-deep); font-family: 'Source Serif 4', serif; font-size: 14.5px; }
+
+/* ============ DIAGRAM (monospace ASCII art in a labeled frame) ============ */
+.diagram{ background: var(--card); border: 1px solid var(--rule-dark); padding: 22px 24px; margin: 22px 0; font-family: 'Geist Mono', monospace; font-size: 12px; line-height: 1.55; color: var(--ink-soft); white-space: pre; overflow-x: auto; position: relative; }
+.diagram::before{ content: "FIG."; position: absolute; top: -9px; left: 18px; background: var(--bg); padding: 0 9px; font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: .2em; color: var(--slate); font-weight: 600; }
+
+/* ============ READOUT PANEL (titled stat grid) ============ */
+.panel{ background: var(--card); border: 1px solid var(--rule-dark); margin: 22px 0; padding: 20px 24px; position: relative; }
+.panel::before{ content: attr(data-title); position: absolute; top: -9px; left: 20px; background: var(--bg); padding: 0 10px; font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: .2em; color: var(--green); font-weight: 600; }
+.panel-grid{ display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; }
+@media (max-width: 680px){ .panel-grid{ grid-template-columns: 1fr 1fr; } }
+.panel-grid .stat .k{ font-family:'Geist Mono',monospace; font-size: 9px; letter-spacing:.16em; text-transform:uppercase; color: var(--ink-faint); margin-bottom: 4px; }
+.panel-grid .stat .v{ font-family:'Archivo',sans-serif; font-weight: 700; font-size: 17px; color: var(--ink); line-height: 1.15; }
+.panel-grid .stat .v small{ font-weight: 400; font-family:'Source Serif 4',serif; font-size: 13px; color: var(--ink-soft); }
+
+/* ============ ISSUE / WORKED CASE (dark header + body) ============ */
+.issue{ margin: 26px 0; background: var(--card); border: 1px solid var(--ink); }
+.issue-header{ padding: 12px 22px; background: var(--ink); color: var(--bg); font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; display: flex; align-items: center; gap: 13px; }
+.issue-header .tag{ background: var(--green); padding: 3px 11px; letter-spacing: .1em; font-weight: 600; font-size: 10px; color: #fff; }
+.issue-header .title{ flex: 1; font-weight: 600; letter-spacing: .08em; }
+.issue-body{ padding: 22px 26px; }
+.issue-body > h5{ margin: 16px 0 7px; font-family:'Geist Mono',monospace; font-size: 10.5px; letter-spacing:.16em; color: var(--green); text-transform: uppercase; font-weight: 600; }
+.issue-body > h5:first-child{ margin-top: 0; }
+
+/* ============ DECISION TREE ============ */
+.tree{ background: var(--card); border: 1px solid var(--slate); padding: 24px 26px; margin: 24px 0; position: relative; }
+.tree::before{ content: "DECISION PATH"; position: absolute; top: -9px; left: 22px; background: var(--bg); padding: 0 11px; font-family:'Geist Mono',monospace; font-size: 10px; letter-spacing: .2em; color: var(--slate); font-weight: 600; }
+.tree pre{ background: transparent; color: var(--ink); border: none; border-left: none; padding: 6px 0 0; font-size: 13px; line-height: 1.7; }
+.tree pre::before{ display: none; }
+.tree .q{ color: var(--green); font-weight: 700; }   /* a question node */
+.tree .a{ color: var(--slate); font-weight: 700; }   /* an answer/branch label */
+
+/* ============ PRINCIPLE (green-bordered key idea) ============ */
+.idea{ margin: 24px 0; border: 2px solid var(--green); background: var(--card); padding: 22px 28px; position: relative; }
+.idea::before{ content: "PRINCIPLE"; position: absolute; top: -10px; left: 22px; background: var(--bg); padding: 0 11px; font-family:'Geist Mono',monospace; font-size: 10px; letter-spacing: .24em; color: var(--green); font-weight: 600; }
+.idea p{ margin: 6px 0; font-size: 16px; }
+
+/* ============ PULL QUOTE ============ */
+.pull{ font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 30px; line-height: 1.08; letter-spacing: -0.015em; color: var(--green); margin: 38px 0; padding: 0 0 0 26px; border-left: 4px solid var(--green); }
+
+/* ============ CHEATSHEET ============ */
+.cheat{ background: var(--card); border: 1px solid var(--ink); padding: 24px 28px; margin: 24px 0; }
+.cheat h5{ margin: 0 0 14px; font-family:'Geist Mono',monospace; font-size: 11px; letter-spacing: .2em; color: var(--green); text-transform: uppercase; font-weight: 600; }
+.cheat-grid{ display: grid; grid-template-columns: 1fr 1.5fr; gap: 6px 22px; font-size: 13px; }
+.cheat-grid .cmd{ font-family:'Geist Mono',monospace; color: var(--green-deep); font-weight: 500; }
+.cheat-grid .desc{ color: var(--ink-soft); font-size: 14.5px; }
+@media (max-width: 680px){ .cheat-grid{ grid-template-columns: 1fr; gap: 2px 18px; } .cheat-grid .desc{ margin-bottom: 10px; } }
+
+/* ============ TWO-COLUMN (e.g. good/bad, before/after) ============ */
+.twocol{ display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 22px 0; }
+@media (max-width: 760px){ .twocol{ grid-template-columns: 1fr; } }
+.twocol .col{ background: var(--card); border: 1px solid var(--rule-dark); padding: 18px 22px; }
+.twocol .col h5{ margin: 0 0 10px; font-family:'Geist Mono',monospace; font-size: 10.5px; letter-spacing: .18em; text-transform: uppercase; color: var(--slate); font-weight: 600; }
+.twocol .col.bad h5{ color: var(--rose); } .twocol .col.good h5{ color: var(--green); }
+.twocol .col p{ margin: 8px 0; font-size: 15px; } .twocol .col p:first-child{ margin-top: 0; }
+
+/* ============ PROFILE / ENTITY CARD (e.g. a person, a module) ============ */
+.iv{ background: var(--card); border: 1px solid var(--rule-dark); border-left: 3px solid var(--slate); padding: 20px 24px; margin: 14px 0; position: relative; }
+.iv.req{ border-left: 3px solid var(--rose); }
+.iv-head{ display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 3px; }
+.iv-name{ font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 23px; letter-spacing: -0.01em; color: var(--ink); }
+.iv-dur{ font-family: 'Geist Mono', monospace; font-size: 11px; color: var(--ink-faint); letter-spacing: .08em; }
+.iv-badge{ font-family: 'Geist Mono', monospace; font-size: 8.5px; letter-spacing: .16em; text-transform: uppercase; background: var(--rose); color: #fff; padding: 3px 9px; font-weight: 600; }
+.iv-role{ font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--green); font-weight: 600; margin-bottom: 9px; }
+.iv-focus{ color: var(--ink-soft); font-size: 15.5px; margin: 8px 0 12px; line-height: 1.48; }
+
+/* ============ CLICKABLE NAV CARD (e.g. an index/landing page) ============ */
+a.vol-card{ display: block; text-decoration: none; color: inherit; background: var(--card); border: 1px solid var(--rule-dark); border-left: 4px solid var(--green); padding: 24px 26px 20px; position: relative; transition: all .16s ease; }
+a.vol-card:hover{ border-left-width: 8px; border-color: var(--green); background: #fbfcf9; transform: translateY(-2px); box-shadow: 0 6px 22px rgba(20,40,26,.09); }
+.vol-card .vc-num{ position: absolute; top: 16px; right: 22px; font-family: 'Archivo', sans-serif; font-weight: 900; font-size: 46px; line-height: 1; color: var(--bg-3); letter-spacing: -0.02em; transition: color .16s; }
+a.vol-card:hover .vc-num{ color: var(--green-bri); }
+.vol-card .vc-kicker{ font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .22em; text-transform: uppercase; color: var(--green); font-weight: 600; margin-bottom: 8px; }
+.vol-card .vc-title{ font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 28px; line-height: 1.02; letter-spacing: -0.015em; color: var(--ink); margin: 0 0 10px; }
+.vol-card .vc-open{ margin-top: 14px; font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--green); font-weight: 600; }
+
+/* ============ SECTION SEPARATOR ============ */
+.rule-sep{ margin: 56px 0; position: relative; height: 0; border-top: 2px solid var(--ink); }
+.rule-sep::after{ content: "◇ ◇ ◇"; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); background: var(--bg); color: var(--green); padding: 0 16px; font-size: 11px; letter-spacing: .3em; }
+
+/* ============ FOOTER ============ */
+footer{ max-width: var(--maxw); margin: 0 auto; padding: 54px 40px 84px; border-top: 2px solid var(--ink); color: var(--ink-soft); font-size: 14px; }
+footer h4{ font-family:'Geist Mono',monospace; font-size: 11px; letter-spacing: .24em; color: var(--green); margin: 0 0 18px; font-weight: 600; }
+footer .resources{ columns: 2; column-gap: 38px; }
+@media (max-width: 680px){ footer .resources{ columns: 1; } }
+footer ul{ list-style: none; padding: 0; margin: 0; }
+footer li{ padding: 5px 0; font-size: 13.5px; break-inside: avoid; }
+footer li code{ color: var(--green-deep); background: transparent; border: none; padding: 0; font-weight: 500; }
+footer .footer-note{ margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--rule); color: var(--ink-faint); font-size: 14px; }
+</style>
+</head>
+<body>
+<header>
+  <p class="filed">pytorch field manual · volume vi · computer vision · extended track</p>
+  <p class="vol">Volume VI of VI · classification, detection, ViTs &amp; diffusion</p>
+  <h1>Computer<br><span class="acc">Vision.</span></h1>
+  <p class="deck">
+    Vision was where deep learning first broke through, and it remains one of the two great specializations. This extended volume takes the CNNs, transformers, and autoencoders of the core track into the vision tasks that matter — detection, segmentation, vision transformers, self-supervision, and the diffusion models behind modern image generation. It assumes Volumes I–III.
+  </p>
+  <div class="readout">
+    <div class="cell"><div class="k">Volume</div><div class="v">VI<span class="u"> / VI</span></div></div>
+    <div class="cell"><div class="k">Chapters</div><div class="v">16</div></div>
+    <div class="cell"><div class="k">Parts</div><div class="v">4</div></div>
+    <div class="cell"><div class="k">Focus</div><div class="v" style="font-size:13px;">detect · segment · gen</div></div>
+  </div>
+
+  <div class="toc">
+    <h3>Contents</h3>
+    <p class="toc-sub">Sixteen chapters across four parts</p>
+    <div class="toc-part">
+      <div class="toc-part-name">Part I · Vision foundations</div>
+      <div class="toc-grid">
+        <a href="#c01"><span class="n">01</span><span>Images as tensors &amp; transforms v2</span></a>
+        <a href="#c02"><span class="n">02</span><span>Augmentation: Mixup, CutMix, RandAug</span></a>
+        <a href="#c03"><span class="n">03</span><span>Modern CNNs: ResNet to ConvNeXt</span></a>
+        <a href="#c04"><span class="n">04</span><span>Transfer learning for vision</span></a>
+      </div>
+    </div>
+    <div class="toc-part">
+      <div class="toc-part-name">Part II · Beyond classification</div>
+      <div class="toc-grid">
+        <a href="#c05"><span class="n">05</span><span>Detection foundations: boxes, IoU, NMS</span></a>
+        <a href="#c06"><span class="n">06</span><span>Detectors: Faster R-CNN, YOLO, DETR</span></a>
+        <a href="#c07"><span class="n">07</span><span>Segmentation: U-Net &amp; Mask R-CNN</span></a>
+        <a href="#c08"><span class="n">08</span><span>Metrics: IoU &amp; mAP</span></a>
+      </div>
+    </div>
+    <div class="toc-part">
+      <div class="toc-part-name">Part III · Vision transformers</div>
+      <div class="toc-grid">
+        <a href="#c09"><span class="n">09</span><span>ViT from scratch</span></a>
+        <a href="#c10"><span class="n">10</span><span>Hierarchical &amp; hybrid: Swin</span></a>
+        <a href="#c11"><span class="n">11</span><span>Self-supervised: MAE &amp; DINO</span></a>
+        <a href="#c12"><span class="n">12</span><span>Multimodal: CLIP</span></a>
+      </div>
+    </div>
+    <div class="toc-part">
+      <div class="toc-part-name">Part IV · Generative &amp; applied vision</div>
+      <div class="toc-grid">
+        <a href="#c13"><span class="n">13</span><span>Autoencoders &amp; VAEs</span></a>
+        <a href="#c14"><span class="n">14</span><span>GANs</span></a>
+        <a href="#c15"><span class="n">15</span><span>Diffusion models</span></a>
+        <a href="#c16"><span class="n">16</span><span>Deploying vision models</span></a>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="part" id="p1">
+    <div class="part-label">Part I — Vision foundations</div>
+    <h2 class="part-title">Pixels into <span class="acc">predictions.</span></h2>
+    <p class="part-intro">Vision work starts with getting images into tensors correctly and augmenting them well — unglamorous, but the difference between a model that generalizes and one that memorizes. This part nails the input side, surveys the modern CNN backbones you'll actually reach for, and applies the transfer-learning leverage from Volume III to images specifically.</p>
+
+    <section class="chapter" id="c01">
+      <h2><span class="ch-num">01</span>Images as tensors &amp; transforms v2</h2>
+      <p>An image is a 3-D tensor of shape <code>(C, H, W)</code> — channels, height, width — and a batch is 4-D, <code>(B, C, H, W)</code>. Color images have 3 channels (RGB); grayscale, 1. Pixels arrive as 8-bit integers in <code>[0, 255]</code> and must become floats, typically scaled to <code>[0, 1]</code> then normalized. PyTorch's convention puts <em>channels first</em> — a frequent surprise for anyone used to libraries that put channels last.</p>
+<pre data-lang="PYTHON"><span class="kw">import</span> torch
+<span class="kw">from</span> torchvision.io <span class="kw">import</span> read_image
+<span class="kw">from</span> torchvision.transforms <span class="kw">import</span> v2
+
+img = <span class="fn">read_image</span>(<span class="str">&quot;cat.jpg&quot;</span>)      <span class="com"># uint8 tensor, shape (3, H, W), values 0-255</span>
+<span class="fn">print</span>(img.shape, img.dtype)      <span class="com"># torch.Size([3, H, W]) torch.uint8</span>
+
+tf = v2.<span class="ty">Compose</span>([
+    v2.<span class="ty">Resize</span>((<span class="num">224</span>, <span class="num">224</span>)),
+    v2.<span class="ty">ToDtype</span>(torch.float32, scale=<span class="kw">True</span>),      <span class="com"># uint8 [0,255] -&gt; float [0,1]</span>
+    v2.<span class="ty">Normalize</span>(mean=[<span class="num">0.485</span>, <span class="num">0.456</span>, <span class="num">0.406</span>],    <span class="com"># ImageNet channel statistics</span>
+                 std=[<span class="num">0.229</span>, <span class="num">0.224</span>, <span class="num">0.225</span>]),
+])
+x = <span class="fn">tf</span>(img).<span class="fn">unsqueeze</span>(<span class="num">0</span>)         <span class="com"># (1, 3, 224, 224), ready for a model</span></pre>
+      <p>Use the modern <code>torchvision.transforms.v2</code> API (not the older v1): it's faster, works on batches and on GPU, and — crucially for Part II — transforms images <em>and</em> their bounding boxes/masks together, so a random flip flips the labels too. For loading whole datasets, <code>torchvision.datasets.ImageFolder</code> reads a directory of class-named subfolders into a labeled dataset in one line, and the built-in datasets (CIFAR, ImageNet) plug straight into a <code>DataLoader</code>.</p>
+      <div class="callout warn">
+        <h5>Channel order and normalization must match the model</h5>
+        <p>A pretrained model expects RGB (not BGR), channels-first, and the exact normalization it was trained with. Feed BGR, or skip normalization, and its features misfire silently — no error, just poor accuracy. When using pretrained weights, take the transforms from the weights object (Chapter 04) rather than hand-writing them.</p>
+      </div>
+    </section>
+
+    <section class="chapter" id="c02">
+      <h2><span class="ch-num">02</span>Augmentation: Mixup, CutMix, RandAug</h2>
+      <p>Volume II covered basic augmentation (flips, crops, color jitter). Vision classification benefits from stronger, more creative schemes that have become standard in state-of-the-art training recipes:</p>
+      <table class="tbl">
+        <thead><tr><th>Technique</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td>RandAugment</td><td>Applies a random sequence of image operations with a single strength knob — automates augmentation policy so you don't tune each transform.</td></tr>
+          <tr><td>Mixup</td><td>Blends two images (and their labels) into a weighted average. Forces smoother decision boundaries; a strong regularizer.</td></tr>
+          <tr><td>CutMix</td><td>Pastes a rectangular patch from one image onto another, mixing labels in proportion to area. Combines mixing with spatial locality.</td></tr>
+          <tr><td>RandomErasing</td><td>Blanks out a random rectangle, forcing the model not to rely on any single region — cheap occlusion robustness.</td></tr>
+        </tbody>
+      </table>
+<pre data-lang="PYTHON"><span class="kw">from</span> torchvision.transforms <span class="kw">import</span> v2
+
+<span class="com"># Mixup/CutMix operate on a BATCH (they mix samples together), so apply them</span>
+<span class="com"># in the training loop or a collate_fn, not in per-image transforms.</span>
+mix = v2.<span class="ty">RandomChoice</span>([v2.<span class="ty">MixUp</span>(num_classes=<span class="num">1000</span>),
+                       v2.<span class="ty">CutMix</span>(num_classes=<span class="num">1000</span>)])
+
+<span class="kw">for</span> images, labels <span class="kw">in</span> loader:
+    images, labels = <span class="fn">mix</span>(images, labels)   <span class="com"># labels become soft (blended) targets</span>
+    <span class="com"># train as usual; use a loss that accepts soft targets (e.g. cross-entropy</span>
+    <span class="com"># with class probabilities). These techniques often add a point or two of</span>
+    <span class="com"># accuracy on top of a strong baseline.</span></pre>
+      <div class="callout tip">
+        <h5>Strong augmentation buys generalization — and needs longer training</h5>
+        <p>Mixup, CutMix, and RandAugment make the task harder each epoch, which curbs overfitting and lifts final accuracy — but the model needs <em>more</em> epochs to fit the harder targets. They're standard for training vision models from scratch; for small-data fine-tuning, dial them down or off, since a pretrained model needs less regularization.</p>
+      </div>
+    </section>
+
+    <section class="chapter" id="c03">
+      <h2><span class="ch-num">03</span>Modern CNNs: ResNet to ConvNeXt</h2>
+      <p>You'll rarely design a backbone; you'll pick one. The lineage from Volume III's ResNet continued to refine accuracy-per-compute:</p>
+      <ul class="dash">
+        <li><strong>ResNet</strong> — the reliable baseline. Well-understood, widely pretrained, still an excellent default (ResNet-50 is the field's reference point).</li>
+        <li><strong>EfficientNet</strong> — introduced <em>compound scaling</em>: grow depth, width, and input resolution together in balanced proportion, reaching high accuracy at low compute. Strong when efficiency matters.</li>
+        <li><strong>RegNet</strong> — design-space-searched networks with clean accuracy/compute trade-offs and good scaling behavior.</li>
+        <li><strong>ConvNeXt</strong> — a pure CNN modernized with ideas borrowed from transformers (larger kernels, LayerNorm, fewer activations), matching vision transformers while keeping convolutional efficiency.</li>
+      </ul>
+      <p>All of these live in <code>torchvision.models</code> with pretrained weights, swappable in a line. The practical guidance: <strong>start with a pretrained ResNet-50 or ConvNeXt-Tiny</strong>, get a baseline, and only shop for a fancier backbone if profiling says the backbone (not your data or head) is the limit.</p>
+<pre data-lang="PYTHON"><span class="kw">from</span> torchvision <span class="kw">import</span> models
+
+<span class="com"># Any of these is one line, pretrained, ready to fine-tune:</span>
+resnet   = models.<span class="fn">resnet50</span>(weights=models.<span class="ty">ResNet50_Weights</span>.<span class="ty">DEFAULT</span>)
+convnext = models.<span class="fn">convnext_tiny</span>(weights=models.<span class="ty">ConvNeXt_Tiny_Weights</span>.<span class="ty">DEFAULT</span>)
+effnet   = models.<span class="fn">efficientnet_v2_s</span>(weights=<span class="str">&quot;DEFAULT&quot;</span>)</pre>
+    </section>
+
+    <section class="chapter" id="c04">
+      <h2><span class="ch-num">04</span>Transfer learning for vision</h2>
+      <p>Volume III made the case; vision is where transfer learning is most reliably transformative, because low-level visual features (edges, textures) are near-universal. The recipe, concretely:</p>
+<pre data-lang="PYTHON"><span class="kw">import</span> torch
+<span class="kw">import</span> torch.nn <span class="kw">as</span> nn
+<span class="kw">from</span> torchvision <span class="kw">import</span> models
+
+weights = models.<span class="ty">ResNet50_Weights</span>.<span class="ty">DEFAULT</span>
+model = models.<span class="fn">resnet50</span>(weights=weights)
+preprocess = weights.<span class="fn">transforms</span>()      <span class="com"># the EXACT transforms the model expects</span>
+
+<span class="com"># Replace the 1000-class head with one for our task:</span>
+model.fc = nn.<span class="ty">Linear</span>(model.fc.in_features, num_classes)
+
+<span class="com"># Feature-extraction phase: freeze the backbone, train only the head.</span>
+<span class="kw">for</span> name, p <span class="kw">in</span> model.<span class="fn">named_parameters</span>():
+    p.requires_grad = name.<span class="fn">startswith</span>(<span class="str">&quot;fc&quot;</span>)
+opt = torch.optim.<span class="ty">AdamW</span>((p <span class="kw">for</span> p <span class="kw">in</span> model.<span class="fn">parameters</span>() <span class="kw">if</span> p.requires_grad),
+                        lr=<span class="num">1e-3</span>)
+
+<span class="com"># Fine-tuning phase (optional, if you have enough data): unfreeze and use a</span>
+<span class="com"># much smaller LR so the pretrained features are nudged, not wrecked.</span>
+<span class="com"># for p in model.parameters(): p.requires_grad = True</span>
+<span class="com"># opt = torch.optim.AdamW(model.parameters(), lr=1e-5)</span></pre>
+      <p>Two vision-specific refinements. Use <em>discriminative learning rates</em> when fine-tuning — a smaller rate for early layers (general features you want to preserve) and a larger one for later layers and the head. And consider freezing the batch-norm statistics of a small-data fine-tune, since tiny batches give noisy stats that can hurt. But the headline is unchanged: a pretrained backbone plus a fresh head, on a few thousand images, beats training from scratch nearly every time.</p>
+      <div class="idea">
+        <p><strong>In vision, almost always start pretrained.</strong> The features learned on large image corpora transfer so well that from-scratch training is the exception, justified only when your images are truly unlike natural photos (medical, satellite, microscopy — and even there, pretraining often still helps). Your first move on any vision task should be a pretrained backbone.</p>
+      </div>
+    </section>
+  </div>
+
+  <div class="rule-sep"></div>
+  <div class="part" id="p2">
+    <div class="part-label">Part II — Beyond classification</div>
+    <h2 class="part-title">Where things are, not just <span class="acc">what.</span></h2>
+    <p class="part-intro">Classification answers "what's in this image?" Real applications also need "where, and how many?" — detection draws boxes around objects, segmentation labels every pixel. These tasks reuse the backbones of Part I but add new heads, new losses, and new metrics. This part covers the concepts (boxes, IoU, NMS, mAP) and the models that put them to work.</p>
+
+    <section class="chapter" id="c05">
+      <h2><span class="ch-num">05</span>Detection foundations: boxes, IoU, NMS</h2>
+      <p><strong>Object detection</strong> finds every object in an image and draws a <em>bounding box</em> around each, with a class label. A box is four numbers — usually <code>(x1, y1, x2, y2)</code>, the top-left and bottom-right corners. Two operations underpin the whole field.</p>
+      <p><strong>IoU (Intersection over Union)</strong> measures how well two boxes overlap: the area of their intersection divided by the area of their union. It's 1 for a perfect match, 0 for no overlap, and it's how you decide whether a predicted box "hit" a ground-truth object.</p>
+      <div class="diagram">  INTERSECTION OVER UNION:
+
+     ┌───────────┐
+     │ predicted │            IoU = ▓ intersection
+     │      ┌────┼──────┐           ─────────────────
+     │      │ ▓▓ │      │            (union of both boxes)
+     └──────┼────┘      │
+            │  ground   │      IoU = 1.0  perfect overlap
+            │   truth   │      IoU > 0.5  usually counts as a "hit"
+            └───────────┘      IoU = 0    no overlap</div>
+      <p><strong>NMS (Non-Maximum Suppression)</strong> cleans up duplicates. Detectors emit many overlapping boxes for the same object; NMS keeps the highest-confidence box and removes others that overlap it above an IoU threshold, leaving one box per object. PyTorch gives you both operations in <code>torchvision.ops</code>:</p>
+<pre data-lang="PYTHON"><span class="kw">import</span> torch
+<span class="kw">from</span> torchvision.ops <span class="kw">import</span> box_iou, nms
+
+boxes = torch.<span class="fn">tensor</span>([[<span class="num">10</span>, <span class="num">10</span>, <span class="num">50</span>, <span class="num">50</span>], [<span class="num">12</span>, <span class="num">12</span>, <span class="num">48</span>, <span class="num">52</span>], [<span class="num">200</span>, <span class="num">200</span>, <span class="num">260</span>, <span class="num">260</span>]])
+scores = torch.<span class="fn">tensor</span>([<span class="num">0.9</span>, <span class="num">0.8</span>, <span class="num">0.75</span>])           <span class="com"># confidence per box</span>
+
+iou = <span class="fn">box_iou</span>(boxes, boxes)                        <span class="com"># pairwise overlap matrix</span>
+keep = <span class="fn">nms</span>(boxes.<span class="fn">float</span>(), scores, iou_threshold=<span class="num">0.5</span>)   <span class="com"># indices to keep</span>
+<span class="fn">print</span>(keep)   <span class="com"># drops box 1 (overlaps box 0 heavily); keeps 0 and 2</span></pre>
+      <p>Detectors also traditionally rely on <strong>anchors</strong> — a grid of predefined boxes of various sizes and aspect ratios — and predict <em>offsets</em> from these anchors rather than absolute coordinates, which makes the regression easier. Newer designs are "anchor-free" (predicting box centers and sizes directly) or set-based (DETR, next chapter), but anchors remain common and worth recognizing.</p>
+    </section>
+
+    <section class="chapter" id="c06">
+      <h2><span class="ch-num">06</span>Detectors: Faster R-CNN, YOLO, DETR</h2>
+      <p>Three families, trading accuracy against speed and simplicity:</p>
+      <table class="tbl">
+        <thead><tr><th>Family</th><th>How it works · trade-off</th></tr></thead>
+        <tbody>
+          <tr><td>Faster R-CNN</td><td><strong>Two-stage:</strong> a region-proposal network suggests candidate boxes, then a second stage classifies and refines each. Accurate, the classic workhorse; heavier and slower.</td></tr>
+          <tr><td>YOLO / RetinaNet</td><td><strong>One-stage:</strong> predict boxes and classes densely in a single pass over the image. Fast, real-time capable; historically a touch less accurate, though modern YOLO closes the gap.</td></tr>
+          <tr><td>DETR</td><td><strong>Transformer set-prediction:</strong> treats detection as directly predicting a set of boxes, using the attention of Volume III. Elegant — no hand-designed anchors or NMS — and increasingly competitive.</td></tr>
+        </tbody>
+      </table>
+      <p>You use pretrained detectors from <code>torchvision.models.detection</code> much like classifiers. Note the interface differences: detectors take a <em>list</em> of images (which may vary in size) and, in training, a list of target dicts with <code>boxes</code> and <code>labels</code>; in eval they return per-image dicts of detections.</p>
+<pre data-lang="PYTHON"><span class="kw">import</span> torch
+<span class="kw">from</span> torchvision.models.detection <span class="kw">import</span> (
+    fasterrcnn_resnet50_fpn, <span class="ty">FasterRCNN_ResNet50_FPN_Weights</span>)
+
+weights = <span class="ty">FasterRCNN_ResNet50_FPN_Weights</span>.<span class="ty">DEFAULT</span>
+model = <span class="fn">fasterrcnn_resnet50_fpn</span>(weights=weights).<span class="fn">eval</span>()
+
+img = weights.<span class="fn">transforms</span>()(<span class="fn">read_image</span>(<span class="str">&quot;street.jpg&quot;</span>))
+<span class="kw">with</span> torch.<span class="fn">no_grad</span>():
+    out = <span class="fn">model</span>([img])[<span class="num">0</span>]          <span class="com"># dict: &#x27;boxes&#x27;, &#x27;labels&#x27;, &#x27;scores&#x27;</span>
+keep = out[<span class="str">&quot;scores&quot;</span>] &gt; <span class="num">0.5</span>         <span class="com"># threshold low-confidence detections</span>
+<span class="fn">print</span>(out[<span class="str">&quot;boxes&quot;</span>][keep], out[<span class="str">&quot;labels&quot;</span>][keep])</pre>
+      <div class="callout tip">
+        <h5>Pick by your latency budget</h5>
+        <p>Real-time application (video, robotics, edge)? Start with a one-stage detector (YOLO-family). Accuracy-first with time to spare (offline analysis, medical)? Faster R-CNN. Want a clean, anchor-free, NMS-free design and have the data to train it? DETR. As always, begin from pretrained weights and fine-tune on your objects.</p>
+      </div>
+    </section>
+
+    <section class="chapter" id="c07">
+      <h2><span class="ch-num">07</span>Segmentation: U-Net &amp; Mask R-CNN</h2>
+      <p>Segmentation labels pixels, not boxes. Two flavors: <strong>semantic segmentation</strong> assigns every pixel a class (road, sky, person) without separating individual objects, while <strong>instance segmentation</strong> also distinguishes each object (person 1 vs person 2) — a per-object mask.</p>
+      <p>The archetype for semantic segmentation is <strong>U-Net</strong>: an encoder that downsamples the image into features (like a CNN backbone), a decoder that upsamples back to full resolution, and — the key idea — <em>skip connections</em> that feed high-resolution encoder features directly across to the decoder, so fine spatial detail lost in downsampling is recovered. It's the backbone of medical imaging and, notably, resurfaces inside diffusion models (Chapter 15).</p>
+      <div class="diagram">  U-NET: ENCODER DOWN, DECODER UP, SKIPS ACROSS:
+
+     input ─► [down] ─────────────skip────────────► [up] ─► output mask
+                └► [down] ──────skip──────► [up] ──►┘
+                     └► [down] ─skip─► [up] ─►┘
+                          └──► bottleneck ──►┘
+     skips carry fine detail past the bottleneck, restoring sharp edges</div>
+      <p>For instance segmentation, <strong>Mask R-CNN</strong> extends Faster R-CNN with a third head that predicts a binary mask for each detected box — detection and segmentation in one model. Both are available pretrained in torchvision (<code>torchvision.models.segmentation</code> for semantic, the detection module for Mask R-CNN), and follow the same load-and-fine-tune pattern.</p>
+    </section>
+
+    <section class="chapter" id="c08">
+      <h2><span class="ch-num">08</span>Metrics: IoU &amp; mAP</h2>
+      <p>Detection and segmentation need their own metrics, because "accuracy" doesn't capture localization. For <strong>segmentation</strong>, the standard is <em>mean IoU</em> — the IoU (Chapter 05) between predicted and true regions, averaged over classes. Simple and intuitive: how much do the predicted and actual regions overlap.</p>
+      <p>For <strong>detection</strong>, the metric is <strong>mAP (mean Average Precision)</strong>, and it deserves unpacking because it's reported everywhere and confuses everyone at first. A detection counts as correct if its IoU with a ground-truth box exceeds a threshold. As you sweep the confidence threshold, you trace a precision–recall curve for each class; the <em>Average Precision</em> is the area under that curve, and <em>mAP</em> averages it across classes.</p>
+      <table class="tbl">
+        <thead><tr><th>Metric</th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr><td>mAP@0.5</td><td>mAP counting a hit at IoU ≥ 0.5. Lenient localization — the classic "PASCAL VOC" metric.</td></tr>
+          <tr><td>mAP@[.5:.95]</td><td>mAP averaged over IoU thresholds from 0.5 to 0.95. Rewards tight boxes — the stricter "COCO" metric, the modern standard.</td></tr>
+          <tr><td>mean IoU</td><td>Segmentation: average region overlap across classes.</td></tr>
+        </tbody>
+      </table>
+      <div class="callout warn">
+        <h5>Report the metric your benchmark uses</h5>
+        <p>A number is meaningless without its protocol. "mAP 45" could be COCO mAP@[.5:.95] (strong) or VOC mAP@0.5 (mediocre) — very different achievements. Always state the IoU threshold and dataset convention, and compare only like with like. Use an established evaluator (e.g. the COCO tools, or <code>torchmetrics</code>) rather than rolling your own — mAP is subtle to compute correctly.</p>
+      </div>
+      <p class="pull">Boxes need IoU, detection needs mAP — classification accuracy stops telling the truth the moment location matters.</p>
+    </section>
+  </div>
+
+  <div class="rule-sep"></div>
+  <div class="part" id="p3">
+    <div class="part-label">Part III — Vision transformers</div>
+    <h2 class="part-title">Attention comes for <span class="acc">images.</span></h2>
+    <p class="part-intro">The transformer that conquered language also works on pixels — cut an image into patches, treat them as tokens, and attend. Vision transformers match or beat CNNs at scale, unlock label-free pretraining, and bridge to language through models like CLIP. This part carries Volume III's attention into vision and sets up the generative finale.</p>
+
+    <section class="chapter" id="c09">
+      <h2><span class="ch-num">09</span>ViT from scratch</h2>
+      <p>The <strong>Vision Transformer (ViT)</strong> asks: what if we treat an image like a sentence? It cuts the image into a grid of fixed-size patches (say 16×16 pixels), flattens and linearly embeds each patch into a token vector, adds positional embeddings, and feeds the sequence to a standard transformer encoder (Volume III). A special learnable "class token" collects information for the final classification. That's it — no convolutions.</p>
+<pre data-lang="PYTHON"><span class="kw">import</span> torch
+<span class="kw">import</span> torch.nn <span class="kw">as</span> nn
+
+<span class="kw">class</span> <span class="ty">PatchEmbed</span>(nn.<span class="ty">Module</span>):
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, img=<span class="num">224</span>, patch=<span class="num">16</span>, in_ch=<span class="num">3</span>, dim=<span class="num">768</span>):
+        <span class="fn">super</span>().<span class="fn">__init__</span>()
+        self.n_patches = (img // patch) ** <span class="num">2</span>                 <span class="com"># e.g. 14*14 = 196</span>
+        <span class="com"># a strided conv IS the patch-embed: each stride lands on one patch</span>
+        self.proj = nn.<span class="ty">Conv2d</span>(in_ch, dim, kernel_size=patch, stride=patch)
+
+    <span class="kw">def</span> <span class="fn">forward</span>(self, x):                    <span class="com"># x: (B, 3, 224, 224)</span>
+        x = self.<span class="fn">proj</span>(x)                     <span class="com"># (B, dim, 14, 14)</span>
+        <span class="kw">return</span> x.<span class="fn">flatten</span>(<span class="num">2</span>).<span class="fn">transpose</span>(<span class="num">1</span>, <span class="num">2</span>)  <span class="com"># (B, 196, dim): 196 patch tokens</span>
+
+<span class="com"># Then: prepend a class token, add positional embeddings, run TransformerBlocks</span>
+<span class="com"># (from Volume III), and classify from the class token&#x27;s final vector.</span>
+patches = <span class="ty">PatchEmbed</span>()(torch.<span class="fn">randn</span>(<span class="num">2</span>, <span class="num">3</span>, <span class="num">224</span>, <span class="num">224</span>))
+<span class="fn">print</span>(patches.shape)                          <span class="com"># (2, 196, 768)</span></pre>
+      <p>The trade against CNNs is <strong>inductive bias</strong>. A convolution builds in locality and translation-invariance — strong priors that let CNNs learn from modest data. A ViT assumes almost nothing about images, so it's more flexible but <em>data-hungry</em>: on small datasets a CNN wins, but given enough data (or large-scale pretraining), the ViT's flexibility lets it pull ahead. This is why ViTs took off alongside huge pretraining datasets.</p>
+      <div class="callout tip">
+        <h5>Use a pretrained ViT; rarely train one from scratch</h5>
+        <p>Because ViTs need enormous data to shine, you almost always start from a pretrained one (torchvision and timm both offer many) and fine-tune — exactly the Part I recipe. Training a ViT from scratch on a small dataset usually underperforms a pretrained ResNet.</p>
+      </div>
+    </section>
+
+    <section class="chapter" id="c10">
+      <h2><span class="ch-num">10</span>Hierarchical &amp; hybrid: Swin</h2>
+      <p>Plain ViT has two limits: it works at a single resolution (no feature pyramid, awkward for detection/segmentation), and its global attention costs grow quadratically with the number of patches, which is expensive for high-resolution images. The <strong>Swin Transformer</strong> fixes both by borrowing the CNN's hierarchy. It computes attention within <em>local windows</em> (cheap, linear in image size), <em>shifts</em> those windows between layers so information crosses window boundaries, and <em>merges</em> patches as it deepens to build a multi-scale pyramid — the pyramid that detection and segmentation heads expect.</p>
+      <p>Meanwhile, the story went full circle: <strong>ConvNeXt</strong> (Part I) showed that a pure CNN, modernized with the training recipes and design choices of transformers, matches ViTs. So the honest state of play is a genuine choice, not a clear winner:</p>
+      <table class="tbl compare">
+        <thead><tr><th>Consideration</th><th>CNN (ResNet/ConvNeXt)</th><th>Transformer (ViT/Swin)</th></tr></thead>
+        <tbody>
+          <tr><td>Small/medium data</td><td>Stronger — built-in inductive bias.</td><td>Weaker unless pretrained at scale.</td></tr>
+          <tr><td>Very large data</td><td>Excellent (ConvNeXt).</td><td>Excellent — flexibility pays off.</td></tr>
+          <tr><td>Dense tasks (detect/seg)</td><td>Natural feature pyramid.</td><td>Use hierarchical variants (Swin).</td></tr>
+          <tr><td>Ecosystem maturity</td><td>Very mature, easy to deploy.</td><td>Mature and growing fast.</td></tr>
+        </tbody>
+      </table>
+      <p>The pragmatic answer: try a pretrained model of either kind, and let your data and metrics decide. The architectures have converged more than the debate suggests.</p>
+    </section>
+
+    <section class="chapter" id="c11">
+      <h2><span class="ch-num">11</span>Self-supervised: MAE &amp; DINO</h2>
+      <p>Labels are expensive; unlabeled images are nearly infinite. <strong>Self-supervised learning</strong> pretrains a backbone with no labels at all, by inventing a task the data can grade itself on — then that backbone transfers to real tasks with little labeled data. Three influential approaches:</p>
+      <ul class="dash">
+        <li><strong>Contrastive (SimCLR, MoCo).</strong> Make two augmented views of the same image, and train so their embeddings are close while different images' embeddings are far apart. The model learns what's essential about an image (invariant to crops and color) — this is the metric learning of Volume III, self-supervised.</li>
+        <li><strong>Masked autoencoding (MAE).</strong> Hide most of an image's patches and train the model to reconstruct them from the few visible ones — literally BERT's fill-in-the-blank, for pixels. Simple, scalable, and produces excellent ViT features.</li>
+        <li><strong>Self-distillation (DINO).</strong> A student network is trained to match a teacher (an average of the student's own past weights) across views. Remarkably, DINO's attention maps segment objects with no segmentation labels ever provided — structure emerges for free.</li>
+      </ul>
+      <p>The payoff mirrors language: a backbone pretrained self-supervised on millions of unlabeled images gives strong general features, which you fine-tune on your small labeled set. It's the vision analogue of the pretrain-then-adapt workflow that dominates Volume V.</p>
+    </section>
+
+    <section class="chapter" id="c12">
+      <h2><span class="ch-num">12</span>Multimodal: CLIP</h2>
+      <p><strong>CLIP</strong> connects images and text in one shared space, and it's one of the most consequential vision models of recent years. It trains two encoders together — one for images, one for text — on hundreds of millions of image-caption pairs, with a contrastive objective: the embedding of an image and the embedding of its true caption should be close, and far from mismatched captions. The result is a space where a picture of a dog and the words "a photo of a dog" land near each other.</p>
+      <p>That shared space enables <strong>zero-shot classification</strong> — recognizing categories the model was never explicitly trained to classify — by comparing an image's embedding to the embeddings of text prompts:</p>
+<pre data-lang="PYTHON"><span class="com"># Conceptual zero-shot classification with a CLIP-style model:</span>
+labels = [<span class="str">&quot;a photo of a cat&quot;</span>, <span class="str">&quot;a photo of a dog&quot;</span>, <span class="str">&quot;a photo of a car&quot;</span>]
+
+image_emb = <span class="fn">image_encoder</span>(image)            <span class="com"># (1, D)</span>
+text_emb  = <span class="fn">text_encoder</span>(<span class="fn">tokenize</span>(labels))  <span class="com"># (3, D)</span>
+
+<span class="com"># cosine similarity, then softmax -&gt; a probability per label. No training needed.</span>
+sims = (image_emb @ text_emb.<span class="ty">T</span>)             <span class="com"># (1, 3)</span>
+probs = sims.<span class="fn">softmax</span>(dim=-<span class="num">1</span>)
+<span class="fn">print</span>(labels[probs.<span class="fn">argmax</span>()])               <span class="com"># the best-matching caption</span></pre>
+      <p>Beyond classification and retrieval, CLIP's text–image alignment is what lets you <em>steer image generation with words</em> — its text embeddings condition the diffusion models of the next part. CLIP is the hinge between the vision track and the language track, and a foundation of modern multimodal AI.</p>
+      <div class="idea">
+        <p><strong>Vision and language stopped being separate.</strong> Patches-as-tokens brought the transformer to images; CLIP tied images and text into one space; and generative models take text and produce pixels. The clean split between "vision models" and "language models" has largely dissolved into a shared toolkit — which is why Volumes V and VI increasingly rhyme.</p>
+      </div>
+    </section>
+  </div>
+
+  <div class="rule-sep"></div>
+  <div class="part" id="p4">
+    <div class="part-label">Part IV — Generative &amp; applied vision</div>
+    <h2 class="part-title">Making images, and <span class="acc">shipping them.</span></h2>
+    <p class="part-intro">The final turn: from recognizing images to <em>creating</em> them. The autoencoder of Volume III becomes a generator (VAE), then adversarial and — the modern workhorse — diffusion models. We close where every model must end: deployed, on the constraints real vision products face. This is the last part of the last volume.</p>
+
+    <section class="chapter" id="c13">
+      <h2><span class="ch-num">13</span>Autoencoders &amp; VAEs</h2>
+      <p>Volume III's autoencoder compressed and reconstructed images, but its latent space was a grab-bag — pick a random latent vector and the decoder usually produces garbage, because the space has holes. The <strong>Variational Autoencoder (VAE)</strong> fixes this by forcing the latent space to be smooth and continuous, which turns the decoder into a <em>generator</em>: sample any point from a simple distribution and get a plausible image.</p>
+      <p>Two changes do it. The encoder outputs a <em>distribution</em> (a mean and variance) rather than a point, and a loss term (KL divergence) pulls that distribution toward a standard normal — so the whole latent space stays densely, meaningfully populated. To backpropagate through the random sampling, the <strong>reparameterization trick</strong> expresses the sample as <code>mean + std · ε</code> with the randomness in <code>ε</code>, keeping the gradient path through <code>mean</code> and <code>std</code>.</p>
+<pre data-lang="PYTHON"><span class="kw">import</span> torch
+<span class="kw">import</span> torch.nn.functional <span class="kw">as</span> <span class="ty">F</span>
+
+<span class="kw">def</span> <span class="fn">vae_step</span>(encoder, decoder, x):
+    mu, logvar = <span class="fn">encoder</span>(x).<span class="fn">chunk</span>(<span class="num">2</span>, dim=-<span class="num">1</span>)        <span class="com"># distribution per input</span>
+    std = torch.<span class="fn">exp</span>(<span class="num">0.5</span> * logvar)
+    z = mu + std * torch.<span class="fn">randn_like</span>(std)            <span class="com"># reparameterization trick</span>
+    recon = <span class="fn">decoder</span>(z)
+    recon_loss = <span class="ty">F</span>.<span class="fn">mse_loss</span>(recon, x, reduction=<span class="str">&quot;sum&quot;</span>)
+    <span class="com"># KL pulls the latent distribution toward N(0, I) -&gt; smooth, samplable space</span>
+    kl = -<span class="num">0.5</span> * torch.<span class="fn">sum</span>(<span class="num">1</span> + logvar - mu.<span class="fn">pow</span>(<span class="num">2</span>) - logvar.<span class="fn">exp</span>())
+    <span class="kw">return</span> recon_loss + kl</pre>
+      <p>VAEs generate somewhat blurry images on their own, but the idea is foundational — and, importantly, a VAE's compact latent space is exactly what <em>latent diffusion</em> (Chapter 15) generates into, for efficiency. The VAE is a building block of the modern generative stack, not just a historical stepping stone.</p>
+    </section>
+
+    <section class="chapter" id="c14">
+      <h2><span class="ch-num">14</span>GANs</h2>
+      <p><strong>Generative Adversarial Networks</strong> frame generation as a contest between two networks. A <em>generator</em> turns random noise into images; a <em>discriminator</em> tries to tell generated images from real ones. They train together: the discriminator learns to spot fakes, and the generator learns to fool it — an arms race that drives the generator toward increasingly realistic images. For years GANs produced the sharpest image synthesis (the uncannily realistic faces of the late 2010s were GANs).</p>
+<pre data-lang="PYTHON"><span class="com"># The adversarial training loop, in essence (one step):</span>
+<span class="com"># 1. Train D: real images should score &quot;real&quot;, fakes should score &quot;fake&quot;.</span>
+d_loss = <span class="fn">bce</span>(<span class="ty">D</span>(real), ones) + <span class="fn">bce</span>(<span class="ty">D</span>(<span class="ty">G</span>(noise).<span class="fn">detach</span>()), zeros)
+d_loss.<span class="fn">backward</span>(); opt_D.<span class="fn">step</span>()
+
+<span class="com"># 2. Train G: make fakes that D scores as &quot;real&quot; (note: no detach).</span>
+g_loss = <span class="fn">bce</span>(<span class="ty">D</span>(<span class="ty">G</span>(noise)), ones)
+g_loss.<span class="fn">backward</span>(); opt_G.<span class="fn">step</span>()</pre>
+      <div class="callout warn">
+        <h5>GANs are famously hard to train</h5>
+        <p>The adversarial balance is delicate: if either network overpowers the other, training collapses. The classic failure is <em>mode collapse</em>, where the generator produces only a few image types regardless of input. GANs remain useful (fast, sharp, great for some image-to-image tasks), but for general high-quality generation they've largely been overtaken by the diffusion models next — which are far more stable to train.</p>
+      </div>
+    </section>
+
+    <section class="chapter" id="c15">
+      <h2><span class="ch-num">15</span>Diffusion models</h2>
+      <p><strong>Diffusion models</strong> are the engine behind modern image generation, and the idea is beautifully simple. Take training images and gradually add noise, step by step, until they're pure static — the "forward process." Then train a network to <em>reverse</em> one step: given a noisy image, predict the noise that was added. To generate, start from pure random noise and run that denoiser repeatedly, and a coherent image emerges from the static.</p>
+      <div class="diagram">  DIFFUSION: LEARN TO REVERSE A NOISING PROCESS
+
+   forward (fixed):   image ─►+noise─►+noise─► ... ─► pure noise
+                        x0      x1       x2            xT
+
+   reverse (learned): noise ─►denoise─►denoise─► ... ─► image
+                        xT       ...                     x0
+   train a U-Net to predict the noise at each step; generate by denoising</div>
+      <p>The training objective is startlingly plain: add a random amount of noise to an image, ask the network to predict that noise, and take the MSE between prediction and truth. The denoiser is almost always a <strong>U-Net</strong> (Chapter 07) — its skip connections preserve the detail needed to reconstruct sharp images.</p>
+<pre data-lang="PYTHON"><span class="kw">import</span> torch
+<span class="kw">import</span> torch.nn.functional <span class="kw">as</span> <span class="ty">F</span>
+
+<span class="kw">def</span> <span class="fn">diffusion_loss</span>(unet, x0, scheduler):
+    <span class="com"># x0: a clean image batch. Pick a random noise level t for each.</span>
+    t = torch.<span class="fn">randint</span>(<span class="num">0</span>, scheduler.<span class="ty">T</span>, (x0.<span class="fn">size</span>(<span class="num">0</span>),), device=x0.device)
+    noise = torch.<span class="fn">randn_like</span>(x0)
+    xt = scheduler.<span class="fn">add_noise</span>(x0, noise, t)      <span class="com"># noise x0 up to level t</span>
+    pred = <span class="fn">unet</span>(xt, t)                          <span class="com"># predict the noise that was added</span>
+    <span class="kw">return</span> <span class="ty">F</span>.<span class="fn">mse_loss</span>(pred, noise)              <span class="com"># ...and that&#x27;s the whole loss</span></pre>
+      <p>Two refinements make this practical and powerful. <strong>Conditioning</strong> steers generation — feed a text embedding (from CLIP, Chapter 12) into the U-Net and it generates images matching the prompt; <em>classifier-free guidance</em> amplifies that steering. <strong>Latent diffusion</strong> (the basis of Stable Diffusion) runs the whole process in a VAE's compact latent space instead of on full-resolution pixels, cutting compute enormously. Together they're how text-to-image systems work: encode the prompt, denoise in latent space guided by it, decode to pixels.</p>
+      <div class="idea">
+        <p><strong>Every idea in this series converges here.</strong> A diffusion image generator uses a U-Net (Volume III/VI) as its denoiser, a VAE (this part) for its latent space, CLIP (Part III) to follow text, attention (Volume III) inside the U-Net, and all of Volume IV's efficiency and serving machinery to run. The most impressive systems in AI are compositions of the primitives you now understand individually.</p>
+      </div>
+    </section>
+
+    <section class="chapter" id="c16">
+      <h2><span class="ch-num">16</span>Deploying vision models</h2>
+      <p>Vision models ship to demanding places — phones, cameras, cars, factory lines — so deployment (Volume IV) has vision-specific edges. The path is the same: export with <code>torch.export</code>, quantize, and target a runtime.</p>
+      <ul class="dash">
+        <li><strong>Real-time throughput.</strong> Video and camera feeds need frames processed within a tight budget. Batch frames when latency allows, use half precision, and consider a compiled or vendor-optimized runtime (e.g. TensorRT) for the last drop of speed.</li>
+        <li><strong>Edge and mobile.</strong> On-device vision (a phone camera, an embedded board) has hard memory and power limits. Quantize aggressively (int8), pick an efficient backbone (EfficientNet, MobileNet), and export to a mobile runtime like ExecuTorch.</li>
+        <li><strong>Preprocessing parity.</strong> The resize, crop, and normalization at inference must exactly match training — a mismatch here silently wrecks accuracy in production. Ship the preprocessing <em>with</em> the model, or bake it into the exported graph.</li>
+        <li><strong>Interchange.</strong> Export to ONNX when the deployment target is another framework or a hardware-specific runtime that consumes it.</li>
+      </ul>
+      <p>The instinct from Volume IV holds: measure the real bottleneck (often preprocessing or data movement, not the model), optimize that, and validate accuracy after every compression step. A vision model that's accurate in a notebook but too slow or too heavy for its target hasn't solved the problem it was built for.</p>
+      <div class="idea">
+        <p><strong>The series, complete.</strong> Six volumes ago you made your first tensor. You can now build and train networks, make them efficient and distributed, scale a transformer into a language model, and take vision from classification through detection to diffusion — all in PyTorch, all understood rather than copied. The frontier keeps moving, but it's built from exactly these parts. Go build something.</p>
+      </div>
+      <p class="pull">From one tensor to a diffusion model — same five-line loop, all the way up.</p>
+    </section>
+  </div>
+
+</main>
+
+<footer>
+  <h4>sources &amp; further study</h4>
+  <div class="resources">
+    <ul>
+      <li><strong>Landmark papers</strong></li>
+      <li>Dosovitskiy et al. — "An Image is Worth 16x16 Words" (ViT)</li>
+      <li>Liu et al. — "Swin Transformer"; ConvNeXt</li>
+      <li>He et al. — "Masked Autoencoders"; Caron et al. — "DINO"</li>
+      <li>Radford et al. — "CLIP"</li>
+      <li>Ho et al. — "Denoising Diffusion"; Rombach et al. — "Latent Diffusion"</li>
+      <li><strong>Official &amp; libraries</strong></li>
+      <li>torchvision — models, ops, transforms.v2</li>
+      <li>timm — pretrained vision backbones</li>
+      <li>Hugging Face diffusers — diffusion pipelines</li>
+      <li><strong>The series</strong></li>
+      <li>Volumes I–IV — the core track · Volume V — LLMs</li>
+    </ul>
+  </div>
+  <p class="footer-note">Volume VI of the PyTorch Field Manual (extended track), and the end of the series. Classic vision (Parts I–II) is stable; vision transformers, self-supervision, and diffusion (Parts III–IV) are active research areas — the concepts here are durable, but expect the state of the art to keep advancing. Built on PyTorch 2.x (2.13, mid-2026). Thank you for reading — now go build something.</p>
+</footer>
+
+</body>
+</html>

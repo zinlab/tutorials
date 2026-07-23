@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PyTorch Field Manual — Volume I · Foundations</title>
+
+<!-- ============================================================
+     FIELD MANUAL TEMPLATE
+     Copy this whole file, then replace the example content in
+     <body>. The <head> CSS is the complete design system — do not
+     edit it except to swap the single accent token (see note below).
+
+     ONE ALLOWED VARIATION: to re-hue the accent, change --green,
+     --green-deep, --green-bri, and --code-bg to a different family
+     (e.g. a blue or copper). Leave everything else alone — the
+     paper, ink, slate, amber, and rose are calibrated to pair with
+     the accent and with each other.
+     ============================================================ -->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;0,8..60,700;1,8..60,400;1,8..60,500&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --bg:        #eef1ec;   /* cool desaturated paper — the page */
+  --bg-2:      #e4e8e1;   /* slightly darker panels / table headers */
+  --bg-3:      #d7dcd2;   /* darker still — inline code chips */
+  --card:      #f7f9f4;   /* card surfaces (slightly lighter than page) */
+  --ink:       #14181a;   /* near-black primary text */
+  --ink-soft:  #3d4642;   /* body text in cards, secondary prose */
+  --ink-faint: #76807a;   /* muted labels, captions */
+  --rule:      #c6ccc0;   /* hairline rules */
+  --rule-soft: #d8ddd2;
+  --rule-dark: #8d958a;   /* card borders */
+  --green:     #1a7f46;   /* SIGNAL ACCENT — primary */
+  --green-deep:#0e5e31;   /* darker accent (code, links) */
+  --green-bri: #2ea05c;   /* brighter accent (hover) */
+  --slate:     #33505f;   /* secondary accent — cool blue-grey */
+  --slate-deep:#203642;
+  --amber:     #b07d12;   /* warning accent */
+  --rose:      #a32a1f;   /* danger / required accent */
+  --code-bg:   #15201a;   /* dark code blocks (green-tinted near-black) */
+  --code-ink:  #d6ddd2;
+  --maxw:      1080px;
+}
+*{ box-sizing: border-box; }
+html{ scroll-behavior: smooth; }
+body{
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Source Serif 4', Georgia, serif;
+  font-size: 17px;
+  line-height: 1.62;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ============ HEADER ============ */
+header{ max-width: var(--maxw); margin: 0 auto; padding: 84px 40px 50px; position: relative; }
+.filed{
+  font-family: 'Geist Mono', ui-monospace, monospace; font-size: 10.5px; letter-spacing: .28em;
+  text-transform: uppercase; color: var(--green); margin: 0 0 28px; font-weight: 600;
+  display: flex; align-items: center; gap: 12px;
+}
+.filed::before{ content: "▸"; color: var(--green); font-size: 13px; }
+.vol{
+  font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .18em;
+  color: var(--ink-faint); text-transform: uppercase; margin: 0 0 16px; font-weight: 500;
+}
+h1{
+  font-family: 'Archivo', system-ui, sans-serif; font-weight: 900;
+  font-size: clamp(54px, 9.5vw, 122px); line-height: 0.9; letter-spacing: -0.02em; margin: 0 0 24px; color: var(--ink);
+}
+h1 .acc{ color: var(--green); }
+.deck{ font-family: 'Source Serif 4', serif; font-size: 20px; font-weight: 400; color: var(--ink-soft); max-width: 770px; line-height: 1.5; }
+.readout{ margin-top: 40px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--rule); border: 1px solid var(--rule); }
+@media (max-width: 680px){ .readout{ grid-template-columns: repeat(2,1fr); } }
+.readout .cell{ background: var(--bg); padding: 14px 16px; }
+.readout .k{ font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 6px; }
+.readout .v{ font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 22px; color: var(--ink); line-height: 1; }
+.readout .v .u{ font-size: 12px; color: var(--green); font-weight: 600; }
+
+/* ============ TOC ============ */
+.toc{ margin-top: 46px; background: var(--card); border: 1px solid var(--rule-dark); padding: 30px 32px 34px; position: relative; }
+.toc::before{ content: "CONTENTS"; position: absolute; top: -9px; left: 26px; background: var(--card); padding: 0 10px; font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .3em; color: var(--green); font-weight: 600; }
+.toc h3{ font-family: 'Archivo', sans-serif; font-size: 26px; font-weight: 800; margin: 0 0 3px; color: var(--ink); letter-spacing: -0.01em; }
+.toc .toc-sub{ font-family: 'Geist Mono', monospace; font-size: 10.5px; color: var(--ink-faint); letter-spacing: .1em; text-transform: uppercase; margin-bottom: 20px; }
+.toc-part{ margin-top: 15px; }
+.toc-part-name{ font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .22em; color: var(--slate); text-transform: uppercase; font-weight: 600; border-bottom: 1px solid var(--rule); padding-bottom: 5px; margin-bottom: 7px; }
+.toc-grid{ display: grid; grid-template-columns: repeat(2,1fr); gap: 1px 32px; }
+@media (max-width: 760px){ .toc-grid{ grid-template-columns: 1fr; } }
+.toc-grid a{ color: var(--ink-soft); text-decoration: none; font-size: 14.5px; padding: 5px 0; display: flex; gap: 12px; align-items: baseline; border-bottom: 1px dotted transparent; transition: all .14s; }
+.toc-grid a:hover{ color: var(--green); border-color: var(--rule); }
+.toc-grid a .n{ font-family: 'Geist Mono', monospace; font-size: 10.5px; color: var(--slate); min-width: 26px; font-weight: 600; }
+
+/* ============ MAIN ============ */
+main{ max-width: var(--maxw); margin: 0 auto; padding: 56px 40px 96px; }
+.part{ margin-top: 92px; padding-top: 46px; position: relative; }
+.part::before{ content:""; position: absolute; top: 0; left: 0; right: 0; border-top: 2px solid var(--ink); }
+.part::after{ content:""; position: absolute; top: 5px; left: 0; width: 84px; border-top: 2px solid var(--green); }
+.part:first-child{ margin-top: 28px; padding-top: 28px; }
+.part-label{ font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .28em; color: var(--green); text-transform: uppercase; margin-bottom: 14px; font-weight: 600; }
+.part-title{ font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 54px; line-height: 0.96; letter-spacing: -0.02em; margin: 0 0 18px; color: var(--ink); }
+.part-title .acc{ color: var(--green); }
+.part-intro{ color: var(--ink-soft); font-size: 18.5px; max-width: 800px; margin-bottom: 34px; line-height: 1.5; }
+
+section.chapter{ margin-top: 52px; }
+section.chapter:first-of-type{ margin-top: 8px; }
+h2{ font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 33px; line-height: 1.08; letter-spacing: -0.015em; margin: 0 0 15px; color: var(--ink); display: flex; align-items: baseline; gap: 15px; padding-bottom: 9px; border-bottom: 2px solid var(--ink); }
+h2 .ch-num{ font-family: 'Geist Mono', monospace; font-size: 13px; color: var(--green); letter-spacing: .05em; font-weight: 600; flex-shrink: 0; }
+h3{ font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 22px; margin: 28px 0 9px; color: var(--ink); letter-spacing: -0.01em; }
+h4{ font-family: 'Geist Mono', monospace; font-size: 10.5px; letter-spacing: .18em; text-transform: uppercase; color: var(--slate); margin: 22px 0 8px; font-weight: 600; }
+p{ margin: 12px 0; }
+p code, li code, td code{ font-family: 'Geist Mono', monospace; font-size: .8em; background: var(--bg-3); color: var(--green-deep); padding: 1px 6px; border-radius: 2px; border: 1px solid var(--rule); }
+strong{ font-weight: 700; }
+ul, ol{ padding-left: 1.3em; }
+li{ margin: 6px 0; }
+ul.tight li{ margin: 3px 0; }
+ul.dash{ list-style: none; padding-left: 0; }
+ul.dash li{ position: relative; padding-left: 22px; }
+ul.dash li::before{ content: "▸"; position: absolute; left: 0; color: var(--green); font-weight: 700; }
+ul.check{ list-style: none; padding-left: 0; }
+ul.check li{ position: relative; padding-left: 24px; }
+ul.check li::before{ content: "▪"; position: absolute; left: 2px; top: 2px; color: var(--green); }
+
+/* ============ CODE ============ */
+pre{ background: var(--code-bg); padding: 17px 20px; overflow-x: auto; font-family: 'Geist Mono', monospace; font-size: 12.5px; line-height: 1.6; color: var(--code-ink); margin: 18px 0; position: relative; border-left: 3px solid var(--green); }
+pre .com{ color: #6f8378; font-style: italic; }   /* comment */
+pre .kw{  color: #6cb38a; }                        /* keyword */
+pre .ty{  color: #8fc6c0; }                        /* type */
+pre .str{ color: #c9b36a; }                        /* string */
+pre .num{ color: #c89a64; }                        /* number */
+pre .fn{  color: #8db8d0; }                        /* function */
+pre .var{ color: #d6ddd2; }                        /* variable */
+pre .glb{ color: #7fbf95; }                        /* global / builtin */
+pre .opt{ color: #c0a96a; }                        /* flag / option */
+pre::before{ content: attr(data-lang); position: absolute; top: 5px; right: 12px; font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: .18em; color: #56635a; text-transform: uppercase; }
+
+/* ============ CALLOUTS ============ */
+.callout{ margin: 22px 0; padding: 15px 22px; border-left: 4px solid var(--slate); background: var(--bg-2); font-size: 16px; line-height: 1.55; }
+.callout.warn{ border-color: var(--amber); }
+.callout.danger{ border-color: var(--rose); }
+.callout.tip{ border-color: var(--green); }
+.callout h5{ margin: 0 0 6px; font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--slate); font-weight: 600; }
+.callout.warn h5{ color: var(--amber); }
+.callout.danger h5{ color: var(--rose); }
+.callout.tip h5{ color: var(--green); }
+.callout p:first-child{ margin-top: 0; } .callout p:last-child{ margin-bottom: 0; }
+
+/* ============ TABLES ============ */
+.tbl{ width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14.5px; }
+.tbl th, .tbl td{ text-align: left; padding: 9px 14px; vertical-align: top; border-bottom: 1px solid var(--rule); }
+.tbl th{ font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink); font-weight: 600; border-bottom: 2px solid var(--ink); border-top: 2px solid var(--ink); background: var(--bg-2); }
+.tbl td:first-child{ font-family: 'Geist Mono', monospace; font-size: 12px; color: var(--green-deep); font-weight: 500; width: 26%; }
+.tbl.wide td:first-child{ width: 20%; }
+.tbl.compare td:first-child{ font-family: 'Geist Mono', monospace; font-weight: 600; color: var(--ink); width: 22%; font-size: 11.5px; letter-spacing: .03em; }
+.tbl.compare td:nth-child(2){ color: var(--green-deep); font-family: 'Source Serif 4', serif; font-size: 14.5px; }
+.tbl.compare td:nth-child(3){ color: var(--slate-deep); font-family: 'Source Serif 4', serif; font-size: 14.5px; }
+
+/* ============ DIAGRAM (monospace ASCII art in a labeled frame) ============ */
+.diagram{ background: var(--card); border: 1px solid var(--rule-dark); padding: 22px 24px; margin: 22px 0; font-family: 'Geist Mono', monospace; font-size: 12px; line-height: 1.55; color: var(--ink-soft); white-space: pre; overflow-x: auto; position: relative; }
+.diagram::before{ content: "FIG."; position: absolute; top: -9px; left: 18px; background: var(--bg); padding: 0 9px; font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: .2em; color: var(--slate); font-weight: 600; }
+
+/* ============ READOUT PANEL (titled stat grid) ============ */
+.panel{ background: var(--card); border: 1px solid var(--rule-dark); margin: 22px 0; padding: 20px 24px; position: relative; }
+.panel::before{ content: attr(data-title); position: absolute; top: -9px; left: 20px; background: var(--bg); padding: 0 10px; font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: .2em; color: var(--green); font-weight: 600; }
+.panel-grid{ display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; }
+@media (max-width: 680px){ .panel-grid{ grid-template-columns: 1fr 1fr; } }
+.panel-grid .stat .k{ font-family:'Geist Mono',monospace; font-size: 9px; letter-spacing:.16em; text-transform:uppercase; color: var(--ink-faint); margin-bottom: 4px; }
+.panel-grid .stat .v{ font-family:'Archivo',sans-serif; font-weight: 700; font-size: 17px; color: var(--ink); line-height: 1.15; }
+.panel-grid .stat .v small{ font-weight: 400; font-family:'Source Serif 4',serif; font-size: 13px; color: var(--ink-soft); }
+
+/* ============ ISSUE / WORKED CASE (dark header + body) ============ */
+.issue{ margin: 26px 0; background: var(--card); border: 1px solid var(--ink); }
+.issue-header{ padding: 12px 22px; background: var(--ink); color: var(--bg); font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; display: flex; align-items: center; gap: 13px; }
+.issue-header .tag{ background: var(--green); padding: 3px 11px; letter-spacing: .1em; font-weight: 600; font-size: 10px; color: #fff; }
+.issue-header .title{ flex: 1; font-weight: 600; letter-spacing: .08em; }
+.issue-body{ padding: 22px 26px; }
+.issue-body > h5{ margin: 16px 0 7px; font-family:'Geist Mono',monospace; font-size: 10.5px; letter-spacing:.16em; color: var(--green); text-transform: uppercase; font-weight: 600; }
+.issue-body > h5:first-child{ margin-top: 0; }
+
+/* ============ DECISION TREE ============ */
+.tree{ background: var(--card); border: 1px solid var(--slate); padding: 24px 26px; margin: 24px 0; position: relative; }
+.tree::before{ content: "DECISION PATH"; position: absolute; top: -9px; left: 22px; background: var(--bg); padding: 0 11px; font-family:'Geist Mono',monospace; font-size: 10px; letter-spacing: .2em; color: var(--slate); font-weight: 600; }
+.tree pre{ background: transparent; color: var(--ink); border: none; border-left: none; padding: 6px 0 0; font-size: 13px; line-height: 1.7; }
+.tree pre::before{ display: none; }
+.tree .q{ color: var(--green); font-weight: 700; }   /* a question node */
+.tree .a{ color: var(--slate); font-weight: 700; }   /* an answer/branch label */
+
+/* ============ PRINCIPLE (green-bordered key idea) ============ */
+.idea{ margin: 24px 0; border: 2px solid var(--green); background: var(--card); padding: 22px 28px; position: relative; }
+.idea::before{ content: "PRINCIPLE"; position: absolute; top: -10px; left: 22px; background: var(--bg); padding: 0 11px; font-family:'Geist Mono',monospace; font-size: 10px; letter-spacing: .24em; color: var(--green); font-weight: 600; }
+.idea p{ margin: 6px 0; font-size: 16px; }
+
+/* ============ PULL QUOTE ============ */
+.pull{ font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 30px; line-height: 1.08; letter-spacing: -0.015em; color: var(--green); margin: 38px 0; padding: 0 0 0 26px; border-left: 4px solid var(--green); }
+
+/* ============ CHEATSHEET ============ */
+.cheat{ background: var(--card); border: 1px solid var(--ink); padding: 24px 28px; margin: 24px 0; }
+.cheat h5{ margin: 0 0 14px; font-family:'Geist Mono',monospace; font-size: 11px; letter-spacing: .2em; color: var(--green); text-transform: uppercase; font-weight: 600; }
+.cheat-grid{ display: grid; grid-template-columns: 1fr 1.5fr; gap: 6px 22px; font-size: 13px; }
+.cheat-grid .cmd{ font-family:'Geist Mono',monospace; color: var(--green-deep); font-weight: 500; }
+.cheat-grid .desc{ color: var(--ink-soft); font-size: 14.5px; }
+@media (max-width: 680px){ .cheat-grid{ grid-template-columns: 1fr; gap: 2px 18px; } .cheat-grid .desc{ margin-bottom: 10px; } }
+
+/* ============ TWO-COLUMN (e.g. good/bad, before/after) ============ */
+.twocol{ display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 22px 0; }
+@media (max-width: 760px){ .twocol{ grid-template-columns: 1fr; } }
+.twocol .col{ background: var(--card); border: 1px solid var(--rule-dark); padding: 18px 22px; }
+.twocol .col h5{ margin: 0 0 10px; font-family:'Geist Mono',monospace; font-size: 10.5px; letter-spacing: .18em; text-transform: uppercase; color: var(--slate); font-weight: 600; }
+.twocol .col.bad h5{ color: var(--rose); } .twocol .col.good h5{ color: var(--green); }
+.twocol .col p{ margin: 8px 0; font-size: 15px; } .twocol .col p:first-child{ margin-top: 0; }
+
+/* ============ PROFILE / ENTITY CARD (e.g. a person, a module) ============ */
+.iv{ background: var(--card); border: 1px solid var(--rule-dark); border-left: 3px solid var(--slate); padding: 20px 24px; margin: 14px 0; position: relative; }
+.iv.req{ border-left: 3px solid var(--rose); }
+.iv-head{ display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 3px; }
+.iv-name{ font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 23px; letter-spacing: -0.01em; color: var(--ink); }
+.iv-dur{ font-family: 'Geist Mono', monospace; font-size: 11px; color: var(--ink-faint); letter-spacing: .08em; }
+.iv-badge{ font-family: 'Geist Mono', monospace; font-size: 8.5px; letter-spacing: .16em; text-transform: uppercase; background: var(--rose); color: #fff; padding: 3px 9px; font-weight: 600; }
+.iv-role{ font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--green); font-weight: 600; margin-bottom: 9px; }
+.iv-focus{ color: var(--ink-soft); font-size: 15.5px; margin: 8px 0 12px; line-height: 1.48; }
+
+/* ============ CLICKABLE NAV CARD (e.g. an index/landing page) ============ */
+a.vol-card{ display: block; text-decoration: none; color: inherit; background: var(--card); border: 1px solid var(--rule-dark); border-left: 4px solid var(--green); padding: 24px 26px 20px; position: relative; transition: all .16s ease; }
+a.vol-card:hover{ border-left-width: 8px; border-color: var(--green); background: #fbfcf9; transform: translateY(-2px); box-shadow: 0 6px 22px rgba(20,40,26,.09); }
+.vol-card .vc-num{ position: absolute; top: 16px; right: 22px; font-family: 'Archivo', sans-serif; font-weight: 900; font-size: 46px; line-height: 1; color: var(--bg-3); letter-spacing: -0.02em; transition: color .16s; }
+a.vol-card:hover .vc-num{ color: var(--green-bri); }
+.vol-card .vc-kicker{ font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .22em; text-transform: uppercase; color: var(--green); font-weight: 600; margin-bottom: 8px; }
+.vol-card .vc-title{ font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 28px; line-height: 1.02; letter-spacing: -0.015em; color: var(--ink); margin: 0 0 10px; }
+.vol-card .vc-open{ margin-top: 14px; font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--green); font-weight: 600; }
+
+/* ============ SECTION SEPARATOR ============ */
+.rule-sep{ margin: 56px 0; position: relative; height: 0; border-top: 2px solid var(--ink); }
+.rule-sep::after{ content: "◇ ◇ ◇"; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); background: var(--bg); color: var(--green); padding: 0 16px; font-size: 11px; letter-spacing: .3em; }
+
+/* ============ FOOTER ============ */
+footer{ max-width: var(--maxw); margin: 0 auto; padding: 54px 40px 84px; border-top: 2px solid var(--ink); color: var(--ink-soft); font-size: 14px; }
+footer h4{ font-family:'Geist Mono',monospace; font-size: 11px; letter-spacing: .24em; color: var(--green); margin: 0 0 18px; font-weight: 600; }
+footer .resources{ columns: 2; column-gap: 38px; }
+@media (max-width: 680px){ footer .resources{ columns: 1; } }
+footer ul{ list-style: none; padding: 0; margin: 0; }
+footer li{ padding: 5px 0; font-size: 13.5px; break-inside: avoid; }
+footer li code{ color: var(--green-deep); background: transparent; border: none; padding: 0; font-weight: 500; }
+footer .footer-note{ margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--rule); color: var(--ink-faint); font-size: 14px; }
+</style>
+</head>
+<body>
+<header>
+  <p class="filed">pytorch field manual · volume i · foundations</p>
+  <p class="vol">Volume I of VI · tensors, autograd, and the training loop</p>
+  <h1>PyTorch<br><span class="acc">Foundations.</span></h1>
+  <p class="deck">
+    Everything a neural network does rests on three ideas: a data structure that holds numbers (the tensor), an engine that computes derivatives automatically (autograd), and a loop that nudges numbers toward "less wrong" (gradient descent). This volume builds all three from nothing, in code, until the canonical PyTorch training loop reads like plain sense.
+  </p>
+  <div class="readout">
+    <div class="cell"><div class="k">Volume</div><div class="v">I<span class="u"> / VI</span></div></div>
+    <div class="cell"><div class="k">Chapters</div><div class="v">16</div></div>
+    <div class="cell"><div class="k">Parts</div><div class="v">4</div></div>
+    <div class="cell"><div class="k">Focus</div><div class="v" style="font-size:13px;">tensors · autograd · loop</div></div>
+  </div>
+
+  <div class="toc">
+    <h3>Contents</h3>
+    <p class="toc-sub">Sixteen chapters across four parts</p>
+    <div class="toc-part">
+      <div class="toc-part-name">Part I · The mental model</div>
+      <div class="toc-grid">
+        <a href="#c01"><span class="n">01</span><span>What deep learning really is</span></a>
+        <a href="#c02"><span class="n">02</span><span>PyTorch's three ideas — and getting set up</span></a>
+        <a href="#c03"><span class="n">03</span><span>A whole training loop in fifteen lines</span></a>
+        <a href="#c04"><span class="n">04</span><span>The workflow you'll repeat forever</span></a>
+      </div>
+    </div>
+    <div class="toc-part">
+      <div class="toc-part-name">Part II · Tensors</div>
+      <div class="toc-grid">
+        <a href="#c05"><span class="n">05</span><span>Making tensors: shape, dtype, device</span></a>
+        <a href="#c06"><span class="n">06</span><span>The memory model: storage, strides &amp; views</span></a>
+        <a href="#c07"><span class="n">07</span><span>Indexing, reshaping &amp; broadcasting</span></a>
+        <a href="#c08"><span class="n">08</span><span>Math, reductions &amp; the NumPy bridge</span></a>
+      </div>
+    </div>
+    <div class="toc-part">
+      <div class="toc-part-name">Part III · Autograd</div>
+      <div class="toc-grid">
+        <a href="#c09"><span class="n">09</span><span>Gradients, with only the calculus you need</span></a>
+        <a href="#c10"><span class="n">10</span><span>requires_grad and the computational graph</span></a>
+        <a href="#c11"><span class="n">11</span><span>Reverse-mode autodiff: what backward() does</span></a>
+        <a href="#c12"><span class="n">12</span><span>no_grad, detach &amp; the gradient gotchas</span></a>
+      </div>
+    </div>
+    <div class="toc-part">
+      <div class="toc-part-name">Part IV · Learning by gradient descent</div>
+      <div class="toc-grid">
+        <a href="#c13"><span class="n">13</span><span>Loss: turning "wrong" into a number</span></a>
+        <a href="#c14"><span class="n">14</span><span>Gradient descent from scratch</span></a>
+        <a href="#c15"><span class="n">15</span><span>The same model, the PyTorch way</span></a>
+        <a href="#c16"><span class="n">16</span><span>Anatomy of the canonical training loop</span></a>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="part" id="p1">
+    <div class="part-label">Part I — The mental model</div>
+    <h2 class="part-title">What you are actually <span class="acc">building.</span></h2>
+    <p class="part-intro">Before a single tensor, get the picture straight. A neural network is a function with adjustable knobs; training is the search for knob settings that make the function's outputs match your data. PyTorch exists to make that search fast, automatic, and expressible as ordinary Python. This part gives you the whole loop at a glance so the details in Parts II–IV have somewhere to land.</p>
+
+    <section class="chapter" id="c01">
+      <h2><span class="ch-num">01</span>What deep learning really is</h2>
+      <p>Strip away the mystique and a neural network is a <strong>function with tunable numbers inside it</strong>. You feed it an input, it produces an output, and buried in the middle are thousands (or billions) of adjustable values called <em>parameters</em>. "Learning" is nothing more exotic than nudging those parameters until the function's outputs line up with examples you already have the answers to.</p>
+      <p>Take the smallest possible case: predicting a house's price from its size. Guess that price is roughly <code>w · size + b</code> for some slope <code>w</code> and offset <code>b</code>. Those two numbers are the parameters. If you have a spreadsheet of past sales, learning means choosing <code>w</code> and <code>b</code> so the line passes as close as possible through your data. That is the entire idea — deep learning just does it with far more parameters and far more flexible functions.</p>
+
+      <h3>Why "deep"</h3>
+      <p>A straight line can only model straight-line relationships. Stack many simple functions on top of each other — each one a linear step followed by a small nonlinear bend — and the combination can bend and fold to approximate almost any relationship at all. Each layer feeds the next; "deep" just means "many layers." The nonlinear bend between layers is what makes depth worth having: without it, a stack of linear layers collapses back into a single line.</p>
+
+      <div class="diagram">  THE LEARNING LOOP, IN ONE PICTURE:
+
+    data ──►  model(parameters)  ──►  prediction
+                                          │
+                                          ▼
+                              loss = how wrong?  ◄── true answer
+                                          │
+              adjust parameters  ◄── gradients (which way is "less wrong"?)
+                                          │
+                                          └──────► repeat, thousands of times</div>
+
+      <p>Three ingredients drive that loop, and they map one-to-one onto the three ideas in PyTorch you'll meet next:</p>
+      <table class="tbl">
+        <thead><tr><th>Ingredient</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td>the model</td><td>A parameterized function: turns inputs into predictions. In PyTorch, built from <code>tensors</code> and <code>nn</code> modules.</td></tr>
+          <tr><td>the loss</td><td>A single number measuring how wrong the predictions are on your data. Smaller is better.</td></tr>
+          <tr><td>the optimizer</td><td>The rule that changes parameters to shrink the loss, using <em>gradients</em> — computed for you by autograd.</td></tr>
+        </tbody>
+      </table>
+
+      <p>Crucially, you never hand-write the rules. You don't tell the model "big houses cost more." You give it examples and a way to measure error, and the optimization discovers the relationship by adjusting parameters. That inversion — from programming rules to fitting parameters — is the whole conceptual shift of machine learning.</p>
+
+      <div class="idea">
+        <p><strong>Learning is optimization.</strong> A model is a function with parameters; a loss scores its output against reality; training repeatedly adjusts the parameters in the direction that lowers the loss. Every technique in this entire series — every architecture, optimizer, and trick — is a variation on making that one loop work better.</p>
+      </div>
+    </section>
+
+    <section class="chapter" id="c02">
+      <h2><span class="ch-num">02</span>PyTorch's three ideas — and getting set up</h2>
+      <p>PyTorch gives you exactly what the learning loop needs, in three layers that stack cleanly:</p>
+      <ul class="dash">
+        <li><strong>Tensors</strong> — n-dimensional arrays of numbers that can live on a CPU or a GPU and, optionally, remember how they were computed. This is your data and your parameters. (Part II.)</li>
+        <li><strong>Autograd</strong> — an engine that watches the math you do on tensors and can then compute every derivative you need, automatically. This is what makes gradients free. (Part III.)</li>
+        <li><strong>nn &amp; optim</strong> — ready-made building blocks (layers, losses) and optimizers, so you assemble models like Lego instead of wiring math by hand. (Part IV and Volume II.)</li>
+      </ul>
+      <p>The defining trait is that PyTorch is <strong>"define-by-run" (eager)</strong>: there is no separate compile step or graph to declare up front. You write ordinary Python — loops, ifs, prints — and PyTorch executes it line by line, building its record of the computation as it goes. That is why PyTorch feels like NumPy that happens to do calculus and run on GPUs, and why debugging it is just debugging Python.</p>
+
+      <h3>Installing it</h3>
+      <p>Install the build that matches your hardware. On a machine with an NVIDIA GPU you want a CUDA build; on a laptop, the CPU build (or, on Apple Silicon, the default build with the "MPS" backend) is fine. The canonical command comes from the selector on pytorch.org; a CUDA 12.4 example looks like this:</p>
+<pre data-lang="BASH"># CPU-only (works everywhere):
+pip install torch torchvision torchaudio
+
+# NVIDIA GPU, CUDA 12.4 build (pick the URL from pytorch.org for your CUDA):
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124</pre>
+      <div class="callout warn">
+        <h5>Match the build to your driver</h5>
+        <p>The single most common setup failure is a CUDA build that doesn't match the installed GPU driver, which shows up later as <code>torch.cuda.is_available()</code> returning <code>False</code>. Check your driver first, then pick the matching CUDA version. When in doubt, the CPU build always runs — just slowly.</p>
+      </div>
+
+      <h3>Verifying and choosing a device</h3>
+      <p>Every PyTorch program starts the same way: import, check what hardware you have, and pick a <em>device</em> to put tensors on. Memorize this idiom — you'll type it a thousand times.</p>
+<pre data-lang="PYTHON"><span class="kw">import</span> torch
+
+<span class="fn">print</span>(torch.__version__)          <span class="com"># e.g. 2.13.0+cu124</span>
+<span class="fn">print</span>(torch.cuda.<span class="fn">is_available</span>())  <span class="com"># True if a usable NVIDIA GPU is present</span>
+
+<span class="com"># Pick the best available device, in order of preference.</span>
+<span class="kw">if</span> torch.cuda.<span class="fn">is_available</span>():
+    device = torch.<span class="fn">device</span>(<span class="str">&quot;cuda&quot;</span>)          <span class="com"># NVIDIA GPU</span>
+<span class="kw">elif</span> torch.backends.mps.<span class="fn">is_available</span>():
+    device = torch.<span class="fn">device</span>(<span class="str">&quot;mps&quot;</span>)           <span class="com"># Apple Silicon GPU</span>
+<span class="kw">else</span>:
+    device = torch.<span class="fn">device</span>(<span class="str">&quot;cpu&quot;</span>)           <span class="com"># always works</span>
+
+<span class="fn">print</span>(<span class="str">&quot;Using:&quot;</span>, device)</pre>
+      <p>A <code>device</code> is just a label saying <em>where</em> a tensor's numbers physically live. CPUs are flexible and always available; GPUs are massively parallel and can run the matrix math of deep learning tens to hundreds of times faster, which is why almost all real training happens on them. You move data and models onto a device with <code>.to(device)</code>, and the rule is simple: <strong>everything that touches in a computation must be on the same device.</strong> We'll return to the mechanics in Chapter 08.</p>
+
+      <div class="callout tip">
+        <h5>You don't need a GPU to start</h5>
+        <p>Every example in this volume runs on a CPU in seconds. Learn the ideas on your laptop; rent a GPU only when your models get big enough to need one. Free hosted notebooks (Colab, Kaggle) give you a GPU with PyTorch pre-installed if you want to try one.</p>
+      </div>
+    </section>
+
+    <section class="chapter" id="c03">
+      <h2><span class="ch-num">03</span>A whole training loop in fifteen lines</h2>
+      <p>Here is a complete, runnable program that learns. It manufactures noisy data from the hidden rule <code>y = 2x + 1</code>, then trains a one-parameter-pair model to rediscover that rule from the data alone. Read it once for the shape; the line-by-line follows.</p>
+<pre data-lang="PYTHON"><span class="kw">import</span> torch
+
+<span class="com"># 1. Data: 100 points from y = 2x + 1, plus a little noise.</span>
+<span class="ty">X</span> = torch.<span class="fn">randn</span>(<span class="num">100</span>, <span class="num">1</span>)                 <span class="com"># 100 inputs, shape (100, 1)</span>
+y = <span class="num">2</span> * <span class="ty">X</span> + <span class="num">1</span> + <span class="num">0.1</span> * torch.<span class="fn">randn</span>(<span class="num">100</span>, <span class="num">1</span>)   <span class="com"># true rule + noise</span>
+
+<span class="com"># 2. Model: a single linear layer, 1 input -&gt; 1 output. Its parameters</span>
+<span class="com">#    (a weight and a bias) start random; training will fit them.</span>
+model = torch.nn.<span class="ty">Linear</span>(<span class="num">1</span>, <span class="num">1</span>)
+
+<span class="com"># 3. Loss + optimizer: mean squared error, and plain gradient descent.</span>
+loss_fn = torch.nn.<span class="ty">MSELoss</span>()
+optimizer = torch.optim.<span class="ty">SGD</span>(model.<span class="fn">parameters</span>(), lr=<span class="num">0.1</span>)
+
+<span class="com"># 4. The loop: do this many times.</span>
+<span class="kw">for</span> epoch <span class="kw">in</span> <span class="fn">range</span>(<span class="num">200</span>):
+    pred = <span class="fn">model</span>(<span class="ty">X</span>)               <span class="com"># forward: predictions from current params</span>
+    loss = <span class="fn">loss_fn</span>(pred, y)       <span class="com"># how wrong are we, as one number?</span>
+
+    optimizer.<span class="fn">zero_grad</span>()         <span class="com"># clear old gradients</span>
+    loss.<span class="fn">backward</span>()               <span class="com"># autograd: compute d(loss)/d(each param)</span>
+    optimizer.<span class="fn">step</span>()              <span class="com"># nudge every param downhill</span>
+
+    <span class="kw">if</span> epoch % <span class="num">50</span> == <span class="num">0</span>:
+        <span class="fn">print</span>(<span class="str">f&quot;epoch {epoch:3d}  loss {loss.item():.4f}&quot;</span>)
+
+<span class="com"># 5. Inspect what it learned (should be close to weight=2, bias=1).</span>
+w, b = model.weight.<span class="fn">item</span>(), model.bias.<span class="fn">item</span>()
+<span class="fn">print</span>(<span class="str">f&quot;learned:  y = {w:.2f} x + {b:.2f}&quot;</span>)</pre>
+      <p>Run it and the loss falls from something large toward ~0.01, and the learned weight and bias land near 2 and 1. The model recovered the rule it was never told. Now the walk-through, because these five steps are the spine of <em>every</em> PyTorch program you will ever write:</p>
+
+      <table class="tbl wide">
+        <thead><tr><th>Line</th><th>What's happening</th></tr></thead>
+        <tbody>
+          <tr><td>Linear(1,1)</td><td>Creates the model. Behind it are two parameters — <code>weight</code> and <code>bias</code> — initialized randomly. Calling <code>model(X)</code> computes <code>X · weight + bias</code>.</td></tr>
+          <tr><td>MSELoss</td><td>Mean squared error: average of <code>(pred − y)²</code>. One number; zero means perfect. This is our definition of "wrong."</td></tr>
+          <tr><td>SGD(lr=0.1)</td><td>The optimizer. It holds references to the model's parameters and knows how to change them. <code>lr</code> (learning rate) is the step size.</td></tr>
+          <tr><td>forward</td><td><code>pred = model(X)</code> pushes data through the model. Autograd quietly records every operation.</td></tr>
+          <tr><td>zero_grad</td><td>Gradients <em>accumulate</em> by default, so you must clear last step's gradients before computing this step's. Forget this and training silently breaks — see Chapter 12.</td></tr>
+          <tr><td>backward</td><td>The magic line. Autograd walks the recorded computation backward and fills in <code>d(loss)/d(param)</code> for every parameter. (Part III explains exactly how.)</td></tr>
+          <tr><td>step</td><td>The optimizer uses those gradients to move each parameter a little in the direction that lowers the loss.</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout danger">
+        <h5>The order is not negotiable</h5>
+        <p>Forward → loss → <code>zero_grad</code> → <code>backward</code> → <code>step</code>. Call <code>step</code> before <code>backward</code> and you update with stale gradients; forget <code>zero_grad</code> and gradients from every past iteration pile up. Both produce a model that "runs" but never learns — the most demoralizing bug for a beginner because nothing errors.</p>
+      </div>
+
+      <p class="pull">Five lines — forward, loss, zero, backward, step — are the heartbeat of PyTorch. Everything else is elaboration.</p>
+    </section>
+
+    <section class="chapter" id="c04">
+      <h2><span class="ch-num">04</span>The workflow you'll repeat forever</h2>
+      <p>Chapter 03 was a whole project in miniature. Every serious training run is the same skeleton with more muscle on each bone. Internalize the checklist and new problems stop being mysterious — they become "which box needs work?"</p>
+
+      <div class="tree">
+<pre><span class="q">Building any model? Walk the six boxes:</span>
+   │
+   ├─ <span class="a">1. data</span>      → get inputs and targets into tensors of known shape
+   ├─ <span class="a">2. model</span>     → a function from input to prediction (nn.Module)
+   ├─ <span class="a">3. loss</span>      → one number scoring prediction against target
+   ├─ <span class="a">4. optimizer</span> → the rule that updates parameters
+   ├─ <span class="a">5. loop</span>      → forward, loss, zero_grad, backward, step
+   └─ <span class="a">6. evaluate</span>  → measure on held-out data you didn't train on</pre>
+      </div>
+
+      <h3>The habit that saves you: print shapes</h3>
+      <p>The overwhelming majority of beginner bugs are <em>shape</em> bugs — a tensor is <code>(100, 1)</code> when the next step expected <code>(100,)</code>, and PyTorch either errors cryptically or, worse, "broadcasts" the mismatch into a silently wrong result. The fix is a reflex: print the shape whenever you're unsure.</p>
+<pre data-lang="PYTHON"><span class="fn">print</span>(<span class="ty">X</span>.shape)          <span class="com"># torch.Size([100, 1])</span>
+<span class="fn">print</span>(pred.shape, y.shape)   <span class="com"># both should match before a loss</span></pre>
+      <p>Throughout this manual, shapes are written as comments like <code># (B, C, H, W)</code> — batch, channels, height, width. Reading and predicting shapes is a real skill; treat those comments as the most important part of the code.</p>
+
+      <h3>Two modes, and turning off gradients for inference</h3>
+      <p>Models behave differently while training versus while being used, because some layers (dropout, batch-norm — Volume II) switch behavior. You signal intent with <code>model.train()</code> and <code>model.eval()</code>. And when you're only <em>using</em> a model, not training it, you wrap the call in <code>torch.no_grad()</code> so autograd doesn't waste time and memory recording a backward pass you'll never run.</p>
+<pre data-lang="PYTHON">model.<span class="fn">eval</span>()                     <span class="com"># switch to evaluation behavior</span>
+<span class="kw">with</span> torch.<span class="fn">no_grad</span>():            <span class="com"># don&#x27;t track gradients here</span>
+    test_pred = <span class="fn">model</span>(<span class="ty">X_test</span>)    <span class="com"># pure inference, faster and lighter</span></pre>
+      <div class="callout tip">
+        <h5>Reproducibility: seed everything</h5>
+        <p>Random initialization and shuffling make each run slightly different. When you need runs to match — for debugging or fair comparison — set the seeds at the top: <code>torch.manual_seed(0)</code>. It won't make training deterministic to the last bit across GPUs (Volume IV covers full determinism), but it removes the everyday randomness.</p>
+      </div>
+
+      <p>That is the whole workflow. The rest of Volume I earns you the right to write each box fluently: Part II makes tensors second nature, Part III demystifies <code>backward()</code>, and Part IV rebuilds the training loop from first principles so that when you write those five lines, you know exactly what each one does and why.</p>
+    </section>
+  </div>
+
+  <div class="rule-sep"></div>
+  <div class="part" id="p2">
+    <div class="part-label">Part II — Tensors</div>
+    <h2 class="part-title">The one data structure <span class="acc">everything rides on.</span></h2>
+    <p class="part-intro">A tensor is an n-dimensional array of numbers — a scalar is a 0-D tensor, a vector 1-D, a matrix 2-D, and an image batch is a 4-D tensor. Your data is tensors, your parameters are tensors, your predictions are tensors. Master how they're shaped, stored, and combined and PyTorch stops surprising you. This part is the grammar; autograd and training are the sentences.</p>
+
+    <section class="chapter" id="c05">
+      <h2><span class="ch-num">05</span>Making tensors: shape, dtype, device</h2>
+      <p>There are two families of ways to make a tensor: wrap existing numbers, or generate new ones. Wrapping uses <code>torch.tensor(...)</code>; generating uses factory functions named for what they produce.</p>
+<pre data-lang="PYTHON"><span class="kw">import</span> torch
+
+<span class="com"># From existing Python data:</span>
+a = torch.<span class="fn">tensor</span>([<span class="num">1.0</span>, <span class="num">2.0</span>, <span class="num">3.0</span>])          <span class="com"># 1-D, three elements</span>
+b = torch.<span class="fn">tensor</span>([[<span class="num">1</span>, <span class="num">2</span>], [<span class="num">3</span>, <span class="num">4</span>]])         <span class="com"># 2-D, shape (2, 2)</span>
+
+<span class="com"># Generated:</span>
+z = torch.<span class="fn">zeros</span>(<span class="num">2</span>, <span class="num">3</span>)        <span class="com"># (2,3) of 0.0</span>
+o = torch.<span class="fn">ones</span>(<span class="num">2</span>, <span class="num">3</span>)         <span class="com"># (2,3) of 1.0</span>
+r = torch.<span class="fn">randn</span>(<span class="num">2</span>, <span class="num">3</span>)        <span class="com"># (2,3) standard-normal random</span>
+u = torch.<span class="fn">rand</span>(<span class="num">2</span>, <span class="num">3</span>)         <span class="com"># (2,3) uniform in [0, 1)</span>
+n = torch.<span class="fn">arange</span>(<span class="num">0</span>, <span class="num">10</span>, <span class="num">2</span>)   <span class="com"># [0, 2, 4, 6, 8]</span>
+l = torch.<span class="fn">linspace</span>(<span class="num">0</span>, <span class="num">1</span>, <span class="num">5</span>)  <span class="com"># 5 points evenly from 0 to 1</span>
+e = torch.<span class="fn">eye</span>(<span class="num">3</span>)             <span class="com"># 3x3 identity</span></pre>
+      <h3>Shape, dtype, device — a tensor's three facts</h3>
+      <p>Every tensor answers three questions: what shape is it, what type are its numbers, and where do they live. You will query these constantly.</p>
+<pre data-lang="PYTHON">x = torch.<span class="fn">randn</span>(<span class="num">4</span>, <span class="num">3</span>)
+<span class="fn">print</span>(x.shape)     <span class="com"># torch.Size([4, 3])  -&gt; rows, cols</span>
+<span class="fn">print</span>(x.ndim)      <span class="com"># 2                    -&gt; number of dimensions</span>
+<span class="fn">print</span>(x.<span class="fn">numel</span>())   <span class="com"># 12                   -&gt; total elements</span>
+<span class="fn">print</span>(x.dtype)     <span class="com"># torch.float32        -&gt; the number type</span>
+<span class="fn">print</span>(x.device)    <span class="com"># cpu                  -&gt; where it lives</span></pre>
+      <p><strong>dtype</strong> is the numeric type. The default for decimals is <code>float32</code> — the workhorse of deep learning, a good balance of range and speed. Integers default to <code>int64</code>. You'll mostly care about <code>float32</code> (activations and parameters), <code>int64</code> (class labels and indices), <code>bool</code> (masks), and later <code>float16</code>/<code>bfloat16</code> (mixed-precision training, Volume IV).</p>
+<pre data-lang="PYTHON">i = torch.<span class="fn">tensor</span>([<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>])              <span class="com"># int64 by default</span>
+f = torch.<span class="fn">tensor</span>([<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>], dtype=torch.float32)   <span class="com"># force float</span>
+g = i.<span class="fn">float</span>()                            <span class="com"># convert: int64 -&gt; float32</span>
+h = f.<span class="fn">to</span>(torch.float16)                  <span class="com"># convert dtype with .to()</span></pre>
+      <table class="tbl">
+        <thead><tr><th>Constructor</th><th>Use it for</th></tr></thead>
+        <tbody>
+          <tr><td>torch.tensor(data)</td><td>Wrapping known values from lists/NumPy. Infers dtype (watch: ints stay int).</td></tr>
+          <tr><td>zeros / ones / full</td><td>Buffers you'll fill in, or constant-initialized tensors.</td></tr>
+          <tr><td>randn / rand</td><td>Random init and test data. <code>randn</code> is Gaussian, <code>rand</code> is uniform.</td></tr>
+          <tr><td>arange / linspace</td><td>Regular sequences — axes, time steps, grids.</td></tr>
+          <tr><td>zeros_like(t)</td><td>A new tensor matching <code>t</code>'s shape, dtype, and device. The safe way to make companions.</td></tr>
+        </tbody>
+      </table>
+      <div class="callout warn">
+        <h5>The float-vs-int trap</h5>
+        <p><code>torch.tensor([1, 2, 3])</code> is <code>int64</code>, and most neural-network math needs floats. Passing integer tensors into a model that expects floats is a frequent first bug. When in doubt for numeric data, be explicit: <code>dtype=torch.float32</code>.</p>
+      </div>
+    </section>
+
+    <section class="chapter" id="c06">
+      <h2><span class="ch-num">06</span>The memory model: storage, strides &amp; views</h2>
+      <p>To predict when PyTorch copies data and when it doesn't — which drives both speed and a whole class of bugs — you need the picture underneath. A tensor is not the numbers; it is a small bundle of <em>metadata</em> (shape, strides, dtype, an offset) pointing into a flat, one-dimensional block of memory called the <strong>storage</strong>.</p>
+      <div class="diagram">  ONE STORAGE, VIEWED AS A (2 x 3) TENSOR:
+
+  storage (flat):   [ 10  11  12  13  14  15 ]   index: 0 1 2 3 4 5
+                      │              │
+  shape (2,3)         └─ row 0 ──────┴─ row 1 ──►   strides = (3, 1)
+                                                     "move 3 to change row,
+   tensor[1, 2] = storage[ 1*3 + 2*1 ] = 15          1 to change column"</div>
+      <p>The <strong>stride</strong> of a dimension is how many storage steps you take to move one index along that dimension. This indirection is powerful: many operations just hand you a <em>new metadata bundle over the same storage</em> — a <strong>view</strong> — with zero copying.</p>
+<pre data-lang="PYTHON">x = torch.<span class="fn">arange</span>(<span class="num">6</span>)          <span class="com"># [0,1,2,3,4,5], storage of 6 ints</span>
+y = x.<span class="fn">reshape</span>(<span class="num">2</span>, <span class="num">3</span>)          <span class="com"># a VIEW: same storage, new shape</span>
+y[<span class="num">0</span>, <span class="num">0</span>] = <span class="num">99</span>                 <span class="com"># writing through the view...</span>
+<span class="fn">print</span>(x[<span class="num">0</span>])                  <span class="com"># ...changes x too!  -&gt; 99</span>
+<span class="fn">print</span>(y.<span class="fn">storage</span>().<span class="fn">data_ptr</span>() == x.<span class="fn">storage</span>().<span class="fn">data_ptr</span>())  <span class="com"># True: shared</span></pre>
+      <p>Slicing, <code>reshape</code>, <code>view</code>, <code>transpose</code>, <code>permute</code>, and <code>unsqueeze</code> all return views when they can. That's great for performance — you reshape a million-element tensor for free — but it means <strong>a view aliases its parent</strong>: modify one, you modify the other. When you truly need an independent copy, call <code>.clone()</code>.</p>
+
+      <h3>Contiguity: the catch</h3>
+      <p>Because a view only reshuffles metadata, some views end up describing memory in a non-sequential order. After a <code>transpose</code>, walking the tensor row-by-row jumps around in storage — the tensor is <strong>non-contiguous</strong>. Most operations handle this fine, but <code>.view()</code> insists on contiguous memory and will raise an error; <code>.reshape()</code> is the forgiving version that copies only if it must.</p>
+      <div class="issue">
+        <div class="issue-header">
+          <span class="tag">worked case</span>
+          <span class="title">"view size is not compatible with input tensor's size and stride"</span>
+        </div>
+        <div class="issue-body">
+          <h5>The setup</h5>
+          <p>You transpose a tensor, then try to flatten it with <code>.view()</code>, and PyTorch throws the error above.</p>
+<pre data-lang="PYTHON">x = torch.<span class="fn">randn</span>(<span class="num">3</span>, <span class="num">4</span>)
+xt = x.<span class="fn">t</span>()                 <span class="com"># transpose -&gt; shape (4, 3), now NON-contiguous</span>
+<span class="com"># xt.view(12)              # RuntimeError: view needs contiguous memory</span></pre>
+          <h5>The investigation</h5>
+          <p><code>xt.is_contiguous()</code> returns <code>False</code>. The transpose only swapped the strides; the underlying storage is still in the original order, so a plain <code>view</code> can't reinterpret it as a flat run.</p>
+          <h5>The fix</h5>
+          <p>Either make it contiguous first, or use <code>reshape</code>, which does that for you when needed:</p>
+<pre data-lang="PYTHON">flat = xt.<span class="fn">contiguous</span>().<span class="fn">view</span>(<span class="num">12</span>)   <span class="com"># explicit: copy into contiguous order</span>
+flat = xt.<span class="fn">reshape</span>(<span class="num">12</span>)             <span class="com"># idiomatic: reshape handles it</span></pre>
+          <h5>The lesson</h5>
+          <p>Reach for <code>reshape</code> by default. Use <code>view</code> only when you want the guarantee of no copy, and remember <code>transpose</code>/<code>permute</code> break contiguity.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="chapter" id="c07">
+      <h2><span class="ch-num">07</span>Indexing, reshaping &amp; broadcasting</h2>
+      <p>Indexing works like NumPy: integers select, slices take ranges, and you can index each dimension independently.</p>
+<pre data-lang="PYTHON">x = torch.<span class="fn">arange</span>(<span class="num">12</span>).<span class="fn">reshape</span>(<span class="num">3</span>, <span class="num">4</span>)
+x[<span class="num">0</span>]           <span class="com"># first row -&gt; shape (4,)</span>
+x[:, <span class="num">1</span>]        <span class="com"># second column -&gt; shape (3,)</span>
+x[<span class="num">1</span>, <span class="num">2</span>]        <span class="com"># single element -&gt; a 0-D tensor</span>
+x[<span class="num">0</span>:<span class="num">2</span>, <span class="num">1</span>:<span class="num">3</span>]    <span class="com"># a sub-block -&gt; shape (2, 2)</span>
+x[x &gt; <span class="num">5</span>]       <span class="com"># boolean mask -&gt; 1-D tensor of the matching elements</span></pre>
+      <h3>Reshaping and the size-juggling verbs</h3>
+      <p>Four verbs cover almost all reshaping. <code>reshape</code> changes the shape; <code>squeeze</code> removes size-1 dimensions; <code>unsqueeze</code> inserts one; and a <code>-1</code> in any reshape means "infer this dimension."</p>
+<pre data-lang="PYTHON">v = torch.<span class="fn">randn</span>(<span class="num">10</span>)
+v.<span class="fn">reshape</span>(<span class="num">2</span>, <span class="num">5</span>)     <span class="com"># (10,)   -&gt; (2, 5)</span>
+v.<span class="fn">reshape</span>(-<span class="num">1</span>, <span class="num">5</span>)    <span class="com"># infer the 2 -&gt; (2, 5)</span>
+v.<span class="fn">unsqueeze</span>(<span class="num">0</span>)      <span class="com"># (10,)   -&gt; (1, 10)   add a batch dimension at front</span>
+v.<span class="fn">unsqueeze</span>(<span class="num">1</span>)      <span class="com"># (10,)   -&gt; (10, 1)   make it a column</span>
+img = torch.<span class="fn">randn</span>(<span class="num">1</span>, <span class="num">1</span>, <span class="num">28</span>, <span class="num">28</span>)
+img.<span class="fn">squeeze</span>()       <span class="com"># (1,1,28,28) -&gt; (28, 28)   drop all size-1 dims</span></pre>
+      <h3>Broadcasting: the rule that saves and bites</h3>
+      <p><strong>Broadcasting</strong> lets tensors of different shapes combine without you writing loops or manually copying data. PyTorch compares shapes from the <em>right</em>; two dimensions are compatible if they're equal or one of them is 1, and a size-1 (or missing) dimension is virtually stretched to match.</p>
+      <div class="diagram">  BROADCASTING (3,1) WITH (1,4)  ->  (3,4):
+
+     (3,1)          (1,4)                result (3,4)
+    ┌───┐        ┌───┬───┬───┬───┐      each cell = row_val + col_val
+    │ a │        │ p   q   r   s │       ┌───────────────┐
+    │ b │   +    └───────────────┘   =   │ a+p a+q a+r a+s│
+    │ c │                                │ b+p b+q b+r b+s│
+    └───┘        stretched down          │ c+p c+q c+r c+s│
+    stretched right                      └───────────────┘</div>
+<pre data-lang="PYTHON">col = torch.<span class="fn">tensor</span>([[<span class="num">1.</span>], [<span class="num">2.</span>], [<span class="num">3.</span>]])   <span class="com"># (3, 1)</span>
+row = torch.<span class="fn">tensor</span>([[<span class="num">10.</span>, <span class="num">20.</span>, <span class="num">30.</span>, <span class="num">40.</span>]])   <span class="com"># (1, 4)</span>
+col + row      <span class="com"># -&gt; (3, 4) via broadcasting, no loops</span>
+
+<span class="com"># Everyday use: subtract a per-column mean from a data matrix.</span>
+data = torch.<span class="fn">randn</span>(<span class="num">100</span>, <span class="num">5</span>)     <span class="com"># 100 samples, 5 features</span>
+mean = data.<span class="fn">mean</span>(dim=<span class="num">0</span>)        <span class="com"># (5,)  -&gt; one mean per feature</span>
+centered = data - mean         <span class="com"># (100,5) - (5,) broadcasts cleanly</span></pre>
+      <div class="callout danger">
+        <h5>The (N,1)-vs-(N,) silent bug</h5>
+        <p>Broadcasting is so accommodating it will happily combine shapes you didn't mean to. Subtracting predictions of shape <code>(N, 1)</code> from targets of shape <code>(N,)</code> broadcasts to <code>(N, N)</code> — a hundred-fold-bigger tensor and a completely wrong loss, with no error raised. When a result is mysteriously the wrong size or the loss is nonsense, print shapes and look for a stray singleton dimension. Fix with <code>squeeze</code>/<code>unsqueeze</code>.</p>
+      </div>
+    </section>
+
+    <section class="chapter" id="c08">
+      <h2><span class="ch-num">08</span>Math, reductions &amp; the NumPy bridge</h2>
+      <p>Elementwise math is what it looks like, and it broadcasts. The one operator worth calling out is matrix multiplication, <code>@</code> (or <code>torch.matmul</code>) — the single most important operation in deep learning, since every linear layer is a matmul.</p>
+<pre data-lang="PYTHON">a = torch.<span class="fn">randn</span>(<span class="num">3</span>, <span class="num">4</span>)
+b = torch.<span class="fn">randn</span>(<span class="num">4</span>, <span class="num">2</span>)
+a @ b            <span class="com"># matrix multiply -&gt; (3, 4) x (4, 2) = (3, 2)</span>
+a * <span class="num">2</span>            <span class="com"># elementwise scale</span>
+a + b.<span class="fn">t</span>()        <span class="com"># broadcast/elementwise (shapes must be compatible)</span>
+a.<span class="fn">exp</span>(); a.<span class="fn">sqrt</span>(); a.<span class="fn">abs</span>()   <span class="com"># elementwise math, also as torch.exp(a) etc.</span></pre>
+      <h3>Reductions: collapsing a dimension</h3>
+      <p>Reductions (<code>sum</code>, <code>mean</code>, <code>max</code>, <code>min</code>, <code>std</code>) collapse a tensor along a chosen dimension. The <code>dim</code> argument names which axis to collapse; <code>keepdim=True</code> leaves a size-1 placeholder so the result still broadcasts against the original.</p>
+<pre data-lang="PYTHON">x = torch.<span class="fn">randn</span>(<span class="num">100</span>, <span class="num">5</span>)      <span class="com"># 100 rows, 5 columns</span>
+x.<span class="fn">mean</span>()                     <span class="com"># -&gt; scalar: mean of all 500 numbers</span>
+x.<span class="fn">mean</span>(dim=<span class="num">0</span>)                <span class="com"># -&gt; (5,): mean down each column</span>
+x.<span class="fn">mean</span>(dim=<span class="num">1</span>)                <span class="com"># -&gt; (100,): mean across each row</span>
+x.<span class="fn">sum</span>(dim=<span class="num">1</span>, keepdim=<span class="kw">True</span>)   <span class="com"># -&gt; (100, 1): keep the axis for broadcasting</span>
+
+<span class="com"># max returns BOTH values and their indices along a dim:</span>
+vals, idx = x.<span class="fn">max</span>(dim=<span class="num">1</span>)     <span class="com"># per-row maximum and where it was</span></pre>
+      <p>Reading <code>dim</code> correctly is a common stumbling block. The rule: <code>dim=k</code> means "reduce <em>along</em> axis k, so axis k disappears." For a <code>(rows, cols)</code> matrix, <code>dim=0</code> collapses rows and leaves one value per column; <code>dim=1</code> collapses columns and leaves one per row.</p>
+
+      <h3>In-place ops, and why to be wary</h3>
+      <p>Operations with a trailing underscore modify the tensor in place instead of returning a new one: <code>x.add_(1)</code> versus <code>x + 1</code>. They save memory, but they overwrite data that autograd may still need for the backward pass, which can corrupt gradients. As a beginner, prefer the out-of-place versions; reach for in-place only when profiling says memory demands it (Volume IV).</p>
+
+      <h3>The NumPy bridge</h3>
+      <p>PyTorch and NumPy interoperate tightly, which matters because so much of the data world speaks NumPy. On the CPU they can even <em>share</em> memory, making conversion free — and occasionally surprising.</p>
+<pre data-lang="PYTHON"><span class="kw">import</span> numpy <span class="kw">as</span> np
+
+arr = np.<span class="fn">array</span>([<span class="num">1.0</span>, <span class="num">2.0</span>, <span class="num">3.0</span>])
+t = torch.<span class="fn">from_numpy</span>(arr)     <span class="com"># SHARES memory with arr (no copy, CPU only)</span>
+back = t.<span class="fn">numpy</span>()              <span class="com"># SHARES memory the other way</span>
+
+arr[<span class="num">0</span>] = <span class="num">99.0</span>
+<span class="fn">print</span>(t[<span class="num">0</span>])                   <span class="com"># -&gt; 99.0 : they alias the same buffer!</span>
+
+<span class="com"># A GPU tensor must come home before it can become a NumPy array:</span>
+gpu = torch.<span class="fn">randn</span>(<span class="num">3</span>, device=<span class="str">&quot;cpu&quot;</span>)   <span class="com"># (pretend this is on cuda)</span>
+gpu.<span class="fn">cpu</span>().<span class="fn">numpy</span>()             <span class="com"># .cpu() first, or you&#x27;ll get an error</span></pre>
+      <div class="idea">
+        <p><strong>Shapes are the language; know them cold.</strong> Most PyTorch debugging is shape debugging. If you can look at a line and predict the output shape — accounting for broadcasting, reductions, and views — you can read any model. Print shapes liberally, annotate them in comments, and the framework stops fighting you.</p>
+      </div>
+    </section>
+  </div>
+
+  <div class="rule-sep"></div>
+  <div class="part" id="p3">
+    <div class="part-label">Part III — Autograd</div>
+    <h2 class="part-title">The engine that computes <span class="acc">every derivative.</span></h2>
+    <p class="part-intro">Training needs gradients — for every parameter, the answer to "which way do I nudge you to lower the loss?" Computing those by hand for a million parameters is impossible; autograd does it automatically by recording your math and replaying it backward. Understand this part and <code>loss.backward()</code> stops being magic and becomes a tool you can reason about, debug, and control.</p>
+
+    <section class="chapter" id="c09">
+      <h2><span class="ch-num">09</span>Gradients, with only the calculus you need</h2>
+      <p>You need exactly one idea from calculus: the <strong>derivative is a slope</strong> — it tells you how much the output changes when you nudge the input a tiny bit. If a function's slope at some point is <code>+6</code>, then increasing the input increases the output about six times as fast; to <em>decrease</em> the output, you move the input the other way.</p>
+      <p>That is the whole basis of training. The loss is a function of the parameters. Its <strong>gradient</strong> is just the collection of slopes — one partial derivative per parameter — bundled into a vector. The gradient points in the direction that <em>increases</em> the loss fastest, so to reduce the loss we step in the <em>opposite</em> direction. That single move, repeated, is gradient descent.</p>
+      <div class="diagram">  WHY THE SLOPE TELLS YOU WHICH WAY TO GO:  f(x) = x²
+
+        loss
+         │        ·                        ·
+         │          ·                    ·
+         │            ·     slope −ve  │  ·   slope +ve
+         │              ·   (go right) │  ·   (go left)
+         │                ·            │·
+         │                  ·  ·  ·  · ·      ← minimum, slope = 0
+         └────────────────────────────────────► x
+         At x = 3 the slope is +6, so decreasing x lowers f.
+         Step:  x ← x − (learning_rate × slope).</div>
+      <p>The last piece is the <strong>chain rule</strong>: the derivative of nested functions is the product of the derivatives of each step. If <code>loss</code> depends on <code>b</code> which depends on <code>a</code> which depends on a parameter <code>w</code>, then <code>d(loss)/dw</code> is <code>d(loss)/db · db/da · da/dw</code>. Neural networks are deeply nested functions, so the chain rule is <em>the</em> mechanism by which a change deep inside the network is traced out to its effect on the loss. Autograd is, at heart, an automatic, exact chain-rule machine.</p>
+      <p>You will essentially never differentiate by hand. But this mental model — loss is a landscape, the gradient is the local uphill direction, we walk downhill — is the intuition every training decision draws on.</p>
+    </section>
+
+    <section class="chapter" id="c10">
+      <h2><span class="ch-num">10</span>requires_grad and the computational graph</h2>
+      <p>Autograd only tracks tensors you ask it to. Set <code>requires_grad=True</code> on a tensor and PyTorch starts recording every operation that involves it, building a <strong>computational graph</strong> — a record of what was computed from what. That graph is exactly what <code>backward()</code> later walks in reverse.</p>
+<pre data-lang="PYTHON"><span class="kw">import</span> torch
+
+x = torch.<span class="fn">tensor</span>(<span class="num">3.0</span>, requires_grad=<span class="kw">True</span>)   <span class="com"># a parameter we can differentiate</span>
+y = x ** <span class="num">2</span>                                   <span class="com"># y = x², autograd records this</span>
+<span class="fn">print</span>(y)              <span class="com"># tensor(9., grad_fn=&lt;PowBackward0&gt;)</span>
+<span class="fn">print</span>(y.grad_fn)      <span class="com"># &lt;PowBackward0&gt; : the op that made y, for the backward pass</span>
+
+y.<span class="fn">backward</span>()          <span class="com"># compute dy/dx and store it in x.grad</span>
+<span class="fn">print</span>(x.grad)         <span class="com"># tensor(6.) — matches d(x²)/dx = 2x = 2·3</span></pre>
+      <p>Notice <code>y</code> carries a <code>grad_fn</code>. Every tensor produced from a tracked tensor remembers the operation that created it. Chain those together and you have the graph: a directed record from your inputs, through each operation, to the final output. When you call <code>.backward()</code> on that output, autograd uses the stored <code>grad_fn</code>s to apply the chain rule step by step, depositing the result in each leaf tensor's <code>.grad</code>.</p>
+
+      <h3>Leaves, and where gradients land</h3>
+      <p>A <strong>leaf</strong> tensor is one you created directly (not computed from others) that has <code>requires_grad=True</code> — your parameters. These are the tensors autograd fills <code>.grad</code> for, because they're what you'll update. Intermediate results (like <code>y</code> above, when it's not the final output) don't retain a <code>.grad</code> by default; they only pass gradient through.</p>
+<pre data-lang="PYTHON"><span class="com"># A two-parameter example, closer to a real model.</span>
+w = torch.<span class="fn">tensor</span>(<span class="num">2.0</span>, requires_grad=<span class="kw">True</span>)   <span class="com"># leaf / parameter</span>
+b = torch.<span class="fn">tensor</span>(<span class="num">1.0</span>, requires_grad=<span class="kw">True</span>)   <span class="com"># leaf / parameter</span>
+x = torch.<span class="fn">tensor</span>(<span class="num">4.0</span>)                        <span class="com"># data: no grad needed</span>
+
+pred = w * x + b        <span class="com"># graph: mul -&gt; add</span>
+loss = (pred - <span class="num">10.0</span>) ** <span class="num">2</span>   <span class="com"># pred=9, loss=(9-10)² = 1</span>
+
+loss.<span class="fn">backward</span>()         <span class="com"># fills w.grad and b.grad via the chain rule</span>
+<span class="fn">print</span>(w.grad, b.grad)   <span class="com"># d(loss)/dw = -8 , d(loss)/db = -2</span></pre>
+      <p>Those gradients say: to lower this loss, increasing <code>w</code> helps eight times as much per unit as increasing <code>b</code> (both have negative slope, so both should increase). An optimizer will act on exactly this information. In a real model <code>w</code> and <code>b</code> are inside <code>nn.Linear</code>, which sets <code>requires_grad=True</code> for you — but the machinery is identical to what you just watched.</p>
+      <div class="callout tip">
+        <h5>Data doesn't need gradients</h5>
+        <p>Only mark <em>parameters</em> with <code>requires_grad=True</code>. Your inputs and targets are fixed; you never adjust them, so leaving them untracked saves memory and makes the graph smaller. <code>nn</code> layers handle this distinction automatically.</p>
+      </div>
+    </section>
+
+    <section class="chapter" id="c11">
+      <h2><span class="ch-num">11</span>Reverse-mode autodiff: what backward() does</h2>
+      <p>The forward pass runs your operations and, along the way, saves the intermediate values it will need. The backward pass then starts at the output with a seed gradient of 1 and walks the graph in reverse, and at each node multiplies by that operation's local derivative — the chain rule, applied mechanically. Because it flows from the single output backward to all inputs, one backward pass computes the gradient for <em>every</em> parameter at once.</p>
+      <div class="diagram">  FORWARD BUILDS THE GRAPH, BACKWARD TRAVERSES IT:
+
+   forward ►     w ─┐
+                    ├─(×)─► h ─┐
+                 x ─┘          ├─(+)─► pred ─►(−t)²─► loss
+                    b ─────────┘
+
+   backward ◄   d loss/dw ◄──── d loss/dh ◄──── d loss/dpred ◄─── 1
+               (each arrow multiplies by that step's local slope)</div>
+      <p>This direction — output-to-input — is called <strong>reverse-mode</strong> automatic differentiation, and it is why deep learning is feasible. Networks have one loss (one output) and millions of parameters (many inputs); reverse mode gets all those millions of derivatives in a single traversal, at roughly the cost of one extra forward pass. Doing it forward-mode, one parameter at a time, would take millions of passes.</p>
+
+      <h3>Why gradients accumulate</h3>
+      <p>Here is a design choice that trips up everyone once. <code>backward()</code> does not <em>overwrite</em> <code>.grad</code> — it <em>adds</em> to it. Call <code>backward()</code> twice without clearing, and the gradients sum together.</p>
+<pre data-lang="PYTHON">x = torch.<span class="fn">tensor</span>(<span class="num">3.0</span>, requires_grad=<span class="kw">True</span>)
+
+(x ** <span class="num">2</span>).<span class="fn">backward</span>()
+<span class="fn">print</span>(x.grad)     <span class="com"># 6.0</span>
+(x ** <span class="num">2</span>).<span class="fn">backward</span>()
+<span class="fn">print</span>(x.grad)     <span class="com"># 12.0 — accumulated, not replaced!</span>
+
+x.grad.<span class="fn">zero_</span>()    <span class="com"># reset to zero</span>
+(x ** <span class="num">2</span>).<span class="fn">backward</span>()
+<span class="fn">print</span>(x.grad)     <span class="com"># 6.0 again</span></pre>
+      <p>This accumulation is deliberate and useful (it lets you split a big batch into pieces and sum their gradients — Volume II's gradient accumulation). But in the normal loop it means you <strong>must</strong> zero gradients each step, which is what <code>optimizer.zero_grad()</code> does. This is the single mechanical reason that line exists.</p>
+
+      <h3>Non-scalar outputs</h3>
+      <p><code>backward()</code> with no argument only works when the output is a single number — which the loss always is, so in practice you rarely hit this. If you call it on a non-scalar tensor, autograd doesn't know how to weight each element and asks you for a <code>gradient</code> argument. The takeaway for now: <strong>always call <code>backward()</code> on a scalar loss.</strong></p>
+    </section>
+
+    <section class="chapter" id="c12">
+      <h2><span class="ch-num">12</span>no_grad, detach &amp; the gradient gotchas</h2>
+      <p>Sometimes you want tensor math <em>without</em> autograd watching — during inference, or when manually updating parameters (the update itself must not be recorded, or you'd differentiate the optimizer). Two tools turn tracking off.</p>
+<pre data-lang="PYTHON"><span class="com"># 1. no_grad: a block where nothing is recorded. Faster, less memory.</span>
+<span class="kw">with</span> torch.<span class="fn">no_grad</span>():
+    prediction = <span class="fn">model</span>(x)      <span class="com"># pure inference; no graph built</span>
+
+<span class="com"># 2. detach: get a copy of a tensor cut out of the graph.</span>
+frozen = some_tensor.<span class="fn">detach</span>()  <span class="com"># shares data, but stops gradient flow</span>
+value  = loss.<span class="fn">detach</span>().<span class="fn">item</span>()  <span class="com"># pull a Python float out for logging</span></pre>
+      <p>You saw why <code>no_grad</code> matters for inference in Chapter 04. It's equally essential in the manual update you'll write next chapter: adjusting a parameter is bookkeeping, not part of the model's math, so it belongs inside <code>no_grad</code>.</p>
+
+      <h3>The gotchas, collected</h3>
+      <p>Almost every autograd error a beginner hits is one of these:</p>
+      <table class="tbl">
+        <thead><tr><th>Symptom</th><th>Cause &amp; fix</th></tr></thead>
+        <tbody>
+          <tr><td>loss never drops</td><td>Forgot <code>zero_grad()</code> — gradients accumulate — or forgot <code>backward()</code>/<code>step()</code> entirely. Check all five loop lines are present and ordered.</td></tr>
+          <tr><td>"backward through the graph a second time"</td><td>You called <code>backward()</code> twice on the same graph. The graph is freed after one backward by default. Usually means you reused a loss tensor; recompute the forward pass, or pass <code>retain_graph=True</code> (rarely what you want).</td></tr>
+          <tr><td>"a leaf Variable that requires grad is being used in an in-place operation"</td><td>You modified a parameter in place outside <code>no_grad</code>. Wrap manual updates in <code>with torch.no_grad():</code>.</td></tr>
+          <tr><td>"can't call numpy() on Tensor that requires grad"</td><td>Detach first: <code>t.detach().cpu().numpy()</code>.</td></tr>
+          <tr><td>grad is <code>None</code></td><td>The tensor wasn't a leaf with <code>requires_grad=True</code>, or no backward reached it. Check it's actually a parameter.</td></tr>
+        </tbody>
+      </table>
+      <div class="callout warn">
+        <h5>Use <code>.item()</code> to log, not the tensor</h5>
+        <p>When you accumulate a running loss for printing, add <code>loss.item()</code> (a plain Python float), not <code>loss</code> (a graph-attached tensor). Summing the tensors keeps the entire computation graph alive across iterations — a classic memory leak that slowly eats all your RAM.</p>
+      </div>
+
+      <div class="cheat">
+        <h5>autograd controls at a glance</h5>
+        <div class="cheat-grid">
+          <div class="cmd">t.requires_grad_(True)</div><div class="desc">Start tracking a tensor (in place).</div>
+          <div class="cmd">with torch.no_grad():</div><div class="desc">Disable tracking in a block — inference, manual updates.</div>
+          <div class="cmd">t.detach()</div><div class="desc">A view of <code>t</code> cut out of the graph.</div>
+          <div class="cmd">t.grad</div><div class="desc">The accumulated gradient (after backward). A tensor or <code>None</code>.</div>
+          <div class="cmd">t.grad.zero_()</div><div class="desc">Reset a gradient. Usually done via the optimizer.</div>
+          <div class="cmd">loss.backward()</div><div class="desc">Compute grads for all leaves feeding a scalar loss.</div>
+          <div class="cmd">t.item()</div><div class="desc">Extract a Python number from a 1-element tensor.</div>
+        </div>
+      </div>
+      <p class="pull">backward() is not magic — it is the chain rule, run once from the loss back to every parameter.</p>
+    </section>
+  </div>
+
+  <div class="rule-sep"></div>
+  <div class="part" id="p4">
+    <div class="part-label">Part IV — Learning by gradient descent</div>
+    <h2 class="part-title">Assembling the <span class="acc">whole loop.</span></h2>
+    <p class="part-intro">You have the three pieces: tensors hold the numbers, autograd supplies the gradients, and a loss turns wrongness into something to minimize. Now we bolt them together — first by hand, so nothing is hidden, then the PyTorch way, so you see exactly what <code>nn</code> and <code>optim</code> automate. By the end, the five-line loop from Chapter 03 will hold no secrets.</p>
+
+    <section class="chapter" id="c13">
+      <h2><span class="ch-num">13</span>Loss: turning "wrong" into a number</h2>
+      <p>Optimization needs a target to minimize, so we must compress "how wrong is the model right now?" into one differentiable number: the <strong>loss</strong>. Differentiable matters — autograd has to be able to take its gradient — which is why we use smooth formulas rather than, say, raw accuracy (which has no useful slope).</p>
+      <p>The right loss depends on the task. For predicting continuous numbers (regression), the default is <strong>mean squared error</strong>: average the squared differences. Squaring makes all errors positive and punishes large misses disproportionately, which pulls the model hard away from big mistakes.</p>
+<pre data-lang="PYTHON">pred = torch.<span class="fn">tensor</span>([<span class="num">2.5</span>, <span class="num">0.0</span>, <span class="num">2.0</span>])
+target = torch.<span class="fn">tensor</span>([<span class="num">3.0</span>, -<span class="num">0.5</span>, <span class="num">2.0</span>])
+
+<span class="com"># By hand — MSE is literally the mean of the squared errors:</span>
+mse_manual = ((pred - target) ** <span class="num">2</span>).<span class="fn">mean</span>()      <span class="com"># tensor(0.1667)</span>
+
+<span class="com"># The built-in, which you&#x27;ll actually use:</span>
+loss_fn = torch.nn.<span class="ty">MSELoss</span>()
+mse_builtin = <span class="fn">loss_fn</span>(pred, target)             <span class="com"># tensor(0.1667) — identical</span></pre>
+      <p>For classification (predicting a category), the standard loss is <strong>cross-entropy</strong>, which scores how much probability the model put on the correct class. It has its own subtleties — Volume II and III go deep — but the principle is the same: one differentiable number, smaller is better.</p>
+      <table class="tbl">
+        <thead><tr><th>Task</th><th>Usual loss</th></tr></thead>
+        <tbody>
+          <tr><td>regression</td><td><code>nn.MSELoss</code> (squared error) or <code>nn.L1Loss</code> (absolute error, less sensitive to outliers).</td></tr>
+          <tr><td>binary classification</td><td><code>nn.BCEWithLogitsLoss</code> — binary cross-entropy, numerically stable.</td></tr>
+          <tr><td>multi-class classification</td><td><code>nn.CrossEntropyLoss</code> — expects raw scores (logits) and integer class labels.</td></tr>
+        </tbody>
+      </table>
+      <div class="callout tip">
+        <h5>The loss encodes your goal</h5>
+        <p>Choosing a loss is choosing what "good" means. MSE says "big errors are much worse than small ones." Swap the loss and you change what the model optimizes for. Most of the time you'll pick the standard loss for your task — but know that it's a lever, not a law.</p>
+      </div>
+    </section>
+
+    <section class="chapter" id="c14">
+      <h2><span class="ch-num">14</span>Gradient descent from scratch</h2>
+      <p>Here is training with <em>nothing</em> hidden — no <code>nn</code>, no optimizer. Just tensors, autograd, and a hand-written update. This is the version to truly understand; everything after it is convenience wrapped around this core.</p>
+<pre data-lang="PYTHON"><span class="kw">import</span> torch
+torch.<span class="fn">manual_seed</span>(<span class="num">0</span>)
+
+<span class="com"># Data from the hidden rule y = 2x + 1.</span>
+<span class="ty">X</span> = torch.<span class="fn">randn</span>(<span class="num">100</span>, <span class="num">1</span>)
+y = <span class="num">2</span> * <span class="ty">X</span> + <span class="num">1</span> + <span class="num">0.1</span> * torch.<span class="fn">randn</span>(<span class="num">100</span>, <span class="num">1</span>)
+
+<span class="com"># Parameters — the numbers we will learn. Start them at zero.</span>
+w = torch.<span class="fn">zeros</span>(<span class="num">1</span>, <span class="num">1</span>, requires_grad=<span class="kw">True</span>)
+b = torch.<span class="fn">zeros</span>(<span class="num">1</span>, requires_grad=<span class="kw">True</span>)
+lr = <span class="num">0.1</span>
+
+<span class="kw">for</span> epoch <span class="kw">in</span> <span class="fn">range</span>(<span class="num">200</span>):
+    <span class="com"># forward: our current guess of y</span>
+    pred = <span class="ty">X</span> @ w + b                    <span class="com"># (100,1)@(1,1) + (1,) -&gt; (100,1)</span>
+    loss = ((pred - y) ** <span class="num">2</span>).<span class="fn">mean</span>()     <span class="com"># MSE, by hand</span>
+
+    <span class="com"># backward: autograd fills w.grad and b.grad</span>
+    loss.<span class="fn">backward</span>()
+
+    <span class="com"># update: step each parameter downhill. NOT tracked by autograd.</span>
+    <span class="kw">with</span> torch.<span class="fn">no_grad</span>():
+        w -= lr * w.grad                <span class="com"># w ← w − lr · dloss/dw</span>
+        b -= lr * b.grad
+        w.grad.<span class="fn">zero_</span>()                  <span class="com"># clear for the next iteration</span>
+        b.grad.<span class="fn">zero_</span>()
+
+<span class="fn">print</span>(<span class="str">f&quot;learned  w={w.item():.3f}  b={b.item():.3f}&quot;</span>)   <span class="com"># ≈ 2.00, 1.00</span></pre>
+      <p>Every line of the canonical loop is visible here. <code>loss.backward()</code> computes the slopes. The <code>with torch.no_grad()</code> block is the "optimizer": it moves each parameter against its gradient by a step of size <code>lr</code>, then zeroes the gradients so they don't accumulate. That's it — that's what training <em>is</em>.</p>
+
+      <h3>The learning rate: the one knob you'll always tune</h3>
+      <p><code>lr</code> scales every step. It is the most important hyperparameter in all of deep learning, and getting it wrong is the most common reason training fails.</p>
+      <div class="twocol">
+        <div class="col bad">
+          <h5>Too large</h5>
+          <p>Steps overshoot the minimum and bounce out. The loss oscillates, explodes to <code>inf</code>, or becomes <code>NaN</code>. If your loss goes to <code>NaN</code> in the first few steps, lower the learning rate first.</p>
+        </div>
+        <div class="col good">
+          <h5>Too small</h5>
+          <p>Steps are safe but tiny; training crawls and may stall in a bad spot. Wastes time and compute. If loss decreases but agonizingly slowly, try raising it.</p>
+        </div>
+      </div>
+      <p>There's no universal right value — it depends on the model, data, and optimizer. Typical starting points are <code>0.1</code> for plain SGD and <code>1e-3</code> for Adam (Volume II). The practical method: try a few values spaced by factors of ten (<code>1e-1, 1e-2, 1e-3</code>) and watch the loss curve. Volume II turns this into a systematic recipe with schedules and warmup.</p>
+    </section>
+
+    <section class="chapter" id="c15">
+      <h2><span class="ch-num">15</span>The same model, the PyTorch way</h2>
+      <p>Now watch the boilerplate vanish. <code>nn.Linear</code> holds the <code>weight</code> and <code>bias</code> for you (already tracked), <code>nn.MSELoss</code> is the loss, and <code>optim.SGD</code> is precisely the manual update block from Chapter 14 — packaged so it works for two parameters or two billion.</p>
+<pre data-lang="PYTHON"><span class="kw">import</span> torch
+torch.<span class="fn">manual_seed</span>(<span class="num">0</span>)
+
+<span class="ty">X</span> = torch.<span class="fn">randn</span>(<span class="num">100</span>, <span class="num">1</span>)
+y = <span class="num">2</span> * <span class="ty">X</span> + <span class="num">1</span> + <span class="num">0.1</span> * torch.<span class="fn">randn</span>(<span class="num">100</span>, <span class="num">1</span>)
+
+model = torch.nn.<span class="ty">Linear</span>(<span class="num">1</span>, <span class="num">1</span>)                 <span class="com"># holds weight (1,1) and bias (1,)</span>
+loss_fn = torch.nn.<span class="ty">MSELoss</span>()
+optimizer = torch.optim.<span class="ty">SGD</span>(model.<span class="fn">parameters</span>(), lr=<span class="num">0.1</span>)
+
+<span class="kw">for</span> epoch <span class="kw">in</span> <span class="fn">range</span>(<span class="num">200</span>):
+    pred = <span class="fn">model</span>(<span class="ty">X</span>)                <span class="com"># forward</span>
+    loss = <span class="fn">loss_fn</span>(pred, y)        <span class="com"># loss</span>
+
+    optimizer.<span class="fn">zero_grad</span>()          <span class="com"># = w.grad.zero_(); b.grad.zero_()</span>
+    loss.<span class="fn">backward</span>()                <span class="com"># = fill .grad for every parameter</span>
+    optimizer.<span class="fn">step</span>()               <span class="com"># = the no_grad update block, generalized</span>
+
+w, b = model.weight.<span class="fn">item</span>(), model.bias.<span class="fn">item</span>()
+<span class="fn">print</span>(<span class="str">f&quot;learned  w={w:.3f}  b={b:.3f}&quot;</span>)        <span class="com"># ≈ 2.00, 1.00 — same result</span></pre>
+      <p>Line for line, this is the manual version with three substitutions. Understanding that equivalence is the payoff of Part IV:</p>
+      <table class="tbl compare">
+        <thead><tr><th>Manual (Ch. 14)</th><th>PyTorch</th><th>What it wraps</th></tr></thead>
+        <tbody>
+          <tr><td>w, b = torch.zeros(...)</td><td>nn.Linear(1, 1)</td><td>Creating &amp; tracking parameters, doing the matmul.</td></tr>
+          <tr><td>((pred - y)**2).mean()</td><td>nn.MSELoss()</td><td>The loss formula.</td></tr>
+          <tr><td>with no_grad: w -= lr*w.grad</td><td>optimizer.step()</td><td>The parameter update, for all params.</td></tr>
+          <tr><td>w.grad.zero_()</td><td>optimizer.zero_grad()</td><td>Clearing accumulated gradients.</td></tr>
+        </tbody>
+      </table>
+      <p><code>model.parameters()</code> is the connective tissue: it yields every learnable tensor in the model, which is exactly what you hand the optimizer so it knows what to update. When you build hundred-layer networks in later volumes, this one call still gathers every parameter automatically — you never track them by hand again.</p>
+      <div class="callout tip">
+        <h5>This is why <code>nn</code> exists</h5>
+        <p>The manual version is perfect for one linear layer and hopeless for a real network. <code>nn.Module</code> lets you compose layers, and <code>parameters()</code> plus an optimizer scales the update to any size — while the five-line loop stays exactly the same. Volume II is entirely about building rich models on top of this foundation.</p>
+      </div>
+    </section>
+
+    <section class="chapter" id="c16">
+      <h2><span class="ch-num">16</span>Anatomy of the canonical training loop</h2>
+      <p>Real training adds two things to the loop: <strong>mini-batches</strong> (process a chunk of data at a time, not all of it at once) and a proper <strong>evaluation</strong> pass on held-out data. Here is the fully-formed loop, annotated. This template — with richer models and data — is what you'll write for the rest of the series.</p>
+<pre data-lang="PYTHON"><span class="kw">import</span> torch
+<span class="kw">from</span> torch.utils.data <span class="kw">import</span> <span class="ty">TensorDataset</span>, <span class="ty">DataLoader</span>
+torch.<span class="fn">manual_seed</span>(<span class="num">0</span>)
+
+<span class="com"># --- data: split into train and validation ---</span>
+<span class="ty">X</span> = torch.<span class="fn">randn</span>(<span class="num">1000</span>, <span class="num">1</span>); y = <span class="num">2</span> * <span class="ty">X</span> + <span class="num">1</span> + <span class="num">0.1</span> * torch.<span class="fn">randn</span>(<span class="num">1000</span>, <span class="num">1</span>)
+n_train = <span class="num">800</span>
+train_ds = <span class="ty">TensorDataset</span>(<span class="ty">X</span>[:n_train], y[:n_train])
+val_ds   = <span class="ty">TensorDataset</span>(<span class="ty">X</span>[n_train:], y[n_train:])
+train_dl = <span class="ty">DataLoader</span>(train_ds, batch_size=<span class="num">32</span>, shuffle=<span class="kw">True</span>)   <span class="com"># mini-batches</span>
+val_dl   = <span class="ty">DataLoader</span>(val_ds, batch_size=<span class="num">32</span>)
+
+<span class="com"># --- model / loss / optimizer ---</span>
+model = torch.nn.<span class="ty">Linear</span>(<span class="num">1</span>, <span class="num">1</span>)
+loss_fn = torch.nn.<span class="ty">MSELoss</span>()
+optimizer = torch.optim.<span class="ty">SGD</span>(model.<span class="fn">parameters</span>(), lr=<span class="num">0.1</span>)
+
+<span class="com"># --- the loop: an EPOCH is one full pass over the training data ---</span>
+<span class="kw">for</span> epoch <span class="kw">in</span> <span class="fn">range</span>(<span class="num">10</span>):
+    model.<span class="fn">train</span>()                          <span class="com"># training mode</span>
+    <span class="kw">for</span> xb, yb <span class="kw">in</span> train_dl:                <span class="com"># one mini-batch at a time</span>
+        pred = <span class="fn">model</span>(xb)
+        loss = <span class="fn">loss_fn</span>(pred, yb)
+        optimizer.<span class="fn">zero_grad</span>()
+        loss.<span class="fn">backward</span>()
+        optimizer.<span class="fn">step</span>()
+
+    <span class="com"># --- evaluate on data the model didn&#x27;t train on ---</span>
+    model.<span class="fn">eval</span>()                           <span class="com"># evaluation mode</span>
+    val_loss = <span class="num">0.0</span>
+    <span class="kw">with</span> torch.<span class="fn">no_grad</span>():                  <span class="com"># no gradients while evaluating</span>
+        <span class="kw">for</span> xb, yb <span class="kw">in</span> val_dl:
+            val_loss += <span class="fn">loss_fn</span>(<span class="fn">model</span>(xb), yb).<span class="fn">item</span>() * <span class="fn">len</span>(xb)
+    val_loss /= <span class="fn">len</span>(val_ds)
+    <span class="fn">print</span>(<span class="str">f&quot;epoch {epoch}  val_loss {val_loss:.4f}&quot;</span>)</pre>
+      <p>Two vocabulary words make the loop legible. A <strong>step</strong> (or iteration) is one mini-batch: one forward, one backward, one update. An <strong>epoch</strong> is one full sweep through the training set — many steps. You shuffle the training data each epoch (<code>shuffle=True</code>) so the model doesn't learn the order, and you <em>never</em> shuffle or train on the validation set — it exists solely to estimate how the model does on data it hasn't seen.</p>
+
+      <div class="diagram">  THE LOOP, NESTED:
+
+   for each EPOCH (full pass over data):
+        model.train()
+        for each BATCH (a handful of samples):
+             forward ─► loss ─► zero_grad ─► backward ─► step
+        model.eval()
+        with no_grad: measure loss on the held-out validation set
+                                     │
+                                     ▼
+                     watch this number — it's the honest one</div>
+
+      <div class="idea">
+        <p><strong>The five lines never change; everything else is what you feed them.</strong> Forward, loss, zero_grad, backward, step — from this linear toy to a billion-parameter transformer, the loop is the same. The rest of your growth as a practitioner is learning richer models to put in the forward pass, better losses, smarter optimizers, and the judgment to read that validation number. That is precisely the road Volumes II through VI walk.</p>
+      </div>
+      <p class="pull">Learn the loop once, and every model you'll ever train is already half-familiar.</p>
+    </section>
+  </div>
+
+</main>
+
+<footer>
+  <h4>sources &amp; further study</h4>
+  <div class="resources">
+    <ul>
+      <li><strong>Official, and worth reading in full</strong></li>
+      <li>PyTorch — "Learn the Basics" tutorial</li>
+      <li>PyTorch — "A Gentle Introduction to torch.autograd"</li>
+      <li>docs.pytorch.org — torch.Tensor &amp; torch.autograd reference</li>
+      <li><strong>For the intuition</strong></li>
+      <li>3Blue1Brown — "Neural Networks" (visual calculus of backprop)</li>
+      <li>Karpathy — "The spelled-out intro to backprop" (micrograd)</li>
+      <li><strong>Next in this series</strong></li>
+      <li>Volume II — Training Neural Networks</li>
+      <li>Volume III — Architectures</li>
+    </ul>
+  </div>
+  <p class="footer-note">Volume I of the PyTorch Field Manual. Everything here — tensors, autograd, the training loop — is stable across the PyTorch 2.x line and will not change under you. The next volume builds real networks on this foundation: <code>nn.Module</code> in depth, the data pipeline, optimizers beyond SGD, and the craft of making models generalize. Code targets PyTorch 2.x (2.13, mid-2026).</p>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PyTorch Field Manual — Volume III · Architectures</title>
+
+<!-- ============================================================
+     FIELD MANUAL TEMPLATE
+     Copy this whole file, then replace the example content in
+     <body>. The <head> CSS is the complete design system — do not
+     edit it except to swap the single accent token (see note below).
+
+     ONE ALLOWED VARIATION: to re-hue the accent, change --green,
+     --green-deep, --green-bri, and --code-bg to a different family
+     (e.g. a blue or copper). Leave everything else alone — the
+     paper, ink, slate, amber, and rose are calibrated to pair with
+     the accent and with each other.
+     ============================================================ -->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;0,8..60,700;1,8..60,400;1,8..60,500&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --bg:        #eef1ec;   /* cool desaturated paper — the page */
+  --bg-2:      #e4e8e1;   /* slightly darker panels / table headers */
+  --bg-3:      #d7dcd2;   /* darker still — inline code chips */
+  --card:      #f7f9f4;   /* card surfaces (slightly lighter than page) */
+  --ink:       #14181a;   /* near-black primary text */
+  --ink-soft:  #3d4642;   /* body text in cards, secondary prose */
+  --ink-faint: #76807a;   /* muted labels, captions */
+  --rule:      #c6ccc0;   /* hairline rules */
+  --rule-soft: #d8ddd2;
+  --rule-dark: #8d958a;   /* card borders */
+  --green:     #1a7f46;   /* SIGNAL ACCENT — primary */
+  --green-deep:#0e5e31;   /* darker accent (code, links) */
+  --green-bri: #2ea05c;   /* brighter accent (hover) */
+  --slate:     #33505f;   /* secondary accent — cool blue-grey */
+  --slate-deep:#203642;
+  --amber:     #b07d12;   /* warning accent */
+  --rose:      #a32a1f;   /* danger / required accent */
+  --code-bg:   #15201a;   /* dark code blocks (green-tinted near-black) */
+  --code-ink:  #d6ddd2;
+  --maxw:      1080px;
+}
+*{ box-sizing: border-box; }
+html{ scroll-behavior: smooth; }
+body{
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Source Serif 4', Georgia, serif;
+  font-size: 17px;
+  line-height: 1.62;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ============ HEADER ============ */
+header{ max-width: var(--maxw); margin: 0 auto; padding: 84px 40px 50px; position: relative; }
+.filed{
+  font-family: 'Geist Mono', ui-monospace, monospace; font-size: 10.5px; letter-spacing: .28em;
+  text-transform: uppercase; color: var(--green); margin: 0 0 28px; font-weight: 600;
+  display: flex; align-items: center; gap: 12px;
+}
+.filed::before{ content: "▸"; color: var(--green); font-size: 13px; }
+.vol{
+  font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .18em;
+  color: var(--ink-faint); text-transform: uppercase; margin: 0 0 16px; font-weight: 500;
+}
+h1{
+  font-family: 'Archivo', system-ui, sans-serif; font-weight: 900;
+  font-size: clamp(54px, 9.5vw, 122px); line-height: 0.9; letter-spacing: -0.02em; margin: 0 0 24px; color: var(--ink);
+}
+h1 .acc{ color: var(--green); }
+.deck{ font-family: 'Source Serif 4', serif; font-size: 20px; font-weight: 400; color: var(--ink-soft); max-width: 770px; line-height: 1.5; }
+.readout{ margin-top: 40px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--rule); border: 1px solid var(--rule); }
+@media (max-width: 680px){ .readout{ grid-template-columns: repeat(2,1fr); } }
+.readout .cell{ background: var(--bg); padding: 14px 16px; }
+.readout .k{ font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 6px; }
+.readout .v{ font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 22px; color: var(--ink); line-height: 1; }
+.readout .v .u{ font-size: 12px; color: var(--green); font-weight: 600; }
+
+/* ============ TOC ============ */
+.toc{ margin-top: 46px; background: var(--card); border: 1px solid var(--rule-dark); padding: 30px 32px 34px; position: relative; }
+.toc::before{ content: "CONTENTS"; position: absolute; top: -9px; left: 26px; background: var(--card); padding: 0 10px; font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .3em; color: var(--green); font-weight: 600; }
+.toc h3{ font-family: 'Archivo', sans-serif; font-size: 26px; font-weight: 800; margin: 0 0 3px; color: var(--ink); letter-spacing: -0.01em; }
+.toc .toc-sub{ font-family: 'Geist Mono', monospace; font-size: 10.5px; color: var(--ink-faint); letter-spacing: .1em; text-transform: uppercase; margin-bottom: 20px; }
+.toc-part{ margin-top: 15px; }
+.toc-part-name{ font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .22em; color: var(--slate); text-transform: uppercase; font-weight: 600; border-bottom: 1px solid var(--rule); padding-bottom: 5px; margin-bottom: 7px; }
+.toc-grid{ display: grid; grid-template-columns: repeat(2,1fr); gap: 1px 32px; }
+@media (max-width: 760px){ .toc-grid{ grid-template-columns: 1fr; } }
+.toc-grid a{ color: var(--ink-soft); text-decoration: none; font-size: 14.5px; padding: 5px 0; display: flex; gap: 12px; align-items: baseline; border-bottom: 1px dotted transparent; transition: all .14s; }
+.toc-grid a:hover{ color: var(--green); border-color: var(--rule); }
+.toc-grid a .n{ font-family: 'Geist Mono', monospace; font-size: 10.5px; color: var(--slate); min-width: 26px; font-weight: 600; }
+
+/* ============ MAIN ============ */
+main{ max-width: var(--maxw); margin: 0 auto; padding: 56px 40px 96px; }
+.part{ margin-top: 92px; padding-top: 46px; position: relative; }
+.part::before{ content:""; position: absolute; top: 0; left: 0; right: 0; border-top: 2px solid var(--ink); }
+.part::after{ content:""; position: absolute; top: 5px; left: 0; width: 84px; border-top: 2px solid var(--green); }
+.part:first-child{ margin-top: 28px; padding-top: 28px; }
+.part-label{ font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .28em; color: var(--green); text-transform: uppercase; margin-bottom: 14px; font-weight: 600; }
+.part-title{ font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 54px; line-height: 0.96; letter-spacing: -0.02em; margin: 0 0 18px; color: var(--ink); }
+.part-title .acc{ color: var(--green); }
+.part-intro{ color: var(--ink-soft); font-size: 18.5px; max-width: 800px; margin-bottom: 34px; line-height: 1.5; }
+
+section.chapter{ margin-top: 52px; }
+section.chapter:first-of-type{ margin-top: 8px; }
+h2{ font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 33px; line-height: 1.08; letter-spacing: -0.015em; margin: 0 0 15px; color: var(--ink); display: flex; align-items: baseline; gap: 15px; padding-bottom: 9px; border-bottom: 2px solid var(--ink); }
+h2 .ch-num{ font-family: 'Geist Mono', monospace; font-size: 13px; color: var(--green); letter-spacing: .05em; font-weight: 600; flex-shrink: 0; }
+h3{ font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 22px; margin: 28px 0 9px; color: var(--ink); letter-spacing: -0.01em; }
+h4{ font-family: 'Geist Mono', monospace; font-size: 10.5px; letter-spacing: .18em; text-transform: uppercase; color: var(--slate); margin: 22px 0 8px; font-weight: 600; }
+p{ margin: 12px 0; }
+p code, li code, td code{ font-family: 'Geist Mono', monospace; font-size: .8em; background: var(--bg-3); color: var(--green-deep); padding: 1px 6px; border-radius: 2px; border: 1px solid var(--rule); }
+strong{ font-weight: 700; }
+ul, ol{ padding-left: 1.3em; }
+li{ margin: 6px 0; }
+ul.tight li{ margin: 3px 0; }
+ul.dash{ list-style: none; padding-left: 0; }
+ul.dash li{ position: relative; padding-left: 22px; }
+ul.dash li::before{ content: "▸"; position: absolute; left: 0; color: var(--green); font-weight: 700; }
+ul.check{ list-style: none; padding-left: 0; }
+ul.check li{ position: relative; padding-left: 24px; }
+ul.check li::before{ content: "▪"; position: absolute; left: 2px; top: 2px; color: var(--green); }
+
+/* ============ CODE ============ */
+pre{ background: var(--code-bg); padding: 17px 20px; overflow-x: auto; font-family: 'Geist Mono', monospace; font-size: 12.5px; line-height: 1.6; color: var(--code-ink); margin: 18px 0; position: relative; border-left: 3px solid var(--green); }
+pre .com{ color: #6f8378; font-style: italic; }   /* comment */
+pre .kw{  color: #6cb38a; }                        /* keyword */
+pre .ty{  color: #8fc6c0; }                        /* type */
+pre .str{ color: #c9b36a; }                        /* string */
+pre .num{ color: #c89a64; }                        /* number */
+pre .fn{  color: #8db8d0; }                        /* function */
+pre .var{ color: #d6ddd2; }                        /* variable */
+pre .glb{ color: #7fbf95; }                        /* global / builtin */
+pre .opt{ color: #c0a96a; }                        /* flag / option */
+pre::before{ content: attr(data-lang); position: absolute; top: 5px; right: 12px; font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: .18em; color: #56635a; text-transform: uppercase; }
+
+/* ============ CALLOUTS ============ */
+.callout{ margin: 22px 0; padding: 15px 22px; border-left: 4px solid var(--slate); background: var(--bg-2); font-size: 16px; line-height: 1.55; }
+.callout.warn{ border-color: var(--amber); }
+.callout.danger{ border-color: var(--rose); }
+.callout.tip{ border-color: var(--green); }
+.callout h5{ margin: 0 0 6px; font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--slate); font-weight: 600; }
+.callout.warn h5{ color: var(--amber); }
+.callout.danger h5{ color: var(--rose); }
+.callout.tip h5{ color: var(--green); }
+.callout p:first-child{ margin-top: 0; } .callout p:last-child{ margin-bottom: 0; }
+
+/* ============ TABLES ============ */
+.tbl{ width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14.5px; }
+.tbl th, .tbl td{ text-align: left; padding: 9px 14px; vertical-align: top; border-bottom: 1px solid var(--rule); }
+.tbl th{ font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink); font-weight: 600; border-bottom: 2px solid var(--ink); border-top: 2px solid var(--ink); background: var(--bg-2); }
+.tbl td:first-child{ font-family: 'Geist Mono', monospace; font-size: 12px; color: var(--green-deep); font-weight: 500; width: 26%; }
+.tbl.wide td:first-child{ width: 20%; }
+.tbl.compare td:first-child{ font-family: 'Geist Mono', monospace; font-weight: 600; color: var(--ink); width: 22%; font-size: 11.5px; letter-spacing: .03em; }
+.tbl.compare td:nth-child(2){ color: var(--green-deep); font-family: 'Source Serif 4', serif; font-size: 14.5px; }
+.tbl.compare td:nth-child(3){ color: var(--slate-deep); font-family: 'Source Serif 4', serif; font-size: 14.5px; }
+
+/* ============ DIAGRAM (monospace ASCII art in a labeled frame) ============ */
+.diagram{ background: var(--card); border: 1px solid var(--rule-dark); padding: 22px 24px; margin: 22px 0; font-family: 'Geist Mono', monospace; font-size: 12px; line-height: 1.55; color: var(--ink-soft); white-space: pre; overflow-x: auto; position: relative; }
+.diagram::before{ content: "FIG."; position: absolute; top: -9px; left: 18px; background: var(--bg); padding: 0 9px; font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: .2em; color: var(--slate); font-weight: 600; }
+
+/* ============ READOUT PANEL (titled stat grid) ============ */
+.panel{ background: var(--card); border: 1px solid var(--rule-dark); margin: 22px 0; padding: 20px 24px; position: relative; }
+.panel::before{ content: attr(data-title); position: absolute; top: -9px; left: 20px; background: var(--bg); padding: 0 10px; font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: .2em; color: var(--green); font-weight: 600; }
+.panel-grid{ display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; }
+@media (max-width: 680px){ .panel-grid{ grid-template-columns: 1fr 1fr; } }
+.panel-grid .stat .k{ font-family:'Geist Mono',monospace; font-size: 9px; letter-spacing:.16em; text-transform:uppercase; color: var(--ink-faint); margin-bottom: 4px; }
+.panel-grid .stat .v{ font-family:'Archivo',sans-serif; font-weight: 700; font-size: 17px; color: var(--ink); line-height: 1.15; }
+.panel-grid .stat .v small{ font-weight: 400; font-family:'Source Serif 4',serif; font-size: 13px; color: var(--ink-soft); }
+
+/* ============ ISSUE / WORKED CASE (dark header + body) ============ */
+.issue{ margin: 26px 0; background: var(--card); border: 1px solid var(--ink); }
+.issue-header{ padding: 12px 22px; background: var(--ink); color: var(--bg); font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; display: flex; align-items: center; gap: 13px; }
+.issue-header .tag{ background: var(--green); padding: 3px 11px; letter-spacing: .1em; font-weight: 600; font-size: 10px; color: #fff; }
+.issue-header .title{ flex: 1; font-weight: 600; letter-spacing: .08em; }
+.issue-body{ padding: 22px 26px; }
+.issue-body > h5{ margin: 16px 0 7px; font-family:'Geist Mono',monospace; font-size: 10.5px; letter-spacing:.16em; color: var(--green); text-transform: uppercase; font-weight: 600; }
+.issue-body > h5:first-child{ margin-top: 0; }
+
+/* ============ DECISION TREE ============ */
+.tree{ background: var(--card); border: 1px solid var(--slate); padding: 24px 26px; margin: 24px 0; position: relative; }
+.tree::before{ content: "DECISION PATH"; position: absolute; top: -9px; left: 22px; background: var(--bg); padding: 0 11px; font-family:'Geist Mono',monospace; font-size: 10px; letter-spacing: .2em; color: var(--slate); font-weight: 600; }
+.tree pre{ background: transparent; color: var(--ink); border: none; border-left: none; padding: 6px 0 0; font-size: 13px; line-height: 1.7; }
+.tree pre::before{ display: none; }
+.tree .q{ color: var(--green); font-weight: 700; }   /* a question node */
+.tree .a{ color: var(--slate); font-weight: 700; }   /* an answer/branch label */
+
+/* ============ PRINCIPLE (green-bordered key idea) ============ */
+.idea{ margin: 24px 0; border: 2px solid var(--green); background: var(--card); padding: 22px 28px; position: relative; }
+.idea::before{ content: "PRINCIPLE"; position: absolute; top: -10px; left: 22px; background: var(--bg); padding: 0 11px; font-family:'Geist Mono',monospace; font-size: 10px; letter-spacing: .24em; color: var(--green); font-weight: 600; }
+.idea p{ margin: 6px 0; font-size: 16px; }
+
+/* ============ PULL QUOTE ============ */
+.pull{ font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 30px; line-height: 1.08; letter-spacing: -0.015em; color: var(--green); margin: 38px 0; padding: 0 0 0 26px; border-left: 4px solid var(--green); }
+
+/* ============ CHEATSHEET ============ */
+.cheat{ background: var(--card); border: 1px solid var(--ink); padding: 24px 28px; margin: 24px 0; }
+.cheat h5{ margin: 0 0 14px; font-family:'Geist Mono',monospace; font-size: 11px; letter-spacing: .2em; color: var(--green); text-transform: uppercase; font-weight: 600; }
+.cheat-grid{ display: grid; grid-template-columns: 1fr 1.5fr; gap: 6px 22px; font-size: 13px; }
+.cheat-grid .cmd{ font-family:'Geist Mono',monospace; color: var(--green-deep); font-weight: 500; }
+.cheat-grid .desc{ color: var(--ink-soft); font-size: 14.5px; }
+@media (max-width: 680px){ .cheat-grid{ grid-template-columns: 1fr; gap: 2px 18px; } .cheat-grid .desc{ margin-bottom: 10px; } }
+
+/* ============ TWO-COLUMN (e.g. good/bad, before/after) ============ */
+.twocol{ display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 22px 0; }
+@media (max-width: 760px){ .twocol{ grid-template-columns: 1fr; } }
+.twocol .col{ background: var(--card); border: 1px solid var(--rule-dark); padding: 18px 22px; }
+.twocol .col h5{ margin: 0 0 10px; font-family:'Geist Mono',monospace; font-size: 10.5px; letter-spacing: .18em; text-transform: uppercase; color: var(--slate); font-weight: 600; }
+.twocol .col.bad h5{ color: var(--rose); } .twocol .col.good h5{ color: var(--green); }
+.twocol .col p{ margin: 8px 0; font-size: 15px; } .twocol .col p:first-child{ margin-top: 0; }
+
+/* ============ PROFILE / ENTITY CARD (e.g. a person, a module) ============ */
+.iv{ background: var(--card); border: 1px solid var(--rule-dark); border-left: 3px solid var(--slate); padding: 20px 24px; margin: 14px 0; position: relative; }
+.iv.req{ border-left: 3px solid var(--rose); }
+.iv-head{ display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 3px; }
+.iv-name{ font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 23px; letter-spacing: -0.01em; color: var(--ink); }
+.iv-dur{ font-family: 'Geist Mono', monospace; font-size: 11px; color: var(--ink-faint); letter-spacing: .08em; }
+.iv-badge{ font-family: 'Geist Mono', monospace; font-size: 8.5px; letter-spacing: .16em; text-transform: uppercase; background: var(--rose); color: #fff; padding: 3px 9px; font-weight: 600; }
+.iv-role{ font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--green); font-weight: 600; margin-bottom: 9px; }
+.iv-focus{ color: var(--ink-soft); font-size: 15.5px; margin: 8px 0 12px; line-height: 1.48; }
+
+/* ============ CLICKABLE NAV CARD (e.g. an index/landing page) ============ */
+a.vol-card{ display: block; text-decoration: none; color: inherit; background: var(--card); border: 1px solid var(--rule-dark); border-left: 4px solid var(--green); padding: 24px 26px 20px; position: relative; transition: all .16s ease; }
+a.vol-card:hover{ border-left-width: 8px; border-color: var(--green); background: #fbfcf9; transform: translateY(-2px); box-shadow: 0 6px 22px rgba(20,40,26,.09); }
+.vol-card .vc-num{ position: absolute; top: 16px; right: 22px; font-family: 'Archivo', sans-serif; font-weight: 900; font-size: 46px; line-height: 1; color: var(--bg-3); letter-spacing: -0.02em; transition: color .16s; }
+a.vol-card:hover .vc-num{ color: var(--green-bri); }
+.vol-card .vc-kicker{ font-family: 'Geist Mono', monospace; font-size: 10px; letter-spacing: .22em; text-transform: uppercase; color: var(--green); font-weight: 600; margin-bottom: 8px; }
+.vol-card .vc-title{ font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 28px; line-height: 1.02; letter-spacing: -0.015em; color: var(--ink); margin: 0 0 10px; }
+.vol-card .vc-open{ margin-top: 14px; font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--green); font-weight: 600; }
+
+/* ============ SECTION SEPARATOR ============ */
+.rule-sep{ margin: 56px 0; position: relative; height: 0; border-top: 2px solid var(--ink); }
+.rule-sep::after{ content: "◇ ◇ ◇"; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); background: var(--bg); color: var(--green); padding: 0 16px; font-size: 11px; letter-spacing: .3em; }
+
+/* ============ FOOTER ============ */
+footer{ max-width: var(--maxw); margin: 0 auto; padding: 54px 40px 84px; border-top: 2px solid var(--ink); color: var(--ink-soft); font-size: 14px; }
+footer h4{ font-family:'Geist Mono',monospace; font-size: 11px; letter-spacing: .24em; color: var(--green); margin: 0 0 18px; font-weight: 600; }
+footer .resources{ columns: 2; column-gap: 38px; }
+@media (max-width: 680px){ footer .resources{ columns: 1; } }
+footer ul{ list-style: none; padding: 0; margin: 0; }
+footer li{ padding: 5px 0; font-size: 13.5px; break-inside: avoid; }
+footer li code{ color: var(--green-deep); background: transparent; border: none; padding: 0; font-weight: 500; }
+footer .footer-note{ margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--rule); color: var(--ink-faint); font-size: 14px; }
+</style>
+</head>
+<body>
+<header>
+  <p class="filed">pytorch field manual · volume iii · architectures</p>
+  <p class="vol">Volume III of VI · the building blocks of modern models</p>
+  <h1>Model<br><span class="acc">Architectures.</span></h1>
+  <p class="deck">
+    The training loop never changes; what you put in the forward pass does. This volume is the catalogue of building blocks — convolutions that see local structure, recurrences and attention that handle sequences, and the transformer that now underpins most of the field. Each is built in code, explained, and connected to the task heads and losses that turn a backbone into a working model.
+  </p>
+  <div class="readout">
+    <div class="cell"><div class="k">Volume</div><div class="v">III<span class="u"> / VI</span></div></div>
+    <div class="cell"><div class="k">Chapters</div><div class="v">16</div></div>
+    <div class="cell"><div class="k">Parts</div><div class="v">4</div></div>
+    <div class="cell"><div class="k">Focus</div><div class="v" style="font-size:13px;">cnn · rnn · attention</div></div>
+  </div>
+
+  <div class="toc">
+    <h3>Contents</h3>
+    <p class="toc-sub">Sixteen chapters across four parts</p>
+    <div class="toc-part">
+      <div class="toc-part-name">Part I · Convolutional networks</div>
+      <div class="toc-grid">
+        <a href="#c01"><span class="n">01</span><span>Convolution mechanics</span></a>
+        <a href="#c02"><span class="n">02</span><span>Building a CNN &amp; the receptive field</span></a>
+        <a href="#c03"><span class="n">03</span><span>Residual networks &amp; the classics</span></a>
+        <a href="#c04"><span class="n">04</span><span>Transfer learning &amp; fine-tuning</span></a>
+      </div>
+    </div>
+    <div class="toc-part">
+      <div class="toc-part-name">Part II · Sequence models</div>
+      <div class="toc-grid">
+        <a href="#c05"><span class="n">05</span><span>Embeddings: representing discrete things</span></a>
+        <a href="#c06"><span class="n">06</span><span>RNNs &amp; the vanishing-gradient problem</span></a>
+        <a href="#c07"><span class="n">07</span><span>LSTM &amp; GRU</span></a>
+        <a href="#c08"><span class="n">08</span><span>Batching sequences: padding &amp; masking</span></a>
+      </div>
+    </div>
+    <div class="toc-part">
+      <div class="toc-part-name">Part III · Attention &amp; transformers</div>
+      <div class="toc-grid">
+        <a href="#c09"><span class="n">09</span><span>Attention from scratch</span></a>
+        <a href="#c10"><span class="n">10</span><span>Self-attention &amp; multi-head</span></a>
+        <a href="#c11"><span class="n">11</span><span>The transformer block</span></a>
+        <a href="#c12"><span class="n">12</span><span>Build a small transformer</span></a>
+      </div>
+    </div>
+    <div class="toc-part">
+      <div class="toc-part-name">Part IV · Heads, losses &amp; representations</div>
+      <div class="toc-grid">
+        <a href="#c13"><span class="n">13</span><span>Task heads</span></a>
+        <a href="#c14"><span class="n">14</span><span>The loss-function catalog</span></a>
+        <a href="#c15"><span class="n">15</span><span>Representation learning &amp; embeddings</span></a>
+        <a href="#c16"><span class="n">16</span><span>Autoencoders: a first generative taste</span></a>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="part" id="p1">
+    <div class="part-label">Part I — Convolutional networks</div>
+    <h2 class="part-title">Networks that <span class="acc">see structure.</span></h2>
+    <p class="part-intro">Images have structure a plain MLP throws away: nearby pixels relate, and a cat is a cat wherever it sits in the frame. Convolutional networks bake in both facts — locality and translation-invariance — with a small sliding filter that shares its weights across the whole image. The result is dramatically fewer parameters and dramatically better vision. This part builds the CNN from the convolution up.</p>
+
+    <section class="chapter" id="c01">
+      <h2><span class="ch-num">01</span>Convolution mechanics</h2>
+      <p>Feeding a 224×224 color image to an <code>nn.Linear</code> means 150,000 inputs and, for a modest hidden layer, tens of millions of weights — most spent relearning the same edge detector at every position. A <strong>convolution</strong> refuses that waste. It slides a small window (the <strong>kernel</strong>, say 3×3) across the image and, at each position, computes a weighted sum of the pixels under it. The <em>same</em> kernel weights are reused at every location, so a feature learned in one corner is detected everywhere — that's <strong>weight sharing</strong> and <strong>translation invariance</strong> in one stroke.</p>
+      <div class="diagram">  A 3x3 KERNEL SLIDING OVER AN INPUT -> ONE OUTPUT PIXEL EACH STOP:
+
+     input (one channel)          kernel        output feature map
+   ┌──┬──┬──┬──┬──┐              ┌──┬──┬──┐      ┌──┬──┬──┐
+   │  │██│██│██│  │              │w1│w2│w3│      │  │▓ │  │
+   ├──┼──┼──┼──┼──┤   dot with   ├──┼──┼──┤  =   ├──┼──┼──┤
+   │  │██│██│██│  │  ─────────►  │w4│w5│w6│      │  │  │  │
+   ├──┼──┼──┼──┼──┤              ├──┼──┼──┤      └──┴──┴──┘
+   │  │██│██│██│  │              │w7│w8│w9│    each output = Σ (pixel × weight)
+   └──┴──┴──┴──┴──┘              └──┴──┴──┘    over the 3x3 window, + bias</div>
+      <p>Real images have <strong>channels</strong> — a color image is 3 (red, green, blue) — and a conv layer produces many <strong>output channels</strong>, one per learned filter. So a conv layer's weight is a 4-D tensor of shape <code>(out_channels, in_channels, kernel_h, kernel_w)</code>, and it maps a <code>(batch, in_ch, H, W)</code> tensor to <code>(batch, out_ch, H', W')</code>. Three knobs control the output size:</p>
+      <table class="tbl">
+        <thead><tr><th>Knob</th><th>Effect</th></tr></thead>
+        <tbody>
+          <tr><td>kernel_size</td><td>The window's size. 3×3 is the modern default; stacks of small kernels beat one big one.</td></tr>
+          <tr><td>stride</td><td>How far the window jumps each step. Stride 2 halves the spatial size — a way to downsample.</td></tr>
+          <tr><td>padding</td><td>Zeros added around the border so edge pixels get full windows. <code>padding=1</code> with a 3×3 kernel keeps H, W unchanged.</td></tr>
+        </tbody>
+      </table>
+<pre data-lang="PYTHON"><span class="kw">import</span> torch
+<span class="kw">import</span> torch.nn <span class="kw">as</span> nn
+
+conv = nn.<span class="ty">Conv2d</span>(in_channels=<span class="num">3</span>, out_channels=<span class="num">16</span>,
+                 kernel_size=<span class="num">3</span>, stride=<span class="num">1</span>, padding=<span class="num">1</span>)   <span class="com"># &#x27;same&#x27; spatial size</span>
+
+x = torch.<span class="fn">randn</span>(<span class="num">8</span>, <span class="num">3</span>, <span class="num">32</span>, <span class="num">32</span>)      <span class="com"># batch 8, RGB, 32x32</span>
+y = <span class="fn">conv</span>(x)                        <span class="com"># -&gt; (8, 16, 32, 32): 16 feature maps</span>
+<span class="fn">print</span>(y.shape)
+<span class="fn">print</span>(conv.weight.shape)           <span class="com"># (16, 3, 3, 3) = (out, in, kh, kw)</span></pre>
+      <p>The output-size formula is worth memorizing because shape bugs here are constant: <code>out = (in + 2·padding − kernel) / stride + 1</code>. With a 3×3 kernel, <code>padding=1</code>, <code>stride=1</code>, the size is preserved; bump stride to 2 and it roughly halves.</p>
+    </section>
+
+    <section class="chapter" id="c02">
+      <h2><span class="ch-num">02</span>Building a CNN &amp; the receptive field</h2>
+      <p>A convolutional network interleaves three moves: convolutions that extract features, nonlinear activations, and <strong>downsampling</strong> that shrinks the spatial size while growing the channel count. Downsampling is done either by strided convolutions or by <strong>pooling</strong> — <code>nn.MaxPool2d</code> keeps the strongest response in each little region, discarding precise position for robustness. As the map shrinks and deepens, each neuron's <strong>receptive field</strong> — the patch of original image it can "see" — grows, so early layers detect edges and textures while later layers assemble them into shapes and objects.</p>
+<pre data-lang="PYTHON"><span class="kw">import</span> torch.nn <span class="kw">as</span> nn
+
+<span class="kw">class</span> <span class="ty">SmallCNN</span>(nn.<span class="ty">Module</span>):
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, num_classes=<span class="num">10</span>):
+        <span class="fn">super</span>().<span class="fn">__init__</span>()
+        self.features = nn.<span class="ty">Sequential</span>(
+            nn.<span class="ty">Conv2d</span>(<span class="num">3</span>, <span class="num">32</span>, <span class="num">3</span>, padding=<span class="num">1</span>), nn.<span class="ty">BatchNorm2d</span>(<span class="num">32</span>), nn.<span class="ty">ReLU</span>(),
+            nn.<span class="ty">MaxPool2d</span>(<span class="num">2</span>),                        <span class="com"># 32x32 -&gt; 16x16</span>
+            nn.<span class="ty">Conv2d</span>(<span class="num">32</span>, <span class="num">64</span>, <span class="num">3</span>, padding=<span class="num">1</span>), nn.<span class="ty">BatchNorm2d</span>(<span class="num">64</span>), nn.<span class="ty">ReLU</span>(),
+            nn.<span class="ty">MaxPool2d</span>(<span class="num">2</span>),                        <span class="com"># 16x16 -&gt; 8x8</span>
+            nn.<span class="ty">Conv2d</span>(<span class="num">64</span>, <span class="num">128</span>, <span class="num">3</span>, padding=<span class="num">1</span>), nn.<span class="ty">BatchNorm2d</span>(<span class="num">128</span>), nn.<span class="ty">ReLU</span>(),
+            nn.<span class="ty">AdaptiveAvgPool2d</span>(<span class="num">1</span>),                <span class="com"># 8x8 -&gt; 1x1, any input size</span>
+        )
+        self.head = nn.<span class="ty">Linear</span>(<span class="num">128</span>, num_classes)     <span class="com"># classify from 128 features</span>
+
+    <span class="kw">def</span> <span class="fn">forward</span>(self, x):
+        x = self.<span class="fn">features</span>(x)            <span class="com"># (B, 128, 1, 1)</span>
+        x = torch.<span class="fn">flatten</span>(x, <span class="num">1</span>)         <span class="com"># (B, 128)</span>
+        <span class="kw">return</span> self.<span class="fn">head</span>(x)             <span class="com"># (B, num_classes) logits</span>
+
+model = <span class="ty">SmallCNN</span>()
+<span class="fn">print</span>(<span class="fn">model</span>(torch.<span class="fn">randn</span>(<span class="num">4</span>, <span class="num">3</span>, <span class="num">32</span>, <span class="num">32</span>)).shape)   <span class="com"># (4, 10)</span></pre>
+      <p>Two patterns here are worth adopting as habits. First, <strong>channels grow as space shrinks</strong> (32→64→128 while 32×32→16×16→8×8): you trade spatial resolution for semantic richness. Second, <code>nn.AdaptiveAvgPool2d(1)</code> collapses whatever spatial size remains to 1×1, which makes the network accept variable input sizes and feeds a fixed-length vector to the linear head — far more robust than hard-coding a flatten size, a frequent source of shape errors.</p>
+      <div class="callout tip">
+        <h5>Conv → Norm → Activation, in that order</h5>
+        <p>The near-universal block ordering is convolution, then <code>BatchNorm2d</code>, then the activation. The conv layer usually sets <code>bias=False</code> when a batch-norm follows it, because the norm's learned shift makes the conv bias redundant. Memorize the triple; you'll stack it hundreds of times.</p>
+      </div>
+    </section>
+
+    <section class="chapter" id="c03">
+      <h2><span class="ch-num">03</span>Residual networks &amp; the classics</h2>
+      <p>Once people tried stacking many layers, they hit a wall: past a certain depth, <em>deeper networks trained worse</em> — not from overfitting, but because the gradient signal degraded on its way back through dozens of layers. <strong>Residual connections</strong> (ResNet, 2015) solved it with an almost trivial change: instead of a block computing <code>y = F(x)</code>, it computes <code>y = x + F(x)</code>. The block only has to learn the <em>difference</em> from its input, and — crucially — the <code>+ x</code> gives gradients a direct highway backward, skipping the transformation entirely if need be.</p>
+<pre data-lang="PYTHON"><span class="kw">import</span> torch.nn <span class="kw">as</span> nn
+<span class="kw">import</span> torch.nn.functional <span class="kw">as</span> <span class="ty">F</span>
+
+<span class="kw">class</span> <span class="ty">ResidualBlock</span>(nn.<span class="ty">Module</span>):
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, channels):
+        <span class="fn">super</span>().<span class="fn">__init__</span>()
+        self.conv1 = nn.<span class="ty">Conv2d</span>(channels, channels, <span class="num">3</span>, padding=<span class="num">1</span>, bias=<span class="kw">False</span>)
+        self.bn1   = nn.<span class="ty">BatchNorm2d</span>(channels)
+        self.conv2 = nn.<span class="ty">Conv2d</span>(channels, channels, <span class="num">3</span>, padding=<span class="num">1</span>, bias=<span class="kw">False</span>)
+        self.bn2   = nn.<span class="ty">BatchNorm2d</span>(channels)
+
+    <span class="kw">def</span> <span class="fn">forward</span>(self, x):
+        identity = x                          <span class="com"># save the input</span>
+        out = <span class="ty">F</span>.<span class="fn">relu</span>(self.<span class="fn">bn1</span>(self.<span class="fn">conv1</span>(x)))
+        out = self.<span class="fn">bn2</span>(self.<span class="fn">conv2</span>(out))
+        out = out + identity                  <span class="com"># the residual &quot;skip&quot; connection</span>
+        <span class="kw">return</span> <span class="ty">F</span>.<span class="fn">relu</span>(out)                    <span class="com"># activate AFTER adding</span></pre>
+      <p>This one idea unlocked networks hundreds of layers deep and is now everywhere — including inside every transformer block in Part III. It's arguably the most important architectural primitive of the last decade.</p>
+      <p>The lineage in one breath: <strong>LeNet</strong> (1998) proved convs work on digits; <strong>AlexNet</strong> (2012) scaled them to ImageNet on GPUs and started the deep-learning boom; <strong>VGG</strong> (2014) showed depth with uniform 3×3 kernels; <strong>ResNet</strong> (2015) made real depth trainable. Modern vision backbones (Volume VI) are refinements on this arc — you rarely implement them by hand, but you'll recognize their parts.</p>
+      <p class="pull">Add the input back to the output, and suddenly a hundred layers train as easily as ten.</p>
+    </section>
+
+    <section class="chapter" id="c04">
+      <h2><span class="ch-num">04</span>Transfer learning &amp; fine-tuning</h2>
+      <p>You almost never train a vision model from scratch. A network pretrained on a huge dataset (ImageNet) has already learned general visual features — edges, textures, parts — in its early layers, and those transfer to almost any image task. <strong>Transfer learning</strong> reuses that backbone and adapts only what's task-specific, which turns a project that would need a million labeled images into one that works with a few thousand.</p>
+      <p>Two modes, chosen by how much data you have:</p>
+      <div class="twocol">
+        <div class="col good">
+          <h5>Feature extraction (little data)</h5>
+          <p>Freeze the whole pretrained backbone, replace the final classification layer, and train only that new head. Fast, cheap, and hard to overfit because almost nothing is learnable.</p>
+        </div>
+        <div class="col good">
+          <h5>Fine-tuning (more data)</h5>
+          <p>Replace the head, then unfreeze some or all of the backbone and train it too — at a <em>low</em> learning rate so you nudge the good pretrained weights rather than wrecking them.</p>
+        </div>
+      </div>
+<pre data-lang="PYTHON"><span class="kw">import</span> torch
+<span class="kw">import</span> torch.nn <span class="kw">as</span> nn
+<span class="kw">from</span> torchvision <span class="kw">import</span> models
+
+<span class="com"># Load a model pretrained on ImageNet.</span>
+model = models.<span class="fn">resnet50</span>(weights=models.<span class="ty">ResNet50_Weights</span>.<span class="ty">DEFAULT</span>)
+
+<span class="com"># --- feature extraction: freeze everything first ---</span>
+<span class="kw">for</span> p <span class="kw">in</span> model.<span class="fn">parameters</span>():
+    p.requires_grad = <span class="kw">False</span>
+
+<span class="com"># Replace the 1000-class head with one for OUR task. New layers default to</span>
+<span class="com"># requires_grad=True, so only these train.</span>
+num_features = model.fc.in_features            <span class="com"># 2048 for resnet50</span>
+model.fc = nn.<span class="ty">Linear</span>(num_features, <span class="num">10</span>)         <span class="com"># 10 classes</span>
+
+<span class="com"># Give the optimizer ONLY the parameters that require grad.</span>
+opt = torch.optim.<span class="ty">AdamW</span>(
+    (p <span class="kw">for</span> p <span class="kw">in</span> model.<span class="fn">parameters</span>() <span class="kw">if</span> p.requires_grad), lr=<span class="num">1e-3</span>)
+
+<span class="com"># --- to fine-tune later: unfreeze and use a much smaller LR ---</span>
+<span class="com"># for p in model.parameters(): p.requires_grad = True</span>
+<span class="com"># opt = torch.optim.AdamW(model.parameters(), lr=1e-5)</span></pre>
+      <div class="callout warn">
+        <h5>Match the preprocessing to the pretrained model</h5>
+        <p>A pretrained network expects inputs normalized exactly as it was trained — the ImageNet mean/std from Volume II, and the right input size. Feed it differently-scaled images and its learned features misfire. The <code>weights</code> object carries the correct transforms: use <code>weights.transforms()</code> to get them rather than guessing.</p>
+      </div>
+      <div class="idea">
+        <p><strong>Start from someone else's millions of images.</strong> Transfer learning is the highest-leverage move in applied deep learning: a frozen pretrained backbone plus a fresh head, trained on a few thousand examples, routinely beats a bespoke model trained from scratch on the same data. Reach for a pretrained model first; justify training from scratch only when your domain is genuinely unlike anything pretrained.</p>
+      </div>
+    </section>
+  </div>
+
+  <div class="rule-sep"></div>
+  <div class="part" id="p2">
+    <div class="part-label">Part II — Sequence models</div>
+    <h2 class="part-title">Data that comes <span class="acc">in order.</span></h2>
+    <p class="part-intro">Text, audio, time series, and DNA share a trait images don't: order matters, and length varies. Handling them needs two new ideas — a way to turn discrete tokens into vectors (embeddings), and a way to carry information along the sequence (recurrence, then attention). This part walks that path from embeddings through LSTMs to the doorstep of the transformer.</p>
+
+    <section class="chapter" id="c05">
+      <h2><span class="ch-num">05</span>Embeddings: representing discrete things</h2>
+      <p>Neural networks eat vectors of numbers, but a word, a user ID, or a product category is a discrete symbol with no natural numeric value. The naive fix — a <strong>one-hot</strong> vector, all zeros but a single 1 — is hopeless at scale: a 50,000-word vocabulary means 50,000-dimensional, almost-entirely-zero inputs, and every word sits equidistant from every other, encoding no notion of similarity.</p>
+      <p>An <strong>embedding</strong> replaces that with a learned, dense vector per symbol. <code>nn.Embedding</code> is literally a lookup table of shape <code>(vocab_size, embed_dim)</code>: give it a token's integer ID and it returns that row, and those rows are trained by gradient descent like any other parameter. The network discovers, on its own, to place similar tokens near each other.</p>
+<pre data-lang="PYTHON"><span class="kw">import</span> torch
+<span class="kw">import</span> torch.nn <span class="kw">as</span> nn
+
+vocab_size, embed_dim = <span class="num">10_000</span>, <span class="num">128</span>
+embed = nn.<span class="ty">Embedding</span>(vocab_size, embed_dim)   <span class="com"># a (10000, 128) learnable table</span>
+
+<span class="com"># A batch of 3 sentences, each 5 tokens, as integer IDs:</span>
+tokens = torch.<span class="fn">randint</span>(<span class="num">0</span>, vocab_size, (<span class="num">3</span>, <span class="num">5</span>))  <span class="com"># (batch=3, seq_len=5)</span>
+vectors = <span class="fn">embed</span>(tokens)                         <span class="com"># -&gt; (3, 5, 128)</span>
+<span class="fn">print</span>(vectors.shape)   <span class="com"># each token ID replaced by its 128-dim learned vector</span></pre>
+      <p>Note the shape transformation: <code>(B, T)</code> integers become <code>(B, T, embed_dim)</code> floats — a batch of sequences of vectors, which is exactly what recurrent layers and transformers consume. Embeddings aren't only for text: any high-cardinality categorical feature (users, items, locations) is best fed to a network through an embedding table. The learned vectors are themselves useful — Chapter 15 returns to them as representations.</p>
+    </section>
+
+    <section class="chapter" id="c06">
+      <h2><span class="ch-num">06</span>RNNs &amp; the vanishing-gradient problem</h2>
+      <p>To process a sequence in order, a <strong>recurrent neural network</strong> maintains a <strong>hidden state</strong> — a running summary — and updates it one element at a time: <code>h_t = f(h_{t−1}, x_t)</code>. The same weights <code>f</code> are applied at every time step (weight sharing across time), and the final hidden state is a compressed memory of everything seen. Conceptually you "unroll" the loop across the sequence and backpropagate through it (called backpropagation through time).</p>
+      <div class="diagram">  AN RNN UNROLLED OVER A SEQUENCE:
+
+     x1        x2        x3        x4        (inputs, one per step)
+      │         │         │         │
+      ▼         ▼         ▼         ▼
+   ┌────┐    ┌────┐    ┌────┐    ┌────┐
+   │ f  │──► │ f  │──► │ f  │──► │ f  │──►  h4  (final "memory")
+   └────┘ h1 └────┘ h2 └────┘ h3 └────┘
+   same weights reused at every step; state h carries the past forward</div>
+      <p>The trouble is long-range memory. Gradients flowing back through many steps get multiplied by the same factors over and over; if those factors are slightly less than one they shrink toward zero (<strong>vanishing gradients</strong>), and the network effectively forgets anything more than a handful of steps back. Slightly greater than one and they blow up (<strong>exploding gradients</strong>, which gradient clipping from Volume II tames). Vanilla RNNs therefore struggle to connect information across long spans — the very thing sequences often demand.</p>
+      <div class="callout warn">
+        <h5>Plain RNNs are mostly of historical interest</h5>
+        <p>You'll rarely deploy a vanilla <code>nn.RNN</code> today — it's the conceptual stepping stone. Its gated descendants (next chapter) fixed the memory problem, and attention (Part III) largely replaced recurrence altogether for the biggest tasks. Understand the RNN to understand why the others exist.</p>
+      </div>
+    </section>
+
+    <section class="chapter" id="c07">
+      <h2><span class="ch-num">07</span>LSTM &amp; GRU</h2>
+      <p>The fix for vanishing gradients is <strong>gating</strong>: instead of overwriting the memory every step, learn to <em>control</em> what gets remembered, forgotten, and output. The <strong>LSTM</strong> (Long Short-Term Memory) adds a separate <em>cell state</em> — a memory highway that information can travel along nearly unchanged — governed by three gates: a forget gate (what to discard), an input gate (what to add), and an output gate (what to expose). Because the cell state is edited additively rather than multiplied through a squashing function, gradients survive across long spans.</p>
+      <p>The <strong>GRU</strong> (Gated Recurrent Unit) is a streamlined cousin with two gates and no separate cell state — fewer parameters, often just as good. In PyTorch both are one layer that processes an entire sequence at once, in optimized C++/CUDA:</p>
+<pre data-lang="PYTHON"><span class="kw">import</span> torch
+<span class="kw">import</span> torch.nn <span class="kw">as</span> nn
+
+lstm = nn.<span class="ty">LSTM</span>(input_size=<span class="num">128</span>, hidden_size=<span class="num">256</span>,
+               num_layers=<span class="num">2</span>, batch_first=<span class="kw">True</span>, dropout=<span class="num">0.2</span>)
+
+x = torch.<span class="fn">randn</span>(<span class="num">32</span>, <span class="num">50</span>, <span class="num">128</span>)     <span class="com"># (batch, seq_len, features) with batch_first</span>
+output, (h_n, c_n) = <span class="fn">lstm</span>(x)
+<span class="fn">print</span>(output.shape)   <span class="com"># (32, 50, 256): hidden state at EVERY time step</span>
+<span class="fn">print</span>(h_n.shape)      <span class="com"># (2, 32, 256): final hidden state per layer</span>
+<span class="fn">print</span>(c_n.shape)      <span class="com"># (2, 32, 256): final cell state per layer</span></pre>
+      <p>Two return values matter. <code>output</code> is the hidden state at every time step — use it when you need a prediction per element (tagging each word, forecasting each future point). <code>h_n</code> is just the final states — use it when you need one summary of the whole sequence (classifying a sentence's sentiment). Set <code>batch_first=True</code> so tensors are the intuitive <code>(batch, time, features)</code>; the default puts time first and trips everyone up.</p>
+      <table class="tbl compare">
+        <thead><tr><th>Pick</th><th>LSTM</th><th>GRU</th></tr></thead>
+        <tbody>
+          <tr><td>Gates / memory</td><td>3 gates + a dedicated cell state.</td><td>2 gates, no separate cell state.</td></tr>
+          <tr><td>Cost</td><td>More parameters, a touch slower.</td><td>Leaner and faster.</td></tr>
+          <tr><td>Rule of thumb</td><td>Default when in doubt; strong on long dependencies.</td><td>Try when you want speed/fewer params; often matches LSTM.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="chapter" id="c08">
+      <h2><span class="ch-num">08</span>Batching sequences: padding &amp; masking</h2>
+      <p>Images in a batch share a shape; sentences don't. To stack sequences of different lengths into one tensor, you <strong>pad</strong> the short ones with a filler token up to the batch's longest length — and then you must <strong>mask</strong> so the model and the loss ignore that padding, or it will happily learn from meaningless filler.</p>
+<pre data-lang="PYTHON"><span class="kw">import</span> torch
+<span class="kw">from</span> torch.nn.utils.rnn <span class="kw">import</span> pad_sequence
+
+<span class="com"># Three sequences of different lengths (as embedded vectors or IDs):</span>
+seqs = [torch.<span class="fn">randn</span>(<span class="num">4</span>, <span class="num">8</span>), torch.<span class="fn">randn</span>(<span class="num">7</span>, <span class="num">8</span>), torch.<span class="fn">randn</span>(<span class="num">3</span>, <span class="num">8</span>)]  <span class="com"># len 4,7,3</span>
+batch = <span class="fn">pad_sequence</span>(seqs, batch_first=<span class="kw">True</span>)   <span class="com"># -&gt; (3, 7, 8), short ones 0-padded</span>
+
+<span class="com"># A boolean mask marking REAL positions (True) vs padding (False):</span>
+lengths = torch.<span class="fn">tensor</span>([<span class="num">4</span>, <span class="num">7</span>, <span class="num">3</span>])
+mask = torch.<span class="fn">arange</span>(<span class="num">7</span>)[<span class="kw">None</span>, :] &lt; lengths[:, <span class="kw">None</span>]   <span class="com"># (3, 7)</span>
+<span class="fn">print</span>(batch.shape, mask.shape)</pre>
+      <p>That mask is the workhorse. For a loss, you compute it only over real positions (or pass <code>ignore_index</code> to <code>CrossEntropyLoss</code> so a designated pad label contributes nothing). For RNNs specifically, <code>pack_padded_sequence</code> lets the layer skip padded steps entirely for both speed and correctness. For transformers (next part), the same mask becomes the <em>attention mask</em> that stops a token from attending to padding.</p>
+      <div class="callout danger">
+        <h5>Unmasked padding silently poisons training</h5>
+        <p>Forget the mask and the model treats pad tokens as real data: the loss rewards predicting padding, attention spreads onto it, and metrics quietly degrade with no error thrown. Whenever sequences vary in length, the mask is not optional — it's part of the correctness of the model.</p>
+      </div>
+      <p>Recurrence processes a sequence strictly left to right, which is inherently serial and slow, and — even with gates — strains to link very distant elements. The next part introduces the mechanism that fixed both at once, and reshaped the field around it.</p>
+    </section>
+  </div>
+
+  <div class="rule-sep"></div>
+  <div class="part" id="p3">
+    <div class="part-label">Part III — Attention &amp; transformers</div>
+    <h2 class="part-title">The idea that <span class="acc">ate the field.</span></h2>
+    <p class="part-intro">Attention lets every element of a sequence look directly at every other element and pull in what's relevant — no step-by-step recurrence, no distance penalty, and fully parallel. The transformer, built almost entirely from attention, now powers language models, vision, audio, and more. This part builds it from the dot product up; Volume V scales it into a GPT.</p>
+
+    <section class="chapter" id="c09">
+      <h2><span class="ch-num">09</span>Attention from scratch</h2>
+      <p>The core question attention answers: for a given element, which other elements matter, and how much? It formalizes this with three learned projections of each element — a <strong>query</strong> (what am I looking for?), a <strong>key</strong> (what do I offer?), and a <strong>value</strong> (what will I contribute if chosen?). An element's query is compared against every key to score relevance; those scores become weights; and the output is the weighted sum of the values. Relevant elements dominate the sum; irrelevant ones fade.</p>
+      <div class="diagram">  SCALED DOT-PRODUCT ATTENTION FOR ONE QUERY:
+
+     query q ·  k1 k2 k3 k4   →  scores  →  softmax  →  weights
+                                                          0.1 0.6 0.2 0.1
+                                                           │   │   │   │
+     output = 0.1·v1 + 0.6·v2 + 0.2·v3 + 0.1·v4  ◄─────────┴───┴───┴───┘
+     (a blend of the values, weighted by how relevant each key was to q)</div>
+      <p>The whole operation for a sequence is three matrix multiplies and a softmax. The one non-obvious detail is the <code>√d</code> divisor: dot products grow with the vector dimension, and without rescaling they'd push the softmax into a near-one-hot regime where gradients vanish. Dividing by the square root of the key dimension keeps the scores in a sane range.</p>
+<pre data-lang="PYTHON"><span class="kw">import</span> torch
+<span class="kw">import</span> torch.nn.functional <span class="kw">as</span> <span class="ty">F</span>
+
+<span class="kw">def</span> <span class="fn">attention</span>(<span class="ty">Q</span>, <span class="ty">K</span>, <span class="ty">V</span>, mask=<span class="kw">None</span>):
+    <span class="com"># Q,K,V: (batch, seq_len, d).  scores: (batch, seq_len, seq_len)</span>
+    d = <span class="ty">Q</span>.<span class="fn">size</span>(-<span class="num">1</span>)
+    scores = (<span class="ty">Q</span> @ <span class="ty">K</span>.<span class="fn">transpose</span>(-<span class="num">2</span>, -<span class="num">1</span>)) / d ** <span class="num">0.5</span>    <span class="com"># relevance of every pair</span>
+    <span class="kw">if</span> mask <span class="kw">is</span> <span class="kw">not</span> <span class="kw">None</span>:
+        scores = scores.<span class="fn">masked_fill</span>(mask == <span class="num">0</span>, <span class="fn">float</span>(<span class="str">&quot;-inf&quot;</span>))  <span class="com"># block positions</span>
+    weights = <span class="ty">F</span>.<span class="fn">softmax</span>(scores, dim=-<span class="num">1</span>)              <span class="com"># each row sums to 1</span>
+    <span class="kw">return</span> weights @ <span class="ty">V</span>                               <span class="com"># weighted blend of values</span>
+
+x = torch.<span class="fn">randn</span>(<span class="num">2</span>, <span class="num">5</span>, <span class="num">64</span>)              <span class="com"># batch 2, 5 tokens, d=64</span>
+out = <span class="fn">attention</span>(x, x, x)               <span class="com"># self-attention: Q=K=V=x</span>
+<span class="fn">print</span>(out.shape)                       <span class="com"># (2, 5, 64)</span></pre>
+      <p>Because attention compares every position with every other in one matrix multiply, it connects distant elements at <em>constant</em> path length — the long-range problem that crippled RNNs simply doesn't arise — and it's massively parallel, which is why transformers train so efficiently on modern hardware.</p>
+    </section>
+
+    <section class="chapter" id="c10">
+      <h2><span class="ch-num">10</span>Self-attention &amp; multi-head</h2>
+      <p>When the queries, keys, and values all come from the <em>same</em> sequence, it's <strong>self-attention</strong>: every token gathers context from every other token in its own sequence. That's the engine of the transformer. But a single attention computes just one kind of relationship. <strong>Multi-head attention</strong> runs several attentions in parallel — each with its own learned Q/K/V projections into a lower-dimensional subspace — so different heads can specialize (one tracks syntax, another long-range reference, another local adjacency). Their outputs are concatenated and projected back.</p>
+<pre data-lang="PYTHON"><span class="kw">import</span> torch
+<span class="kw">import</span> torch.nn <span class="kw">as</span> nn
+<span class="kw">import</span> torch.nn.functional <span class="kw">as</span> <span class="ty">F</span>
+
+<span class="kw">class</span> <span class="ty">MultiHeadSelfAttention</span>(nn.<span class="ty">Module</span>):
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, dim, n_heads):
+        <span class="fn">super</span>().<span class="fn">__init__</span>()
+        <span class="kw">assert</span> dim % n_heads == <span class="num">0</span>
+        self.n_heads, self.head_dim = n_heads, dim // n_heads
+        self.qkv = nn.<span class="ty">Linear</span>(dim, dim * <span class="num">3</span>)   <span class="com"># project to Q, K, V at once</span>
+        self.proj = nn.<span class="ty">Linear</span>(dim, dim)      <span class="com"># final output projection</span>
+
+    <span class="kw">def</span> <span class="fn">forward</span>(self, x, mask=<span class="kw">None</span>):
+        <span class="ty">B</span>, <span class="ty">T</span>, <span class="ty">D</span> = x.shape
+        <span class="com"># make Q,K,V, then split the channels into heads:</span>
+        qkv = self.<span class="fn">qkv</span>(x).<span class="fn">reshape</span>(<span class="ty">B</span>, <span class="ty">T</span>, <span class="num">3</span>, self.n_heads, self.head_dim)
+        q, k, v = qkv.<span class="fn">permute</span>(<span class="num">2</span>, <span class="num">0</span>, <span class="num">3</span>, <span class="num">1</span>, <span class="num">4</span>)   <span class="com"># each: (B, n_heads, T, head_dim)</span>
+        <span class="com"># PyTorch&#x27;s fused, memory-efficient attention (uses FlashAttention):</span>
+        out = <span class="ty">F</span>.<span class="fn">scaled_dot_product_attention</span>(q, k, v, attn_mask=mask)
+        out = out.<span class="fn">transpose</span>(<span class="num">1</span>, <span class="num">2</span>).<span class="fn">reshape</span>(<span class="ty">B</span>, <span class="ty">T</span>, <span class="ty">D</span>)   <span class="com"># merge heads back</span>
+        <span class="kw">return</span> self.<span class="fn">proj</span>(out)</pre>
+      <p>In production you rarely hand-roll the softmax from Chapter 09. <code>F.scaled_dot_product_attention</code> is a single fused kernel that computes the whole thing far faster and with much less memory (it dispatches to FlashAttention on capable GPUs) — Volume IV and V lean on it heavily. Learn the manual version for understanding; call the fused one for speed.</p>
+      <div class="callout tip">
+        <h5>Causal masking makes it a generator</h5>
+        <p>For language modeling, a token must not peek at future tokens. A <em>causal mask</em> sets the attention scores for all future positions to <code>−∞</code> before the softmax, so each position attends only to itself and earlier ones. That single mask is the difference between a bidirectional encoder (BERT-style) and an autoregressive decoder (GPT-style) — the subject of Volume V.</p>
+      </div>
+    </section>
+
+    <section class="chapter" id="c11">
+      <h2><span class="ch-num">11</span>The transformer block</h2>
+      <p>A transformer is a stack of identical <strong>blocks</strong>, each two sub-layers wrapped in the residual-plus-normalization pattern from Volume II. The first sub-layer is multi-head self-attention (tokens exchange information); the second is a small position-wise feed-forward network — two linear layers with an activation — that processes each token independently. Both sub-layers get a residual skip and a LayerNorm. Modern transformers put the norm <em>before</em> each sub-layer ("pre-norm"), which trains more stably than the original "post-norm" design.</p>
+<pre data-lang="PYTHON"><span class="kw">import</span> torch.nn <span class="kw">as</span> nn
+
+<span class="kw">class</span> <span class="ty">TransformerBlock</span>(nn.<span class="ty">Module</span>):
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, dim, n_heads, mlp_ratio=<span class="num">4</span>, p=<span class="num">0.1</span>):
+        <span class="fn">super</span>().<span class="fn">__init__</span>()
+        self.norm1 = nn.<span class="ty">LayerNorm</span>(dim)
+        self.attn  = <span class="ty">MultiHeadSelfAttention</span>(dim, n_heads)
+        self.norm2 = nn.<span class="ty">LayerNorm</span>(dim)
+        self.mlp = nn.<span class="ty">Sequential</span>(               <span class="com"># position-wise feed-forward</span>
+            nn.<span class="ty">Linear</span>(dim, dim * mlp_ratio), nn.<span class="ty">GELU</span>(),
+            nn.<span class="ty">Linear</span>(dim * mlp_ratio, dim), nn.<span class="ty">Dropout</span>(p),
+        )
+
+    <span class="kw">def</span> <span class="fn">forward</span>(self, x, mask=<span class="kw">None</span>):
+        x = x + self.<span class="fn">attn</span>(self.<span class="fn">norm1</span>(x), mask)  <span class="com"># pre-norm + residual</span>
+        x = x + self.<span class="fn">mlp</span>(self.<span class="fn">norm2</span>(x))         <span class="com"># pre-norm + residual</span>
+        <span class="kw">return</span> x</pre>
+      <p>One thing is missing, and it's essential: attention is <strong>permutation-invariant</strong> — shuffle the tokens and, since every token attends to every other symmetrically, the outputs just shuffle too. The block has no inherent sense of order. So we inject position explicitly with a <strong>positional encoding</strong> added to the token embeddings before the first block — either fixed sinusoids or learned position vectors (Volume V covers the modern rotary variant, RoPE). Without it, "dog bites man" and "man bites dog" look identical.</p>
+    </section>
+
+    <section class="chapter" id="c12">
+      <h2><span class="ch-num">12</span>Build a small transformer</h2>
+      <p>Assembled, a transformer classifier is: embed tokens, add positions, run a stack of blocks, pool to one vector, classify. Here it is end to end — a complete, trainable sequence classifier that is, in miniature, the same machine as a large language model.</p>
+<pre data-lang="PYTHON"><span class="kw">import</span> torch
+<span class="kw">import</span> torch.nn <span class="kw">as</span> nn
+
+<span class="kw">class</span> <span class="ty">TinyTransformer</span>(nn.<span class="ty">Module</span>):
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, vocab, dim=<span class="num">128</span>, n_heads=<span class="num">4</span>, depth=<span class="num">4</span>,
+                 num_classes=<span class="num">2</span>, max_len=<span class="num">512</span>):
+        <span class="fn">super</span>().<span class="fn">__init__</span>()
+        self.tok = nn.<span class="ty">Embedding</span>(vocab, dim)
+        self.pos = nn.<span class="ty">Parameter</span>(torch.<span class="fn">randn</span>(<span class="num">1</span>, max_len, dim) * <span class="num">0.02</span>)  <span class="com"># learned</span>
+        self.blocks = nn.<span class="ty">ModuleList</span>(
+            [<span class="ty">TransformerBlock</span>(dim, n_heads) <span class="kw">for</span> _ <span class="kw">in</span> <span class="fn">range</span>(depth)])
+        self.norm = nn.<span class="ty">LayerNorm</span>(dim)
+        self.head = nn.<span class="ty">Linear</span>(dim, num_classes)
+
+    <span class="kw">def</span> <span class="fn">forward</span>(self, ids, mask=<span class="kw">None</span>):
+        <span class="ty">T</span> = ids.<span class="fn">size</span>(<span class="num">1</span>)
+        x = self.<span class="fn">tok</span>(ids) + self.pos[:, :<span class="ty">T</span>]     <span class="com"># embed + position</span>
+        <span class="kw">for</span> blk <span class="kw">in</span> self.blocks:
+            x = <span class="fn">blk</span>(x, mask)
+        x = self.<span class="fn">norm</span>(x).<span class="fn">mean</span>(dim=<span class="num">1</span>)            <span class="com"># mean-pool over tokens</span>
+        <span class="kw">return</span> self.<span class="fn">head</span>(x)                     <span class="com"># (B, num_classes) logits</span>
+
+model = <span class="ty">TinyTransformer</span>(vocab=<span class="num">10_000</span>)
+ids = torch.<span class="fn">randint</span>(<span class="num">0</span>, <span class="num">10_000</span>, (<span class="num">8</span>, <span class="num">50</span>))         <span class="com"># batch 8, 50 tokens</span>
+<span class="fn">print</span>(<span class="fn">model</span>(ids).shape)                          <span class="com"># (8, 2)</span></pre>
+      <p>For real work you can also assemble this from PyTorch's built-in <code>nn.TransformerEncoderLayer</code> and <code>nn.TransformerEncoder</code> rather than hand-writing the block — but building it once, as here, is what makes the built-ins (and Volume V's GPT) legible.</p>
+      <div class="idea">
+        <p><strong>One block, stacked, is most of modern AI.</strong> The transformer you just built — embed, add position, attention-and-MLP with residuals, repeat — is architecturally the same as a frontier language model; the differences are scale, a causal mask, and training data. Understanding this 40-line model is the foundation on which Volume V's LLMs and Volume VI's vision transformers both stand.</p>
+      </div>
+      <p class="pull">Attention plus a feed-forward, wrapped in residuals and repeated — that stack is the workhorse of the decade.</p>
+    </section>
+  </div>
+
+  <div class="rule-sep"></div>
+  <div class="part" id="p4">
+    <div class="part-label">Part IV — Heads, losses &amp; representations</div>
+    <h2 class="part-title">From backbone to <span class="acc">working model.</span></h2>
+    <p class="part-intro">A CNN or transformer is a <em>backbone</em> that turns raw input into rich features. What makes it solve a task is the small <em>head</em> on top and the <em>loss</em> that scores it. This part catalogs the heads and losses you'll wire onto any backbone, then steps back to the deeper payoff: the features themselves are reusable representations — the idea that powers retrieval, transfer, and the generative models that close the series.</p>
+
+    <section class="chapter" id="c13">
+      <h2><span class="ch-num">13</span>Task heads</h2>
+      <p>Almost every model factors into a <strong>backbone</strong> (produces a feature vector) and a <strong>head</strong> (maps features to the task's output shape). Swapping the head — and its loss — is how one backbone serves many tasks, and it's exactly what transfer learning exploited in Chapter 04.</p>
+<pre data-lang="PYTHON"><span class="kw">import</span> torch.nn <span class="kw">as</span> nn
+
+feat_dim = <span class="num">512</span>   <span class="com"># whatever the backbone outputs</span>
+
+<span class="com"># Multi-class classification: one logit per class.</span>
+clf_head = nn.<span class="ty">Linear</span>(feat_dim, num_classes)          <span class="com"># + CrossEntropyLoss</span>
+
+<span class="com"># Regression: raw real number(s), no activation.</span>
+reg_head = nn.<span class="ty">Linear</span>(feat_dim, <span class="num">1</span>)                    <span class="com"># + MSELoss</span>
+
+<span class="com"># Multi-label (each label independent): one logit per label.</span>
+multilabel_head = nn.<span class="ty">Linear</span>(feat_dim, num_labels)   <span class="com"># + BCEWithLogitsLoss</span>
+
+<span class="com"># Per-token / sequence labeling: apply a linear at EVERY position.</span>
+token_head = nn.<span class="ty">Linear</span>(feat_dim, num_tags)          <span class="com"># over (B, T, feat_dim)</span></pre>
+      <p>The pattern generalizes to structured outputs. Dense prediction (a label per pixel, Volume VI) uses a head that upsamples back to image resolution; detection uses heads that emit boxes and class scores. But the principle is constant: the backbone learns <em>what's there</em>, the head expresses it in the shape the task needs, and the loss grades that shape.</p>
+      <div class="callout tip">
+        <h5>Output raw logits, let the loss do the rest</h5>
+        <p>Classification heads should emit unbounded scores (logits), not probabilities — <code>CrossEntropyLoss</code> and <code>BCEWithLogitsLoss</code> apply softmax/sigmoid internally in a numerically stable way. Add your own softmax before them and you get a subtly wrong, hard-to-debug loss. Apply the activation only at inference, when you actually want probabilities.</p>
+      </div>
+    </section>
+
+    <section class="chapter" id="c14">
+      <h2><span class="ch-num">14</span>The loss-function catalog</h2>
+      <p>Choosing a loss is choosing what "wrong" means (Volume I, Chapter 13). Match it to the task and the output format, and mind the input conventions — most beginner loss bugs are a dtype or a logits-vs-probabilities mismatch.</p>
+      <table class="tbl">
+        <thead><tr><th>Loss</th><th>Task · what it expects</th></tr></thead>
+        <tbody>
+          <tr><td>CrossEntropyLoss</td><td>Multi-class classification. Input: raw logits <code>(N, C)</code>. Target: integer class indices <code>(N,)</code> as <code>int64</code> — <em>not</em> one-hot.</td></tr>
+          <tr><td>BCEWithLogitsLoss</td><td>Binary or multi-label. Input: logits. Target: floats in <code>{0,1}</code>, same shape. Numerically stable — prefer over <code>BCELoss</code>.</td></tr>
+          <tr><td>MSELoss</td><td>Regression. Penalizes squared error; sensitive to outliers.</td></tr>
+          <tr><td>L1Loss</td><td>Regression, robust to outliers (absolute error).</td></tr>
+          <tr><td>SmoothL1 / Huber</td><td>Regression that's squared near zero, linear far out — a middle ground, common in detection box regression.</td></tr>
+          <tr><td>NLLLoss</td><td>Like cross-entropy but expects <code>log_softmax</code> already applied. Use <code>CrossEntropyLoss</code> unless you have a reason.</td></tr>
+          <tr><td>focal loss</td><td>Classification under heavy class imbalance — down-weights easy examples so rare classes get heard (detection, Volume VI).</td></tr>
+          <tr><td>contrastive / triplet</td><td>Metric learning — pull similar pairs together, push dissimilar apart in embedding space (next chapter).</td></tr>
+        </tbody>
+      </table>
+      <div class="issue">
+        <div class="issue-header">
+          <span class="tag">worked case</span>
+          <span class="title">"0D or 1D target tensor expected" from CrossEntropyLoss</span>
+        </div>
+        <div class="issue-body">
+          <h5>The setup</h5>
+          <p>A multi-class model errors at the loss, or trains but never learns, because the targets were one-hot encoded as floats.</p>
+          <h5>The fix</h5>
+          <p><code>CrossEntropyLoss</code> wants <em>class indices</em>, not one-hot: a target of shape <code>(N,)</code> and dtype <code>int64</code>, where each value is the correct class number. If your labels are one-hot, convert with <code>labels.argmax(dim=1)</code>. And pass <em>logits</em>, shape <code>(N, C)</code> — never softmaxed probabilities.</p>
+          <h5>The lesson</h5>
+          <p>When a loss errors, print <code>pred.shape, pred.dtype, target.shape, target.dtype</code> and check them against the loss's documented contract. Ninety percent of loss bugs are shape or dtype mismatches, not math.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="chapter" id="c15">
+      <h2><span class="ch-num">15</span>Representation learning &amp; embeddings</h2>
+      <p>Here's the shift in perspective that unlocks a lot of modern practice: the <em>features</em> a trained backbone produces — the vector just before the head — are valuable in their own right. A well-trained network maps inputs into a space where <strong>geometry means something</strong>: similar inputs land near each other, and directions can encode attributes. That vector is an <strong>embedding</strong> of the input, and you can use it far beyond the original task.</p>
+      <ul class="dash">
+        <li><strong>Similarity &amp; retrieval.</strong> Embed everything, then find nearest neighbors by cosine similarity — the basis of semantic search, recommendation, and deduplication.</li>
+        <li><strong>Transfer.</strong> Freeze the backbone and train a tiny head on a new task (Chapter 04) — you're reusing the representation.</li>
+        <li><strong>Clustering &amp; visualization.</strong> Group or plot (with UMAP/t-SNE) the embeddings to see structure the labels never named.</li>
+      </ul>
+<pre data-lang="PYTHON"><span class="kw">import</span> torch.nn.functional <span class="kw">as</span> <span class="ty">F</span>
+
+<span class="com"># Cosine similarity between two embedding vectors: 1 = identical direction.</span>
+<span class="kw">def</span> <span class="fn">cosine_sim</span>(a, b):
+    <span class="kw">return</span> <span class="ty">F</span>.<span class="fn">cosine_similarity</span>(a, b, dim=-<span class="num">1</span>)
+
+<span class="com"># Retrieval: find the closest database vectors to a query embedding.</span>
+query = model.<span class="fn">backbone</span>(x)               <span class="com"># (1, D)</span>
+db    = model.<span class="fn">backbone</span>(corpus)          <span class="com"># (N, D)</span>
+scores = <span class="ty">F</span>.<span class="fn">cosine_similarity</span>(query, db) <span class="com"># (N,)</span>
+top5 = scores.<span class="fn">topk</span>(<span class="num">5</span>).indices           <span class="com"># the 5 most similar items</span></pre>
+      <p>You can also train <em>specifically</em> to shape this space. <strong>Metric learning</strong> losses — contrastive and triplet — take pairs or triplets and explicitly pull matching items together while pushing mismatches apart, producing embeddings tuned for similarity search rather than classification. This same instinct — learn a good representation without task labels — is the heart of <strong>self-supervised learning</strong>, which Volume VI develops for vision.</p>
+      <div class="idea">
+        <p><strong>The representation often outlasts the task.</strong> Models get retrained and replaced, but a good embedding space is reusable infrastructure — it powers search, recommendation, transfer, and clustering long after the head that trained it is gone. When you build a model, ask not only "does it classify well?" but "is the space it learned useful?"</p>
+      </div>
+    </section>
+
+    <section class="chapter" id="c16">
+      <h2><span class="ch-num">16</span>Autoencoders: a first generative taste</h2>
+      <p>Everything so far mapped input to a <em>label</em>. An <strong>autoencoder</strong> maps input back to <em>itself</em>, through a narrow bottleneck: an <em>encoder</em> compresses the input to a small latent vector, a <em>decoder</em> reconstructs the input from it, and the loss is reconstruction error. With no labels at all, the network is forced to discover an efficient encoding — the essence of the data — because the bottleneck won't fit anything wasteful.</p>
+<pre data-lang="PYTHON"><span class="kw">import</span> torch
+<span class="kw">import</span> torch.nn <span class="kw">as</span> nn
+
+<span class="kw">class</span> <span class="ty">Autoencoder</span>(nn.<span class="ty">Module</span>):
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, in_dim=<span class="num">784</span>, latent=<span class="num">32</span>):
+        <span class="fn">super</span>().<span class="fn">__init__</span>()
+        self.encoder = nn.<span class="ty">Sequential</span>(
+            nn.<span class="ty">Linear</span>(in_dim, <span class="num">128</span>), nn.<span class="ty">ReLU</span>(),
+            nn.<span class="ty">Linear</span>(<span class="num">128</span>, latent),                 <span class="com"># the bottleneck</span>
+        )
+        self.decoder = nn.<span class="ty">Sequential</span>(
+            nn.<span class="ty">Linear</span>(latent, <span class="num">128</span>), nn.<span class="ty">ReLU</span>(),
+            nn.<span class="ty">Linear</span>(<span class="num">128</span>, in_dim), nn.<span class="ty">Sigmoid</span>(),   <span class="com"># back to pixel range [0,1]</span>
+        )
+
+    <span class="kw">def</span> <span class="fn">forward</span>(self, x):
+        z = self.<span class="fn">encoder</span>(x)          <span class="com"># compress to latent code</span>
+        <span class="kw">return</span> self.<span class="fn">decoder</span>(z), z    <span class="com"># reconstruction, and the code itself</span>
+
+model = <span class="ty">Autoencoder</span>()
+recon, z = <span class="fn">model</span>(torch.<span class="fn">rand</span>(<span class="num">16</span>, <span class="num">784</span>))
+loss = nn.functional.<span class="fn">mse_loss</span>(recon, torch.<span class="fn">rand</span>(<span class="num">16</span>, <span class="num">784</span>))   <span class="com"># reconstruction loss</span></pre>
+      <p>Autoencoders are useful directly — for denoising (train to reconstruct a clean input from a corrupted one), anomaly detection (things that reconstruct badly are outliers), and dimensionality reduction. But their deeper importance is conceptual: they're the gateway to <strong>generative</strong> models. Constrain the latent space to a smooth probability distribution and the decoder becomes a <em>sampler</em> that generates new data — the <strong>variational autoencoder</strong> — and from there the line runs to GANs and diffusion models. Volume VI picks up exactly here.</p>
+      <div class="callout tip">
+        <h5>Where the series goes next</h5>
+        <p>Volume III gave you the architectures. Volume IV makes them fast, cheap, and deployable at scale. Then the extended tracks specialize: Volume V scales the transformer of Part III into a language model, and Volume VI takes the CNNs, ViTs, and autoencoders here into detection, segmentation, and diffusion.</p>
+      </div>
+      <p class="pull">Predict the label, and you learn a task; reconstruct the input, and you learn the data itself.</p>
+    </section>
+  </div>
+
+</main>
+
+<footer>
+  <h4>sources &amp; further study</h4>
+  <div class="resources">
+    <ul>
+      <li><strong>Papers that made this part</strong></li>
+      <li>He et al. — "Deep Residual Learning" (ResNet)</li>
+      <li>Vaswani et al. — "Attention Is All You Need"</li>
+      <li>Hochreiter &amp; Schmidhuber — LSTM</li>
+      <li><strong>Official</strong></li>
+      <li>torchvision.models — pretrained backbones</li>
+      <li>nn.Transformer &amp; F.scaled_dot_product_attention</li>
+      <li><strong>Explainers</strong></li>
+      <li>"The Illustrated Transformer" (Alammar)</li>
+      <li><strong>Next</strong></li>
+      <li>Volume IV — Efficiency, Scale &amp; Production</li>
+    </ul>
+  </div>
+  <p class="footer-note">Volume III of the PyTorch Field Manual. Convolutions, recurrence, and attention are the load-bearing architectures of the field; the transformer of Part III recurs in Volumes V and VI. Next, Volume IV makes all of this fast and deployable. Code targets PyTorch 2.x (2.13, mid-2026); <code>F.scaled_dot_product_attention</code> and pretrained-weight APIs are current and stable.</p>
+</footer>
+
+</body>
+</html>
